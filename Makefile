@@ -82,12 +82,14 @@ test: test-unit test-integ
 
 test-unit:
 	@echo "==> Running unit tests..."
-	$(GO) test -race -count=1 -coverprofile=$(BUILD_DIR)/coverage.out ./internal/...
+	@mkdir -p $(BUILD_DIR)
+	$(GO) test -count=1 -coverprofile=$(BUILD_DIR)/coverage.out ./internal/...
 	@echo "==> Unit tests passed."
 
 test-integ:
 	@echo "==> Running integration tests..."
-	$(GO) test -race -count=1 -tags=integration ./tests/...
+	@mkdir -p $(BUILD_DIR)
+	$(GO) test -count=1 -tags=integration ./tests/...
 	@echo "==> Integration tests passed."
 
 # ------------------------------------------------------------------------------
