@@ -7,7 +7,8 @@
 [![Go Version](https://img.shields.io/badge/Go-1.23+-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fraw.githubusercontent.com%2Factonos%2Factonos%2Fmaster%2FVERSION&regex=%5E(.%2B)%24&label=version&style=flat-square&color=green)](VERSION)
+[![Version](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fraw.githubusercontent.com%2Factonos%2Factonos%2Frefs%2Fheads%2Fmaster%2FVERSION&search=(.*)
+&label=version&style=flat-square&color=green)](VERSION)
 
 A single-purpose appliance OS designed as a **customizable, self-governing agent kernel** that runs 24/7. ActonOS compiles into a single static binary (`actond`) and deploys plug-and-play on **bare-metal MiniPCs** or as a **Docker container**.
 
