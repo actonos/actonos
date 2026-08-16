@@ -1,0 +1,9 @@
+{
+  "title": "Interactive Agent Session",
+  "placeholder": "Type your message or command for the agent...",
+  "send": "Send Message",
+  "streaming": "Agent is thinking...",
+  "selectAgent": "Select an agent to begin conversation",
+  "tokens": "Tokens: {{count}}",
+  "model": "Model: {{name}}"
+}

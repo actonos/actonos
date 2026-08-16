@@ -1,0 +1,15 @@
+{
+  "eyebrow": "Kết Nối Dịch Vụ Doanh Nghiệp",
+  "title": "Tích Hợp OAuth 2.1 SaaS",
+  "subtitle": "Kết nối các nền tảng SaaS bên thứ ba với ủy quyền 1-click qua chuẩn OAuth 2.1 PKCE. Các Agent sẽ tự động kế thừa quyền hạn an toàn.",
+  "actions": {
+    "connect": "Kết Nối 1-Click",
+    "disconnect": "Ngắt Kết Nối",
+    "connected": "Đã Kết Nối & Đang Hoạt Động"
+  },
+  "risk": {
+    "low": "Rủi ro: Thấp",
+    "medium": "Rủi ro: Vừa",
+    "high": "Rủi ro: Cao"
+  }
+}

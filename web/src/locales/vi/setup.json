@@ -1,0 +1,21 @@
+{
+  "title": "Chào Mừng Đến Với ActonOS",
+  "subtitle": "Hoàn tất cài đặt ban đầu để kết nối thiết bị và vận hành các AI Agent tự trị.",
+  "wifi": {
+    "title": "Bước 1: Kết Nối Wi-Fi Cục Bộ",
+    "ssid": "Tên Mạng Wi-Fi (SSID)",
+    "password": "Mật Khẩu Wi-Fi"
+  },
+  "llm": {
+    "title": "Bước 2: Khóa API Mô Hình LLM",
+    "anthropic": "Khóa API Anthropic Claude",
+    "gemini": "Khóa API Google Gemini",
+    "openai": "Khóa API OpenAI"
+  },
+  "remote": {
+    "title": "Bước 3: Truy Cập Từ Xa & Bảo Mật",
+    "tailscale": "Mã Xác Thực Tailscale (Tùy chọn kết nối từ xa)",
+    "adminPin": "Mã PIN Quản Trị Thiết Bị"
+  },
+  "finish": "Hoàn Tất & Khởi Chạy Kernel"
+}

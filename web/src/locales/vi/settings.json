@@ -1,0 +1,28 @@
+{
+  "eyebrow": "Phần Cứng & Truy Cập Từ Xa",
+  "title": "Hệ Thống & Tailscale",
+  "subtitle": "Theo dõi hiệu năng phần cứng, kết nối mạng không dây và truy cập mã hóa qua mạng Tailscale mesh.",
+  "tailscale": {
+    "title": "Truy Cập Từ Xa Tailscale",
+    "desc": "Truy cập thiết bị ActonOS này an toàn từ bất cứ đâu qua mạng riêng ảo mã hóa đầu cuối mà không cần mở port mạng.",
+    "status": "Trạng Thái Kết Nối",
+    "ip": "Địa Chỉ IP Tailnet",
+    "hostname": "Tên Node Thiết Bị",
+    "peers": "Thiết Bị Peer Đang Kết Nối"
+  },
+  "metrics": {
+    "title": "Hiệu Năng Thiết Bị",
+    "cpu": "Tải CPU",
+    "temp": "Nhiệt Độ Core",
+    "ram": "Bộ Nhớ RAM",
+    "actondRam": "RAM Tiến Trình Daemon",
+    "disk": "Dung Lượng Dữ Liệu",
+    "uptime": "Thời Gian Hoạt Động"
+  },
+  "wifi": {
+    "title": "Mạng Không Dây",
+    "scan": "Quét Sóng Wi-Fi",
+    "connect": "Kết Nối Mạng",
+    "password": "Mật Khẩu Wi-Fi"
+  }
+}

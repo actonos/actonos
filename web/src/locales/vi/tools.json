@@ -1,0 +1,32 @@
+{
+  "eyebrow": "Dynamic Tooling Hub",
+  "title": "Kho Công Cụ & Tích Hợp",
+  "subtitle": "Khám phá, kết nối và thực thi các công cụ qua Model Context Protocol (MCP), plugin WebAssembly và kịch bản cục bộ.",
+  "tabs": {
+    "all": "Tất Cả Công Cụ ({{count}})",
+    "native": "Hệ Thống (Native)",
+    "mcp": "Máy Chủ MCP",
+    "wasm": "Plugin WASM",
+    "skill": "Kịch Bản (Skills)"
+  },
+  "actions": {
+    "addMCP": "Kết Nối Máy Chủ MCP",
+    "testTool": "Chạy Thử Nghiệm",
+    "refresh": "Làm Mới Danh Mục"
+  },
+  "mcpModal": {
+    "title": "Kết Nối Máy Chủ Model Context Protocol",
+    "idLabel": "Mã Định Danh Máy Chủ",
+    "idPlaceholder": "vd: github_mcp",
+    "commandLabel": "Lệnh / Nhị Phân Khởi Chạy",
+    "commandPlaceholder": "vd: npx -y @modelcontextprotocol/server-github",
+    "argsLabel": "Tham Số Dòng Lệnh",
+    "argsPlaceholder": "vd: --token=ghp_xyz"
+  },
+  "testModal": {
+    "title": "Chạy Thử Công Cụ: {{name}}",
+    "inputLabel": "Tham Số Đầu Vào (JSON)",
+    "outputLabel": "Kết Quả Thực Thi",
+    "running": "Đang thực thi trong sandbox..."
+  }
+}

@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -16,6 +18,9 @@ import (
 	"github.com/actonos/actonos/internal/bus"
 	"github.com/actonos/actonos/internal/llm"
 	"github.com/actonos/actonos/internal/memory"
+	"github.com/actonos/actonos/internal/server"
+	"github.com/actonos/actonos/internal/system"
+	"github.com/actonos/actonos/internal/tools"
 )
 
 var (
@@ -30,6 +35,7 @@ func main() {
 		dataDir    = flag.String("data-dir", "./data", "Directory for persistent storage and databases")
 		logLevel   = flag.String("log-level", "info", "Log level (debug, info, warn, error)")
 		listenAddr = flag.String("listen-addr", ":8080", "HTTP server listen address")
+		hostname   = flag.String("hostname", "acton-mini", "Appliance network hostname")
 		showVer    = flag.Bool("version", false, "Print version information and exit")
 	)
 	flag.Parse()
@@ -62,13 +68,23 @@ func main() {
 		"listen_addr", *listenAddr,
 	)
 
-	// Ensure data directories
+	// Ensure runtime directories
 	storageDir := filepath.Join(*dataDir, "storage")
 	vectorDir := filepath.Join(*dataDir, "vectors")
-	if err := os.MkdirAll(storageDir, 0755); err != nil {
-		slog.Error("failed to create storage dir", "error", err)
-		os.Exit(1)
+	workspaceDir := filepath.Join(*dataDir, "workspace")
+	pluginsDir := filepath.Join(*dataDir, "plugins")
+	skillsDir := filepath.Join(*dataDir, "skills")
+	overridesDir := filepath.Join(*dataDir, "overrides")
+
+	for _, dir := range []string{storageDir, vectorDir, workspaceDir, pluginsDir, skillsDir, overridesDir} {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			slog.Error("failed to create directory", "path", dir, "error", err)
+			os.Exit(1)
+		}
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// 1. Initialize SQLite Database
 	dbPath := filepath.Join(storageDir, "acton.db")
@@ -106,37 +122,87 @@ func main() {
 
 	// 6. Initialize LLM Provider Router
 	llmRouter := llm.NewModelCascadeRouter()
-
-	// Register default mock/local fallback
 	mockLocal := llm.NewMockProvider("local-stub", "ActonOS Core Engine initialized and operating normally.")
 	llmRouter.RegisterProvider("local-stub", mockLocal)
 
-	// 7. Initialize Agent Manager
+	// 7. Initialize Dynamic Tooling Hub
+	toolReg := tools.NewToolRegistry(eventBus)
+	tools.RegisterNativeTools(toolReg, workspaceDir)
+	mcpHost := tools.NewMCPHostEngine(toolReg)
+	wasmManager := tools.NewWASMPluginManager(toolReg, pluginsDir)
+	_ = wasmManager.ScanAndRegisterPlugins(ctx)
+
+	skillWatcher := tools.NewSkillWatcher(toolReg, skillsDir)
+	if err := skillWatcher.Start(); err != nil {
+		slog.Warn("skill watcher failed to start", "error", err)
+	}
+	defer skillWatcher.Stop()
+	slog.Info("dynamic tooling hub initialized", "tools_registered", len(toolReg.List()))
+
+	// 8. Initialize Agent Manager
 	agentMgr, err := agent.NewAgentManager(db, eventBus)
 	if err != nil {
 		slog.Error("failed to initialize agent manager", "error", err)
 		os.Exit(1)
 	}
-	agentsList, _ := agentMgr.List(context.Background())
+	agentsList, _ := agentMgr.List(ctx)
 	slog.Info("agent manager loaded", "agents_registered", len(agentsList))
 
-	// 8. Initialize Swarm Manager & ReAct Engine
+	// 9. Initialize Swarm Manager & ReAct Engine
 	swarmMgr := agent.NewSwarmManager(agentMgr, eventBus, llmRouter, hybridEngine, 8)
 	engine := agent.NewEngine(agentMgr, eventBus, llmRouter, hybridEngine)
-	_ = swarmMgr
-	_ = engine
 
-	// 9. Initialize OAuth 2.1 PKCE Engine & Token Refresh Daemon
+	// 10. Initialize OAuth 2.1 PKCE Engine & Token Refresh Daemon
 	stateStore := auth.NewStateStore(10 * time.Minute)
 	oauthEngine := auth.NewOAuthEngine(stateStore)
 	tokenDaemon := auth.NewTokenRefreshDaemon(oauthEngine, vault, db, eventBus)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	tokenDaemon.Start(ctx)
 	defer tokenDaemon.Stop()
 	slog.Info("token refresh daemon started (auto-renew 5min before expiry)")
+
+	// 11. Initialize Hardware Abstraction Layer (HAL)
+	hal := system.AutoDetectHAL(*dataDir)
+	slog.Info("hardware abstraction layer loaded", "runtime_mode", hal.RuntimeMode())
+
+	// 12. Initialize Embedded Tailscale Node
+	tailscaleMgr := system.NewTailscaleManager(*dataDir, *hostname, "")
+	if err := tailscaleMgr.Start(ctx); err != nil {
+		slog.Warn("tailscale initialization warning", "error", err)
+	}
+	defer tailscaleMgr.Close()
+
+	// 13. Initialize HTTP REST API & Web UI Server
+	srvConfig := server.Config{
+		AgentManager:       agentMgr,
+		SwarmManager:       swarmMgr,
+		Engine:             engine,
+		LLMRouter:          llmRouter,
+		ToolRegistry:       toolReg,
+		MCPHost:            mcpHost,
+		Memory:             hybridEngine,
+		HAL:                hal,
+		Tailscale:          tailscaleMgr,
+		TokenRefreshDaemon: tokenDaemon,
+		EventBus:           eventBus,
+	}
+
+	apiServer := server.NewServer(srvConfig)
+	apiServer.RegisterStaticRoutes(overridesDir)
+
+	httpServer := &http.Server{
+		Addr:         *listenAddr,
+		Handler:      apiServer.Router(),
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+
+	go func() {
+		slog.Info("ActonOS Web UI & REST API listening", "address", *listenAddr)
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("http server error", "error", err)
+		}
+	}()
 
 	// Publish System Boot Event
 	eventBus.Publish(bus.NewEvent(bus.EventSystemBoot, "kernel", map[string]any{
@@ -144,7 +210,7 @@ func main() {
 		"time":    time.Now().UTC(),
 	}))
 
-	slog.Info("ActonOS Core Engine is running and ready for instructions")
+	slog.Info("ActonOS daemon is running and ready for instructions")
 
 	// Handle Graceful Shutdown
 	sigCh := make(chan os.Signal, 1)
@@ -152,6 +218,13 @@ func main() {
 
 	sig := <-sigCh
 	slog.Info("shutdown signal received", "signal", sig.String())
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		slog.Error("http server shutdown error", "error", err)
+	}
 
 	eventBus.Publish(bus.NewEvent(bus.EventSystemShutdown, "kernel", nil))
 	slog.Info("ActonOS daemon stopped cleanly")

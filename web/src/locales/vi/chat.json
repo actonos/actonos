@@ -1,0 +1,9 @@
+{
+  "title": "Phiên Hội Thoại Với Agent",
+  "placeholder": "Nhập tin nhắn hoặc yêu cầu cho agent...",
+  "send": "Gửi Tin Nhắn",
+  "streaming": "Agent đang suy nghĩ...",
+  "selectAgent": "Chọn một agent để bắt đầu hội thoại",
+  "tokens": "Số Tokens: {{count}}",
+  "model": "Mô Hình: {{name}}"
+}

@@ -1,0 +1,37 @@
+{
+  "eyebrow": "Universal Agent Engine",
+  "title": "Configured Agents",
+  "subtitle": "Create, customize, and orchestrate autonomous AI agents running on the ActonOS kernel.",
+  "actions": {
+    "createNew": "Create New Agent",
+    "editAgent": "Edit Agent",
+    "deleteConfirm": "Are you sure you want to delete this agent?",
+    "chat": "Chat with Agent"
+  },
+  "card": {
+    "toolsCount": "{{count}} Tools Authorized",
+    "budget": "Max Budget: ${{amount}}/mo",
+    "approval": "Approval: {{level}}",
+    "openChat": "Launch Session",
+    "noAgents": "No agents configured yet. Create your first agent to get started."
+  },
+  "modal": {
+    "createTitle": "Create AI Agent",
+    "editTitle": "Edit Agent Manifest",
+    "nameLabel": "Agent Name",
+    "namePlaceholder": "e.g., Senior Software Architect",
+    "descLabel": "Description",
+    "descPlaceholder": "Describe the agent's responsibilities and expertise...",
+    "instructionsLabel": "System Instructions (Prompt)",
+    "instructionsPlaceholder": "You are an expert software engineer. Always validate code syntax...",
+    "primaryModelLabel": "Primary LLM Model",
+    "fallbackModelLabel": "Fallback LLM Model (Rate-limit recovery)",
+    "temperatureLabel": "Temperature (Creativity: 0.0 - 1.0)",
+    "toolsLabel": "Authorized Tools",
+    "budgetLabel": "Monthly Budget Limit (USD)",
+    "approvalLabel": "Human Approval Level",
+    "approvalLow": "Low (Auto-execute 100%)",
+    "approvalMed": "Medium (Workspace writes allowed)",
+    "approvalHigh": "High (Always require confirmation)"
+  }
+}

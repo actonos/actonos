@@ -1,0 +1,30 @@
+{
+  "appName": "ActonOS",
+  "tagline": "Kernel Hệ Điều Hành AI Agent Đa Năng",
+  "language": {
+    "toggle": "Đổi Ngôn Ngữ",
+    "en": "English",
+    "vi": "Tiếng Việt"
+  },
+  "buttons": {
+    "save": "Lưu Thay Đổi",
+    "cancel": "Hủy Bỏ",
+    "create": "Tạo Mới",
+    "delete": "Xóa",
+    "edit": "Chỉnh Sửa",
+    "close": "Đóng",
+    "refresh": "Làm Mới",
+    "connect": "Kết Nối",
+    "disconnect": "Ngắt Kết Nối",
+    "execute": "Chạy Công Cụ",
+    "start": "Kích Hoạt",
+    "stop": "Tạm Dừng"
+  },
+  "status": {
+    "active": "Đang Hoạt Động",
+    "stopped": "Đã Tạm Dừng",
+    "error": "Lỗi",
+    "connected": "Đã Kết Nối",
+    "disconnected": "Chưa Kết Nối"
+  }
+}

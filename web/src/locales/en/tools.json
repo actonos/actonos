@@ -1,0 +1,32 @@
+{
+  "eyebrow": "Dynamic Tooling Hub",
+  "title": "Tool Registry & Integrations",
+  "subtitle": "Discover, connect, and execute tools across Model Context Protocol (MCP), WebAssembly plugins, and local skills.",
+  "tabs": {
+    "all": "All Tools ({{count}})",
+    "native": "Native Core",
+    "mcp": "MCP Servers",
+    "wasm": "WASM Plugins",
+    "skill": "Local Skills"
+  },
+  "actions": {
+    "addMCP": "Connect MCP Server",
+    "testTool": "Test Execution",
+    "refresh": "Reload Registry"
+  },
+  "mcpModal": {
+    "title": "Connect Model Context Protocol Server",
+    "idLabel": "Server Identifier",
+    "idPlaceholder": "e.g., github_mcp",
+    "commandLabel": "Command / Binary",
+    "commandPlaceholder": "e.g., npx -y @modelcontextprotocol/server-github",
+    "argsLabel": "Arguments (space separated)",
+    "argsPlaceholder": "e.g., --token=ghp_xyz"
+  },
+  "testModal": {
+    "title": "Test Tool: {{name}}",
+    "inputLabel": "Input Parameters (JSON)",
+    "outputLabel": "Execution Output",
+    "running": "Executing in sandbox..."
+  }
+}

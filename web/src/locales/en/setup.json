@@ -1,0 +1,21 @@
+{
+  "title": "Welcome to ActonOS",
+  "subtitle": "Complete this initial setup wizard to connect your appliance and start running autonomous AI agents.",
+  "wifi": {
+    "title": "Step 1: Connect to Local Wi-Fi",
+    "ssid": "Wi-Fi Network SSID",
+    "password": "Wi-Fi Password"
+  },
+  "llm": {
+    "title": "Step 2: LLM Provider API Keys",
+    "anthropic": "Anthropic Claude API Key",
+    "gemini": "Google Gemini API Key",
+    "openai": "OpenAI API Key"
+  },
+  "remote": {
+    "title": "Step 3: Remote Access & Security",
+    "tailscale": "Tailscale Auth Key (Optional for remote access)",
+    "adminPin": "Appliance Admin PIN"
+  },
+  "finish": "Complete Setup & Boot Kernel"
+}

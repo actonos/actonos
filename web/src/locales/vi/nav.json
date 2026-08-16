@@ -1,0 +1,14 @@
+{
+  "links": {
+    "agents": "Quản Lý Agents",
+    "toolHub": "Kho Công Cụ",
+    "workspace": "Không Gian Tệp",
+    "integrations": "Tích Hợp SaaS",
+    "chat": "Hội Thoại",
+    "settings": "Hệ Thống & Từ Xa"
+  },
+  "cta": {
+    "createAgent": "Tạo Agent Mới",
+    "statusOnline": "Kernel Đang Chạy"
+  }
+}

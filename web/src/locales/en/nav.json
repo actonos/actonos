@@ -1,0 +1,14 @@
+{
+  "links": {
+    "agents": "Agents",
+    "toolHub": "Tool Hub",
+    "workspace": "Workspace",
+    "integrations": "Integrations",
+    "chat": "Conversations",
+    "settings": "System & Remote"
+  },
+  "cta": {
+    "createAgent": "Create Agent",
+    "statusOnline": "Kernel Online"
+  }
+}

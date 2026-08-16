@@ -1,0 +1,15 @@
+{
+  "eyebrow": "Enterprise SaaS Connectors",
+  "title": "OAuth 2.1 Integrations",
+  "subtitle": "Connect third-party SaaS platforms with 1-click authorization via OAuth 2.1 PKCE. Agents automatically inherit authorized scopes.",
+  "actions": {
+    "connect": "1-Click Connect",
+    "disconnect": "Disconnect",
+    "connected": "Authorized & Active"
+  },
+  "risk": {
+    "low": "Risk: Low",
+    "medium": "Risk: Medium",
+    "high": "Risk: High"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "appName": "ActonOS",
+  "tagline": "AI Agent Operating System Kernel",
+  "language": {
+    "toggle": "Switch Language",
+    "en": "English",
+    "vi": "Tiếng Việt"
+  },
+  "buttons": {
+    "save": "Save Changes",
+    "cancel": "Cancel",
+    "create": "Create",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "refresh": "Refresh",
+    "connect": "Connect",
+    "disconnect": "Disconnect",
+    "execute": "Run Tool",
+    "start": "Start",
+    "stop": "Stop"
+  },
+  "status": {
+    "active": "Active",
+    "stopped": "Stopped",
+    "error": "Error",
+    "connected": "Connected",
+    "disconnected": "Disconnected"
+  }
+}

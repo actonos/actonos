@@ -1,0 +1,20 @@
+services:
+  actonos:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    image: actonos/agent:latest
+    container_name: actonos-agent
+    ports:
+      - "8080:8080"
+    volumes:
+      - acton-data:/data
+    environment:
+      - RUNTIME_MODE=docker
+      - PORT=8080
+      - DATA_DIR=/data
+    restart: unless-stopped
+
+volumes:
+  acton-data:
+    driver: local
