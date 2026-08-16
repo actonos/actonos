@@ -17,7 +17,7 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
 
   /* Type Scale */
-  --text-caption: 10px;
+  --text-caption: 12px;
   --text-body-sm: 14px;
   --text-body: 16px;
   --text-subheading: 18px;
@@ -40,7 +40,10 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-h1, h2, h3, .font-serif {
+h1,
+h2,
+h3,
+.font-serif {
   font-family: var(--font-serif);
   letter-spacing: -0.01em;
 }

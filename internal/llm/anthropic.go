@@ -38,18 +38,28 @@ type anthropicMessage struct {
 	Content string `json:"content"`
 }
 
+type anthropicTool struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	InputSchema json.RawMessage `json:"input_schema"`
+}
+
 type anthropicRequest struct {
 	Model       string             `json:"model"`
 	Messages    []anthropicMessage `json:"messages"`
 	System      string             `json:"system,omitempty"`
 	MaxTokens   int                `json:"max_tokens"`
 	Temperature *float64           `json:"temperature,omitempty"`
+	Tools       []anthropicTool    `json:"tools,omitempty"`
 }
 
 type anthropicResponse struct {
 	Content []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
+		Type  string          `json:"type"`
+		Text  string          `json:"text,omitempty"`
+		ID    string          `json:"id,omitempty"`
+		Name  string          `json:"name,omitempty"`
+		Input json.RawMessage `json:"input,omitempty"`
 	} `json:"content"`
 	Usage struct {
 		InputTokens  int `json:"input_tokens"`
@@ -91,12 +101,26 @@ func (p *AnthropicProvider) Complete(ctx context.Context, messages []Message, op
 		}
 	}
 
+	var anthropicTools []anthropicTool
+	for _, t := range opts.Tools {
+		schema := t.Function.Parameters
+		if len(schema) == 0 {
+			schema = json.RawMessage(`{"type":"object"}`)
+		}
+		anthropicTools = append(anthropicTools, anthropicTool{
+			Name:        t.Function.Name,
+			Description: t.Function.Description,
+			InputSchema: schema,
+		})
+	}
+
 	reqBody := anthropicRequest{
 		Model:       model,
 		Messages:    anthropicMsgs,
 		System:      systemPrompt,
 		MaxTokens:   maxTokens,
 		Temperature: opts.Temperature,
+		Tools:       anthropicTools,
 	}
 
 	jsonData, err := json.Marshal(reqBody)
@@ -138,15 +162,26 @@ func (p *AnthropicProvider) Complete(ctx context.Context, messages []Message, op
 	}
 
 	var content string
+	var toolCalls []ToolCall
 	for _, block := range anthropicResp.Content {
 		if block.Type == "text" {
 			content += block.Text
+		} else if block.Type == "tool_use" {
+			toolCalls = append(toolCalls, ToolCall{
+				ID:   block.ID,
+				Type: "function",
+				Function: FunctionCall{
+					Name:      block.Name,
+					Arguments: block.Input,
+				},
+			})
 		}
 	}
 
 	return &Response{
-		Content: content,
-		Model:   anthropicResp.Model,
+		Content:   content,
+		ToolCalls: toolCalls,
+		Model:     anthropicResp.Model,
 		Usage: Usage{
 			PromptTokens:     anthropicResp.Usage.InputTokens,
 			CompletionTokens: anthropicResp.Usage.OutputTokens,

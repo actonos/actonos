@@ -1,0 +1,19 @@
+{
+  "eyebrow": "Kết nối",
+  "title": "Kết nối dịch vụ",
+  "subtitle": "Kết nối các dịch vụ bên ngoài như Google, Notion, GitHub.",
+  "actions": {
+    "connect": "Kết nối",
+    "disconnect": "Ngắt kết nối",
+    "simulate": "Test Webhook"
+  },
+  "status": {
+    "connected": "Đã kết nối",
+    "disconnected": "Chưa kết nối"
+  },
+  "risk": {
+    "low": "Rủi ro thấp",
+    "medium": "Rủi ro trung bình",
+    "high": "Rủi ro cao"
+  }
+}

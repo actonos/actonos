@@ -1,0 +1,46 @@
+{
+  "eyebrow": "Kênh chat",
+  "title": "Kênh Chat",
+  "subtitle": "Kết nối Telegram, Discord, WhatsApp để nhận và trả lời tin nhắn tự động.",
+  "addAccount": "Thêm tài khoản",
+  "saveAll": "Lưu",
+  "telegram": {
+    "name": "Telegram",
+    "desc": "Bot hai chiều. Nhắn tin trực tiếp và nhận phản hồi tự động."
+  },
+  "whatsapp": {
+    "name": "WhatsApp",
+    "desc": "Kết nối qua WhatsApp Cloud API cho tin nhắn di động."
+  },
+  "discord": {
+    "name": "Discord",
+    "desc": "Lắng nghe tin nhắn và @mention trong Discord server."
+  },
+  "webhook": {
+    "name": "Webhook",
+    "desc": "Nhận HTTP POST từ hệ thống bên ngoài."
+  },
+  "pairing": {
+    "title": "Ghép nối người dùng",
+    "subtitle": "Tạo mã PIN 6 chữ số để xác thực người dùng chat mới.",
+    "generate": "Tạo mã PIN",
+    "activeCode": "Mã PIN đang hoạt động",
+    "instructions": "Gửi mã này hoặc /pair <PIN> từ ứng dụng chat để xác thực.",
+    "whitelist": "Người dùng đã xác thực",
+    "empty": "Chưa có người dùng nào được ghép nối. Tạo mã PIN và gửi từ chat.",
+    "revoke": "Thu hồi"
+  },
+  "status": {
+    "active": "Hoạt động",
+    "offline": "Ngoại tuyến",
+    "listening": "Đang lắng nghe"
+  },
+  "accounts": {
+    "label": "Tên tài khoản",
+    "token": "Token bot",
+    "phoneId": "Số điện thoại ID",
+    "enabled": "Bật",
+    "remove": "Xoá",
+    "primary": "Chính"
+  }
+}

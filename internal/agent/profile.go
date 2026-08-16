@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -34,21 +35,35 @@ type ProceduralPattern struct {
 
 // UserProfileManager manages the persistent user profile memory in SQLite and JSON.
 type UserProfileManager struct {
-	mu         sync.RWMutex
-	db         *sql.DB
-	configPath string
-	profile    UserProfile
+	mu           sync.RWMutex
+	db           *sql.DB
+	configPath   string
+	soulPath     string
+	memoryMDPath string
+	profile      UserProfile
 }
 
 // NewUserProfileManager creates a new UserProfileManager.
 func NewUserProfileManager(db *memory.DB, dataDir string) (*UserProfileManager, error) {
 	configDir := filepath.Join(dataDir, "config")
+	workspaceDir := filepath.Join(dataDir, "workspace")
 	_ = os.MkdirAll(configDir, 0755)
+	_ = os.MkdirAll(workspaceDir, 0755)
+
 	configPath := filepath.Join(configDir, "profile.json")
+	soulPath := filepath.Join(configDir, "SOUL.md")
+	memoryMDPath := filepath.Join(workspaceDir, "MEMORY.md")
+
+	var sqlDB *sql.DB
+	if db != nil {
+		sqlDB = db.SQLDB()
+	}
 
 	mgr := &UserProfileManager{
-		db:         db.SQLDB(),
-		configPath: configPath,
+		db:           sqlDB,
+		configPath:   configPath,
+		soulPath:     soulPath,
+		memoryMDPath: memoryMDPath,
 		profile: UserProfile{
 			Language:           "en",
 			CommunicationStyle: "concise",
@@ -57,8 +72,10 @@ func NewUserProfileManager(db *memory.DB, dataDir string) (*UserProfileManager, 
 		},
 	}
 
-	if err := mgr.initSchema(); err != nil {
-		return nil, err
+	if sqlDB != nil {
+		if err := mgr.initSchema(); err != nil {
+			return nil, err
+		}
 	}
 	mgr.loadFromDisk()
 
@@ -155,3 +172,55 @@ func (m *UserProfileManager) GetRelevantPatterns(ctx context.Context, domain str
 	}
 	return patterns, nil
 }
+
+// GetSoul retrieves the current Agent Soul personality instructions.
+func (m *UserProfileManager) GetSoul() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if data, err := os.ReadFile(m.soulPath); err == nil && len(data) > 0 {
+		return string(data)
+	}
+
+	return `# ActonOS Agent Soul
+You are an autonomous AI Agent running on the ActonOS Appliance Kernel.
+Your purpose is to assist the user proactively, execute tasks precisely, and respect privacy and system security constraints.
+`
+}
+
+// SaveSoul updates the SOUL.md personality markdown file.
+func (m *UserProfileManager) SaveSoul(ctx context.Context, content string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return os.WriteFile(m.soulPath, []byte(content), 0644)
+}
+
+// GetMemoryMD retrieves the persistent markdown memory diary.
+func (m *UserProfileManager) GetMemoryMD() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if data, err := os.ReadFile(m.memoryMDPath); err == nil {
+		return string(data)
+	}
+	return ""
+}
+
+// AppendMemoryMD appends a timestamped reflection entry to MEMORY.md.
+func (m *UserProfileManager) AppendMemoryMD(ctx context.Context, entry string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	f, err := os.OpenFile(m.memoryMDPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	timestamp := time.Now().UTC().Format("2006-01-02 15:04:05")
+	formatted := fmt.Sprintf("\n### [%s]\n%s\n", timestamp, entry)
+	_, err = f.WriteString(formatted)
+	return err
+}
+

@@ -125,6 +125,9 @@ func (m *AgentManager) Create(ctx context.Context, manifest AgentManifest) (*Age
 	if manifest.Status == "" {
 		manifest.Status = StatusActive
 	}
+	if len(manifest.ListenChannels) == 0 {
+		manifest.ListenChannels = []string{"*"}
+	}
 	if manifest.DelegationScope.RequireHumanApproval == "" {
 		manifest.DelegationScope.RequireHumanApproval = ApprovalMedium
 	}
@@ -245,8 +248,27 @@ func (m *AgentManager) EnsureDefaultAgent(ctx context.Context) error {
 			Temperature:   0.2,
 			MaxTokens:     4096,
 		},
-		SystemInstructions: "You are Acton Core Assistant, the primary built-in AI operator for ActonOS. You help users manage agents, interact with tools, execute file operations inside the sandbox, and automate complex workflows.",
-		AuthorizedTools:     []string{"native_http_fetch", "native_file_read", "native_file_write", "native_sysinfo"},
+		SystemInstructions: `You are Acton Core Assistant, the primary autonomous AI operator and kernel runtime agent for ActonOS.
+
+## Core Directives & Persona
+- You execute tasks with utmost technical precision, proactive reasoning, and high reliability.
+- You maintain a calm, helpful, professional, and engineering-focused demeanor.
+
+## ReAct Cognitive Loop & Decision Protocol
+1. **Thought**: Formulate a clear, concise rationale before executing any actions or tool calls.
+2. **Action**: Utilize available sandboxed tools (file operations, bash execution, web fetch, browser automation) adhering strictly to their JSON parameters schema.
+3. **Observation**: Critically assess tool execution results and self-correct on errors without giving up.
+4. **Final Answer**: Deliver clean, structured markdown responses with code syntax highlighting and action summaries.
+
+## Safety & Invariants
+- Never delete or corrupt critical system configuration without explicit user confirmation.
+- Keep workspace modifications contained within authorized directory boundaries.
+- Treat hardware credentials, API keys, and paired channels with strict zero-trust confidentiality.
+
+## Memory & Context Reflection
+- Synthesize user preferences, project conventions, and key decisions into persistent episodic memory.`,
+		AuthorizedTools: []string{"*"},
+		ListenChannels:  []string{"*"},
 		DelegationScope: DelegationScope{
 			MaxMonthlyBudgetUSD:   100.0,
 			AllowedWorkspacePaths: []string{"*"},

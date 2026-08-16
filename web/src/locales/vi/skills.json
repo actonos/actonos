@@ -1,0 +1,39 @@
+{
+  "eyebrow": "Kỹ năng",
+  "title": "Kỹ năng Agent",
+  "subtitle": "Cài đặt và quản lý kỹ năng cho agent. Khám phá kỹ năng từ cộng đồng.",
+  "tabs": {
+    "installed": "Đã cài ({{count}})",
+    "hub": "Cộng đồng ({{count}})"
+  },
+  "hub": {
+    "title": "Kỹ năng cộng đồng",
+    "subtitle": "Cài đặt 1-click vào hệ thống",
+    "installed": "Đã cài",
+    "available": "Có sẵn",
+    "install": "Cài đặt",
+    "installing": "Đang cài...",
+    "uninstall": "Gỡ cài đặt",
+    "uninstalling": "Đang gỡ..."
+  },
+  "actions": {
+    "newSkill": "Tạo kỹ năng",
+    "refresh": "Làm mới",
+    "search": "Tìm kỹ năng..."
+  },
+  "createModal": {
+    "title": "Tạo kỹ năng mới",
+    "nameLabel": "Tên kỹ năng",
+    "namePlaceholder": "vd. market_researcher",
+    "descLabel": "Mô tả",
+    "descPlaceholder": "Mô tả khi nào agent nên dùng kỹ năng này...",
+    "contentLabel": "Hướng dẫn (Markdown)",
+    "contentPlaceholder": "Viết hướng dẫn cho kỹ năng...",
+    "submit": "Tạo kỹ năng",
+    "creating": "Đang tạo..."
+  },
+  "empty": {
+    "title": "Không tìm thấy kỹ năng",
+    "subtitle": "Tạo kỹ năng mới hoặc cài đặt từ cộng đồng."
+  }
+}

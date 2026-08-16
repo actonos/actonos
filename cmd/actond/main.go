@@ -10,12 +10,14 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/actonos/actonos/internal/agent"
 	"github.com/actonos/actonos/internal/auth"
 	"github.com/actonos/actonos/internal/bus"
+	"github.com/actonos/actonos/internal/channels"
 	"github.com/actonos/actonos/internal/llm"
 	"github.com/actonos/actonos/internal/memory"
 	"github.com/actonos/actonos/internal/server"
@@ -120,10 +122,30 @@ func main() {
 	defer eventBus.Close()
 	slog.Info("event bus initialized")
 
-	// 6. Initialize LLM Provider Router
+	// 6. Initialize LLM Provider Router & Load Configured Keys
 	llmRouter := llm.NewModelCascadeRouter()
 	mockLocal := llm.NewMockProvider("local-stub", "ActonOS Core Engine initialized and operating normally.")
 	llmRouter.RegisterProvider("local-stub", mockLocal)
+
+	configDir := filepath.Join(*dataDir, "config")
+	_ = os.MkdirAll(configDir, 0755)
+	readKey := func(file string) string {
+		data, _ := os.ReadFile(filepath.Join(configDir, file))
+		return strings.TrimSpace(string(data))
+	}
+
+	if antKey := readKey("anthropic.key"); antKey != "" {
+		llmRouter.RegisterProvider("anthropic/claude-3-7-sonnet", llm.NewAnthropicProvider(antKey, "claude-3-7-sonnet"))
+	}
+	if gemKey := readKey("gemini.key"); gemKey != "" {
+		llmRouter.RegisterProvider("google/gemini-2.5-flash", llm.NewGeminiProvider(gemKey, "gemini-2.5-flash"))
+	}
+	if oaiKey := readKey("openai.key"); oaiKey != "" {
+		llmRouter.RegisterProvider("openai/gpt-4o", llm.NewOpenAIProvider(oaiKey, "gpt-4o", "https://api.openai.com/v1"))
+	}
+	if dsKey := readKey("deepseek.key"); dsKey != "" {
+		llmRouter.RegisterProvider("deepseek/deepseek-chat", llm.NewDeepSeekProvider(dsKey, "deepseek-chat"))
+	}
 
 	// 7. Initialize Dynamic Tooling Hub
 	toolReg := tools.NewToolRegistry(eventBus)
@@ -137,9 +159,10 @@ func main() {
 		slog.Warn("skill watcher failed to start", "error", err)
 	}
 	defer skillWatcher.Stop()
+	hubMgr := tools.NewHubManager(skillsDir)
 	slog.Info("dynamic tooling hub initialized", "tools_registered", len(toolReg.List()))
 
-	// 8. Initialize Agent Manager
+	// 8. Initialize Agent Manager, User Profile & Cognitive Memory
 	agentMgr, err := agent.NewAgentManager(db, eventBus)
 	if err != nil {
 		slog.Error("failed to initialize agent manager", "error", err)
@@ -148,11 +171,78 @@ func main() {
 	agentsList, _ := agentMgr.List(ctx)
 	slog.Info("agent manager loaded", "agents_registered", len(agentsList))
 
-	// 9. Initialize Swarm Manager & ReAct Engine
+	profileMgr, err := agent.NewUserProfileManager(db, *dataDir)
+	if err != nil {
+		slog.Warn("failed to initialize user profile manager", "error", err)
+	}
+
+	// 9. Initialize Swarm Manager, ReAct Engine & Proactive Cron Scheduler
 	swarmMgr := agent.NewSwarmManager(agentMgr, eventBus, llmRouter, hybridEngine, 8)
 	engine := agent.NewEngine(agentMgr, eventBus, llmRouter, hybridEngine)
+	engine.SetToolRegistry(toolReg)
 
-	// 10. Initialize OAuth 2.1 PKCE Engine & Token Refresh Daemon
+	cronSched := agent.NewCronScheduler(engine, eventBus)
+	cronSched.Start(ctx)
+	defer cronSched.Stop()
+
+	// 10. Initialize Zero-Trust Channel Pairing & Multi-Channel Adapters
+	pairingMgr, err := channels.NewPairingManager(db.SQLDB())
+	if err != nil {
+		slog.Warn("failed to initialize pairing manager", "error", err)
+	}
+
+	tgToken := readKey("telegram.token")
+	tgAdapter := channels.NewTelegramAdapter(tgToken, eventBus, pairingMgr)
+	if err := tgAdapter.Start(ctx); err != nil {
+		slog.Warn("failed to start telegram adapter", "error", err)
+	}
+	defer tgAdapter.Stop()
+
+	waToken := readKey("whatsapp.token")
+	waPhone := readKey("whatsapp.phone_id")
+	waAdapter := channels.NewWhatsAppAdapter(waToken, waPhone, "acton_verify_token", eventBus, pairingMgr)
+
+	// Background listener for channel messages (Telegram & WhatsApp 2-way loop)
+	channelSub := eventBus.Subscribe(bus.EventAgentActionStarted)
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case ev, ok := <-channelSub:
+				if !ok {
+					return
+				}
+				if ev.AgentID == "telegram" || ev.AgentID == "whatsapp" {
+					if inMsg, ok := ev.Payload.(channels.InboundMessage); ok {
+						go func(msg channels.InboundMessage) {
+							target := "agent_system_core"
+							resp, err := engine.ExecuteStep(context.Background(), target, msg.Content)
+							if err != nil {
+								slog.Error("failed to process channel message", "channel", msg.ChannelID, "error", err)
+								return
+							}
+							if msg.ChannelID == "telegram" && msg.Metadata != nil && msg.Metadata["chat_id"] != "" {
+								_ = tgAdapter.SendMessage(context.Background(), channels.OutboundMessage{
+									ChannelID: "telegram",
+									Recipient: msg.Metadata["chat_id"],
+									Content:   resp.Content,
+								})
+							} else if msg.ChannelID == "whatsapp" {
+								_ = waAdapter.SendMessage(context.Background(), channels.OutboundMessage{
+									ChannelID: "whatsapp",
+									Recipient: msg.SenderID,
+									Content:   resp.Content,
+								})
+							}
+						}(inMsg)
+					}
+				}
+			}
+		}
+	}()
+
+	// 11. Initialize OAuth 2.1 PKCE Engine & Token Refresh Daemon
 	stateStore := auth.NewStateStore(10 * time.Minute)
 	oauthEngine := auth.NewOAuthEngine(stateStore)
 	tokenDaemon := auth.NewTokenRefreshDaemon(oauthEngine, vault, db, eventBus)
@@ -160,30 +250,36 @@ func main() {
 	defer tokenDaemon.Stop()
 	slog.Info("token refresh daemon started (auto-renew 5min before expiry)")
 
-	// 11. Initialize Hardware Abstraction Layer (HAL)
+	// 12. Initialize Hardware Abstraction Layer (HAL)
 	hal := system.AutoDetectHAL(*dataDir)
 	slog.Info("hardware abstraction layer loaded", "runtime_mode", hal.RuntimeMode())
 
-	// 12. Initialize Embedded Tailscale Node
+	// 13. Initialize Embedded Tailscale Node
 	tailscaleMgr := system.NewTailscaleManager(*dataDir, *hostname, "")
 	if err := tailscaleMgr.Start(ctx); err != nil {
 		slog.Warn("tailscale initialization warning", "error", err)
 	}
 	defer tailscaleMgr.Close()
 
-	// 13. Initialize HTTP REST API & Web UI Server
+	// 14. Initialize HTTP REST API & Web UI Server
 	srvConfig := server.Config{
 		AgentManager:       agentMgr,
 		SwarmManager:       swarmMgr,
 		Engine:             engine,
+		CronScheduler:      cronSched,
+		ProfileManager:     profileMgr,
 		LLMRouter:          llmRouter,
 		ToolRegistry:       toolReg,
 		MCPHost:            mcpHost,
+		HubManager:         hubMgr,
 		Memory:             hybridEngine,
 		HAL:                hal,
 		Tailscale:          tailscaleMgr,
 		TokenRefreshDaemon: tokenDaemon,
 		EventBus:           eventBus,
+		PairingManager:     pairingMgr,
+		TelegramAdapter:    tgAdapter,
+		WhatsAppAdapter:    waAdapter,
 	}
 
 	apiServer := server.NewServer(srvConfig)

@@ -1,22 +1,22 @@
 {
-  "eyebrow": "Sandboxed File System",
-  "title": "Workspace Explorer",
-  "subtitle": "Inspect, create, edit, and manage files written or read by autonomous agents inside the isolated /data/workspace/ environment.",
+  "eyebrow": "Files",
+  "title": "Workspace Files",
+  "subtitle": "View and manage files created and read by agents.",
   "actions": {
     "newFile": "New File",
     "refresh": "Refresh",
-    "save": "Save File",
+    "save": "Save",
     "delete": "Delete",
     "deleteConfirm": "Are you sure you want to delete this file?"
   },
   "table": {
-    "name": "File Name",
+    "name": "Name",
     "size": "Size",
     "modified": "Last Modified",
-    "empty": "No files found in this workspace directory."
+    "empty": "No files found."
   },
   "editor": {
-    "title": "File Editor: {{path}}",
-    "placeholder": "Enter file contents here..."
+    "title": "Editing: {{path}}",
+    "placeholder": "File content..."
   }
 }

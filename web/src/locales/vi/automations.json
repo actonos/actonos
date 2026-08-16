@@ -1,0 +1,43 @@
+{
+  "eyebrow": "Tự động hoá",
+  "title": "Tự động hoá",
+  "subtitle": "Lên lịch thực hiện tác vụ định kỳ và nhận thông báo tự động.",
+  "actions": {
+    "newTask": "Tác vụ mới",
+    "runNow": "Chạy ngay",
+    "edit": "Chỉnh sửa",
+    "delete": "Xoá",
+    "enable": "Bật",
+    "disable": "Tạm dừng"
+  },
+  "table": {
+    "taskName": "Tên tác vụ & Agent",
+    "schedule": "Lịch chạy",
+    "channel": "Kênh thông báo",
+    "lastRun": "Lần chạy cuối",
+    "status": "Trạng thái",
+    "actions": "Thao tác"
+  },
+  "modal": {
+    "createTitle": "Lên lịch tác vụ mới",
+    "editTitle": "Sửa tác vụ",
+    "nameLabel": "Tên tác vụ",
+    "namePlaceholder": "vd. Báo cáo buổi sáng hàng ngày",
+    "agentLabel": "Agent thực thi",
+    "cronExprLabel": "Biểu thức lịch (Cron)",
+    "cronExprPlaceholder": "vd. 0 8 * * * (Hàng ngày lúc 8:00)",
+    "presetDaily": "Hàng ngày 8:00",
+    "presetHourly": "Mỗi giờ",
+    "presetWeekly": "Hàng tuần (Thứ 2 9:00)",
+    "presetCustom": "Tuỳ chỉnh",
+    "promptLabel": "Hướng dẫn / Prompt",
+    "promptPlaceholder": "Mô tả việc agent cần làm tự động...",
+    "channelLabel": "Kênh gửi thông báo",
+    "channelNone": "Không gửi",
+    "channelTelegram": "Telegram",
+    "channelWhatsApp": "WhatsApp",
+    "recipientLabel": "Người nhận / ID Chat",
+    "recipientPlaceholder": "vd. 123456789",
+    "save": "Lưu tác vụ"
+  }
+}

@@ -1,11 +1,34 @@
 {
-  "eyebrow": "Kết Nối Dịch Vụ Doanh Nghiệp",
-  "title": "Tích Hợp OAuth 2.1 SaaS",
-  "subtitle": "Kết nối các nền tảng SaaS bên thứ ba với ủy quyền 1-click qua chuẩn OAuth 2.1 PKCE. Các Agent sẽ tự động kế thừa quyền hạn an toàn.",
+  "eyebrow": "Kết Nối Đa Kênh Tự Trị",
+  "title": "Tích Hợp SaaS & Kênh Trò Chuyện",
+  "subtitle": "Kết nối các nền tảng SaaS qua chuẩn OAuth 2.1 PKCE và liên kết Telegram, Discord, WhatsApp hoặc Webhook để kích hoạt vòng lặp Agent tự trị.",
+  "channels": {
+    "title": "Kênh Trò Chuyện & Bộ Tiếp Nhận Webhook",
+    "telegram": "Bot Telegram 2 Chiều",
+    "telegramDesc": "Bot Long-Polling 2 chiều. Nhắn tin trực tiếp, stream phản hồi và nhận cảnh báo chủ động.",
+    "whatsapp": "WhatsApp Cloud API",
+    "whatsappDesc": "Kết nối qua Webhook WhatsApp Cloud API để tương tác thuận tiện trên di động.",
+    "discord": "Discord Gateway",
+    "discordDesc": "Lắng nghe tin nhắn máy chủ, @mention và chủ đề để định tuyến yêu cầu trực tiếp tới Agent.",
+    "webhook": "Inbound Webhook",
+    "webhookDesc": "Kích hoạt tác vụ Agent tự trị từ các hệ thống bên ngoài qua giao thức HTTP POST."
+  },
+  "pairing": {
+    "title": "Ghép Nối Kênh & Bảo Mật Whitelist (Zero-Trust)",
+    "subtitle": "Tạo mã PIN 6 số tạm thời để xác thực người dùng Telegram hoặc WhatsApp trước khi họ có thể ra lệnh cho kernel.",
+    "generate": "Tạo Mã PIN Ghép Nối",
+    "activeCode": "Mã PIN Đang Hoạt Động",
+    "instructions": "Gửi mã PIN 6 số này hoặc lệnh /pair <PIN> từ chat Telegram/WhatsApp để xác thực tài khoản.",
+    "whitelist": "Danh Sách Trắng Được Ủy Quyền",
+    "empty": "Chưa có người dùng nào được cấp quyền. Hãy tạo mã PIN ở trên và gửi từ kênh chat của bạn.",
+    "revoke": "Thu Hồi Quyền"
+  },
   "actions": {
     "connect": "Kết Nối 1-Click",
     "disconnect": "Ngắt Kết Nối",
-    "connected": "Đã Kết Nối & Đang Hoạt Động"
+    "connected": "Đã Kết Nối & Đang Hoạt Động",
+    "save": "Lưu Cấu Hình Kênh",
+    "simulate": "Mô Phỏng Webhook"
   },
   "risk": {
     "low": "Rủi ro: Thấp",

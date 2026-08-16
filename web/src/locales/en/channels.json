@@ -1,0 +1,46 @@
+{
+  "eyebrow": "Channels",
+  "title": "Chat Channels",
+  "subtitle": "Connect Telegram, Discord, WhatsApp to receive and reply messages automatically.",
+  "addAccount": "Add Account",
+  "saveAll": "Save",
+  "telegram": {
+    "name": "Telegram",
+    "desc": "Two-way bot. Message directly and receive automatic replies."
+  },
+  "whatsapp": {
+    "name": "WhatsApp",
+    "desc": "Connect via WhatsApp Cloud API for mobile messaging."
+  },
+  "discord": {
+    "name": "Discord",
+    "desc": "Listen to messages and @mentions in Discord servers."
+  },
+  "webhook": {
+    "name": "Webhook",
+    "desc": "Receive HTTP POST requests from external systems."
+  },
+  "pairing": {
+    "title": "User Pairing",
+    "subtitle": "Generate a 6-digit PIN to authenticate new chat users.",
+    "generate": "Generate PIN",
+    "activeCode": "Active PIN",
+    "instructions": "Send this code or /pair <PIN> from your chat app to authorize.",
+    "whitelist": "Authorized Users",
+    "empty": "No users paired yet. Generate a PIN and send it from your chat.",
+    "revoke": "Revoke"
+  },
+  "status": {
+    "active": "Active",
+    "offline": "Offline",
+    "listening": "Listening"
+  },
+  "accounts": {
+    "label": "Account Label",
+    "token": "Bot Token",
+    "phoneId": "Phone Number ID",
+    "enabled": "Enabled",
+    "remove": "Remove",
+    "primary": "Primary"
+  }
+}

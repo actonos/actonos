@@ -178,3 +178,68 @@ func (s *Server) handleUploadWASM(w http.ResponseWriter, r *http.Request) {
 		"filename": header.Filename,
 	})
 }
+
+// Hub Catalog & Marketplace Handlers
+func (s *Server) handleListHubCatalog(w http.ResponseWriter, r *http.Request) {
+	if s.hubMgr == nil {
+		s.respondError(w, http.StatusNotImplemented, "HUB_NOT_AVAILABLE", "hub manager not configured")
+		return
+	}
+
+	catalog := s.hubMgr.ListCatalog()
+	s.respondJSON(w, http.StatusOK, map[string]any{
+		"catalog": catalog,
+		"count":   len(catalog),
+	})
+}
+
+func (s *Server) handleInstallHubSkill(w http.ResponseWriter, r *http.Request) {
+	if s.hubMgr == nil {
+		s.respondError(w, http.StatusNotImplemented, "HUB_NOT_AVAILABLE", "hub manager not configured")
+		return
+	}
+
+	var req struct {
+		SkillID string `json:"skill_id"`
+	}
+	if err := s.decodeJSON(r, &req); err != nil || req.SkillID == "" {
+		s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", "skill_id is required")
+		return
+	}
+
+	if err := s.hubMgr.InstallSkill(req.SkillID); err != nil {
+		s.respondError(w, http.StatusBadRequest, "INSTALL_FAILED", err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]string{
+		"status":   "installed",
+		"skill_id": req.SkillID,
+	})
+}
+
+func (s *Server) handleUninstallHubSkill(w http.ResponseWriter, r *http.Request) {
+	if s.hubMgr == nil {
+		s.respondError(w, http.StatusNotImplemented, "HUB_NOT_AVAILABLE", "hub manager not configured")
+		return
+	}
+
+	var req struct {
+		SkillID string `json:"skill_id"`
+	}
+	if err := s.decodeJSON(r, &req); err != nil || req.SkillID == "" {
+		s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", "skill_id is required")
+		return
+	}
+
+	if err := s.hubMgr.UninstallSkill(req.SkillID); err != nil {
+		s.respondError(w, http.StatusBadRequest, "UNINSTALL_FAILED", err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]string{
+		"status":   "uninstalled",
+		"skill_id": req.SkillID,
+	})
+}
+

@@ -15,8 +15,10 @@ import {
   X,
 } from 'lucide-react';
 
+import type { NavTab } from '@/components/layout/Sidebar';
+
 export interface QuickstartGuideProps {
-  onNavigateTab: (tab: 'agents' | 'tools' | 'workspace' | 'integrations' | 'chat' | 'settings') => void;
+  onNavigateTab: (tab: NavTab) => void;
   onOpenChat: (agentID: string) => void;
 }
 

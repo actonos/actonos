@@ -1,28 +1,28 @@
 {
-  "eyebrow": "Hardware & Remote Access",
-  "title": "System & Tailscale",
-  "subtitle": "Monitor live hardware metrics, Wi-Fi connectivity, and encrypted Tailscale mesh access.",
+  "eyebrow": "System",
+  "title": "Settings",
+  "subtitle": "System hardware, API keys, network, and Tailscale VPN.",
   "tailscale": {
     "title": "Tailscale Remote Access",
-    "desc": "Access this ActonOS appliance securely from anywhere via end-to-end encrypted mesh VPN without port forwarding.",
-    "status": "Connection Status",
-    "ip": "Tailnet IP Address",
-    "hostname": "Node Hostname",
-    "peers": "Active Tailnet Peers"
+    "desc": "Access ActonOS securely from anywhere via encrypted VPN.",
+    "status": "Status",
+    "ip": "IP Address",
+    "hostname": "Hostname",
+    "peers": "Peers"
   },
   "metrics": {
-    "title": "Appliance Performance",
+    "title": "System Performance",
     "cpu": "CPU Load",
-    "temp": "Core Temperature",
-    "ram": "Memory Usage",
+    "temp": "Core Temp",
+    "ram": "Memory",
     "actondRam": "Daemon Footprint",
-    "disk": "User Data Disk",
-    "uptime": "System Uptime"
+    "disk": "Storage",
+    "uptime": "Uptime"
   },
   "wifi": {
-    "title": "Wireless Network",
-    "scan": "Scan Wi-Fi",
-    "connect": "Connect Network",
-    "password": "Wi-Fi Password"
+    "title": "Wi-Fi Network",
+    "scan": "Scan",
+    "connect": "Connect",
+    "password": "Password"
   }
 }

@@ -1,0 +1,43 @@
+{
+  "eyebrow": "Automations",
+  "title": "Automations",
+  "subtitle": "Schedule recurring AI tasks and receive automatic push notifications.",
+  "actions": {
+    "newTask": "New Task",
+    "runNow": "Run Now",
+    "edit": "Edit",
+    "delete": "Delete",
+    "enable": "Enable",
+    "disable": "Pause"
+  },
+  "table": {
+    "taskName": "Task Name & Agent",
+    "schedule": "Schedule",
+    "channel": "Channel",
+    "lastRun": "Last Run",
+    "status": "Status",
+    "actions": "Actions"
+  },
+  "modal": {
+    "createTitle": "New Scheduled Task",
+    "editTitle": "Edit Task",
+    "nameLabel": "Task Name",
+    "namePlaceholder": "e.g. Daily Morning Briefing",
+    "agentLabel": "Agent",
+    "cronExprLabel": "Schedule",
+    "cronExprPlaceholder": "e.g. 0 8 * * * (Daily at 8:00 AM)",
+    "presetDaily": "Daily 8 AM",
+    "presetHourly": "Every Hour",
+    "presetWeekly": "Weekly (Mon 9 AM)",
+    "presetCustom": "Custom",
+    "promptLabel": "Prompt / Instructions",
+    "promptPlaceholder": "What should the agent do automatically...",
+    "channelLabel": "Alert Channel",
+    "channelNone": "None",
+    "channelTelegram": "Telegram",
+    "channelWhatsApp": "WhatsApp",
+    "recipientLabel": "Recipient / Chat ID",
+    "recipientPlaceholder": "e.g. 123456789",
+    "save": "Save Task"
+  }
+}

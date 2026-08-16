@@ -1,0 +1,74 @@
+{
+  "eyebrow": "Tổng quan",
+  "title": "Bảng điều khiển",
+  "subtitle": "Xem nhanh trạng thái hệ thống, agents và hoạt động gần đây.",
+  "quickstart": {
+    "title": "Hướng dẫn bắt đầu nhanh",
+    "subtitle": "Hoàn thành các bước dưới đây để làm quen với ActonOS.",
+    "progress": "Đã hoàn thành {{completed}}/{{total}} bước",
+    "dismiss": "Ẩn hướng dẫn",
+    "show": "Hiện hướng dẫn",
+    "steps": {
+      "keys": {
+        "title": "Cấu hình API Keys",
+        "desc": "Thêm khoá API Anthropic, OpenAI hoặc Gemini.",
+        "action": "Cấu hình"
+      },
+      "channel": {
+        "title": "Kết nối Kênh Chat",
+        "desc": "Liên kết Telegram, Discord hoặc WhatsApp để trò chuyện với bot.",
+        "action": "Kết nối"
+      },
+      "agent": {
+        "title": "Tạo AI Agent",
+        "desc": "Tạo và tuỳ chỉnh agent tự động của bạn.",
+        "action": "Tạo mới"
+      },
+      "chat": {
+        "title": "Trò chuyện thử",
+        "desc": "Gửi tin nhắn để xem agent tư duy và dùng công cụ.",
+        "action": "Trò chuyện"
+      },
+      "skills": {
+        "title": "Cài đặt Kỹ năng",
+        "desc": "Khám phá kỹ năng cộng đồng để mở rộng năng lực cho agent.",
+        "action": "Khám phá"
+      }
+    }
+  },
+  "gauges": {
+    "cpu": "CPU",
+    "memory": "Bộ nhớ RAM",
+    "storage": "Ổ đĩa",
+    "uptime": "Thời gian chạy",
+    "temp": "Nhiệt độ",
+    "active": "Hoạt động"
+  },
+  "metrics": {
+    "agents": "Agents",
+    "agentsDesc": "{{active}} đang chạy / {{total}} tổng",
+    "tools": "Công cụ",
+    "toolsDesc": "{{total}} công cụ (Native, MCP, WASM)",
+    "automations": "Tự động hoá",
+    "automationsDesc": "{{total}} tác vụ lên lịch",
+    "mesh": "Mạng Tailscale",
+    "meshConnected": "Đã kết nối ({{ip}})",
+    "meshDisabled": "Chưa bật"
+  },
+  "launchpad": {
+    "title": "Thao tác nhanh",
+    "chatCore": "Chat với Trợ lý",
+    "newAgent": "Tạo Agent mới",
+    "exploreTools": "Quản lý công cụ",
+    "exploreSkills": "Khám phá kỹ năng",
+    "openWorkspace": "Quản lý tệp",
+    "pairChannel": "Kênh chat",
+    "settings": "Cài đặt"
+  },
+  "activity": {
+    "title": "Hoạt động gần đây",
+    "subtitle": "Nhật ký thực thi công cụ và hành động của agent theo thời gian thực.",
+    "empty": "Chưa có nhật ký gần đây.",
+    "viewAll": "Xem tất cả"
+  }
+}

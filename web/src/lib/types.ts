@@ -31,10 +31,21 @@ export interface AgentManifest {
   model_config: ModelConfig;
   system_instructions: string;
   authorized_tools: string[];
+  /** Channels this agent listens to. ['*'] = all (default). */
+  listen_channels: string[];
   delegation_scope: DelegationScope;
   trigger_rules?: TriggerRule[];
   created_at?: string;
   updated_at?: string;
+}
+
+/** A single connected account for a channel type (multi-account support). */
+export interface ChannelAccount {
+  id: string;
+  label: string;
+  token?: string;
+  phone_id?: string;
+  enabled: boolean;
 }
 
 export interface ToolInfo {

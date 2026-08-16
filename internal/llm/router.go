@@ -37,16 +37,41 @@ func (r *ModelCascadeRouter) RegisterProvider(id string, provider LLMProvider) {
 	}
 }
 
-// GetProvider retrieves a provider by identifier.
+// GetProvider retrieves a provider by identifier or falls back gracefully.
 func (r *ModelCascadeRouter) GetProvider(id string) (LLMProvider, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	p, ok := r.providers[id]
-	if !ok {
-		return nil, fmt.Errorf("%w: %s", ErrProviderNotFound, id)
+	// 1. Direct key match
+	if p, ok := r.providers[id]; ok {
+		return p, nil
 	}
-	return p, nil
+
+	// 2. Fuzzy alias matching
+	cleanID := id
+	for k, p := range r.providers {
+		if k == cleanID {
+			return p, nil
+		}
+		// Match prefixes (e.g. anthropic, gemini, openai, claude, gpt)
+		if (len(cleanID) > 4 && len(k) > 4) && (cleanID[:4] == k[:4]) {
+			return p, nil
+		}
+	}
+
+	// 3. Fallback to default registered provider if any exists
+	if r.defaultID != "" {
+		if p, ok := r.providers[r.defaultID]; ok {
+			return p, nil
+		}
+	}
+
+	// 4. Return any registered provider
+	for _, p := range r.providers {
+		return p, nil
+	}
+
+	return nil, fmt.Errorf("%w: %s", ErrProviderNotFound, id)
 }
 
 // CompleteWithCascade attempts execution with primary provider, falling back on error.

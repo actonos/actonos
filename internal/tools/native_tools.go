@@ -27,6 +27,8 @@ func RegisterNativeTools(r *ToolRegistry, workspaceDir string) {
 	_ = r.Register(NewFileReadTool(workspaceDir))
 	_ = r.Register(NewFileWriteTool(workspaceDir))
 	_ = r.Register(NewSysInfoTool())
+	_ = r.Register(NewBrowserNavigateTool())
+	_ = r.Register(NewBrowserScreenshotTool(workspaceDir))
 }
 
 // -----------------------------------------------------------------------------

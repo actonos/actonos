@@ -8,6 +8,7 @@ import (
 	"github.com/actonos/actonos/internal/agent"
 	"github.com/actonos/actonos/internal/auth"
 	"github.com/actonos/actonos/internal/bus"
+	"github.com/actonos/actonos/internal/channels"
 	"github.com/actonos/actonos/internal/llm"
 	"github.com/actonos/actonos/internal/memory"
 	"github.com/actonos/actonos/internal/system"
@@ -19,19 +20,25 @@ import (
 
 // Server holds all subsystem references and handles HTTP routing.
 type Server struct {
-	router      chi.Router
-	agentMgr    *agent.AgentManager
-	swarmMgr    *agent.SwarmManager
-	engine      *agent.Engine
-	llmRouter   *llm.ModelCascadeRouter
-	toolReg     *tools.ToolRegistry
-	mcpHost     *tools.MCPHostEngine
-	memory      *memory.HybridEngine
-	hal         system.HAL
-	tailscale   *system.TailscaleManager
-	tokenDaemon *auth.TokenRefreshDaemon
-	bus         *bus.EventBus
-	startTime   time.Time
+	router         chi.Router
+	agentMgr       *agent.AgentManager
+	swarmMgr       *agent.SwarmManager
+	engine         *agent.Engine
+	cronSched      *agent.CronScheduler
+	profileMgr     *agent.UserProfileManager
+	llmRouter      *llm.ModelCascadeRouter
+	toolReg        *tools.ToolRegistry
+	mcpHost        *tools.MCPHostEngine
+	hubMgr         *tools.HubManager
+	memory         *memory.HybridEngine
+	hal            system.HAL
+	tailscale      *system.TailscaleManager
+	tokenDaemon    *auth.TokenRefreshDaemon
+	bus            *bus.EventBus
+	pairingMgr     *channels.PairingManager
+	tgAdapter      *channels.TelegramAdapter
+	waAdapter      *channels.WhatsAppAdapter
+	startTime      time.Time
 }
 
 // Config holds configuration parameters for the HTTP server.
@@ -39,14 +46,20 @@ type Config struct {
 	AgentManager       *agent.AgentManager
 	SwarmManager       *agent.SwarmManager
 	Engine             *agent.Engine
+	CronScheduler      *agent.CronScheduler
+	ProfileManager     *agent.UserProfileManager
 	LLMRouter          *llm.ModelCascadeRouter
 	ToolRegistry       *tools.ToolRegistry
 	MCPHost            *tools.MCPHostEngine
+	HubManager         *tools.HubManager
 	Memory             *memory.HybridEngine
 	HAL                system.HAL
 	Tailscale          *system.TailscaleManager
 	TokenRefreshDaemon *auth.TokenRefreshDaemon
 	EventBus           *bus.EventBus
+	PairingManager     *channels.PairingManager
+	TelegramAdapter    *channels.TelegramAdapter
+	WhatsAppAdapter    *channels.WhatsAppAdapter
 }
 
 // NewServer initializes the HTTP API Server with all endpoints and middlewares.
@@ -55,14 +68,20 @@ func NewServer(cfg Config) *Server {
 		agentMgr:    cfg.AgentManager,
 		swarmMgr:    cfg.SwarmManager,
 		engine:      cfg.Engine,
+		cronSched:   cfg.CronScheduler,
+		profileMgr:  cfg.ProfileManager,
 		llmRouter:   cfg.LLMRouter,
 		toolReg:     cfg.ToolRegistry,
 		mcpHost:     cfg.MCPHost,
+		hubMgr:      cfg.HubManager,
 		memory:      cfg.Memory,
 		hal:         cfg.HAL,
 		tailscale:   cfg.Tailscale,
 		tokenDaemon: cfg.TokenRefreshDaemon,
 		bus:         cfg.EventBus,
+		pairingMgr:  cfg.PairingManager,
+		tgAdapter:   cfg.TelegramAdapter,
+		waAdapter:   cfg.WhatsAppAdapter,
 		startTime:   time.Now(),
 	}
 
@@ -97,11 +116,20 @@ func (s *Server) setupRoutes() {
 	// API Routes
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/health", s.handleHealth)
+		r.Get("/dashboard/summary", s.handleDashboardSummary)
 
-		// Agent Management
+		// Agent Management, Soul & Cron
 		r.Route("/agents", func(r chi.Router) {
 			r.Get("/", s.handleListAgents)
 			r.Post("/", s.handleCreateAgent)
+			r.Get("/cron", s.handleListCronJobs)
+			r.Post("/cron", s.handleSaveCronJob)
+			r.Post("/cron/{id}/run", s.handleRunCronJob)
+			r.Delete("/cron/{id}", s.handleDeleteCronJob)
+			r.Get("/soul", s.handleGetSoul)
+			r.Put("/soul", s.handleSaveSoul)
+			r.Get("/memory-md", s.handleGetMemoryMD)
+
 			r.Route("/{agentID}", func(r chi.Router) {
 				r.Get("/", s.handleGetAgent)
 				r.Put("/", s.handleUpdateAgent)
@@ -110,6 +138,14 @@ func (s *Server) setupRoutes() {
 				r.Post("/stop", s.handleStopAgent)
 				r.Post("/chat", s.handleChat)
 			})
+		})
+
+		// Standalone Cron Route Alias
+		r.Route("/cron", func(r chi.Router) {
+			r.Get("/", s.handleListCronJobs)
+			r.Post("/", s.handleSaveCronJob)
+			r.Post("/{id}/run", s.handleRunCronJob)
+			r.Delete("/{id}", s.handleDeleteCronJob)
 		})
 
 		// Conversations & History
@@ -123,7 +159,7 @@ func (s *Server) setupRoutes() {
 			})
 		})
 
-		// Tool Hub
+		// Tool Hub & Skills Marketplace
 		r.Route("/tools", func(r chi.Router) {
 			r.Get("/", s.handleListTools)
 			r.Post("/mcp", s.handleConnectMCP)
@@ -131,6 +167,9 @@ func (s *Server) setupRoutes() {
 			r.Post("/execute", s.handleExecuteTool)
 			r.Post("/skill", s.handleCreateSkill)
 			r.Post("/wasm", s.handleUploadWASM)
+			r.Get("/hub/catalog", s.handleListHubCatalog)
+			r.Post("/hub/install", s.handleInstallHubSkill)
+			r.Post("/hub/uninstall", s.handleUninstallHubSkill)
 		})
 
 		// Onboarding & Setup
@@ -139,13 +178,23 @@ func (s *Server) setupRoutes() {
 			r.Post("/wizard", s.handleSetupWizard)
 		})
 
-		// SaaS Integrations & Channel Adapters
+		// SaaS Integrations & Channel Adapters & Pairing
 		r.Route("/integrations", func(r chi.Router) {
 			r.Get("/", s.handleListIntegrations)
 			r.Post("/{provider}/auth-url", s.handleGetAuthURL)
 			r.Post("/{provider}/toggle", s.handleToggleIntegration)
 			r.Get("/channels", s.handleGetChannels)
 			r.Post("/channels", s.handleSaveChannels)
+			r.Post("/pairing/code", s.handleGeneratePairingCode)
+			r.Post("/pairing/verify", s.handleVerifyPairingCode)
+			r.Get("/authorizations", s.handleListAuthorizations)
+			r.Delete("/authorizations", s.handleRevokeAuthorization)
+		})
+
+		// Webhooks (WhatsApp, Generic)
+		r.Route("/webhooks", func(r chi.Router) {
+			r.Get("/whatsapp", s.handleWhatsAppVerifyWebhook)
+			r.Post("/whatsapp", s.handleWhatsAppInboundWebhook)
 		})
 
 		// Workspace File Manager

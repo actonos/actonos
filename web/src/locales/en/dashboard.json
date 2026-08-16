@@ -1,0 +1,74 @@
+{
+  "eyebrow": "Overview",
+  "title": "Dashboard",
+  "subtitle": "Overview of system status, active agents, and recent activities.",
+  "quickstart": {
+    "title": "Quick Start Guide",
+    "subtitle": "Complete these quick steps to get the most out of ActonOS.",
+    "progress": "{{completed}} of {{total}} completed",
+    "dismiss": "Hide Guide",
+    "show": "Show Guide",
+    "steps": {
+      "keys": {
+        "title": "Add API Keys",
+        "desc": "Configure Anthropic, OpenAI, or Gemini keys.",
+        "action": "Configure"
+      },
+      "channel": {
+        "title": "Connect a Chat Channel",
+        "desc": "Link Telegram, Discord, or WhatsApp to chat with agents.",
+        "action": "Connect"
+      },
+      "agent": {
+        "title": "Create an AI Agent",
+        "desc": "Create and customize your autonomous agent.",
+        "action": "Create"
+      },
+      "chat": {
+        "title": "Try Chatting",
+        "desc": "Send a prompt to see the agent think and use tools.",
+        "action": "Chat"
+      },
+      "skills": {
+        "title": "Explore Skills",
+        "desc": "Install community skills to give your agents new capabilities.",
+        "action": "Browse"
+      }
+    }
+  },
+  "gauges": {
+    "cpu": "CPU",
+    "memory": "Memory",
+    "storage": "Disk Storage",
+    "uptime": "Uptime",
+    "temp": "Core Temp",
+    "active": "Active"
+  },
+  "metrics": {
+    "agents": "Agents",
+    "agentsDesc": "{{active}} active of {{total}} total",
+    "tools": "Tools",
+    "toolsDesc": "{{total}} tools (Native, MCP, WASM)",
+    "automations": "Automations",
+    "automationsDesc": "{{total}} scheduled tasks",
+    "mesh": "Tailscale VPN",
+    "meshConnected": "Connected ({{ip}})",
+    "meshDisabled": "Disabled"
+  },
+  "launchpad": {
+    "title": "Quick Actions",
+    "chatCore": "Chat with Assistant",
+    "newAgent": "New Agent",
+    "exploreTools": "Manage Tools",
+    "exploreSkills": "Explore Skills",
+    "openWorkspace": "Files & Storage",
+    "pairChannel": "Chat Channels",
+    "settings": "Settings"
+  },
+  "activity": {
+    "title": "Recent Activity",
+    "subtitle": "Real-time log of tool executions and agent actions.",
+    "empty": "No recent logs.",
+    "viewAll": "View All"
+  }
+}

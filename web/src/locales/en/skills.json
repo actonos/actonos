@@ -1,0 +1,39 @@
+{
+  "eyebrow": "Skills",
+  "title": "Agent Skills",
+  "subtitle": "Install and manage skills for agents. Explore community skills.",
+  "tabs": {
+    "installed": "Installed ({{count}})",
+    "hub": "Community Hub ({{count}})"
+  },
+  "hub": {
+    "title": "Community Skills",
+    "subtitle": "1-click install into your system",
+    "installed": "Installed",
+    "available": "Available",
+    "install": "Install",
+    "installing": "Installing...",
+    "uninstall": "Uninstall",
+    "uninstalling": "Uninstalling..."
+  },
+  "actions": {
+    "newSkill": "Create Skill",
+    "refresh": "Refresh",
+    "search": "Search skills..."
+  },
+  "createModal": {
+    "title": "Create New Skill",
+    "nameLabel": "Skill Name",
+    "namePlaceholder": "e.g. market_researcher",
+    "descLabel": "Description",
+    "descPlaceholder": "Describe when agents should use this skill...",
+    "contentLabel": "Instructions (Markdown)",
+    "contentPlaceholder": "Write skill instructions...",
+    "submit": "Create Skill",
+    "creating": "Creating..."
+  },
+  "empty": {
+    "title": "No skills found",
+    "subtitle": "Create a custom skill or install one from the community hub."
+  }
+}

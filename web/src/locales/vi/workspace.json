@@ -1,22 +1,22 @@
 {
-  "eyebrow": "Hệ Thống Tệp Sandbox",
-  "title": "Trình Duyệt Workspace",
-  "subtitle": "Kiểm tra, tạo mới, chỉnh sửa và quản lý các tệp dữ liệu do AI Agent tạo ra trong môi trường cô lập /data/workspace/.",
+  "eyebrow": "Tệp tin",
+  "title": "Quản lý tệp",
+  "subtitle": "Xem và quản lý các tệp được tạo và sử dụng bởi agent.",
   "actions": {
-    "newFile": "Tạo Tệp Mới",
-    "refresh": "Làm Mới",
-    "save": "Lưu Tệp",
-    "delete": "Xóa",
-    "deleteConfirm": "Bạn có chắc chắn muốn xóa tệp này không?"
+    "newFile": "Tệp mới",
+    "refresh": "Làm mới",
+    "save": "Lưu",
+    "delete": "Xoá",
+    "deleteConfirm": "Bạn có chắc muốn xoá tệp này?"
   },
   "table": {
-    "name": "Tên Tệp / Thư Mục",
-    "size": "Kích Thước",
-    "modified": "Thời Gian Sửa Đổi",
-    "empty": "Không có tệp nào trong thư mục workspace này."
+    "name": "Tên tệp",
+    "size": "Kích thước",
+    "modified": "Ngày sửa đổi",
+    "empty": "Không có tệp nào."
   },
   "editor": {
-    "title": "Chỉnh Sửa Tệp: {{path}}",
-    "placeholder": "Nhập nội dung tệp tại đây..."
+    "title": "Chỉnh sửa: {{path}}",
+    "placeholder": "Nội dung tệp..."
   }
 }

@@ -1,28 +1,28 @@
 {
-  "eyebrow": "Phần Cứng & Truy Cập Từ Xa",
-  "title": "Hệ Thống & Tailscale",
-  "subtitle": "Theo dõi hiệu năng phần cứng, kết nối mạng không dây và truy cập mã hóa qua mạng Tailscale mesh.",
+  "eyebrow": "Hệ thống",
+  "title": "Cài đặt",
+  "subtitle": "Phần cứng hệ thống, khoá API, mạng và mạng ảo Tailscale.",
   "tailscale": {
-    "title": "Truy Cập Từ Xa Tailscale",
-    "desc": "Truy cập thiết bị ActonOS này an toàn từ bất cứ đâu qua mạng riêng ảo mã hóa đầu cuối mà không cần mở port mạng.",
-    "status": "Trạng Thái Kết Nối",
-    "ip": "Địa Chỉ IP Tailnet",
-    "hostname": "Tên Node Thiết Bị",
-    "peers": "Thiết Bị Peer Đang Kết Nối"
+    "title": "Truy cập từ xa Tailscale",
+    "desc": "Truy cập ActonOS an toàn từ bất cứ đâu qua mạng VPN mã hoá.",
+    "status": "Trạng thái",
+    "ip": "Địa chỉ IP",
+    "hostname": "Tên máy chủ",
+    "peers": "Thiết bị kết nối"
   },
   "metrics": {
-    "title": "Hiệu Năng Thiết Bị",
+    "title": "Hiệu năng hệ thống",
     "cpu": "Tải CPU",
-    "temp": "Nhiệt Độ Core",
-    "ram": "Bộ Nhớ RAM",
-    "actondRam": "RAM Tiến Trình Daemon",
-    "disk": "Dung Lượng Dữ Liệu",
-    "uptime": "Thời Gian Hoạt Động"
+    "temp": "Nhiệt độ",
+    "ram": "Bộ nhớ RAM",
+    "actondRam": "Bộ nhớ Daemon",
+    "disk": "Ổ đĩa",
+    "uptime": "Thời gian chạy"
   },
   "wifi": {
-    "title": "Mạng Không Dây",
-    "scan": "Quét Sóng Wi-Fi",
-    "connect": "Kết Nối Mạng",
-    "password": "Mật Khẩu Wi-Fi"
+    "title": "Mạng Wi-Fi",
+    "scan": "Quét mạng",
+    "connect": "Kết nối",
+    "password": "Mật khẩu"
   }
 }

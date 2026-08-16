@@ -1,32 +1,28 @@
 {
-  "eyebrow": "Dynamic Tooling Hub",
-  "title": "Tool Registry & Integrations",
-  "subtitle": "Discover, connect, and execute tools across Model Context Protocol (MCP), WebAssembly plugins, and local skills.",
+  "eyebrow": "Tools",
+  "title": "Tools",
+  "subtitle": "System tools, MCP servers, and WASM plugins available for agents.",
   "tabs": {
-    "all": "All Tools ({{count}})",
-    "native": "Native Core",
-    "mcp": "MCP Servers",
-    "wasm": "WASM Plugins",
-    "skill": "Local Skills"
+    "all": "All ({{count}})",
+    "native": "Native",
+    "mcp": "MCP",
+    "wasm": "WASM"
   },
   "actions": {
-    "addMCP": "Connect MCP Server",
-    "testTool": "Test Execution",
-    "refresh": "Reload Registry"
+    "addMCP": "Connect MCP",
+    "testTool": "Test",
+    "refresh": "Refresh",
+    "uploadWasm": "Upload WASM",
+    "search": "Search tools..."
   },
   "mcpModal": {
-    "title": "Connect Model Context Protocol Server",
-    "idLabel": "Server Identifier",
-    "idPlaceholder": "e.g., github_mcp",
-    "commandLabel": "Command / Binary",
-    "commandPlaceholder": "e.g., npx -y @modelcontextprotocol/server-github",
-    "argsLabel": "Arguments (space separated)",
-    "argsPlaceholder": "e.g., --token=ghp_xyz"
-  },
-  "testModal": {
-    "title": "Test Tool: {{name}}",
-    "inputLabel": "Input Parameters (JSON)",
-    "outputLabel": "Execution Output",
-    "running": "Executing in sandbox..."
+    "title": "Connect MCP Server",
+    "idLabel": "Server Name",
+    "idPlaceholder": "e.g. mcp_brave_search",
+    "typeLabel": "Transport",
+    "commandLabel": "Command",
+    "argsLabel": "Arguments (JSON Array)",
+    "urlLabel": "SSE URL",
+    "save": "Connect"
   }
 }

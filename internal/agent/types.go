@@ -55,6 +55,10 @@ type AgentManifest struct {
 	ModelConfig         llm.ModelConfig  `json:"model_config"`
 	SystemInstructions string           `json:"system_instructions"`
 	AuthorizedTools     []string         `json:"authorized_tools"`
+	// ListenChannels defines which chat channels this agent responds to.
+	// ["*"] means all channels (default). Specific channel IDs like
+	// ["telegram", "discord"] restrict the agent to only those channels.
+	ListenChannels      []string         `json:"listen_channels"`
 	DelegationScope     DelegationScope  `json:"delegation_scope"`
 	TriggerRules        []TriggerRule    `json:"trigger_rules"`
 	CreatedAt           time.Time        `json:"created_at"`

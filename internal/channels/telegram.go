@@ -5,69 +5,247 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/actonos/actonos/internal/bus"
 )
 
-// TelegramAdapter handles two-way messaging with the Telegram Bot API.
+// TelegramAdapter handles two-way messaging with the Telegram Bot API via Long-Polling or Outbound.
 type TelegramAdapter struct {
-	mu       sync.RWMutex
-	token    string
-	bus      *bus.EventBus
-	client   *http.Client
-	running  bool
-	stopChan chan struct{}
+	mu           sync.RWMutex
+	token        string
+	bus          *bus.EventBus
+	pairingMgr   *PairingManager
+	client       *http.Client
+	running      bool
+	stopChan     chan struct{}
+	lastUpdateID int64
 }
 
 // NewTelegramAdapter creates a new TelegramAdapter.
-func NewTelegramAdapter(token string, bus *bus.EventBus) *TelegramAdapter {
+func NewTelegramAdapter(token string, bus *bus.EventBus, pairingMgr *PairingManager) *TelegramAdapter {
 	return &TelegramAdapter{
-		token:    token,
-		bus:      bus,
-		client:   &http.Client{Timeout: 30 * time.Second},
-		stopChan: make(chan struct{}),
+		token:      token,
+		bus:        bus,
+		pairingMgr: pairingMgr,
+		client:     &http.Client{Timeout: 35 * time.Second},
+		stopChan:   make(chan struct{}),
 	}
 }
 
 func (t *TelegramAdapter) Name() string { return "telegram" }
 
-func (t *TelegramAdapter) Start(ctx context.Context) error {
+// UpdateToken updates the bot token dynamically.
+func (t *TelegramAdapter) UpdateToken(token string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	t.token = token
+}
 
+// Start begins the background long-polling loop.
+func (t *TelegramAdapter) Start(ctx context.Context) error {
+	t.mu.Lock()
 	if t.token == "" {
+		t.mu.Unlock()
 		slog.Info("telegram channel adapter: no token provided, idle mode")
 		return nil
 	}
-
+	if t.running {
+		t.mu.Unlock()
+		return nil
+	}
 	t.running = true
-	slog.Info("telegram channel adapter started")
+	t.stopChan = make(chan struct{})
+	t.mu.Unlock()
+
+	slog.Info("telegram channel adapter started (long-polling active)")
+	go t.pollLoop(ctx)
 	return nil
 }
 
+// Stop gracefully terminates the polling loop.
 func (t *TelegramAdapter) Stop() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.running {
 		close(t.stopChan)
 		t.running = false
+		slog.Info("telegram channel adapter stopped")
 	}
 	return nil
 }
 
+func (t *TelegramAdapter) pollLoop(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.stopChan:
+			return
+		default:
+			t.fetchUpdates(ctx)
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+}
+
+type tgUpdate struct {
+	UpdateID int64 `json:"update_id"`
+	Message  *struct {
+		MessageID int64 `json:"message_id"`
+		From      *struct {
+			ID        int64  `json:"id"`
+			FirstName string `json:"first_name"`
+			Username  string `json:"username"`
+		} `json:"from"`
+		Chat struct {
+			ID   int64  `json:"id"`
+			Type string `json:"type"`
+		} `json:"chat"`
+		Text string `json:"text"`
+	} `json:"message"`
+}
+
+type tgResponse struct {
+	OK     bool       `json:"ok"`
+	Result []tgUpdate `json:"result"`
+}
+
+func (t *TelegramAdapter) fetchUpdates(ctx context.Context) {
+	t.mu.RLock()
+	token := t.token
+	offset := t.lastUpdateID + 1
+	t.mu.RUnlock()
+
+	if token == "" {
+		return
+	}
+
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/getUpdates?offset=%d&timeout=20", token, offset)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return
+	}
+
+	resp, err := t.client.Do(req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return
+	}
+
+	var tgResp tgResponse
+	if err := json.Unmarshal(body, &tgResp); err != nil || !tgResp.OK {
+		return
+	}
+
+	for _, upd := range tgResp.Result {
+		t.mu.Lock()
+		if upd.UpdateID > t.lastUpdateID {
+			t.lastUpdateID = upd.UpdateID
+		}
+		t.mu.Unlock()
+
+		if upd.Message == nil || upd.Message.From == nil || upd.Message.Text == "" {
+			continue
+		}
+
+		t.handleInboundMessage(ctx, upd)
+	}
+}
+
+func (t *TelegramAdapter) handleInboundMessage(ctx context.Context, upd tgUpdate) {
+	senderID := strconv.FormatInt(upd.Message.From.ID, 10)
+	chatID := strconv.FormatInt(upd.Message.Chat.ID, 10)
+	senderName := upd.Message.From.Username
+	if senderName == "" {
+		senderName = upd.Message.From.FirstName
+	}
+	text := strings.TrimSpace(upd.Message.Text)
+
+	// Check Authorization
+	isAuth := false
+	if t.pairingMgr != nil {
+		isAuth = t.pairingMgr.IsAuthorized("telegram", senderID)
+	} else {
+		isAuth = true // If no pairing manager, allow by default
+	}
+
+	if !isAuth {
+		// Attempt pairing check
+		cleanCode := strings.TrimPrefix(text, "/pair ")
+		cleanCode = strings.TrimSpace(cleanCode)
+
+		if len(cleanCode) == 6 && t.pairingMgr != nil {
+			paired, err := t.pairingMgr.ValidateAndPair("telegram", cleanCode, senderID, senderName)
+			if err == nil && paired {
+				_ = t.SendMessage(ctx, OutboundMessage{
+					ChannelID: "telegram",
+					Recipient: chatID,
+					Content:   fmt.Sprintf("🎉 Authentication successful!\n\nWelcome %s, your Telegram account is now paired with ActonOS Kernel. You can send prompts and commands anytime.", senderName),
+				})
+				return
+			}
+		}
+
+		_ = t.SendMessage(ctx, OutboundMessage{
+			ChannelID: "telegram",
+			Recipient: chatID,
+			Content: fmt.Sprintf("🔒 Unauthorized Access to ActonOS.\n\nPlease generate a 6-digit Pairing PIN on your ActonOS Web UI (Integrations -> Channel Pairing) and send it here to authenticate.\n(Your Sender ID: %s)", senderID),
+		})
+		return
+	}
+
+	// Update active time
+	if t.pairingMgr != nil {
+		t.pairingMgr.TouchUser("telegram", senderID)
+	}
+
+	// Publish to Bus
+	if t.bus != nil {
+		t.bus.Publish(bus.NewEvent(bus.EventAgentActionStarted, "telegram", InboundMessage{
+			ChannelID:   "telegram",
+			SenderID:    senderID,
+			SenderName:  senderName,
+			TargetAgent: "default",
+			Content:     text,
+			Metadata: map[string]string{
+				"chat_id":    chatID,
+				"message_id": strconv.FormatInt(upd.Message.MessageID, 10),
+			},
+		}))
+	}
+}
+
+// SendMessage sends an outbound message to a Telegram chat.
 func (t *TelegramAdapter) SendMessage(ctx context.Context, msg OutboundMessage) error {
-	if t.token == "" {
+	t.mu.RLock()
+	token := t.token
+	t.mu.RUnlock()
+
+	if token == "" {
 		return fmt.Errorf("telegram token not configured")
 	}
 
-	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", t.token)
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", token)
 	body := map[string]any{
-		"chat_id": msg.Recipient,
-		"text":    msg.Content,
+		"chat_id":    msg.Recipient,
+		"text":       msg.Content,
+		"parse_mode": "Markdown",
 	}
 
 	data, err := json.Marshal(body)

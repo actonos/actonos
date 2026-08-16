@@ -1,4 +1,4 @@
-import type { AgentManifest, ToolInfo, SystemMetrics, TailscaleStatus } from './types';
+import type { AgentManifest, ChannelAccount, ToolInfo, SystemMetrics, TailscaleStatus } from './types';
 
 const API_BASE = '/api';
 
@@ -75,11 +75,69 @@ export interface StorageInfoData {
   total_bytes: number;
 }
 
-export const api = {
-  // Health
-  getHealth: () => fetchJSON<any>('/health'),
+export interface HubSkillItem {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  author: string;
+  version: string;
+  icon: string;
+  tags: string[];
+  installed: boolean;
+  skill_md?: string;
+}
 
-  // Agents
+export interface CronJobItem {
+  id: string;
+  agent_id: string;
+  name: string;
+  cron_expr: string;
+  prompt: string;
+  target_channel: string;
+  target_recipient: string;
+  enabled: boolean;
+  last_run?: string;
+  next_run?: string;
+}
+
+export interface DashboardSummaryData {
+  metrics?: SystemMetrics;
+  tailscale?: TailscaleStatus;
+  agents_count: number;
+  agents_active: number;
+  tools_count: number;
+  tools_native: number;
+  tools_mcp: number;
+  tools_skills: number;
+  tools_wasm: number;
+  cron_count: number;
+  storage: {
+    storage_bytes: number;
+    vectors_bytes: number;
+    workspace_bytes: number;
+    logs_bytes: number;
+    total_bytes: number;
+  };
+  recent_audit: AuditLogItem[];
+  timestamp: string;
+}
+
+export interface ChannelAuthorizationItem {
+  channel_id: string;
+  sender_id: string;
+  sender_name: string;
+  paired_at: string;
+  last_active_at: string;
+  status: string;
+}
+
+export const api = {
+  // Health & Dashboard
+  getHealth: () => fetchJSON<any>('/health'),
+  getDashboardSummary: () => fetchJSON<DashboardSummaryData>('/dashboard/summary'),
+
+  // Agents, Soul & Cron
   listAgents: () => fetchJSON<{ agents: AgentManifest[]; count: number }>('/agents'),
   getAgent: (id: string) => fetchJSON<AgentManifest>(`/agents/${id}`),
   createAgent: (manifest: Partial<AgentManifest>) =>
@@ -98,6 +156,23 @@ export const api = {
     fetchJSON<{ status: string }>(`/agents/${id}/start`, { method: 'POST' }),
   stopAgent: (id: string) =>
     fetchJSON<{ status: string }>(`/agents/${id}/stop`, { method: 'POST' }),
+  getSoul: () => fetchJSON<{ soul: string }>('/agents/soul'),
+  saveSoul: (soul: string) =>
+    fetchJSON<{ status: string }>('/agents/soul', {
+      method: 'PUT',
+      body: JSON.stringify({ soul }),
+    }),
+  getMemoryMD: () => fetchJSON<{ memory_md: string }>('/agents/memory-md'),
+  listCronJobs: () => fetchJSON<{ jobs: CronJobItem[]; count: number }>('/agents/cron'),
+  saveCronJob: (job: Partial<CronJobItem>) =>
+    fetchJSON<{ status: string; job: CronJobItem }>('/agents/cron', {
+      method: 'POST',
+      body: JSON.stringify(job),
+    }),
+  deleteCronJob: (id: string) =>
+    fetchJSON<{ status: string }>(`/agents/cron/${id}`, { method: 'DELETE' }),
+  triggerCronJob: (id: string) =>
+    fetchJSON<{ status: string; message: string }>(`/cron/${id}/run`, { method: 'POST' }),
 
   // Conversations
   listConversations: (agentID?: string) =>
@@ -119,7 +194,7 @@ export const api = {
       body: JSON.stringify({ title }),
     }),
 
-  // Tools
+  // Tools & Skills Hub
   listTools: (category?: string) =>
     fetchJSON<{ tools: ToolInfo[]; count: number }>(`/tools${category ? `?category=${category}` : ''}`),
   connectMCP: (cfg: { id: string; command: string; args?: string[] }) =>
@@ -144,6 +219,18 @@ export const api = {
     fd.append('file', file);
     return fetch('/api/tools/wasm', { method: 'POST', body: fd }).then((r) => r.json());
   },
+  listHubCatalog: () =>
+    fetchJSON<{ catalog: HubSkillItem[]; count: number }>('/tools/hub/catalog'),
+  installHubSkill: (skill_id: string) =>
+    fetchJSON<{ status: string; skill_id: string }>('/tools/hub/install', {
+      method: 'POST',
+      body: JSON.stringify({ skill_id }),
+    }),
+  uninstallHubSkill: (skill_id: string) =>
+    fetchJSON<{ status: string; skill_id: string }>('/tools/hub/uninstall', {
+      method: 'POST',
+      body: JSON.stringify({ skill_id }),
+    }),
 
   // Workspace
   listWorkspaceFiles: (dir?: string) =>
@@ -187,23 +274,50 @@ export const api = {
     method: 'POST',
   }),
 
-  // Integrations & Channels
+  // Integrations & Channels & Pairing
   listIntegrations: () => fetchJSON<{ integrations: any[]; count: number }>('/integrations'),
   toggleIntegration: (provider: string) =>
     fetchJSON<{ provider: string; connected: boolean }>(`/integrations/${provider}/toggle`, { method: 'POST' }),
   getChannels: () =>
     fetchJSON<{
-      telegram_enabled: boolean;
-      telegram_bot: string;
-      discord_enabled: boolean;
-      discord_bot: string;
+      telegram: ChannelAccount[];
+      discord: ChannelAccount[];
+      whatsapp: ChannelAccount[];
       webhook_secret: string;
       webhook_url: string;
     }>('/integrations/channels'),
-  saveChannels: (cfg: { telegram_token?: string; discord_token?: string; webhook_secret?: string }) =>
+  saveChannels: (cfg: {
+    telegram_token?: string;
+    discord_token?: string;
+    whatsapp_token?: string;
+    whatsapp_phone_id?: string;
+    webhook_secret?: string;
+    telegram_accounts?: ChannelAccount[];
+    discord_accounts?: ChannelAccount[];
+    whatsapp_accounts?: ChannelAccount[];
+  }) =>
     fetchJSON<{ status: string }>('/integrations/channels', {
       method: 'POST',
       body: JSON.stringify(cfg),
+    }),
+  generatePairingCode: (channel_id: string = 'telegram') =>
+    fetchJSON<{ code: string; channel_id: string; expires_in: number }>('/integrations/pairing/code', {
+      method: 'POST',
+      body: JSON.stringify({ channel_id }),
+    }),
+  verifyPairingCode: (data: { channel_id: string; code: string; sender_id: string; sender_name: string }) =>
+    fetchJSON<{ status: string; sender: string }>('/integrations/pairing/verify', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  listAuthorizations: (channel_id?: string) =>
+    fetchJSON<{ users: ChannelAuthorizationItem[]; count: number }>(
+      `/integrations/authorizations${channel_id ? `?channel_id=${channel_id}` : ''}`
+    ),
+  revokeAuthorization: (data: { channel_id: string; sender_id: string }) =>
+    fetchJSON<{ status: string }>('/integrations/authorizations', {
+      method: 'DELETE',
+      body: JSON.stringify(data),
     }),
 
   // HAL & Network
@@ -217,3 +331,4 @@ export const api = {
     }),
   restartDaemon: () => fetchJSON<{ status: string }>('/system/restart', { method: 'POST' }),
 };
+

@@ -42,7 +42,7 @@ ActonOS uses a sunlit, garden-inspired SaaS language: a warm cream canvas, organ
 
 | Role | Size | Line Height | Letter Spacing | Token |
 |------|------|-------------|----------------|-------|
-| caption | 10px | 1.2 | -0.2px | `--text-caption` |
+| caption | 12px | 1.5 | -0.2px | `--text-caption` |
 | body-sm | 14px | 1.5 | -0.14px | `--text-body-sm` |
 | body | 16px | 1.5 | -0.16px | `--text-body` |
 | subheading | 18px | 1.5 | -0.18px | `--text-subheading` |
@@ -246,7 +246,7 @@ The off-white tones are not neutral white — #f9fbf2 has a faint warm-green cas
   --font-inter: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
   /* Typography — Scale */
-  --text-caption: 10px;
+  --text-caption: 12px;
   --leading-caption: 1.2;
   --tracking-caption: -0.2px;
   --text-body-sm: 14px;
@@ -334,7 +334,7 @@ The off-white tones are not neutral white — #f9fbf2 has a faint warm-green cas
   --font-inter: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
   /* Typography — Scale */
-  --text-caption: 10px;
+  --text-caption: 12px;
   --leading-caption: 1.2;
   --tracking-caption: -0.2px;
   --text-body-sm: 14px;

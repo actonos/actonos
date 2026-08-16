@@ -1,14 +1,25 @@
 {
+  "brand": "ActonOS",
   "links": {
-    "agents": "Quản Lý Agents",
-    "toolHub": "Kho Công Cụ",
-    "workspace": "Không Gian Tệp",
-    "integrations": "Tích Hợp SaaS",
-    "chat": "Hội Thoại",
-    "settings": "Hệ Thống & Từ Xa"
+    "dashboard": "Tổng quan",
+    "agents": "Agents",
+    "agentStudio": "Agent Studio",
+    "chat": "Chat",
+    "automations": "Tự động",
+    "tools": "Công cụ",
+    "skills": "Kỹ năng",
+    "workspace": "Tệp",
+    "channels": "Kênh chat",
+    "connectors": "Kết nối",
+    "settings": "Cài đặt"
   },
-  "cta": {
-    "createAgent": "Tạo Agent Mới",
-    "statusOnline": "Kernel Đang Chạy"
+  "sections": {
+    "connections": "Kết nối",
+    "tools": "Công cụ",
+    "system": "Hệ thống"
+  },
+  "status": {
+    "connected": "Hệ thống hoạt động",
+    "offline": "Ngoại tuyến"
   }
 }

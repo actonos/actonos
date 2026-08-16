@@ -2,27 +2,28 @@ import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
+import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { useToast } from '@/components/ui/Toast';
 import { AgentCard } from '@/components/features/agents/AgentCard';
-import { AgentFormModal } from '@/components/features/agents/AgentFormModal';
-import { QuickstartGuide } from '@/components/features/onboarding/QuickstartGuide';
+import { SoulEditorModal } from '@/components/features/agents/SoulEditorModal';
 import {
   Plus,
-  MessageSquare,
   Search,
   Download,
   Upload,
-  Bot,
+  Sparkles,
+  RefreshCw,
 } from 'lucide-react';
 import { api } from '@/lib/api';
-import type { AgentManifest, ToolInfo } from '@/lib/types';
-import type { NavTab } from '@/components/layout/Navbar';
+import type { AgentManifest } from '@/lib/types';
+import type { NavTab } from '@/components/layout/Sidebar';
 
 export interface AgentsPageProps {
   onOpenChat: (agentID: string) => void;
   onNavigateTab: (tab: NavTab) => void;
-  isCreateModalOpen: boolean;
-  setIsCreateModalOpen: (open: boolean) => void;
+  onEditAgent: (agentID: string) => void;
 }
 
 type AgentFilter = 'all' | 'system' | 'active' | 'stopped';
@@ -30,29 +31,25 @@ type AgentFilter = 'all' | 'system' | 'active' | 'stopped';
 export function AgentsPage({
   onOpenChat,
   onNavigateTab,
-  isCreateModalOpen,
-  setIsCreateModalOpen,
+  onEditAgent,
 }: AgentsPageProps) {
   const { t } = useTranslation('agents');
+  const { success, error, info } = useToast();
   const [agents, setAgents] = useState<AgentManifest[]>([]);
-  const [tools, setTools] = useState<ToolInfo[]>([]);
-  const [editingAgent, setEditingAgent] = useState<AgentManifest | null>(null);
+  const [deletingAgentId, setDeletingAgentId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<AgentFilter>('all');
+  const [isSoulModalOpen, setIsSoulModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const [agentRes, toolRes] = await Promise.all([
-        api.listAgents(),
-        api.listTools(),
-      ]);
+      const agentRes = await api.listAgents();
       setAgents(agentRes.agents || []);
-      setTools(toolRes.tools || []);
-    } catch (err) {
-      console.error('Failed to load agents or tools:', err);
+    } catch (err: any) {
+      error('Failed to load agents', err.message);
     } finally {
       setLoading(false);
     }
@@ -62,30 +59,31 @@ export function AgentsPage({
     loadData();
   }, []);
 
-  const handleCreateOrUpdate = async (data: Partial<AgentManifest>) => {
-    if (editingAgent) {
-      await api.updateAgent(editingAgent.agent_id, data);
-    } else {
-      await api.createAgent(data);
-    }
-    setEditingAgent(null);
-    loadData();
-  };
-
-  const handleDelete = async (id: string) => {
-    if (window.confirm(t('actions.deleteConfirm', 'Are you sure you want to delete this agent?'))) {
-      await api.deleteAgent(id);
+  const handleConfirmDeleteAgent = async () => {
+    if (!deletingAgentId) return;
+    try {
+      await api.deleteAgent(deletingAgentId);
+      success('Agent Deleted', `Agent ${deletingAgentId} has been removed.`);
+      setDeletingAgentId(null);
       loadData();
+    } catch (err: any) {
+      error('Failed to delete agent', err.message);
     }
   };
 
   const handleToggleStatus = async (id: string, currentStatus: string) => {
-    if (currentStatus === 'active') {
-      await api.stopAgent(id);
-    } else {
-      await api.startAgent(id);
+    try {
+      if (currentStatus === 'active') {
+        await api.stopAgent(id);
+        info('Agent Stopped', `Agent ${id} is now idle.`);
+      } else {
+        await api.startAgent(id);
+        success('Agent Started', `Agent ${id} is now active.`);
+      }
+      loadData();
+    } catch (err: any) {
+      error('Failed to toggle agent status', err.message);
     }
-    loadData();
   };
 
   const handleExportAgents = () => {
@@ -96,6 +94,7 @@ export function AgentsPage({
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
+    success('Export Complete', `${agents.length} agent manifest(s) downloaded.`);
   };
 
   const handleImportAgents = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,9 +112,9 @@ export function AgentsPage({
         }
       }
       loadData();
-      alert(`Imported ${items.length} agent manifest(s) successfully!`);
+      success('Import Succeeded', `Imported ${items.length} agent manifest(s) successfully!`);
     } catch (err: any) {
-      alert(`Failed to import manifest: ${err.message}`);
+      error('Manifest Import Failed', err.message);
     }
   };
 
@@ -139,9 +138,6 @@ export function AgentsPage({
       <BlobBackdrop />
 
       <PageContainer>
-        {/* Onboarding Quickstart Banner */}
-        <QuickstartGuide onNavigateTab={onNavigateTab} onOpenChat={onOpenChat} />
-
         {/* Header section */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div className="flex-1">
@@ -152,11 +148,23 @@ export function AgentsPage({
               {t('title', 'Autonomous Agents')}
             </h1>
             <p className="font-sans text-body text-slate mt-1 max-w-2xl">
-              {t('subtitle', 'Create, customize, and orchestrate autonomous AI agents running on the ActonOS kernel.')}
+              {t(
+                'subtitle',
+                'Create, customize, and orchestrate autonomous AI agents with SOUL.md personality and proactive background cron automations.'
+              )}
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 shrink-0 self-start sm:self-center">
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<Sparkles className="w-3.5 h-3.5" />}
+              onClick={() => setIsSoulModalOpen(true)}
+              title="Edit Agent Soul (SOUL.md)"
+            >
+              Agent Soul
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -183,104 +191,115 @@ export function AgentsPage({
               className="hidden"
             />
             <Button
-              variant="secondary"
+              variant="ghost"
               size="sm"
-              icon={<MessageSquare className="w-4 h-4" />}
-              onClick={() => onOpenChat('agent_system_core')}
+              icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />}
+              onClick={loadData}
             >
-              {t('quickChatSystem', 'Chat with Root')}
+              Refresh
             </Button>
             <Button
               variant="primary"
               size="sm"
-              icon={<Plus className="w-4 h-4" />}
-              onClick={() => {
-                setEditingAgent(null);
-                setIsCreateModalOpen(true);
-              }}
+              icon={<Plus className="w-3.5 h-3.5" />}
+              onClick={() => onEditAgent('new')}
             >
               {t('actions.createNew', 'Create New Agent')}
             </Button>
           </div>
         </div>
 
-        {/* Search & Filter Toolbar */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 mb-6">
-          {/* Search Input */}
-          <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 text-slate absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search agents by name, role, or authorized tools..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-soft-meadow text-deep-ink pl-10 pr-4 py-2 rounded-full border border-onyx/10 text-body-sm font-sans focus:outline-none focus:ring-2 focus:ring-deep-ink"
-            />
+        {/* Filter and Search Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+          {/* Pill filters */}
+          <div className="flex items-center gap-1.5 bg-canvas/80 backdrop-blur-sm p-1 rounded-full border border-onyx/10 shadow-xs self-start sm:self-auto overflow-x-auto">
+            {(['all', 'system', 'active', 'stopped'] as const).map((filter) => {
+              const label =
+                filter === 'all'
+                  ? `All Agents (${agents.length})`
+                  : filter === 'system'
+                    ? '⭐ Root System'
+                    : filter === 'active'
+                      ? 'Active'
+                      : 'Stopped';
+
+              const isActive = activeFilter === filter;
+              return (
+                <button
+                  key={filter}
+                  onClick={() => setActiveFilter(filter)}
+                  className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${isActive
+                      ? 'bg-deep-ink text-white font-semibold shadow-xs'
+                      : 'text-deep-ink hover:text-slate'
+                    }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
 
-          {/* Filter Pills */}
-          <div className="flex items-center gap-1.5 p-1 bg-soft-meadow rounded-full border border-onyx/10 shrink-0">
-            {(['all', 'system', 'active', 'stopped'] as AgentFilter[]).map((f) => (
-              <button
-                key={f}
-                onClick={() => setActiveFilter(f)}
-                className={`px-3.5 py-1 rounded-full text-caption font-medium capitalize transition-all ${
-                  activeFilter === f
-                    ? 'bg-deep-ink text-white font-semibold shadow-xs'
-                    : 'text-deep-ink hover:text-slate'
-                }`}
-              >
-                {f === 'system' ? '⭐ Root' : f}
-              </button>
-            ))}
+          {/* Search box */}
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate" />
+            <input
+              type="text"
+              placeholder="Search agents, tools, models..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-canvas/80 backdrop-blur-sm text-deep-ink pl-10 pr-4 py-2 rounded-full border border-onyx/10 text-body-sm font-sans placeholder:text-slate focus:outline-none focus:border-deep-ink transition-colors shadow-xs"
+            />
           </div>
         </div>
 
-        {/* Agent Cards Grid */}
+        {/* Agents Grid */}
         {loading ? (
-          <div className="py-20 text-center text-slate font-sans">Loading agents...</div>
+          <div className="py-24 text-center text-slate font-sans text-body">Loading agents...</div>
         ) : filteredAgents.length === 0 ? (
-          <div className="bg-soft-meadow rounded-[24px] p-12 text-center max-w-lg mx-auto border border-onyx/10">
-            <div className="w-14 h-14 rounded-full bg-canvas flex items-center justify-center text-deep-ink mx-auto mb-4 border border-onyx">
-              <Bot className="w-7 h-7 text-hi-yellow" />
-            </div>
-            <h3 className="font-serif text-heading-sm text-deep-ink mb-2">No Matching Agents</h3>
-            <p className="font-sans text-body-sm text-slate mb-6">
-              {searchQuery ? 'No agents match your search filter.' : t('card.noAgents', 'Create your first agent to get started.')}
+          <Card className="p-12 text-center border border-dashed border-onyx/20 bg-canvas/60">
+            <p className="text-body text-slate mb-4">
+              {searchQuery ? 'No agents match your search filter.' : t('card.noAgents')}
             </p>
-            <Button variant="primary" onClick={() => setIsCreateModalOpen(true)}>
-              {t('actions.createNew', 'Create New Agent')}
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Plus className="w-3.5 h-3.5" />}
+              onClick={() => onEditAgent('new')}
+            >
+              {t('actions.createNew')}
             </Button>
-          </div>
+          </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredAgents.map((agent) => (
               <AgentCard
                 key={agent.agent_id}
                 agent={agent}
-                onChat={onOpenChat}
-                onEdit={(ag) => {
-                  setEditingAgent(ag);
-                  setIsCreateModalOpen(true);
-                }}
-                onDelete={handleDelete}
-                onToggleStatus={handleToggleStatus}
+                onChat={() => onOpenChat(agent.agent_id)}
+                onEdit={() => onEditAgent(agent.agent_id)}
+                onDelete={() => setDeletingAgentId(agent.agent_id)}
+                onToggleStatus={() => handleToggleStatus(agent.agent_id, agent.status)}
               />
             ))}
           </div>
         )}
       </PageContainer>
 
-      {/* Create / Edit Modal */}
-      <AgentFormModal
-        isOpen={isCreateModalOpen}
-        onClose={() => {
-          setIsCreateModalOpen(false);
-          setEditingAgent(null);
-        }}
-        onSubmit={handleCreateOrUpdate}
-        initialAgent={editingAgent}
-        availableTools={tools}
+      {/* Soul Editor Modal */}
+      <SoulEditorModal
+        isOpen={isSoulModalOpen}
+        onClose={() => setIsSoulModalOpen(false)}
+      />
+
+      {/* Delete Agent Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!deletingAgentId}
+        onClose={() => setDeletingAgentId(null)}
+        onConfirm={handleConfirmDeleteAgent}
+        title="Delete Agent Manifest"
+        description={`Are you sure you want to delete "${deletingAgentId}"? This will permanently remove its state and execution manifests from ActonOS.`}
+        confirmLabel="Delete Agent"
+        variant="danger"
       />
     </div>
   );

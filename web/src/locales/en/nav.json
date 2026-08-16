@@ -1,14 +1,25 @@
 {
+  "brand": "ActonOS",
   "links": {
+    "dashboard": "Dashboard",
     "agents": "Agents",
-    "toolHub": "Tool Hub",
+    "agentStudio": "Agent Studio",
+    "chat": "Chat",
+    "automations": "Automations",
+    "tools": "Tools",
+    "skills": "Skills",
     "workspace": "Workspace",
-    "integrations": "Integrations",
-    "chat": "Conversations",
-    "settings": "System & Remote"
+    "channels": "Chat Channels",
+    "connectors": "Connectors",
+    "settings": "Settings"
   },
-  "cta": {
-    "createAgent": "Create Agent",
-    "statusOnline": "Kernel Online"
+  "sections": {
+    "connections": "Connections",
+    "tools": "Tools",
+    "system": "System"
+  },
+  "status": {
+    "connected": "System Online",
+    "offline": "Offline"
   }
 }

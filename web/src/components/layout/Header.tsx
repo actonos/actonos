@@ -21,12 +21,17 @@ export function Header({ activeTab, onOpenMobileSidebar }: HeaderProps) {
   }, []);
 
   const tabTitles: Record<NavTab, { title: string; category: string }> = {
-    agents: { title: 'Autonomous Agents', category: 'Universal Engine' },
-    chat: { title: 'ReAct Chat Canvas', category: 'Cognition & Reasoning' },
-    tools: { title: 'Tool Hub & MCP', category: 'Dynamic Tooling' },
-    workspace: { title: 'Workspace Explorer', category: 'Sandboxed Filesystem' },
-    integrations: { title: 'SaaS & Channels', category: 'Multi-Channel Connectors' },
-    settings: { title: 'Settings & Hardware', category: 'System Administration' },
+    dashboard: { title: 'Dashboard', category: 'Overview' },
+    agents: { title: 'Agents', category: 'AI Management' },
+    'agent-studio': { title: 'Agent Studio', category: 'Configuration' },
+    chat: { title: 'Chat', category: 'Conversation' },
+    automations: { title: 'Automations', category: 'Scheduling' },
+    tools: { title: 'Tools', category: 'System Tools' },
+    skills: { title: 'Skills', category: 'Agent Skills' },
+    workspace: { title: 'Workspace', category: 'Files' },
+    channels: { title: 'Chat Channels', category: 'Connections' },
+    connectors: { title: 'Connectors', category: 'Services' },
+    settings: { title: 'Settings', category: 'System' },
   };
 
   const current = tabTitles[activeTab] || { title: 'ActonOS', category: 'Kernel' };
@@ -66,7 +71,7 @@ export function Header({ activeTab, onOpenMobileSidebar }: HeaderProps) {
 
         <div className="flex items-center gap-1.5 px-3 py-1 bg-soft-meadow rounded-full border border-onyx/10 text-caption font-mono text-deep-ink font-medium">
           <Sparkles className="w-3.5 h-3.5 text-hi-yellow" />
-          <span className="hidden sm:inline">Cascade Active</span>
+          <span className="hidden sm:inline">Active</span>
         </div>
       </div>
     </header>

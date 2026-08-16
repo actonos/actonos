@@ -1,0 +1,19 @@
+{
+  "eyebrow": "Connectors",
+  "title": "Service Connectors",
+  "subtitle": "Connect external services like Google, Notion, and GitHub.",
+  "actions": {
+    "connect": "Connect",
+    "disconnect": "Disconnect",
+    "simulate": "Test Webhook"
+  },
+  "status": {
+    "connected": "Connected",
+    "disconnected": "Disconnected"
+  },
+  "risk": {
+    "low": "Low Risk",
+    "medium": "Medium Risk",
+    "high": "High Risk"
+  }
+}
