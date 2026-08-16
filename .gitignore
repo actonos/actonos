@@ -34,6 +34,7 @@ web/.vite/
 web/.cache/
 web/coverage/
 *.tsbuildinfo
+internal/server/dist/
 
 # Package manager locks (keep package-lock.json)
 web/yarn.lock
