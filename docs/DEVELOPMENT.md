@@ -274,7 +274,7 @@ make all
 
 # Docker image
 make docker
-# Output: actonos/agent:0.1.0
+# Output: actonos/actonos:0.1.0
 
 # Bare-metal ISO
 make iso

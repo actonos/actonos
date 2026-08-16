@@ -42,7 +42,7 @@ GOFLAGS       := -trimpath
 BINARY        := actond
 BUILD_DIR     := build
 WEB_DIR       := web
-DOCKER_IMAGE  := actonos/agent
+DOCKER_IMAGE  := actonos/actonos
 DOCKER_TAG    := $(VERSION)
 
 # ------------------------------------------------------------------------------

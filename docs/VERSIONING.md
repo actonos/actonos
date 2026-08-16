@@ -214,9 +214,9 @@ curl http://localhost:8080/api/health
 
 | Tag | Description |
 |:---|:---|
-| `actonos/agent:latest` | Latest stable release |
-| `actonos/agent:0.2.0` | Specific release version |
-| `actonos/agent:main` | Latest build from main branch (unstable) |
+| `actonos/actonos:latest` | Latest stable release |
+| `actonos/actonos:0.2.0` | Specific release version |
+| `actonos/actonos:main` | Latest build from main branch (unstable) |
 
 ---
 

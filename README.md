@@ -116,7 +116,7 @@ docker run -d \
   -v ./acton-data:/data \
   -e RUNTIME_MODE=docker \
   --restart unless-stopped \
-  actonos/agent:latest
+  actonos/actonos:latest
 ```
 
 Open `http://localhost:8080` to access the dashboard.

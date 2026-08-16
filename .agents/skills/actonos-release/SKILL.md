@@ -139,8 +139,8 @@ git push origin main --tags
 ```bash
 # Docker image
 make docker
-docker push actonos/agent:$(cat VERSION)
-docker push actonos/agent:latest
+docker push actonos/actonos:$(cat VERSION)
+docker push actonos/actonos:latest
 
 # ISO (if releasing bare-metal)
 make iso

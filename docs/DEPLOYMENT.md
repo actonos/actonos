@@ -40,7 +40,7 @@ docker run -d \
   -v $(pwd)/acton-data:/data \
   -e RUNTIME_MODE=docker \
   --restart unless-stopped \
-  actonos/agent:latest
+  actonos/actonos:latest
 ```
 
 ### Docker Compose
@@ -51,7 +51,7 @@ version: "3.9"
 
 services:
   actonos:
-    image: actonos/agent:latest
+    image: actonos/actonos:latest
     container_name: actonos
     restart: unless-stopped
     ports:
@@ -92,7 +92,7 @@ docker compose -f deploy/docker/docker-compose.yml down
 make docker
 
 # Or manually
-docker build -t actonos/agent:latest -f deploy/docker/Dockerfile .
+docker build -t actonos/actonos:latest -f deploy/docker/Dockerfile .
 ```
 
 The multi-stage Dockerfile produces an Alpine-based image under **35 MB**.

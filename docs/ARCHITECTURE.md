@@ -362,7 +362,7 @@ docker run -d \
   -v /local/acton-data:/data \
   -e RUNTIME_MODE=docker \
   --restart unless-stopped \
-  actonos/agent:latest
+  actonos/actonos:latest
 ```
 
 ---

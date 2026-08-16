@@ -21,7 +21,7 @@ make deps → make lint → make test → make build-web → make build → make
 | `make build-web` | Build React frontend (Vite production) | `web/dist/` |
 | `make build` | Build full `actond` binary (includes web) | `build/actond` |
 | `make build-only` | Build Go binary only (skip web rebuild) | `build/actond` |
-| `make docker` | Build Docker image | `actonos/agent:VERSION` |
+| `make docker` | Build Docker image | `actonos/actonos:VERSION` |
 | `make iso` | Build bare-metal installation ISO | `build/ActonOS-vVERSION.iso` |
 | `make all` | Full pipeline: lint → test → build | `build/actond` |
 
@@ -76,7 +76,7 @@ GOOS=linux GOARCH=arm64 make build
 
 ```bash
 make docker
-# Output: actonos/agent:VERSION and actonos/agent:latest
+# Output: actonos/actonos:VERSION and actonos/actonos:latest
 ```
 
 The Dockerfile uses multi-stage build:
