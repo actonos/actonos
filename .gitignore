@@ -19,6 +19,7 @@ vendor/
 
 # Binary output
 build/
+bin/
 
 # Go workspace
 go.work
