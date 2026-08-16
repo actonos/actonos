@@ -3,6 +3,7 @@ package server
 import (
 	"database/sql"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -60,6 +61,22 @@ func (s *Server) handleListConversations(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+func generateConversationTitle(prompt string) string {
+	clean := strings.TrimSpace(prompt)
+	clean = strings.TrimLeft(clean, "#*- \t\r\n")
+	if idx := strings.Index(clean, "\n"); idx != -1 {
+		clean = strings.TrimSpace(clean[:idx])
+	}
+	runes := []rune(clean)
+	if len(runes) == 0 {
+		return "New Session"
+	}
+	if len(runes) > 42 {
+		return string(runes[:42]) + "..."
+	}
+	return string(runes)
+}
+
 func (s *Server) handleCreateConversation(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		AgentID string `json:"agent_id"`
@@ -74,10 +91,10 @@ func (s *Server) handleCreateConversation(w http.ResponseWriter, r *http.Request
 		req.AgentID = "agent_system_core"
 	}
 	if req.Title == "" {
-		req.Title = "New Conversation"
+		req.Title = "New Session"
 	}
 
-	id := "conv_" + uuid.New().String()[:12]
+	id := "conv_" + uuid.New().String()
 	now := time.Now().UTC()
 
 	query := `INSERT INTO conversations (id, agent_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`
@@ -108,14 +125,14 @@ func (s *Server) handleGetConversation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch messages
-	msgQuery := `SELECT id, conversation_id, role, content, created_at FROM messages WHERE conversation_id = ? ORDER BY created_at ASC`
+	msgQuery := `SELECT id, conversation_id, role, content, COALESCE(tool_calls_json, ''), created_at FROM messages WHERE conversation_id = ? ORDER BY created_at ASC`
 	rows, err := s.memory.DB().SQLDB().QueryContext(r.Context(), msgQuery, convID)
 	var messages []MessageRecord
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
 			var m MessageRecord
-			if err := rows.Scan(&m.ID, &m.ConversationID, &m.Role, &m.Content, &m.CreatedAt); err == nil {
+			if err := rows.Scan(&m.ID, &m.ConversationID, &m.Role, &m.Content, &m.ToolCallsJSON, &m.CreatedAt); err == nil {
 				messages = append(messages, m)
 			}
 		}

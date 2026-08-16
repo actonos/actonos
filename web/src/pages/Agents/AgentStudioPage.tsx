@@ -16,15 +16,18 @@ import {
   Shield,
   FileCode,
   CheckCircle2,
+  AlertTriangle,
   RotateCcw,
   Radio,
   Send,
   Phone,
   Sliders,
   Check,
+  Sparkles,
 } from 'lucide-react';
 import { api } from '@/lib/api';
-import type { AgentManifest, ToolInfo } from '@/lib/types';
+import type { AgentManifest, ToolInfo, LLMProviderInfo } from '@/lib/types';
+import { LATEST_MODEL_CATALOG, getCategorizedModels } from '@/lib/models';
 
 export interface AgentStudioPageProps {
   agentID: string; // 'new' or existing agent ID like 'agent_system_core'
@@ -76,6 +79,11 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
   const [saving, setSaving] = useState(false);
   const [toolsList, setToolsList] = useState<ToolInfo[]>([]);
 
+  // LLM Providers from Settings
+  const [configuredProviders, setConfiguredProviders] = useState<LLMProviderInfo[]>([]);
+  const [customPrimaryMode, setCustomPrimaryMode] = useState(false);
+  const [customFallbackMode, setCustomFallbackMode] = useState(false);
+
   // Form State
   const [name, setName] = useState(isNew ? 'New Custom Agent' : '');
   const [idSlug, setIdSlug] = useState(isNew ? '' : agentID);
@@ -105,12 +113,19 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
   const [approvalLevel, setApprovalLevel] = useState<'Low' | 'Medium' | 'High'>('Medium');
   const [allowedPaths, setAllowedPaths] = useState('*');
 
-  // Load Agent & Available Tools
+  // Load Agent, Available Tools & Active LLM Providers
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const toolsRes = await api.listTools().catch(() => ({ tools: [], count: 0 }));
+        const [toolsRes, keysRes] = await Promise.all([
+          api.listTools().catch(() => ({ tools: [], count: 0 })),
+          api.getAPIKeys().catch(() => null),
+        ]);
+
         setToolsList(toolsRes.tools || []);
+        if (keysRes?.providers) {
+          setConfiguredProviders(keysRes.providers);
+        }
 
         if (!isNew) {
           const agent = await api.getAgent(agentID);
@@ -122,10 +137,20 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
           setIsSystem(!!agent.is_system);
 
           if (agent.model_config) {
-            setPrimaryModel(agent.model_config.primary_model || 'anthropic/claude-3-7-sonnet');
-            setFallbackModel(agent.model_config.fallback_model || 'google/gemini-2.5-flash');
+            const pMod = agent.model_config.primary_model || 'anthropic/claude-3-7-sonnet';
+            const fMod = agent.model_config.fallback_model || 'google/gemini-2.5-flash';
+            setPrimaryModel(pMod);
+            setFallbackModel(fMod);
             setTemperature(agent.model_config.temperature ?? 0.2);
             setMaxTokens(agent.model_config.max_tokens ?? 4096);
+
+            // Check if models are not in the standard catalog to switch to custom text input
+            if (!LATEST_MODEL_CATALOG.some((m) => m.id === pMod)) {
+              setCustomPrimaryMode(true);
+            }
+            if (!LATEST_MODEL_CATALOG.some((m) => m.id === fMod)) {
+              setCustomFallbackMode(true);
+            }
           }
 
           setSystemInstructions(agent.system_instructions || ACTON_STANDARD_PROMPT);
@@ -172,7 +197,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
         name: name.trim(),
         description: description.trim(),
         avatar_icon: avatarIcon,
-        status,
+        status: status || 'active',
         model_config: {
           primary_model: primaryModel,
           fallback_model: fallbackModel,
@@ -239,6 +264,21 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
     info('Standard Preset Loaded', 'System instructions populated with ActonOS ReAct cognitive architecture prompt.');
   };
 
+  // Helper to find provider status for a model ID string
+  const getProviderForModel = (modelId: string) => {
+    const prefix = modelId.includes('/') ? modelId.split('/')[0] : modelId;
+    const cleanPrefix = prefix.replace('google', 'gemini');
+    return configuredProviders.find((p) => p.id === cleanPrefix || p.id === prefix);
+  };
+
+  const isModelProviderConfigured = (modelId: string) => {
+    if (modelId.startsWith('ollama/')) return true;
+    const p = getProviderForModel(modelId);
+    return !!(p && p.configured && p.enabled);
+  };
+
+  const { readyModels, otherModels } = getCategorizedModels(configuredProviders);
+
   if (loading) {
     return (
       <div className="py-24 text-center text-slate font-sans text-body">
@@ -248,6 +288,11 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
   }
 
   const isAllToolsSelected = authorizedTools.includes('*');
+  const primaryProviderConfig = getProviderForModel(primaryModel);
+  const primaryIsReady = isModelProviderConfigured(primaryModel);
+
+  const fallbackProviderConfig = getProviderForModel(fallbackModel);
+  const fallbackIsReady = isModelProviderConfigured(fallbackModel);
 
   return (
     <div className="relative min-h-[calc(100vh-64px)]">
@@ -403,7 +448,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               activeTab === 'model' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
             }`}
           >
-            🧠 LLM & Model
+            🧠 LLM & Model ({primaryIsReady ? '✓ Active' : '⚠️ Key Needed'})
           </button>
           <button
             onClick={() => setActiveTab('tools')}
@@ -470,47 +515,187 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
           </Card>
         )}
 
-        {/* TAB 2: LLM & Reasoning */}
+        {/* TAB 2: Dynamic Synchronized LLM & Reasoning */}
         {activeTab === 'model' && (
           <div className="space-y-6">
+            {/* Live LLM Provider Sync Status Banner */}
+            <div className="p-4 rounded-2xl bg-soft-meadow border border-onyx/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-deep-ink text-hi-yellow flex items-center justify-center shrink-0">
+                  <Cpu className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-serif text-body font-semibold text-deep-ink">
+                    Dynamic LLM Provider Synchronization
+                  </h4>
+                  <p className="font-sans text-caption text-slate">
+                    Agent automatically routes requests through providers configured in your hardware vault.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-caption font-mono text-slate">
+                  {configuredProviders.filter((p) => p.configured && p.enabled).length} Provider(s) Active
+                </span>
+              </div>
+            </div>
+
             <Card className="p-6 border border-onyx/10 bg-canvas/90 space-y-6">
               <h3 className="font-serif text-heading-sm text-deep-ink flex items-center gap-2">
-                <Cpu className="w-5 h-5 text-deep-ink" />
-                <span>Model Configuration</span>
+                <Sparkles className="w-5 h-5 text-deep-ink" />
+                <span>Primary & Fallback Model Architecture</span>
               </h3>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-caption font-semibold text-deep-ink mb-1">
-                    Primary LLM Model
-                  </label>
-                  <select
-                    value={primaryModel}
-                    onChange={(e) => setPrimaryModel(e.target.value)}
-                    className="w-full bg-soft-meadow text-deep-ink p-2.5 rounded-full border border-onyx/10 text-body-sm font-sans focus:outline-none"
+                {/* PRIMARY MODEL SELECTION */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-caption font-semibold text-deep-ink">
+                      Primary LLM Model
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setCustomPrimaryMode(!customPrimaryMode)}
+                      className="text-[11px] font-mono text-deep-ink hover:underline cursor-pointer"
+                    >
+                      {customPrimaryMode ? '▸ Choose from catalog' : '✏️ Custom model string'}
+                    </button>
+                  </div>
+
+                  {customPrimaryMode ? (
+                    <Input
+                      value={primaryModel}
+                      onChange={(e) => setPrimaryModel(e.target.value)}
+                      placeholder="e.g. anthropic/claude-3-7-sonnet or ollama/custom:latest"
+                      className="font-mono text-body-sm"
+                    />
+                  ) : (
+                    <select
+                      value={primaryModel}
+                      onChange={(e) => setPrimaryModel(e.target.value)}
+                      className="w-full bg-soft-meadow text-deep-ink p-2.5 rounded-full border border-onyx/10 text-body-sm font-sans focus:outline-none"
+                    >
+                      {readyModels.length > 0 && (
+                        <optgroup label="⚡ Ready to Use (Active Keys in Settings)">
+                          {readyModels.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name} — {m.badge || m.providerName}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+
+                      <optgroup label="⚙️ Other Available Models (Requires API Key in Settings)">
+                        {otherModels.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name} ({m.providerName}) {m.badge ? `• ${m.badge}` : ''}
+                          </option>
+                        ))}
+                      </optgroup>
+                    </select>
+                  )}
+
+                  {/* Primary Model Provider Diagnostics */}
+                  <div
+                    className={`p-3 rounded-xl border text-caption font-sans flex items-start gap-2 ${
+                      primaryIsReady
+                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-900'
+                        : 'bg-amber-500/10 border-amber-500/20 text-amber-900'
+                    }`}
                   >
-                    <option value="anthropic/claude-3-7-sonnet">Anthropic Claude 3.7 Sonnet</option>
-                    <option value="google/gemini-2.5-flash">Google Gemini 2.5 Flash</option>
-                    <option value="openai/gpt-4o">OpenAI GPT-4o</option>
-                    <option value="deepseek/deepseek-chat">DeepSeek-V3 Chat</option>
-                    <option value="ollama/llama3.3">Local Ollama (Llama 3.3)</option>
-                  </select>
+                    {primaryIsReady ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                    )}
+                    <div>
+                      <span className="font-semibold block">
+                        {primaryIsReady
+                          ? `Active: ${primaryProviderConfig?.name || 'Local Inference'} is ready`
+                          : `Setup Required: API key for ${primaryModel.split('/')[0]} is not set`}
+                      </span>
+                      <span className="text-[11px] opacity-80 block mt-0.5">
+                        {primaryIsReady
+                          ? `Requests to "${primaryModel}" will execute with native tool use & reasoning.`
+                          : `Configure this key in System > Settings to enable inference.`}
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-caption font-semibold text-deep-ink mb-1">
-                    Fallback Recovery Model
-                  </label>
-                  <select
-                    value={fallbackModel}
-                    onChange={(e) => setFallbackModel(e.target.value)}
-                    className="w-full bg-soft-meadow text-deep-ink p-2.5 rounded-full border border-onyx/10 text-body-sm font-sans focus:outline-none"
+                {/* FALLBACK RECOVERY MODEL SELECTION */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-caption font-semibold text-deep-ink">
+                      Fallback Recovery Model
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setCustomFallbackMode(!customFallbackMode)}
+                      className="text-[11px] font-mono text-deep-ink hover:underline cursor-pointer"
+                    >
+                      {customFallbackMode ? '▸ Choose from catalog' : '✏️ Custom model string'}
+                    </button>
+                  </div>
+
+                  {customFallbackMode ? (
+                    <Input
+                      value={fallbackModel}
+                      onChange={(e) => setFallbackModel(e.target.value)}
+                      placeholder="e.g. google/gemini-2.5-flash"
+                      className="font-mono text-body-sm"
+                    />
+                  ) : (
+                    <select
+                      value={fallbackModel}
+                      onChange={(e) => setFallbackModel(e.target.value)}
+                      className="w-full bg-soft-meadow text-deep-ink p-2.5 rounded-full border border-onyx/10 text-body-sm font-sans focus:outline-none"
+                    >
+                      {readyModels.length > 0 && (
+                        <optgroup label="⚡ Ready to Use (Active Keys in Settings)">
+                          {readyModels.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name} — {m.badge || m.providerName}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+
+                      <optgroup label="⚙️ Other Available Models (Requires API Key in Settings)">
+                        {otherModels.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name} ({m.providerName})
+                          </option>
+                        ))}
+                      </optgroup>
+                    </select>
+                  )}
+
+                  {/* Fallback Model Diagnostics */}
+                  <div
+                    className={`p-3 rounded-xl border text-caption font-sans flex items-start gap-2 ${
+                      fallbackIsReady
+                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-900'
+                        : 'bg-amber-500/10 border-amber-500/20 text-amber-900'
+                    }`}
                   >
-                    <option value="google/gemini-2.5-flash">Google Gemini 2.5 Flash (Fast Fallback)</option>
-                    <option value="anthropic/claude-3-7-sonnet">Anthropic Claude 3.7 Sonnet</option>
-                    <option value="openai/gpt-4o">OpenAI GPT-4o</option>
-                    <option value="deepseek/deepseek-chat">DeepSeek-V3 Chat</option>
-                  </select>
+                    {fallbackIsReady ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                    )}
+                    <div>
+                      <span className="font-semibold block">
+                        {fallbackIsReady
+                          ? `Fallback: ${fallbackProviderConfig?.name || 'Local Inference'} is ready`
+                          : `Setup Required: Fallback provider key is missing`}
+                      </span>
+                      <span className="text-[11px] opacity-80 block mt-0.5">
+                        If primary model encounters rate limits or errors, cascade automatically recovers using this model.
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -522,7 +707,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                   </span>
                   <span className="text-caption text-slate">
                     {temperature <= 0.2
-                      ? 'Deterministic & Code'
+                      ? 'Deterministic & Precise Coding'
                       : temperature <= 0.7
                       ? 'Balanced Reasoning'
                       : 'Creative'}

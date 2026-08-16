@@ -35,8 +35,10 @@ export function CronJobModal({ isOpen, onClose, onJobCreated, agents }: CronJobM
         agent_id: agentId,
         cron_expr: cronExpr.trim(),
         prompt: prompt.trim(),
-        target_channel: channel,
-        target_recipient: recipient.trim(),
+        target_channel: channel || 'telegram',
+        target_recipient: recipient.trim() || undefined,
+        channel: channel || 'telegram',
+        recipient: recipient.trim() || undefined,
         enabled: true,
       });
       success('Proactive Cron Task Scheduled', `Task "${name}" is registered and active.`);

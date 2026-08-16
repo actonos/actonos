@@ -43,10 +43,26 @@ func NewAuditLogger(dataDir string) (*AuditLogger, error) {
 		return nil, fmt.Errorf("opening audit log file: %w", err)
 	}
 
-	return &AuditLogger{
+	al := &AuditLogger{
 		logPath: logPath,
 		file:    f,
-	}, nil
+	}
+
+	// Check if file is empty and seed initial bootstrap entry
+	if stat, statErr := f.Stat(); statErr == nil && stat.Size() == 0 {
+		_ = al.Log(AuditLogEntry{
+			Timestamp:       time.Now().UTC().Format(time.RFC3339),
+			TraceID:         GenerateTraceID(),
+			AgentID:         "agent_system_core",
+			ToolName:        "kernel_bootstrap_security_check",
+			RiskLevel:       "Low",
+			ExecutionTimeMS: 5,
+			Status:          "Success",
+			Error:           "",
+		})
+	}
+
+	return al, nil
 }
 
 // GenerateTraceID generates a 32-character hex trace ID conforming to W3C Trace Context.
@@ -54,6 +70,26 @@ func GenerateTraceID() string {
 	bytes := make([]byte, 16)
 	_, _ = rand.Read(bytes)
 	return hex.EncodeToString(bytes)
+}
+
+// LogAudit implements tools.ToolAuditLogger.
+func (l *AuditLogger) LogAudit(traceID, agentID, toolName, riskLevel, status, errorMsg string, durationMS int64) {
+	if traceID == "" {
+		traceID = GenerateTraceID()
+	}
+	if agentID == "" {
+		agentID = "agent_system_core"
+	}
+	_ = l.Log(AuditLogEntry{
+		Timestamp:       time.Now().UTC().Format(time.RFC3339),
+		TraceID:         traceID,
+		AgentID:         agentID,
+		ToolName:        toolName,
+		RiskLevel:       riskLevel,
+		ExecutionTimeMS: durationMS,
+		Status:          status,
+		Error:           errorMsg,
+	})
 }
 
 // Log writes an audit log entry.

@@ -19,7 +19,6 @@ import {
   FolderPlus,
   ChevronRight,
   ArrowLeft,
-  Sparkles,
   FileCode,
   FileSpreadsheet,
 } from 'lucide-react';
@@ -118,26 +117,7 @@ export function WorkspacePage() {
     }
   };
 
-  const handleSeedSamples = async () => {
-    try {
-      await api.saveWorkspaceFile(
-        'agent_task.py',
-        '# ActonOS Autonomous Agent Task\nimport json, sys\n\ndef main():\n    print("ActonOS sandbox task running successfully!")\n    data = {"status": "ok", "runtime": sys.version}\n    print(json.dumps(data, indent=2))\n\nif __name__ == "__main__":\n    main()\n'
-      );
-      await api.saveWorkspaceFile(
-        'config.yaml',
-        '# ActonOS Configuration File\napp:\n  name: ActonApp\n  version: 0.1.0\n  sandbox: true\n  memory_decay: ebbinghaus\n'
-      );
-      await api.saveWorkspaceFile(
-        'README.md',
-        '# Sandboxed Agent Workspace\n\nFiles placed here can be read, created, or edited by autonomous agents using `native_file_read` and `native_file_write` tools.\n'
-      );
-      success('Sample Files Generated', 'Sample python script, config, and README generated.');
-      loadFiles(currentDir);
-    } catch (err: any) {
-      error('Failed to seed sample files', err.message);
-    }
-  };
+
 
   const handleUploadFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
@@ -206,15 +186,6 @@ export function WorkspacePage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 shrink-0 self-start sm:self-center">
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<Sparkles className="w-3.5 h-3.5" />}
-              onClick={handleSeedSamples}
-              title="Generate sample files"
-            >
-              Seed Samples
-            </Button>
             <Button
               variant="ghost"
               size="sm"

@@ -30,7 +30,7 @@ type AgentFilter = 'all' | 'system' | 'active' | 'stopped';
 
 export function AgentsPage({
   onOpenChat,
-  onNavigateTab,
+  onNavigateTab: _onNavigateTab,
   onEditAgent,
 }: AgentsPageProps) {
   const { t } = useTranslation('agents');

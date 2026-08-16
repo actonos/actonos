@@ -34,6 +34,8 @@ type Server struct {
 	hal            system.HAL
 	tailscale      *system.TailscaleManager
 	tokenDaemon    *auth.TokenRefreshDaemon
+	oauthEngine    *auth.OAuthEngine
+	stateStore     *auth.StateStore
 	bus            *bus.EventBus
 	pairingMgr     *channels.PairingManager
 	tgAdapter      *channels.TelegramAdapter
@@ -56,6 +58,8 @@ type Config struct {
 	HAL                system.HAL
 	Tailscale          *system.TailscaleManager
 	TokenRefreshDaemon *auth.TokenRefreshDaemon
+	OAuthEngine        *auth.OAuthEngine
+	StateStore         *auth.StateStore
 	EventBus           *bus.EventBus
 	PairingManager     *channels.PairingManager
 	TelegramAdapter    *channels.TelegramAdapter
@@ -78,6 +82,8 @@ func NewServer(cfg Config) *Server {
 		hal:         cfg.HAL,
 		tailscale:   cfg.Tailscale,
 		tokenDaemon: cfg.TokenRefreshDaemon,
+		oauthEngine: cfg.OAuthEngine,
+		stateStore:  cfg.StateStore,
 		bus:         cfg.EventBus,
 		pairingMgr:  cfg.PairingManager,
 		tgAdapter:   cfg.TelegramAdapter,
@@ -178,10 +184,18 @@ func (s *Server) setupRoutes() {
 			r.Post("/wizard", s.handleSetupWizard)
 		})
 
-		// SaaS Integrations & Channel Adapters & Pairing
+		// OAuth Callbacks
+		r.Get("/auth/callback", s.handleOAuthCallback)
+
+		// SaaS Integrations & Connectors & Channel Adapters & Pairing
 		r.Route("/integrations", func(r chi.Router) {
 			r.Get("/", s.handleListIntegrations)
+			r.Get("/oauth/callback", s.handleOAuthCallback)
 			r.Post("/{provider}/auth-url", s.handleGetAuthURL)
+			r.Post("/{provider}/token", s.handleSaveDirectToken)
+			r.Post("/{provider}/config", s.handleSaveProviderConfig)
+			r.Post("/{provider}/test", s.handleTestIntegration)
+			r.Post("/{provider}/disconnect", s.handleDisconnectIntegration)
 			r.Post("/{provider}/toggle", s.handleToggleIntegration)
 			r.Get("/channels", s.handleGetChannels)
 			r.Post("/channels", s.handleSaveChannels)
@@ -207,9 +221,13 @@ func (s *Server) setupRoutes() {
 			r.Post("/upload", s.handleUploadWorkspaceFile)
 		})
 
-		// System, HAL, Keys, Audit & Tailscale
+		// System, HAL, Keys, Identity, Audit & Tailscale
 		r.Route("/system", func(r chi.Router) {
 			r.Get("/metrics", s.handleGetMetrics)
+			r.Get("/identity", s.handleGetIdentity)
+			r.Put("/identity", s.handleSaveIdentity)
+			r.Get("/profile", s.handleGetIdentity)
+			r.Put("/profile", s.handleSaveIdentity)
 			r.Get("/keys", s.handleGetAPIKeys)
 			r.Post("/keys", s.handleSaveAPIKeys)
 			r.Post("/keys/test", s.handleTestAPIKey)

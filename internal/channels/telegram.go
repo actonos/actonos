@@ -26,6 +26,8 @@ type TelegramAdapter struct {
 	running      bool
 	stopChan     chan struct{}
 	lastUpdateID int64
+	lastChatID   string
+	chatIDs      map[string]bool
 }
 
 // NewTelegramAdapter creates a new TelegramAdapter.
@@ -36,6 +38,7 @@ func NewTelegramAdapter(token string, bus *bus.EventBus, pairingMgr *PairingMana
 		pairingMgr: pairingMgr,
 		client:     &http.Client{Timeout: 35 * time.Second},
 		stopChan:   make(chan struct{}),
+		chatIDs:    make(map[string]bool),
 	}
 }
 
@@ -45,7 +48,35 @@ func (t *TelegramAdapter) Name() string { return "telegram" }
 func (t *TelegramAdapter) UpdateToken(token string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.token = token
+	t.token = strings.TrimSpace(token)
+}
+
+// RestartWithToken dynamically swaps token and re-initiates the background polling loop.
+func (t *TelegramAdapter) RestartWithToken(token string) error {
+	_ = t.Stop()
+	t.UpdateToken(token)
+	if strings.TrimSpace(token) == "" {
+		return nil
+	}
+	return t.Start(context.Background())
+}
+
+// GetLastChatID returns the most recently active Telegram chat ID.
+func (t *TelegramAdapter) GetLastChatID() string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.lastChatID
+}
+
+// GetKnownChatIDs returns all chat IDs that have messaged the bot.
+func (t *TelegramAdapter) GetKnownChatIDs() []string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	res := make([]string, 0, len(t.chatIDs))
+	for id := range t.chatIDs {
+		res = append(res, id)
+	}
+	return res
 }
 
 // Start begins the background long-polling loop.
@@ -82,6 +113,12 @@ func (t *TelegramAdapter) Stop() error {
 }
 
 func (t *TelegramAdapter) pollLoop(ctx context.Context) {
+	defer func() {
+		t.mu.Lock()
+		t.running = false
+		t.mu.Unlock()
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -177,6 +214,15 @@ func (t *TelegramAdapter) handleInboundMessage(ctx context.Context, upd tgUpdate
 	}
 	text := strings.TrimSpace(upd.Message.Text)
 
+	// Save active chat ID for proactive push / reminders
+	t.mu.Lock()
+	t.lastChatID = chatID
+	if t.chatIDs == nil {
+		t.chatIDs = make(map[string]bool)
+	}
+	t.chatIDs[chatID] = true
+	t.mu.Unlock()
+
 	// Check Authorization
 	isAuth := false
 	if t.pairingMgr != nil {
@@ -231,7 +277,7 @@ func (t *TelegramAdapter) handleInboundMessage(ctx context.Context, upd tgUpdate
 	}
 }
 
-// SendMessage sends an outbound message to a Telegram chat.
+// SendMessage sends an outbound message to a Telegram chat with automatic Markdown and plain text fallback.
 func (t *TelegramAdapter) SendMessage(ctx context.Context, msg OutboundMessage) error {
 	t.mu.RLock()
 	token := t.token
@@ -242,31 +288,51 @@ func (t *TelegramAdapter) SendMessage(ctx context.Context, msg OutboundMessage) 
 	}
 
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", token)
-	body := map[string]any{
+
+	// 1. Try sending with Markdown formatting
+	bodyMD := map[string]any{
 		"chat_id":    msg.Recipient,
 		"text":       msg.Content,
 		"parse_mode": "Markdown",
 	}
+	dataMD, _ := json.Marshal(bodyMD)
 
-	data, err := json.Marshal(body)
+	reqMD, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(dataMD))
+	if err == nil {
+		reqMD.Header.Set("Content-Type", "application/json")
+		if resp, err := t.client.Do(reqMD); err == nil {
+			defer resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return nil
+			}
+		}
+	}
+
+	// 2. Fallback: Send plain text without parse_mode
+	bodyPlain := map[string]any{
+		"chat_id": msg.Recipient,
+		"text":    msg.Content,
+	}
+	dataPlain, err := json.Marshal(bodyPlain)
 	if err != nil {
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
+	reqPlain, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(dataPlain))
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	reqPlain.Header.Set("Content-Type", "application/json")
 
-	resp, err := t.client.Do(req)
+	respPlain, err := t.client.Do(reqPlain)
 	if err != nil {
-		return fmt.Errorf("sending telegram message: %w", err)
+		return fmt.Errorf("sending plain telegram message: %w", err)
 	}
-	defer resp.Body.Close()
+	defer respPlain.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("telegram api returned status %d", resp.StatusCode)
+	if respPlain.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(respPlain.Body)
+		return fmt.Errorf("telegram api error (%d): %s", respPlain.StatusCode, string(respBody))
 	}
 
 	return nil

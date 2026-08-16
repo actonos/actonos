@@ -48,6 +48,24 @@ export interface ChannelAccount {
   enabled: boolean;
 }
 
+export interface ConversationItem {
+  id: string;
+  agent_id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatMessageRecord {
+  id: string;
+  conversation_id: string;
+  agent_id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  tool_calls_json?: string;
+  created_at: string;
+}
+
 export interface ToolInfo {
   name: string;
   description: string;
@@ -84,3 +102,37 @@ export interface TailscaleStatus {
   peers_count: number;
   auth_key_set: boolean;
 }
+
+export interface ConnectorInfo {
+  id: string;
+  name: string;
+  category: string;
+  icon: string;
+  risk_level: 'Low' | 'Medium' | 'High';
+  description: string;
+  connected: boolean;
+  auth_type?: 'oauth' | 'token';
+  account_name?: string;
+  account_email?: string;
+  avatar_url?: string;
+  connected_at?: string;
+  scopes?: string[];
+  expires_at?: string;
+  client_id?: string;
+  client_secret?: string;
+  direct_token?: string;
+}
+
+export interface LLMProviderInfo {
+  id: string;
+  name: string;
+  configured: boolean;
+  masked_key: string;
+  base_url: string;
+  default_model: string;
+  enabled: boolean;
+  last_latency: number;
+  last_tested: string;
+  status: 'connected' | 'error' | 'not_configured' | 'configured';
+}
+

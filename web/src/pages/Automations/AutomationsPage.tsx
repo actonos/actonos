@@ -80,8 +80,8 @@ export function AutomationsPage() {
     setAgentID(job.agent_id);
     setCronExpr(job.cron_expr);
     setPrompt(job.prompt);
-    setTargetChannel(job.target_channel || 'telegram');
-    setTargetRecipient(job.target_recipient || '');
+    setTargetChannel(job.target_channel || job.channel || 'telegram');
+    setTargetRecipient(job.target_recipient || job.recipient || '');
     setIsModalOpen(true);
   };
 
@@ -99,8 +99,10 @@ export function AutomationsPage() {
         agent_id: agentID,
         cron_expr: cronExpr.trim(),
         prompt: prompt.trim(),
-        target_channel: targetChannel,
-        target_recipient: targetRecipient.trim(),
+        target_channel: targetChannel || 'telegram',
+        target_recipient: targetRecipient.trim() || undefined,
+        channel: targetChannel || 'telegram',
+        recipient: targetRecipient.trim() || undefined,
         enabled: true,
       });
 
@@ -193,7 +195,7 @@ export function AutomationsPage() {
           </div>
         </div>
 
-        {/* Tasks List Table / Grid */}
+        {/* Tasks List Table */}
         {loading ? (
           <div className="py-24 text-center text-slate font-sans text-body">Loading automations...</div>
         ) : jobs.length === 0 ? (
@@ -203,92 +205,127 @@ export function AutomationsPage() {
             </div>
             <h3 className="font-serif text-heading-sm text-deep-ink mb-1">No Scheduled Automations</h3>
             <p className="text-body-sm text-slate max-w-md mx-auto mb-6">
-              Create recurring tasks like daily briefings, security audits, git health scans, or dataset syncs.
+              Create recurring tasks like daily briefings, security audits, git health scans, or meeting reminders.
             </p>
             <Button variant="primary" size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={openCreateModal}>
               Schedule Your First Task
             </Button>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {jobs.map((job) => {
-              const matchedAgent = agents.find((a) => a.agent_id === job.agent_id);
-              const isRunning = runningJobId === job.id;
+          <div className="bg-canvas/90 border border-onyx/10 rounded-2xl shadow-xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-onyx/10 bg-soft-meadow/50 text-[11px] font-mono uppercase tracking-wider text-slate">
+                    <th className="py-3.5 px-4 font-semibold">Schedule</th>
+                    <th className="py-3.5 px-4 font-semibold">Task Name</th>
+                    <th className="py-3.5 px-4 font-semibold">Agent</th>
+                    <th className="py-3.5 px-4 font-semibold">Instructions / Directive</th>
+                    <th className="py-3.5 px-4 font-semibold">Push Route</th>
+                    <th className="py-3.5 px-4 font-semibold text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-onyx/5 text-body-sm font-sans">
+                  {jobs.map((job) => {
+                    const matchedAgent = agents.find((a) => a.agent_id === job.agent_id);
+                    const isRunning = runningJobId === job.id;
+                    const channelName = job.target_channel || job.channel || 'telegram';
+                    const recipient = job.target_recipient || job.recipient || '';
 
-              return (
-                <Card
-                  key={job.id}
-                  className="p-6 border border-onyx/10 bg-canvas/90 shadow-xs hover:border-onyx/20 flex flex-col justify-between"
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <Badge variant="active" className="text-[10px] font-mono mb-1.5">
-                          {job.cron_expr}
-                        </Badge>
-                        <h4 className="font-serif text-heading-sm text-deep-ink font-semibold line-clamp-1">
-                          {job.name}
-                        </h4>
-                      </div>
+                    return (
+                      <tr key={job.id} className="hover:bg-soft-meadow/40 transition-colors">
+                        {/* Schedule Column */}
+                        <td className="py-4 px-4 align-top whitespace-nowrap">
+                          <Badge variant="active" className="font-mono text-[11px] px-2 py-0.5">
+                            {job.cron_expr}
+                          </Badge>
+                          {job.next_run && (
+                            <div className="text-[11px] text-slate mt-1 font-mono">
+                              Next: {new Date(job.next_run).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          )}
+                        </td>
 
-                      <Badge variant="neutral" className="text-[11px] capitalize shrink-0">
-                        {job.target_channel || 'Local'}
-                      </Badge>
-                    </div>
+                        {/* Task Name Column */}
+                        <td className="py-4 px-4 align-top min-w-[180px]">
+                          <div className="font-serif font-semibold text-deep-ink text-body-sm">
+                            {job.name}
+                          </div>
+                          <div className="font-mono text-[11px] text-slate truncate max-w-[200px]">
+                            {job.id}
+                          </div>
+                        </td>
 
-                    {/* Agent & Execution target */}
-                    <div className="flex items-center gap-2 p-2 rounded-xl bg-soft-meadow text-body-sm font-sans text-deep-ink">
-                      <Sparkles className="w-4 h-4 text-hi-yellow shrink-0" />
-                      <span className="font-semibold truncate">
-                        {matchedAgent ? matchedAgent.name : job.agent_id}
-                      </span>
-                    </div>
+                        {/* Assigned Agent Column */}
+                        <td className="py-4 px-4 align-top whitespace-nowrap">
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-soft-meadow border border-onyx/10 text-caption text-deep-ink font-medium">
+                            <Sparkles className="w-3.5 h-3.5 text-hi-yellow shrink-0" />
+                            <span>{matchedAgent ? matchedAgent.name : job.agent_id}</span>
+                          </div>
+                        </td>
 
-                    {/* Prompt Preview */}
-                    <p className="font-sans text-caption text-slate line-clamp-3 bg-soft-meadow/50 p-2.5 rounded-xl border border-onyx/5">
-                      "{job.prompt}"
-                    </p>
+                        {/* Prompt Column */}
+                        <td className="py-4 px-4 align-top max-w-sm">
+                          <p className="text-caption text-slate line-clamp-2 bg-soft-meadow/40 p-2 rounded-xl border border-onyx/5">
+                            "{job.prompt}"
+                          </p>
+                        </td>
 
-                    {job.target_recipient && (
-                      <div className="text-[11px] font-mono text-slate flex items-center gap-1.5">
-                        <Send className="w-3 h-3 text-slate" />
-                        <span>Push to: <strong>{job.target_recipient}</strong></span>
-                      </div>
-                    )}
-                  </div>
+                        {/* Push Route Column */}
+                        <td className="py-4 px-4 align-top whitespace-nowrap">
+                          <div className="space-y-1">
+                            <Badge
+                              variant={channelName === 'telegram' ? 'accent' : 'neutral'}
+                              className="text-[11px] font-mono capitalize"
+                            >
+                              {channelName === 'telegram' ? '📱 Telegram Bot' : channelName === 'whatsapp' ? '💬 WhatsApp' : channelName}
+                            </Badge>
+                            {recipient ? (
+                              <div className="text-[11px] font-mono text-slate flex items-center gap-1">
+                                <Send className="w-2.5 h-2.5" />
+                                <span>{recipient}</span>
+                              </div>
+                            ) : (
+                              <div className="text-[10px] font-mono text-slate/70">Auto-route</div>
+                            )}
+                          </div>
+                        </td>
 
-                  {/* Actions Bar */}
-                  <div className="pt-4 mt-4 border-t border-onyx/5 flex items-center justify-between gap-2">
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      icon={<Play className={`w-3.5 h-3.5 ${isRunning ? 'animate-spin' : ''}`} />}
-                      onClick={() => handleRunNow(job)}
-                      disabled={isRunning}
-                    >
-                      {isRunning ? 'Running...' : t('actions.runNow', 'Run Now')}
-                    </Button>
-
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon={<Edit2 className="w-3.5 h-3.5" />}
-                        onClick={() => openEditModal(job)}
-                        title="Edit task"
-                      />
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        icon={<Trash2 className="w-3.5 h-3.5" />}
-                        onClick={() => setDeletingJobId(job.id)}
-                        title="Delete task"
-                      />
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
+                        {/* Actions Column */}
+                        <td className="py-4 px-4 align-top text-right whitespace-nowrap">
+                          <div className="inline-flex items-center gap-1.5">
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              icon={<Play className={`w-3.5 h-3.5 ${isRunning ? 'animate-spin' : ''}`} />}
+                              onClick={() => handleRunNow(job)}
+                              disabled={isRunning}
+                              className="px-3"
+                            >
+                              {isRunning ? 'Running...' : t('actions.runNow', 'Run Now')}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              icon={<Edit2 className="w-3.5 h-3.5" />}
+                              onClick={() => openEditModal(job)}
+                              title="Edit task"
+                            />
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              icon={<Trash2 className="w-3.5 h-3.5" />}
+                              onClick={() => setDeletingJobId(job.id)}
+                              title="Delete task"
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </PageContainer>
@@ -397,6 +434,7 @@ export function AutomationsPage() {
                   >
                     <option value="telegram">{t('modal.channelTelegram', 'Telegram Bot')}</option>
                     <option value="whatsapp">{t('modal.channelWhatsApp', 'WhatsApp Cloud API')}</option>
+                    <option value="all">All Paired Channels</option>
                     <option value="none">{t('modal.channelNone', 'None (Internal Execution Only)')}</option>
                   </select>
                 </div>
@@ -406,7 +444,7 @@ export function AutomationsPage() {
                     {t('modal.recipientLabel', 'Recipient / Chat ID')}
                   </label>
                   <Input
-                    placeholder={t('modal.recipientPlaceholder', 'e.g., 123456789 or @channel')}
+                    placeholder={t('modal.recipientPlaceholder', 'e.g., 123456789 or leave empty for auto-route')}
                     value={targetRecipient}
                     onChange={(e) => setTargetRecipient(e.target.value)}
                   />

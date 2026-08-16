@@ -42,17 +42,38 @@ func (t *BrowserNavigateTool) ParametersSchema() json.RawMessage {
 }
 
 func (t *BrowserNavigateTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {
+	inputJSON = NormalizeToolInput(inputJSON)
 	var input struct {
 		URL         string `json:"url"`
 		WaitSeconds int    `json:"wait_seconds"`
 	}
-	if err := json.Unmarshal(inputJSON, &input); err != nil {
-		return nil, fmt.Errorf("parsing input: %w", err)
+	if err := json.Unmarshal(inputJSON, &input); err != nil || input.URL == "" {
+		var strURL string
+		if strErr := json.Unmarshal(inputJSON, &strURL); strErr == nil && strURL != "" {
+			input.URL = strURL
+		} else {
+			var m map[string]any
+			if mapErr := json.Unmarshal(inputJSON, &m); mapErr == nil {
+				if u, ok := m["url"].(string); ok && u != "" {
+					input.URL = u
+				} else if u, ok := m["URL"].(string); ok && u != "" {
+					input.URL = u
+				}
+				if w, ok := m["wait_seconds"].(float64); ok {
+					input.WaitSeconds = int(w)
+				}
+			}
+		}
 	}
 
 	if input.URL == "" {
 		return nil, errors.New("url parameter is required")
 	}
+
+	if !strings.HasPrefix(input.URL, "http://") && !strings.HasPrefix(input.URL, "https://") {
+		input.URL = "https://" + input.URL
+	}
+
 	if input.WaitSeconds <= 0 || input.WaitSeconds > 10 {
 		input.WaitSeconds = 2
 	}
@@ -143,17 +164,38 @@ func (t *BrowserScreenshotTool) ParametersSchema() json.RawMessage {
 }
 
 func (t *BrowserScreenshotTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {
+	inputJSON = NormalizeToolInput(inputJSON)
 	var input struct {
 		URL        string `json:"url"`
 		OutputPath string `json:"output_path"`
 	}
-	if err := json.Unmarshal(inputJSON, &input); err != nil {
-		return nil, fmt.Errorf("parsing input: %w", err)
+	if err := json.Unmarshal(inputJSON, &input); err != nil || input.URL == "" {
+		var strURL string
+		if strErr := json.Unmarshal(inputJSON, &strURL); strErr == nil && strURL != "" {
+			input.URL = strURL
+		} else {
+			var m map[string]any
+			if mapErr := json.Unmarshal(inputJSON, &m); mapErr == nil {
+				if u, ok := m["url"].(string); ok && u != "" {
+					input.URL = u
+				} else if u, ok := m["URL"].(string); ok && u != "" {
+					input.URL = u
+				}
+				if p, ok := m["output_path"].(string); ok && p != "" {
+					input.OutputPath = p
+				}
+			}
+		}
 	}
 
 	if input.URL == "" {
 		return nil, errors.New("url parameter is required")
 	}
+
+	if !strings.HasPrefix(input.URL, "http://") && !strings.HasPrefix(input.URL, "https://") {
+		input.URL = "https://" + input.URL
+	}
+
 	if input.OutputPath == "" {
 		input.OutputPath = fmt.Sprintf("screenshot_%d.png", time.Now().Unix())
 	}

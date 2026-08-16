@@ -1,4 +1,12 @@
-import type { AgentManifest, ChannelAccount, ToolInfo, SystemMetrics, TailscaleStatus } from './types';
+import type {
+  AgentManifest,
+  ChannelAccount,
+  ConnectorInfo,
+  LLMProviderInfo,
+  ToolInfo,
+  SystemMetrics,
+  TailscaleStatus,
+} from './types';
 
 const API_BASE = '/api';
 
@@ -45,6 +53,7 @@ export interface MessageRecordItem {
 }
 
 export interface ProviderKeysData {
+  providers?: LLMProviderInfo[];
   anthropic_configured: boolean;
   anthropic_masked: string;
   gemini_configured: boolean;
@@ -54,6 +63,18 @@ export interface ProviderKeysData {
   deepseek_configured: boolean;
   deepseek_masked: string;
   ollama_url: string;
+}
+
+export interface UserIdentityProfile {
+  user_name: string;
+  user_role?: string;
+  language: string;
+  timezone?: string;
+  communication_style?: string;
+  bio?: string;
+  custom_instructions?: string;
+  soul?: string;
+  updated_at?: string;
 }
 
 export interface AuditLogItem {
@@ -94,11 +115,21 @@ export interface CronJobItem {
   name: string;
   cron_expr: string;
   prompt: string;
-  target_channel: string;
-  target_recipient: string;
+  target_channel?: string;
+  target_recipient?: string;
+  channel?: string;
+  recipient?: string;
   enabled: boolean;
   last_run?: string;
   next_run?: string;
+}
+
+export interface WorkspaceFileItem {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  size: number;
+  mod_time: string;
 }
 
 export interface DashboardSummaryData {
@@ -156,23 +187,44 @@ export const api = {
     fetchJSON<{ status: string }>(`/agents/${id}/start`, { method: 'POST' }),
   stopAgent: (id: string) =>
     fetchJSON<{ status: string }>(`/agents/${id}/stop`, { method: 'POST' }),
-  getSoul: () => fetchJSON<{ soul: string }>('/agents/soul'),
-  saveSoul: (soul: string) =>
-    fetchJSON<{ status: string }>('/agents/soul', {
+  getSoul: () =>
+    fetchJSON<{ content: string; soul: string; path: string }>('/agents/soul').then((r) => ({
+      ...r,
+      soul: r.soul || r.content,
+      content: r.content || r.soul,
+    })),
+  saveSoul: (content: string) =>
+    fetchJSON<{ status: string; path: string }>('/agents/soul', {
       method: 'PUT',
-      body: JSON.stringify({ soul }),
+      body: JSON.stringify({ content, soul: content }),
     }),
   getMemoryMD: () => fetchJSON<{ memory_md: string }>('/agents/memory-md'),
-  listCronJobs: () => fetchJSON<{ jobs: CronJobItem[]; count: number }>('/agents/cron'),
-  saveCronJob: (job: Partial<CronJobItem>) =>
-    fetchJSON<{ status: string; job: CronJobItem }>('/agents/cron', {
+  listCronJobs: () => fetchJSON<{ jobs: CronJobItem[]; count: number }>('/cron'),
+  saveCronJob: (job: Partial<CronJobItem> & { target_channel?: string; target_recipient?: string }) =>
+    fetchJSON<{ status: string; job?: CronJobItem; job_id?: string }>('/cron', {
       method: 'POST',
-      body: JSON.stringify(job),
+      body: JSON.stringify({
+        ...job,
+        channel: job.channel || job.target_channel,
+        recipient: job.recipient || job.target_recipient,
+      }),
     }),
   deleteCronJob: (id: string) =>
-    fetchJSON<{ status: string }>(`/agents/cron/${id}`, { method: 'DELETE' }),
+    fetchJSON<{ status: string }>(`/cron/${id}`, { method: 'DELETE' }),
   triggerCronJob: (id: string) =>
     fetchJSON<{ status: string; message: string }>(`/cron/${id}/run`, { method: 'POST' }),
+
+  // Chat Execution
+  chat: (agentID: string, message: string, conversationID?: string) =>
+    fetchJSON<{
+      response: string;
+      conversation_id: string;
+      tool_calls?: any[];
+      usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+    }>(`/agents/${agentID}/chat`, {
+      method: 'POST',
+      body: JSON.stringify({ message, conversation_id: conversationID }),
+    }),
 
   // Conversations
   listConversations: (agentID?: string) =>
@@ -194,11 +246,11 @@ export const api = {
       body: JSON.stringify({ title }),
     }),
 
-  // Tools & Skills Hub
+  // Tools Registry & MCP Host
   listTools: (category?: string) =>
     fetchJSON<{ tools: ToolInfo[]; count: number }>(`/tools${category ? `?category=${category}` : ''}`),
-  connectMCP: (cfg: { id: string; command: string; args?: string[] }) =>
-    fetchJSON<{ status: string }>('/tools/mcp', {
+  connectMCP: (cfg: { id: string; command: string; args?: string[]; env?: Record<string, string> }) =>
+    fetchJSON<{ status: string; server_id: string; tools_discovered: number }>('/tools/mcp', {
       method: 'POST',
       body: JSON.stringify({ transport: 'stdio', ...cfg }),
     }),
@@ -207,7 +259,7 @@ export const api = {
   executeTool: (name: string, input: any) =>
     fetchJSON<any>('/tools/execute', {
       method: 'POST',
-      body: JSON.stringify({ name, input }),
+      body: JSON.stringify({ name, tool: name, input, arguments: input }),
     }),
   createSkill: (skill: { name: string; description: string; content: string }) =>
     fetchJSON<{ status: string; name: string; path: string }>('/tools/skill', {
@@ -217,26 +269,33 @@ export const api = {
   uploadWASM: (file: File) => {
     const fd = new FormData();
     fd.append('file', file);
-    return fetch('/api/tools/wasm', { method: 'POST', body: fd }).then((r) => r.json());
+    return fetch(`${API_BASE}/tools/wasm`, { method: 'POST', body: fd }).then((r) => r.json());
   },
-  listHubCatalog: () =>
-    fetchJSON<{ catalog: HubSkillItem[]; count: number }>('/tools/hub/catalog'),
-  installHubSkill: (skill_id: string) =>
-    fetchJSON<{ status: string; skill_id: string }>('/tools/hub/install', {
+
+  // Skills Public Community Hub
+  listHubCatalog: () => fetchJSON<{ catalog: HubSkillItem[]; count: number }>('/tools/hub/catalog'),
+  installHubSkill: (skillId: string) =>
+    fetchJSON<{ status: string; skill: string }>('/tools/hub/install', {
       method: 'POST',
-      body: JSON.stringify({ skill_id }),
+      body: JSON.stringify({ skill_id: skillId }),
     }),
-  uninstallHubSkill: (skill_id: string) =>
-    fetchJSON<{ status: string; skill_id: string }>('/tools/hub/uninstall', {
+  uninstallHubSkill: (skillId: string) =>
+    fetchJSON<{ status: string; skill: string }>('/tools/hub/uninstall', {
       method: 'POST',
-      body: JSON.stringify({ skill_id }),
+      body: JSON.stringify({ skill_id: skillId }),
     }),
 
-  // Workspace
+  // Sandboxed Workspace
   listWorkspaceFiles: (dir?: string) =>
-    fetchJSON<{ files: any[]; dir: string; count: number }>(`/workspace/files${dir ? `?dir=${encodeURIComponent(dir)}` : ''}`),
+    fetchJSON<{ files: WorkspaceFileItem[]; dir: string; count: number }>(
+      `/workspace/files${dir ? `?subpath=${encodeURIComponent(dir)}&dir=${encodeURIComponent(dir)}` : ''}`
+    ).then((r) => ({
+      files: r.files || [],
+      dir: r.dir || dir || '',
+      count: r.count || (r.files ? r.files.length : 0),
+    })),
   getWorkspaceFile: (path: string) =>
-    fetchJSON<{ path: string; content: string; size: number }>(`/workspace/file?path=${encodeURIComponent(path)}`),
+    fetchJSON<{ path: string; content: string; size?: number }>(`/workspace/file?path=${encodeURIComponent(path)}`),
   saveWorkspaceFile: (path: string, content: string) =>
     fetchJSON<{ path: string; written: number }>('/workspace/file', {
       method: 'POST',
@@ -250,7 +309,7 @@ export const api = {
       body: JSON.stringify({ path }),
     }),
 
-  // System & Keys
+  // System & LLM Provider Keys
   getAPIKeys: () => fetchJSON<ProviderKeysData>('/system/keys'),
   saveAPIKeys: (keys: {
     anthropic_key?: string;
@@ -258,26 +317,86 @@ export const api = {
     openai_key?: string;
     deepseek_key?: string;
     ollama_url?: string;
+    provider?: string;
+    api_key?: string;
+    base_url?: string;
+    default_model?: string;
+    enabled?: boolean;
   }) =>
     fetchJSON<{ status: string }>('/system/keys', {
       method: 'POST',
       body: JSON.stringify(keys),
     }),
-  testAPIKey: (provider: string, key: string, url?: string) =>
-    fetchJSON<{ status: string; response: string; model: string }>('/system/keys/test', {
+  saveProviderKey: (params: {
+    provider: string;
+    api_key?: string;
+    base_url?: string;
+    default_model?: string;
+    enabled?: boolean;
+  }) =>
+    fetchJSON<{ status: string }>('/system/keys', {
       method: 'POST',
-      body: JSON.stringify({ provider, key, url }),
+      body: JSON.stringify(params),
+    }),
+  deleteProviderKey: (provider: string) =>
+    fetchJSON<{ status: string; provider: string }>(`/system/keys/${provider}`, {
+      method: 'DELETE',
+    }),
+  testAPIKey: (provider: string, key: string, url?: string, model?: string) =>
+    fetchJSON<{ status: string; response: string; model: string; latency_ms: number }>('/system/keys/test', {
+      method: 'POST',
+      body: JSON.stringify({ provider, key, url, model }),
     }),
   getAuditLogs: () => fetchJSON<{ entries: AuditLogItem[]; count: number }>('/system/audit'),
   getStorageInfo: () => fetchJSON<StorageInfoData>('/system/storage'),
-  checkOTA: () => fetchJSON<{ current_version: string; update_available: boolean; latest_version: string; last_checked: string }>('/system/ota/check', {
-    method: 'POST',
-  }),
+  getIdentity: () => fetchJSON<UserIdentityProfile>('/system/identity'),
+  saveIdentity: (profile: Partial<UserIdentityProfile>) =>
+    fetchJSON<{ status: string; profile: UserIdentityProfile; updated_at: string }>('/system/identity', {
+      method: 'PUT',
+      body: JSON.stringify(profile),
+    }),
+  checkOTA: () =>
+    fetchJSON<{ current_version: string; update_available: boolean; latest_version: string; last_checked: string }>(
+      '/system/ota/check',
+      { method: 'POST' }
+    ),
 
-  // Integrations & Channels & Pairing
-  listIntegrations: () => fetchJSON<{ integrations: any[]; count: number }>('/integrations'),
+  // SaaS Connectors & OAuth 2.1 PKCE
+  listIntegrations: () => fetchJSON<{ integrations: ConnectorInfo[]; count: number }>('/integrations'),
+  getAuthURL: (provider: string, client_id?: string, client_secret?: string, redirect_uri?: string) =>
+    fetchJSON<{ provider: string; auth_url: string; state: string; redirect_uri: string }>(
+      `/integrations/${provider}/auth-url`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ client_id, client_secret, redirect_uri }),
+      }
+    ),
+  saveDirectToken: (provider: string, token: string) =>
+    fetchJSON<{ status: string; provider: string; auth_type: string; identity: any }>(
+      `/integrations/${provider}/token`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ token }),
+      }
+    ),
+  saveConnectorConfig: (provider: string, client_id: string, client_secret: string) =>
+    fetchJSON<{ status: string }>(`/integrations/${provider}/config`, {
+      method: 'POST',
+      body: JSON.stringify({ client_id, client_secret }),
+    }),
+  testConnector: (provider: string) =>
+    fetchJSON<{ status: string; provider: string; latency_ms: number; identity: any }>(
+      `/integrations/${provider}/test`,
+      { method: 'POST' }
+    ),
+  disconnectConnector: (provider: string) =>
+    fetchJSON<{ status: string; provider: string }>(`/integrations/${provider}/disconnect`, {
+      method: 'POST',
+    }),
   toggleIntegration: (provider: string) =>
     fetchJSON<{ provider: string; connected: boolean }>(`/integrations/${provider}/toggle`, { method: 'POST' }),
+
+  // Chat Channels
   getChannels: () =>
     fetchJSON<{
       telegram: ChannelAccount[];
@@ -331,4 +450,3 @@ export const api = {
     }),
   restartDaemon: () => fetchJSON<{ status: string }>('/system/restart', { method: 'POST' }),
 };
-

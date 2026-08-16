@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 )
 
@@ -27,12 +28,26 @@ func NewModelCascadeRouter() *ModelCascadeRouter {
 	}
 }
 
+// Count returns the number of registered providers.
+func (r *ModelCascadeRouter) Count() int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return len(r.providers)
+}
+
+// SetDefaultProvider sets the default provider ID.
+func (r *ModelCascadeRouter) SetDefaultProvider(id string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.defaultID = id
+}
+
 // RegisterProvider adds an LLMProvider to the router registry.
 func (r *ModelCascadeRouter) RegisterProvider(id string, provider LLMProvider) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.providers[id] = provider
-	if r.defaultID == "" {
+	if r.defaultID == "" || (r.defaultID == "local-stub" && id != "local-stub") {
 		r.defaultID = id
 	}
 }
@@ -47,31 +62,48 @@ func (r *ModelCascadeRouter) GetProvider(id string) (LLMProvider, error) {
 		return p, nil
 	}
 
-	// 2. Fuzzy alias matching
-	cleanID := id
-	for k, p := range r.providers {
-		if k == cleanID {
-			return p, nil
-		}
-		// Match prefixes (e.g. anthropic, gemini, openai, claude, gpt)
-		if (len(cleanID) > 4 && len(k) > 4) && (cleanID[:4] == k[:4]) {
+	// 2. Extract prefix before slash (e.g. "anthropic/claude-3-7-sonnet" -> "anthropic")
+	prefix := id
+	if idx := strings.Index(id, "/"); idx != -1 {
+		prefix = id[:idx]
+		if p, ok := r.providers[prefix]; ok {
 			return p, nil
 		}
 	}
 
-	// 3. Fallback to default registered provider if any exists
-	if r.defaultID != "" {
+	// 3. Fuzzy alias matching
+	cleanID := strings.ToLower(prefix)
+	for k, p := range r.providers {
+		kLower := strings.ToLower(k)
+		if kLower == cleanID {
+			return p, nil
+		}
+		if strings.HasPrefix(cleanID, kLower) || strings.HasPrefix(kLower, cleanID) {
+			return p, nil
+		}
+		if (cleanID == "google" && kLower == "gemini") || (cleanID == "gemini" && kLower == "google") {
+			return p, nil
+		}
+	}
+
+	// 4. If an explicit provider ID was requested (e.g. "anthropic/claude" or "openai") but not found,
+	// check if a default non-mock provider is available before resorting to anything else
+	if r.defaultID != "" && r.defaultID != "local-stub" {
 		if p, ok := r.providers[r.defaultID]; ok {
 			return p, nil
 		}
 	}
 
-	// 4. Return any registered provider
+	// 5. Fallback to mock provider only if no other provider exists
+	if p, ok := r.providers["local-stub"]; ok {
+		return p, nil
+	}
+
 	for _, p := range r.providers {
 		return p, nil
 	}
 
-	return nil, fmt.Errorf("%w: %s", ErrProviderNotFound, id)
+	return nil, fmt.Errorf("%w: %s (provider not configured in Settings)", ErrProviderNotFound, id)
 }
 
 // CompleteWithCascade attempts execution with primary provider, falling back on error.
@@ -90,21 +122,27 @@ func (r *ModelCascadeRouter) CompleteWithCascade(
 	}
 
 	var lastErr error
-	for _, providerID := range cascadeOrder {
-		provider, err := r.GetProvider(providerID)
+	for _, target := range cascadeOrder {
+		provider, err := r.GetProvider(target)
 		if err != nil {
-			slog.Warn("provider not found in router cascade", "provider_id", providerID, "error", err)
+			slog.Warn("provider not found in router cascade", "target", target, "error", err)
 			lastErr = err
 			continue
 		}
 
-		resp, err := provider.Complete(ctx, messages, opts)
+		// Dynamically assign target model if specified in the target string
+		callOpts := opts
+		if callOpts.Model == "" && strings.Contains(target, "/") {
+			callOpts.Model = target[strings.Index(target, "/")+1:]
+		}
+
+		resp, err := provider.Complete(ctx, messages, callOpts)
 		if err == nil {
 			return resp, nil
 		}
 
 		slog.Warn("provider failed in cascade, attempting fallback",
-			"provider_id", providerID,
+			"target", target,
 			"error", err,
 		)
 		lastErr = err
@@ -129,20 +167,25 @@ func (r *ModelCascadeRouter) StreamCompleteWithCascade(
 	}
 
 	var lastErr error
-	for _, providerID := range cascadeOrder {
-		provider, err := r.GetProvider(providerID)
+	for _, target := range cascadeOrder {
+		provider, err := r.GetProvider(target)
 		if err != nil {
 			lastErr = err
 			continue
 		}
 
-		ch, err := provider.StreamComplete(ctx, messages, opts)
+		callOpts := opts
+		if callOpts.Model == "" && strings.Contains(target, "/") {
+			callOpts.Model = target[strings.Index(target, "/")+1:]
+		}
+
+		ch, err := provider.StreamComplete(ctx, messages, callOpts)
 		if err == nil {
 			return ch, nil
 		}
 
 		slog.Warn("provider stream failed, attempting fallback",
-			"provider_id", providerID,
+			"target", target,
 			"error", err,
 		)
 		lastErr = err

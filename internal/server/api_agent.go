@@ -2,10 +2,12 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/actonos/actonos/internal/agent"
@@ -19,6 +21,7 @@ type createAgentRequest struct {
 	Name                string                `json:"name"`
 	Description         string                `json:"description"`
 	AvatarIcon          string                `json:"avatar_icon"`
+	Status              agent.AgentStatus     `json:"status,omitempty"`
 	ModelConfig         llm.ModelConfig       `json:"model_config"`
 	SystemInstructions string                `json:"system_instructions"`
 	AuthorizedTools     []string              `json:"authorized_tools"`
@@ -46,10 +49,16 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	status := req.Status
+	if status == "" {
+		status = agent.StatusActive
+	}
+
 	manifest := agent.AgentManifest{
 		Name:                req.Name,
 		Description:         req.Description,
 		AvatarIcon:          req.AvatarIcon,
+		Status:              status,
 		ModelConfig:         req.ModelConfig,
 		SystemInstructions: req.SystemInstructions,
 		AuthorizedTools:     req.AuthorizedTools,
@@ -85,11 +94,21 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	status := req.Status
+	if status == "" {
+		if existing, err := s.agentMgr.Get(r.Context(), agentID); err == nil && existing.Status != "" {
+			status = existing.Status
+		} else {
+			status = agent.StatusActive
+		}
+	}
+
 	manifest := agent.AgentManifest{
 		AgentID:             agentID,
 		Name:                req.Name,
 		Description:         req.Description,
 		AvatarIcon:          req.AvatarIcon,
+		Status:              status,
 		ModelConfig:         req.ModelConfig,
 		SystemInstructions: req.SystemInstructions,
 		AuthorizedTools:     req.AuthorizedTools,
@@ -140,6 +159,9 @@ func (s *Server) handleStopAgent(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	agentID := chi.URLParam(r, "agentID")
+	if agentID == "" || agentID == "default" {
+		agentID = "agent_system_core"
+	}
 
 	var req struct {
 		ConversationID string `json:"conversation_id"`
@@ -156,20 +178,91 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Persist user message if conversation exists
-	if req.ConversationID != "" && s.memory != nil {
-		now := time.Now().UTC()
-		userMsgID := "msg_" + uuid.New().String()[:12]
+	now := time.Now().UTC()
+	convID := req.ConversationID
+	var convTitle string
+
+	if s.memory != nil {
+		// If no conversation ID provided, automatically create a new session
+		if convID == "" {
+			convID = "conv_" + uuid.New().String()
+			convTitle = generateConversationTitle(req.Message)
+			_, _ = s.memory.DB().SQLDB().ExecContext(
+				r.Context(),
+				`INSERT INTO conversations (id, agent_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+				convID, agentID, convTitle, now, now,
+			)
+		} else {
+			// Check if conversation exists and check its title
+			var existingTitle string
+			err := s.memory.DB().SQLDB().QueryRowContext(
+				r.Context(),
+				`SELECT title FROM conversations WHERE id = ?`,
+				convID,
+			).Scan(&existingTitle)
+
+			if err == sql.ErrNoRows {
+				convTitle = generateConversationTitle(req.Message)
+				_, _ = s.memory.DB().SQLDB().ExecContext(
+					r.Context(),
+					`INSERT INTO conversations (id, agent_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+					convID, agentID, convTitle, now, now,
+				)
+			} else {
+				convTitle = existingTitle
+				if existingTitle == "New Session" || existingTitle == "New Conversation" || existingTitle == "" {
+					convTitle = generateConversationTitle(req.Message)
+					_, _ = s.memory.DB().SQLDB().ExecContext(
+						r.Context(),
+						`UPDATE conversations SET title = ?, updated_at = ? WHERE id = ?`,
+						convTitle, now, convID,
+					)
+				} else {
+					_, _ = s.memory.DB().SQLDB().ExecContext(
+						r.Context(),
+						`UPDATE conversations SET updated_at = ? WHERE id = ?`,
+						now, convID,
+					)
+				}
+			}
+		}
+
+		// Insert user message with agent_id
+		userMsgID := "msg_" + uuid.New().String()
 		_, _ = s.memory.DB().SQLDB().ExecContext(
 			r.Context(),
-			`INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)`,
-			userMsgID, req.ConversationID, "user", req.Message, now,
+			`INSERT INTO messages (id, conversation_id, agent_id, role, content, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+			userMsgID, convID, agentID, "user", req.Message, now,
 		)
-		_, _ = s.memory.DB().SQLDB().ExecContext(
-			r.Context(),
-			`UPDATE conversations SET updated_at = ? WHERE id = ?`,
-			now, req.ConversationID,
-		)
+	}
+
+	// Load short-term Working Memory (recent history) for this conversation
+	var history []llm.Message
+	if s.memory != nil && convID != "" {
+		rows, err := s.memory.DB().SQLDB().QueryContext(r.Context(), `
+			SELECT role, content
+			FROM messages
+			WHERE conversation_id = ? AND role IN ('user', 'assistant')
+			ORDER BY created_at DESC
+			LIMIT 8
+		`, convID)
+		if err == nil {
+			var reversed []llm.Message
+			for rows.Next() {
+				var role, content string
+				if err := rows.Scan(&role, &content); err == nil {
+					reversed = append(reversed, llm.Message{Role: llm.Role(role), Content: content})
+				}
+			}
+			rows.Close()
+			// Exclude the last message if it's the current user message
+			if len(reversed) > 0 && reversed[0].Role == "user" && reversed[0].Content == req.Message {
+				reversed = reversed[1:]
+			}
+			for i, j := 0, len(reversed)-1; i < len(reversed); i, j = i+1, j-1 {
+				history = append(history, reversed[j])
+			}
+		}
 	}
 
 	if req.Stream {
@@ -182,61 +275,153 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
+		w.Header().Set("X-Accel-Buffering", "no")
 
-		resp, err := s.engine.ExecuteStep(r.Context(), agentID, req.Message)
-		if err != nil {
-			fmt.Fprintf(w, "event: error\ndata: %s\n\n", err.Error())
-			flusher.Flush()
-			return
+		eventChan := make(chan agent.AgentStreamEvent, 64)
+		go func() {
+			_, _ = s.engine.ExecuteStepStreamWithHistory(r.Context(), agentID, req.Message, history, eventChan)
+		}()
+
+		var finalContent strings.Builder
+		var allToolCalls []llm.ToolCall
+		var finalModel string
+		var finalTokens int
+
+		for ev := range eventChan {
+			ev.ConversationID = convID
+			ev.Title = convTitle
+
+			switch ev.Type {
+			case agent.EventStreamThought:
+				dataBytes, _ := json.Marshal(map[string]any{
+					"conversation_id": convID,
+					"title":           convTitle,
+					"thought":         ev.Thought,
+				})
+				fmt.Fprintf(w, "event: thought\ndata: %s\n\n", string(dataBytes))
+				flusher.Flush()
+
+			case agent.EventStreamToken:
+				finalContent.WriteString(ev.Content)
+				dataBytes, _ := json.Marshal(map[string]any{
+					"conversation_id": convID,
+					"title":           convTitle,
+					"content":         ev.Content,
+				})
+				fmt.Fprintf(w, "event: token\ndata: %s\n\n", string(dataBytes))
+				flusher.Flush()
+
+			case agent.EventStreamToolCall:
+				allToolCalls = append(allToolCalls, llm.ToolCall{
+					ID:   ev.ToolCallID,
+					Type: "function",
+					Function: llm.FunctionCall{
+						Name: ev.Tool,
+					},
+				})
+				dataBytes, _ := json.Marshal(map[string]any{
+					"conversation_id": convID,
+					"title":           convTitle,
+					"tool":            ev.Tool,
+					"tool_call_id":    ev.ToolCallID,
+					"args":            ev.Args,
+				})
+				fmt.Fprintf(w, "event: tool_call\ndata: %s\n\n", string(dataBytes))
+				flusher.Flush()
+
+			case agent.EventStreamToolResult:
+				dataBytes, _ := json.Marshal(map[string]any{
+					"conversation_id": convID,
+					"title":           convTitle,
+					"tool":            ev.Tool,
+					"tool_call_id":    ev.ToolCallID,
+					"result":          ev.Result,
+					"status":          ev.Status,
+					"latency_ms":      ev.LatencyMs,
+				})
+				fmt.Fprintf(w, "event: tool_result\ndata: %s\n\n", string(dataBytes))
+				flusher.Flush()
+
+			case agent.EventStreamAudit:
+				if ev.AuditLog != nil {
+					dataBytes, _ := json.Marshal(map[string]any{
+						"conversation_id": convID,
+						"title":           convTitle,
+						"audit_log":       ev.AuditLog,
+					})
+					fmt.Fprintf(w, "event: audit\ndata: %s\n\n", string(dataBytes))
+					flusher.Flush()
+				}
+
+			case agent.EventStreamDone:
+				if ev.Model != "" {
+					finalModel = ev.Model
+				}
+				if ev.Usage != nil {
+					finalTokens = ev.Usage.TotalTokens
+				}
+				dataBytes, _ := json.Marshal(map[string]any{
+					"conversation_id": convID,
+					"title":           convTitle,
+					"content":         ev.Content,
+					"tokens_used":     finalTokens,
+					"model":           finalModel,
+					"timestamp":       time.Now().UTC(),
+				})
+				fmt.Fprintf(w, "event: done\ndata: %s\n\n", string(dataBytes))
+				flusher.Flush()
+
+			case agent.EventStreamError:
+				dataBytes, _ := json.Marshal(map[string]any{
+					"conversation_id": convID,
+					"title":           convTitle,
+					"error":           ev.Error,
+				})
+				fmt.Fprintf(w, "event: error\ndata: %s\n\n", string(dataBytes))
+				flusher.Flush()
+			}
 		}
 
-		// Persist assistant message
-		if req.ConversationID != "" && s.memory != nil && resp != nil {
-			now := time.Now().UTC()
-			asstMsgID := "msg_" + uuid.New().String()[:12]
-			toolCallsJSON, _ := json.Marshal(resp.ToolCalls)
+		// Persist assistant message into database
+		if s.memory != nil && finalContent.Len() > 0 {
+			asstMsgID := "msg_" + uuid.New().String()
+			toolCallsJSON, _ := json.Marshal(allToolCalls)
 			_, _ = s.memory.DB().SQLDB().ExecContext(
 				r.Context(),
-				`INSERT INTO messages (id, conversation_id, role, content, tool_calls_json, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-				asstMsgID, req.ConversationID, "assistant", resp.Content, string(toolCallsJSON), now,
+				`INSERT INTO messages (id, conversation_id, agent_id, role, content, tool_calls_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+				asstMsgID, convID, agentID, "assistant", finalContent.String(), string(toolCallsJSON), time.Now().UTC(),
 			)
 		}
-
-		// Stream content in chunk events
-		tokenJSON, _ := json.Marshal(map[string]any{"content": resp.Content, "tool_calls": resp.ToolCalls})
-		fmt.Fprintf(w, "event: token\ndata: %s\n\n", string(tokenJSON))
-		flusher.Flush()
-
-		doneJSON, _ := json.Marshal(map[string]any{
-			"tokens_used": resp.Usage.TotalTokens,
-			"model":       resp.Model,
-			"timestamp":   time.Now().UTC(),
-		})
-		fmt.Fprintf(w, "event: done\ndata: %s\n\n", string(doneJSON))
-		flusher.Flush()
 		return
 	}
 
 	// Non-streaming completion
-	resp, err := s.engine.ExecuteStep(r.Context(), agentID, req.Message)
+	resp, err := s.engine.ExecuteStepWithHistory(r.Context(), agentID, req.Message, history)
 	if err != nil {
 		s.respondError(w, http.StatusInternalServerError, "CHAT_FAILED", err.Error())
 		return
 	}
 
 	// Persist assistant message
-	if req.ConversationID != "" && s.memory != nil && resp != nil {
-		now := time.Now().UTC()
-		asstMsgID := "msg_" + uuid.New().String()[:12]
+	if s.memory != nil && resp != nil {
+		asstMsgID := "msg_" + uuid.New().String()
 		toolCallsJSON, _ := json.Marshal(resp.ToolCalls)
 		_, _ = s.memory.DB().SQLDB().ExecContext(
 			r.Context(),
-			`INSERT INTO messages (id, conversation_id, role, content, tool_calls_json, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-			asstMsgID, req.ConversationID, "assistant", resp.Content, string(toolCallsJSON), now,
+			`INSERT INTO messages (id, conversation_id, agent_id, role, content, tool_calls_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			asstMsgID, convID, agentID, "assistant", resp.Content, string(toolCallsJSON), time.Now().UTC(),
 		)
 	}
 
-	s.respondJSON(w, http.StatusOK, resp)
+	s.respondJSON(w, http.StatusOK, map[string]any{
+		"conversation_id": convID,
+		"title":           convTitle,
+		"content":         resp.Content,
+		"role":            "assistant",
+		"model":           resp.Model,
+		"tool_calls":      resp.ToolCalls,
+		"usage":           resp.Usage,
+	})
 }
 
 // Proactive Cron Job Handlers
@@ -259,17 +444,60 @@ func (s *Server) handleSaveCronJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var job agent.CronJob
-	if err := s.decodeJSON(r, &job); err != nil {
+	var req struct {
+		ID              string `json:"id"`
+		AgentID         string `json:"agent_id"`
+		Name            string `json:"name"`
+		CronExpr        string `json:"cron_expr"`
+		Prompt          string `json:"prompt"`
+		TargetChannel   string `json:"target_channel"`
+		Channel         string `json:"channel"`
+		TargetRecipient string `json:"target_recipient"`
+		Recipient       string `json:"recipient"`
+		Enabled         *bool  `json:"enabled"`
+	}
+	if err := s.decodeJSON(r, &req); err != nil {
 		s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
+	}
+
+	targetChan := req.TargetChannel
+	if targetChan == "" {
+		targetChan = req.Channel
+	}
+	if targetChan == "" {
+		targetChan = "telegram"
+	}
+
+	targetRec := req.TargetRecipient
+	if targetRec == "" {
+		targetRec = req.Recipient
+	}
+
+	enabled := true
+	if req.Enabled != nil {
+		enabled = *req.Enabled
+	}
+
+	job := agent.CronJob{
+		ID:              req.ID,
+		AgentID:         req.AgentID,
+		Name:            req.Name,
+		CronExpr:        req.CronExpr,
+		Prompt:          req.Prompt,
+		TargetChannel:   targetChan,
+		TargetRecipient: targetRec,
+		Enabled:         enabled,
 	}
 
 	if job.ID == "" {
 		job.ID = fmt.Sprintf("job_%d", time.Now().Unix())
 	}
+	if job.Name == "" {
+		job.Name = job.ID
+	}
 	if job.AgentID == "" {
-		job.AgentID = "default"
+		job.AgentID = "agent_system_core"
 	}
 
 	if err := s.cronSched.RegisterJob(job); err != nil {
@@ -315,27 +543,49 @@ func (s *Server) handleRunCronJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Trigger agent execution in background or synchronously
+	// Trigger agent execution in background with proactive notification framing
 	go func(job agent.CronJob) {
 		agentID := job.AgentID
 		if agentID == "" || agentID == "default" {
 			agentID = "agent_system_core"
 		}
-		resp, err := s.engine.ExecuteStep(context.Background(), agentID, job.Prompt)
+		executionPrompt := agent.BuildCronExecutionPrompt(&job)
+		resp, err := s.engine.ExecuteStep(context.Background(), agentID, executionPrompt)
 		if err != nil {
 			return
 		}
-		if job.TargetChannel == "telegram" && s.tgAdapter != nil && job.TargetRecipient != "" {
-			_ = s.tgAdapter.SendMessage(context.Background(), channels.OutboundMessage{
-				ChannelID: "telegram",
-				Recipient: job.TargetRecipient,
-				Content:   fmt.Sprintf("⏰ **[Automated Cron Task: %s]**\n\n%s", job.Name, resp.Content),
-			})
-		} else if job.TargetChannel == "whatsapp" && s.waAdapter != nil && job.TargetRecipient != "" {
+
+		targetChan := job.TargetChannel
+		if targetChan == "" {
+			targetChan = "telegram"
+		}
+
+		// Route to Telegram
+		if (targetChan == "telegram" || targetChan == "all") && s.tgAdapter != nil {
+			recipients := []string{}
+			if job.TargetRecipient != "" {
+				recipients = append(recipients, job.TargetRecipient)
+			} else if lastID := s.tgAdapter.GetLastChatID(); lastID != "" {
+				recipients = append(recipients, lastID)
+			} else {
+				recipients = s.tgAdapter.GetKnownChatIDs()
+			}
+
+			for _, rec := range recipients {
+				_ = s.tgAdapter.SendMessage(context.Background(), channels.OutboundMessage{
+					ChannelID: "telegram",
+					Recipient: rec,
+					Content:   fmt.Sprintf("⏰ **[Cron Reminder: %s]**\n\n%s", job.Name, resp.Content),
+				})
+			}
+		}
+
+		// Route to WhatsApp
+		if (targetChan == "whatsapp" || targetChan == "all") && s.waAdapter != nil && job.TargetRecipient != "" {
 			_ = s.waAdapter.SendMessage(context.Background(), channels.OutboundMessage{
 				ChannelID: "whatsapp",
 				Recipient: job.TargetRecipient,
-				Content:   fmt.Sprintf("⏰ *[Automated Cron Task: %s]*\n\n%s", job.Name, resp.Content),
+				Content:   fmt.Sprintf("⏰ *[Cron Reminder: %s]*\n\n%s", job.Name, resp.Content),
 			})
 		}
 	}(*targetJob)

@@ -13,11 +13,15 @@ import (
 	"github.com/actonos/actonos/internal/memory"
 )
 
-// UserProfile represents extracted user preferences, habits, and persona.
+// UserProfile represents extracted owner identity, user preferences, habits, and persona.
 type UserProfile struct {
 	UserName           string            `json:"user_name"`
-	Language           string            `json:"language"` // "en", "vi"
+	UserRole           string            `json:"user_role"`
+	Language           string            `json:"language"` // "vi", "en"
+	Timezone           string            `json:"timezone"` // "Asia/Ho_Chi_Minh", "UTC"
 	CommunicationStyle string            `json:"communication_style"` // "concise", "detailed", "technical"
+	Bio                string            `json:"bio"`
+	CustomInstructions string            `json:"custom_instructions"`
 	NamingConventions  string            `json:"naming_conventions"`
 	Preferences        map[string]string `json:"preferences"`
 	UpdatedAt          time.Time         `json:"updated_at"`
@@ -65,8 +69,13 @@ func NewUserProfileManager(db *memory.DB, dataDir string) (*UserProfileManager, 
 		soulPath:     soulPath,
 		memoryMDPath: memoryMDPath,
 		profile: UserProfile{
-			Language:           "en",
+			UserName:           "Operator",
+			UserRole:           "System Administrator & Architect",
+			Language:           "vi",
+			Timezone:           "Asia/Ho_Chi_Minh",
 			CommunicationStyle: "concise",
+			Bio:                "Owner of the ActonOS local intelligence kernel.",
+			CustomInstructions: "Provide structured, high-accuracy, and verified responses.",
 			Preferences:        make(map[string]string),
 			UpdatedAt:          time.Now().UTC(),
 		},

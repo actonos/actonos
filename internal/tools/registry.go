@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,11 +43,17 @@ type ToolInfo struct {
 	Schema      json.RawMessage `json:"schema"`
 }
 
+// ToolAuditLogger defines interface for writing tool audit logs.
+type ToolAuditLogger interface {
+	LogAudit(traceID, agentID, toolName, riskLevel, status, errorMsg string, durationMS int64)
+}
+
 // ToolRegistry manages all registered tools (Native, MCP, WASM, Skills).
 type ToolRegistry struct {
-	mu    sync.RWMutex
-	tools map[string]Tool
-	bus   *bus.EventBus
+	mu          sync.RWMutex
+	tools       map[string]Tool
+	bus         *bus.EventBus
+	auditLogger ToolAuditLogger
 }
 
 // NewToolRegistry creates a new ToolRegistry instance.
@@ -55,6 +62,13 @@ func NewToolRegistry(eventBus *bus.EventBus) *ToolRegistry {
 		tools: make(map[string]Tool),
 		bus:   eventBus,
 	}
+}
+
+// SetAuditLogger connects the system audit logger.
+func (r *ToolRegistry) SetAuditLogger(al ToolAuditLogger) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.auditLogger = al
 }
 
 // Register adds a tool to the registry.
@@ -157,6 +171,54 @@ func (r *ToolRegistry) ToLLMToolDefinitions(authorizedTools []string) []llm.Tool
 	return defs
 }
 
+// NormalizeToolInput converts raw string, double-JSON-encoded, or malformed inputs into valid JSON object bytes.
+func NormalizeToolInput(inputJSON json.RawMessage) json.RawMessage {
+	trimmed := strings.TrimSpace(string(inputJSON))
+	if len(trimmed) == 0 || trimmed == `""` || trimmed == "{}" {
+		return json.RawMessage(`{}`)
+	}
+
+	// 1. If wrapped in outer quotes (JSON string literal like "\"{\\\"url\\\": ...}\"" or "\"https://example.com\"")
+	if strings.HasPrefix(trimmed, `"`) && strings.HasSuffix(trimmed, `"`) {
+		var unescaped string
+		if err := json.Unmarshal([]byte(trimmed), &unescaped); err == nil {
+			unescapedTrimmed := strings.TrimSpace(unescaped)
+			// If unescaped string is a JSON object or array
+			if (strings.HasPrefix(unescapedTrimmed, "{") && strings.HasSuffix(unescapedTrimmed, "}")) ||
+				(strings.HasPrefix(unescapedTrimmed, "[") && strings.HasSuffix(unescapedTrimmed, "]")) {
+				return json.RawMessage(unescapedTrimmed)
+			}
+			// If it's a URL string like "https://..." or "http://..."
+			if strings.HasPrefix(unescapedTrimmed, "http://") || strings.HasPrefix(unescapedTrimmed, "https://") {
+				obj, _ := json.Marshal(map[string]any{"url": unescapedTrimmed})
+				return json.RawMessage(obj)
+			}
+			// Wrap raw string with universal property names
+			obj, _ := json.Marshal(map[string]any{
+				"url":     unescapedTrimmed,
+				"path":    unescapedTrimmed,
+				"command": unescapedTrimmed,
+				"input":   unescapedTrimmed,
+			})
+			return json.RawMessage(obj)
+		}
+	}
+
+	// 2. If it's already a JSON object { ... }
+	if strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}") {
+		return inputJSON
+	}
+
+	// 3. Fallback: Wrap raw string
+	obj, _ := json.Marshal(map[string]any{
+		"url":     trimmed,
+		"path":    trimmed,
+		"command": trimmed,
+		"input":   trimmed,
+	})
+	return json.RawMessage(obj)
+}
+
 // Execute executes a tool by name with input JSON parameters.
 func (r *ToolRegistry) Execute(ctx context.Context, agentID, name string, inputJSON json.RawMessage) (*ToolResult, error) {
 	tool, err := r.Get(name)
@@ -164,18 +226,33 @@ func (r *ToolRegistry) Execute(ctx context.Context, agentID, name string, inputJ
 		return nil, err
 	}
 
+	// Normalize input to handle string-encoded or malformed LLM tool arguments
+	normalizedInput := NormalizeToolInput(inputJSON)
+
 	if r.bus != nil {
 		r.bus.Publish(bus.NewEvent(bus.EventToolExecutionStarted, agentID, map[string]any{
 			"tool_name": name,
-			"input":     string(inputJSON),
+			"input":     string(normalizedInput),
 		}))
 	}
 
+	// Determine risk level
+	riskLevel := "Low"
+	switch name {
+	case "native_file_write", "native_cron_schedule", "native_browser_screenshot":
+		riskLevel = "High"
+	case "native_browser_navigate", "native_http_fetch":
+		riskLevel = "Medium"
+	}
+
 	startTime := time.Now()
-	res, err := tool.Execute(ctx, inputJSON)
+	res, err := tool.Execute(ctx, normalizedInput)
 
 	duration := time.Since(startTime)
 	if err != nil {
+		if r.auditLogger != nil {
+			r.auditLogger.LogAudit("", agentID, name, riskLevel, "Failed", err.Error(), duration.Milliseconds())
+		}
 		if r.bus != nil {
 			r.bus.Publish(bus.NewEvent(bus.EventToolExecutionError, agentID, map[string]any{
 				"tool_name":   name,
@@ -186,6 +263,9 @@ func (r *ToolRegistry) Execute(ctx context.Context, agentID, name string, inputJ
 		return nil, fmt.Errorf("%w: %v", ErrExecutionFailed, err)
 	}
 
+	if r.auditLogger != nil {
+		r.auditLogger.LogAudit("", agentID, name, riskLevel, "Success", "", duration.Milliseconds())
+	}
 	if r.bus != nil {
 		r.bus.Publish(bus.NewEvent(bus.EventToolExecutionResult, agentID, map[string]any{
 			"tool_name":   name,

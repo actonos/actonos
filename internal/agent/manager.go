@@ -79,7 +79,13 @@ func (m *AgentManager) loadAll() error {
 			continue
 		}
 		manifest.AgentID = id
+		if statusStr == "" {
+			statusStr = string(StatusActive)
+		}
 		manifest.Status = AgentStatus(statusStr)
+		if manifest.Status == "" {
+			manifest.Status = StatusActive
+		}
 		manifest.CreatedAt = createdAt
 		manifest.UpdatedAt = updatedAt
 
@@ -199,6 +205,13 @@ func (m *AgentManager) Update(ctx context.Context, manifest AgentManifest) (*Age
 	now := time.Now().UTC()
 	manifest.CreatedAt = existing.CreatedAt
 	manifest.UpdatedAt = now
+	if manifest.Status == "" {
+		if existing.Status != "" {
+			manifest.Status = existing.Status
+		} else {
+			manifest.Status = StatusActive
+		}
+	}
 
 	manifestJSON, err := json.Marshal(manifest)
 	if err != nil {
@@ -230,7 +243,14 @@ func (m *AgentManager) EnsureDefaultAgent(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.agents[DefaultSystemAgentID]; exists {
+	if existing, exists := m.agents[DefaultSystemAgentID]; exists {
+		if existing.Status == "" || existing.Status == StatusStopped {
+			existing.Status = StatusActive
+			now := time.Now().UTC()
+			existing.UpdatedAt = now
+			manifestJSON, _ := json.Marshal(existing)
+			_, _ = m.db.SQLDB().ExecContext(ctx, "UPDATE agents SET status = ?, manifest_json = ?, updated_at = ? WHERE id = ?", string(StatusActive), string(manifestJSON), now, DefaultSystemAgentID)
+		}
 		return nil
 	}
 

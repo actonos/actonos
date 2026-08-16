@@ -47,3 +47,111 @@ h3,
   font-family: var(--font-serif);
   letter-spacing: -0.01em;
 }
+
+/* TipTap Prose & Markdown Styling */
+.tiptap-renderer .tiptap {
+  outline: none;
+}
+
+.tiptap-renderer .tiptap p {
+  margin-bottom: 0.75rem;
+  line-height: 1.625;
+}
+
+.tiptap-renderer .tiptap p:last-child {
+  margin-bottom: 0;
+}
+
+.tiptap-renderer .tiptap h1,
+.tiptap-renderer .tiptap h2,
+.tiptap-renderer .tiptap h3 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.tiptap-renderer:not(.tiptap-user) .tiptap h1,
+.tiptap-renderer:not(.tiptap-user) .tiptap h2,
+.tiptap-renderer:not(.tiptap-user) .tiptap h3 {
+  color: var(--color-deep-ink);
+}
+
+.tiptap-user .tiptap h1,
+.tiptap-user .tiptap h2,
+.tiptap-user .tiptap h3 {
+  color: #ffffff;
+}
+
+.tiptap-renderer .tiptap h1 { font-size: 1.4rem; }
+.tiptap-renderer .tiptap h2 { font-size: 1.2rem; }
+.tiptap-renderer .tiptap h3 { font-size: 1.05rem; }
+
+.tiptap-renderer .tiptap pre {
+  background-color: var(--color-deep-ink);
+  color: #f8fafc;
+  padding: 0.875rem 1.125rem;
+  border-radius: 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12.5px;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.tiptap-renderer:not(.tiptap-user) .tiptap code {
+  background-color: rgba(19, 14, 48, 0.08);
+  color: var(--color-deep-ink);
+  padding: 0.15rem 0.35rem;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+.tiptap-user .tiptap code {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  padding: 0.15rem 0.35rem;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+.tiptap-renderer .tiptap pre code {
+  background-color: transparent !important;
+  color: inherit !important;
+  padding: 0 !important;
+}
+
+.tiptap-renderer .tiptap ul,
+.tiptap-renderer .tiptap ol {
+  padding-left: 1.25rem;
+  margin: 0.5rem 0 0.75rem 0;
+}
+
+.tiptap-renderer .tiptap ul {
+  list-style-type: disc;
+}
+
+.tiptap-renderer .tiptap ol {
+  list-style-type: decimal;
+}
+
+.tiptap-renderer .tiptap li {
+  margin-bottom: 0.25rem;
+}
+
+.tiptap-renderer .tiptap blockquote {
+  border-left: 3px solid var(--color-hi-yellow);
+  padding-left: 0.875rem;
+  margin: 0.75rem 0;
+  font-style: italic;
+}
+
+.tiptap-renderer:not(.tiptap-user) .tiptap blockquote {
+  color: var(--color-slate);
+}
+
+.tiptap-user .tiptap blockquote {
+  color: rgba(255, 255, 255, 0.8);
+}

@@ -2,10 +2,12 @@ package agent
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 	"time"
 
 	"github.com/actonos/actonos/internal/bus"
+	_ "modernc.org/sqlite"
 )
 
 func TestCronScheduler_RegisterAndList(t *testing.T) {
@@ -92,5 +94,33 @@ func TestCronScheduler_ExecutionTrigger(t *testing.T) {
 
 	if !received {
 		t.Fatal("expected proactive cron event to be received")
+	}
+}
+
+func TestCronScheduler_Persistence(t *testing.T) {
+	eb := bus.NewEventBus()
+	defer eb.Close()
+
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("failed to open sqlite: %v", err)
+	}
+	defer db.Close()
+
+	// 1. Create first scheduler instance, write job to DB
+	cs1 := NewCronScheduler(nil, eb, db)
+	err = cs1.RegisterCron("persisted_job", "agent_system_core", "0 9 * * *", "Daily sync", "telegram", "chat_123")
+	if err != nil {
+		t.Fatalf("failed to register cron: %v", err)
+	}
+
+	// 2. Create second scheduler instance with same DB (simulate restart)
+	cs2 := NewCronScheduler(nil, eb, db)
+	jobs := cs2.ListJobs()
+	if len(jobs) != 1 {
+		t.Fatalf("expected 1 hydrated job after restart, got %d", len(jobs))
+	}
+	if jobs[0].ID != "persisted_job" || jobs[0].TargetRecipient != "chat_123" || jobs[0].CronExpr != "0 9 * * *" {
+		t.Fatalf("hydrated job mismatch: %+v", jobs[0])
 	}
 }

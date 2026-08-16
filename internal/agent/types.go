@@ -99,3 +99,47 @@ type AgentState struct {
 	Entropy        float64         `json:"entropy"`
 	LastActiveAt   time.Time       `json:"last_active_at"`
 }
+
+// StreamEventType describes the granular state of streaming execution.
+type StreamEventType string
+
+const (
+	EventStreamThought    StreamEventType = "thought"
+	EventStreamToken      StreamEventType = "token"
+	EventStreamToolCall   StreamEventType = "tool_call"
+	EventStreamToolResult StreamEventType = "tool_result"
+	EventStreamAudit      StreamEventType = "audit"
+	EventStreamDone       StreamEventType = "done"
+	EventStreamError      StreamEventType = "error"
+)
+
+// AuditLogEntry tracks an immutable security/governance record of an agent action.
+type AuditLogEntry struct {
+	Timestamp    time.Time `json:"timestamp"`
+	AgentID      string    `json:"agent_id"`
+	Action       string    `json:"action"`
+	ToolName     string    `json:"tool_name,omitempty"`
+	Parameters   any       `json:"parameters,omitempty"`
+	Status       string    `json:"status"`
+	Verification string    `json:"verification"` // e.g. "Tier 1 AST Clean", "Memory Search", "Sandbox Isolation"
+	DurationMs   int64     `json:"duration_ms"`
+}
+
+// AgentStreamEvent encapsulates an event emitted during ReAct cognitive execution.
+type AgentStreamEvent struct {
+	Type           StreamEventType `json:"type"`
+	Content        string          `json:"content,omitempty"`
+	Thought        string          `json:"thought,omitempty"`
+	Tool           string          `json:"tool,omitempty"`
+	ToolCallID     string          `json:"tool_call_id,omitempty"`
+	Args           any             `json:"args,omitempty"`
+	Result         string          `json:"result,omitempty"`
+	Status         string          `json:"status,omitempty"`
+	LatencyMs      int64           `json:"latency_ms,omitempty"`
+	AuditLog       *AuditLogEntry  `json:"audit_log,omitempty"`
+	Usage          *llm.Usage      `json:"usage,omitempty"`
+	Model          string          `json:"model,omitempty"`
+	ConversationID string          `json:"conversation_id,omitempty"`
+	Title          string          `json:"title,omitempty"`
+	Error          string          `json:"error,omitempty"`
+}

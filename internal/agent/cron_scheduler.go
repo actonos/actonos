@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -28,20 +29,128 @@ type CronJob struct {
 
 // CronScheduler orchestrates background cron-triggered agent executions and proactive push.
 type CronScheduler struct {
-	mu       sync.RWMutex
-	cron     *cron.Cron
-	engine   *Engine
-	eventBus *bus.EventBus
-	jobs     map[string]*CronJob
+	mu                     sync.RWMutex
+	cron                   *cron.Cron
+	engine                 *Engine
+	eventBus               *bus.EventBus
+	db                     *sql.DB
+	jobs                   map[string]*CronJob
+	defaultRecipientGetter func(channel string) string
 }
 
-// NewCronScheduler creates a CronScheduler instance.
-func NewCronScheduler(engine *Engine, eventBus *bus.EventBus) *CronScheduler {
-	return &CronScheduler{
+// NewCronScheduler creates a CronScheduler instance with optional SQLite persistence.
+func NewCronScheduler(engine *Engine, eventBus *bus.EventBus, db ...*sql.DB) *CronScheduler {
+	cs := &CronScheduler{
 		cron:     cron.New(cron.WithParser(cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor))),
 		engine:   engine,
 		eventBus: eventBus,
 		jobs:     make(map[string]*CronJob),
+	}
+	if len(db) > 0 && db[0] != nil {
+		cs.db = db[0]
+		cs.initDB()
+		cs.loadJobsFromDB()
+	}
+	return cs
+}
+
+// SetDefaultRecipientGetter configures a provider to resolve default channel recipient IDs.
+func (cs *CronScheduler) SetDefaultRecipientGetter(fn func(channel string) string) {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	cs.defaultRecipientGetter = fn
+}
+
+// GetDefaultRecipient returns the default recipient ID for a given channel.
+func (cs *CronScheduler) GetDefaultRecipient(channel string) string {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+	if cs.defaultRecipientGetter != nil {
+		return cs.defaultRecipientGetter(channel)
+	}
+	return ""
+}
+
+// SetDB attaches a database and hydrates stored cron jobs.
+func (cs *CronScheduler) SetDB(db *sql.DB) {
+	cs.mu.Lock()
+	cs.db = db
+	cs.mu.Unlock()
+	if db != nil {
+		cs.initDB()
+		cs.loadJobsFromDB()
+	}
+}
+
+func (cs *CronScheduler) initDB() {
+	if cs.db == nil {
+		return
+	}
+	query := `
+	CREATE TABLE IF NOT EXISTS cron_jobs (
+		id TEXT PRIMARY KEY,
+		agent_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		cron_expr TEXT NOT NULL,
+		prompt TEXT NOT NULL,
+		target_channel TEXT NOT NULL DEFAULT 'telegram',
+		target_recipient TEXT NOT NULL DEFAULT '',
+		enabled INTEGER NOT NULL DEFAULT 1,
+		last_run TIMESTAMP,
+		created_at TIMESTAMP NOT NULL,
+		updated_at TIMESTAMP NOT NULL
+	);
+	`
+	_, err := cs.db.Exec(query)
+	if err != nil {
+		slog.Error("failed to initialize cron_jobs table", "error", err)
+	}
+}
+
+func (cs *CronScheduler) loadJobsFromDB() {
+	if cs.db == nil {
+		return
+	}
+	rows, err := cs.db.Query("SELECT id, agent_id, name, cron_expr, prompt, target_channel, target_recipient, enabled, last_run FROM cron_jobs")
+	if err != nil {
+		slog.Error("failed to load cron jobs from database", "error", err)
+		return
+	}
+	defer rows.Close()
+
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+
+	for rows.Next() {
+		var job CronJob
+		var enabledInt int
+		var lastRun sql.NullTime
+		if err := rows.Scan(&job.ID, &job.AgentID, &job.Name, &job.CronExpr, &job.Prompt, &job.TargetChannel, &job.TargetRecipient, &enabledInt, &lastRun); err != nil {
+			continue
+		}
+		job.Enabled = (enabledInt == 1)
+		if lastRun.Valid {
+			job.LastRun = lastRun.Time
+		}
+
+		if job.Enabled {
+			jobCopy := job
+			entryID, err := cs.cron.AddFunc(job.CronExpr, func() {
+				cs.executeJob(&jobCopy)
+			})
+			if err == nil {
+				jobCopy.entryID = entryID
+				entry := cs.cron.Entry(entryID)
+				jobCopy.NextRun = entry.Next
+				cs.jobs[jobCopy.ID] = &jobCopy
+				slog.Info("hydrated persistent cron job from db", "id", jobCopy.ID, "agent", jobCopy.AgentID, "cron", jobCopy.CronExpr)
+			} else {
+				slog.Warn("failed to reschedule loaded cron job", "id", job.ID, "cron", job.CronExpr, "error", err)
+				cs.jobs[job.ID] = &job
+			}
+		} else {
+			cs.jobs[job.ID] = &job
+		}
 	}
 }
 
@@ -57,7 +166,7 @@ func (cs *CronScheduler) Stop() {
 	slog.Info("autonomous cron scheduler stopped")
 }
 
-// RegisterJob adds or updates a scheduled proactive agent job.
+// RegisterJob adds or updates a scheduled proactive agent job and persists it to SQLite.
 func (cs *CronScheduler) RegisterJob(job CronJob) error {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
@@ -67,29 +176,59 @@ func (cs *CronScheduler) RegisterJob(job CronJob) error {
 		cs.cron.Remove(existing.entryID)
 	}
 
-	if !job.Enabled {
-		cs.jobs[job.ID] = &job
-		return nil
-	}
-
 	jobCopy := job
-	entryID, err := cs.cron.AddFunc(job.CronExpr, func() {
-		cs.executeJob(&jobCopy)
-	})
-	if err != nil {
-		return fmt.Errorf("invalid cron expression %q: %w", job.CronExpr, err)
+	if jobCopy.TargetChannel == "" {
+		jobCopy.TargetChannel = "telegram"
+	}
+	if jobCopy.TargetRecipient == "" && cs.defaultRecipientGetter != nil {
+		jobCopy.TargetRecipient = cs.defaultRecipientGetter(jobCopy.TargetChannel)
 	}
 
-	jobCopy.entryID = entryID
-	entry := cs.cron.Entry(entryID)
-	jobCopy.NextRun = entry.Next
+	if job.Enabled {
+		entryID, err := cs.cron.AddFunc(job.CronExpr, func() {
+			cs.executeJob(&jobCopy)
+		})
+		if err != nil {
+			return fmt.Errorf("invalid cron expression %q: %w", job.CronExpr, err)
+		}
+
+		jobCopy.entryID = entryID
+		entry := cs.cron.Entry(entryID)
+		jobCopy.NextRun = entry.Next
+	}
 
 	cs.jobs[jobCopy.ID] = &jobCopy
+
+	// Persist to SQLite database
+	if cs.db != nil {
+		enabledInt := 0
+		if jobCopy.Enabled {
+			enabledInt = 1
+		}
+		now := time.Now().UTC()
+		_, err := cs.db.Exec(`
+			INSERT INTO cron_jobs (id, agent_id, name, cron_expr, prompt, target_channel, target_recipient, enabled, last_run, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(id) DO UPDATE SET
+				agent_id = excluded.agent_id,
+				name = excluded.name,
+				cron_expr = excluded.cron_expr,
+				prompt = excluded.prompt,
+				target_channel = excluded.target_channel,
+				target_recipient = excluded.target_recipient,
+				enabled = excluded.enabled,
+				updated_at = excluded.updated_at;
+		`, jobCopy.ID, jobCopy.AgentID, jobCopy.Name, jobCopy.CronExpr, jobCopy.Prompt, jobCopy.TargetChannel, jobCopy.TargetRecipient, enabledInt, jobCopy.LastRun, now, now)
+		if err != nil {
+			slog.Error("failed to persist cron job to db", "id", jobCopy.ID, "error", err)
+		}
+	}
+
 	slog.Info("registered proactive cron job", "id", jobCopy.ID, "agent", jobCopy.AgentID, "cron", jobCopy.CronExpr)
 	return nil
 }
 
-// RemoveJob removes a scheduled job.
+// RemoveJob removes a scheduled job and removes it from SQLite.
 func (cs *CronScheduler) RemoveJob(jobID string) {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
@@ -99,6 +238,13 @@ func (cs *CronScheduler) RemoveJob(jobID string) {
 			cs.cron.Remove(job.entryID)
 		}
 		delete(cs.jobs, jobID)
+	}
+
+	if cs.db != nil {
+		_, err := cs.db.Exec("DELETE FROM cron_jobs WHERE id = ?", jobID)
+		if err != nil {
+			slog.Error("failed to delete cron job from db", "id", jobID, "error", err)
+		}
 	}
 }
 
@@ -119,6 +265,67 @@ func (cs *CronScheduler) ListJobs() []CronJob {
 	return result
 }
 
+// RegisterCron implements tools.CronSchedulerProvider.
+func (cs *CronScheduler) RegisterCron(id, agentID, cronExpr, prompt, targetChannel, targetRecipient string) error {
+	if targetChannel == "" {
+		targetChannel = "telegram"
+	}
+	if targetRecipient == "" && cs.defaultRecipientGetter != nil {
+		targetRecipient = cs.defaultRecipientGetter(targetChannel)
+	}
+	return cs.RegisterJob(CronJob{
+		ID:              id,
+		Name:            id,
+		AgentID:         agentID,
+		CronExpr:        cronExpr,
+		Prompt:          prompt,
+		TargetChannel:   targetChannel,
+		TargetRecipient: targetRecipient,
+		Enabled:         true,
+	})
+}
+
+// RemoveCron implements tools.CronSchedulerProvider.
+func (cs *CronScheduler) RemoveCron(id string) {
+	cs.RemoveJob(id)
+}
+
+// ListCrons implements tools.CronSchedulerProvider.
+func (cs *CronScheduler) ListCrons() []map[string]any {
+	jobs := cs.ListJobs()
+	var res []map[string]any
+	for _, j := range jobs {
+		res = append(res, map[string]any{
+			"id":               j.ID,
+			"name":             j.Name,
+			"agent_id":         j.AgentID,
+			"cron_expression":  j.CronExpr,
+			"prompt":           j.Prompt,
+			"target_channel":   j.TargetChannel,
+			"target_recipient": j.TargetRecipient,
+			"enabled":          j.Enabled,
+			"last_run":         j.LastRun,
+			"next_run":         j.NextRun,
+		})
+	}
+	return res
+}
+
+// BuildCronExecutionPrompt formats the autonomous trigger prompt so the LLM knows it is generating a notification FOR the user.
+func BuildCronExecutionPrompt(job *CronJob) string {
+	return fmt.Sprintf(`[AUTONOMOUS PROACTIVE NOTIFICATION TRIGGER]
+Task Name: %s
+Task Directive / Reminder Content: %s
+Push Channel: %s
+
+YOU ARE EXECUTING AN AUTOMATED NOTIFICATION TO YOUR OWNER.
+Instructions:
+1. Compose the actual reminder / update message intended FOR THE OWNER.
+2. Address the owner respectfully and directly in their language (Vietnamese if applicable).
+3. Deliver the reminder clearly with any relevant action items or context.
+4. DO NOT say "Cảm ơn bạn đã nhắc nhở" or pretend the user is reminding you. YOU are the autonomous AI assistant sending this scheduled notification to your owner.`, job.Name, job.Prompt, job.TargetChannel)
+}
+
 func (cs *CronScheduler) executeJob(job *CronJob) {
 	slog.Info("executing proactive cron job", "job_id", job.ID, "agent_id", job.AgentID)
 
@@ -127,11 +334,15 @@ func (cs *CronScheduler) executeJob(job *CronJob) {
 
 	cs.mu.Lock()
 	job.LastRun = time.Now().UTC()
+	if cs.db != nil {
+		_, _ = cs.db.Exec("UPDATE cron_jobs SET last_run = ?, updated_at = ? WHERE id = ?", job.LastRun, job.LastRun, job.ID)
+	}
 	cs.mu.Unlock()
 
 	var responseContent string
 	if cs.engine != nil {
-		resp, err := cs.engine.ExecuteStep(ctx, job.AgentID, job.Prompt)
+		executionPrompt := BuildCronExecutionPrompt(job)
+		resp, err := cs.engine.ExecuteStep(ctx, job.AgentID, executionPrompt)
 		if err != nil {
 			slog.Error("proactive cron job failed", "job_id", job.ID, "error", err)
 			return

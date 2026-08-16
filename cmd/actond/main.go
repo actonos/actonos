@@ -124,31 +124,35 @@ func main() {
 
 	// 6. Initialize LLM Provider Router & Load Configured Keys
 	llmRouter := llm.NewModelCascadeRouter()
-	mockLocal := llm.NewMockProvider("local-stub", "ActonOS Core Engine initialized and operating normally.")
-	llmRouter.RegisterProvider("local-stub", mockLocal)
-
 	configDir := filepath.Join(*dataDir, "config")
 	_ = os.MkdirAll(configDir, 0755)
+
 	readKey := func(file string) string {
 		data, _ := os.ReadFile(filepath.Join(configDir, file))
 		return strings.TrimSpace(string(data))
 	}
 
-	if antKey := readKey("anthropic.key"); antKey != "" {
-		llmRouter.RegisterProvider("anthropic/claude-3-7-sonnet", llm.NewAnthropicProvider(antKey, "claude-3-7-sonnet"))
-	}
-	if gemKey := readKey("gemini.key"); gemKey != "" {
-		llmRouter.RegisterProvider("google/gemini-2.5-flash", llm.NewGeminiProvider(gemKey, "gemini-2.5-flash"))
-	}
-	if oaiKey := readKey("openai.key"); oaiKey != "" {
-		llmRouter.RegisterProvider("openai/gpt-4o", llm.NewOpenAIProvider(oaiKey, "gpt-4o", "https://api.openai.com/v1"))
-	}
-	if dsKey := readKey("deepseek.key"); dsKey != "" {
-		llmRouter.RegisterProvider("deepseek/deepseek-chat", llm.NewDeepSeekProvider(dsKey, "deepseek-chat"))
+	server.RegisterAllStoredProviders(llmRouter, configDir)
+
+	// Fallback mock only if no real providers are configured
+	if llmRouter.Count() == 0 {
+		mockLocal := llm.NewMockProvider("local-stub", "ActonOS Core Engine initialized. Please configure your LLM Provider API keys in System > Settings.")
+		llmRouter.RegisterProvider("local-stub", mockLocal)
 	}
 
-	// 7. Initialize Dynamic Tooling Hub
+	// 7. Initialize Dynamic Tooling Hub & System Audit Logger
+	auditLogger, err := system.NewAuditLogger(*dataDir)
+	if err != nil {
+		slog.Warn("failed to initialize audit logger", "error", err)
+	}
+	if auditLogger != nil {
+		defer auditLogger.Close()
+	}
+
 	toolReg := tools.NewToolRegistry(eventBus)
+	if auditLogger != nil {
+		toolReg.SetAuditLogger(auditLogger)
+	}
 	tools.RegisterNativeTools(toolReg, workspaceDir)
 	mcpHost := tools.NewMCPHostEngine(toolReg)
 	wasmManager := tools.NewWASMPluginManager(toolReg, pluginsDir)
@@ -180,8 +184,12 @@ func main() {
 	swarmMgr := agent.NewSwarmManager(agentMgr, eventBus, llmRouter, hybridEngine, 8)
 	engine := agent.NewEngine(agentMgr, eventBus, llmRouter, hybridEngine)
 	engine.SetToolRegistry(toolReg)
+	if profileMgr != nil {
+		engine.SetProfileManager(profileMgr)
+	}
 
-	cronSched := agent.NewCronScheduler(engine, eventBus)
+	cronSched := agent.NewCronScheduler(engine, eventBus, db.SQLDB())
+	tools.AttachCronScheduler(toolReg, cronSched)
 	cronSched.Start(ctx)
 	defer cronSched.Stop()
 
@@ -202,8 +210,32 @@ func main() {
 	waPhone := readKey("whatsapp.phone_id")
 	waAdapter := channels.NewWhatsAppAdapter(waToken, waPhone, "acton_verify_token", eventBus, pairingMgr)
 
-	// Background listener for channel messages (Telegram & WhatsApp 2-way loop)
+	// Multi-Channel Cognitive Session Manager
+	sessionMgr := channels.NewChannelSessionManager(db.SQLDB())
+
+	// Set Default Recipient Resolver for Proactive Schedulers
+	cronSched.SetDefaultRecipientGetter(func(channel string) string {
+		if channel == "telegram" && tgAdapter != nil {
+			if lastID := tgAdapter.GetLastChatID(); lastID != "" {
+				return lastID
+			}
+			known := tgAdapter.GetKnownChatIDs()
+			if len(known) > 0 {
+				return known[0]
+			}
+			if pairingMgr != nil {
+				paired := pairingMgr.ListAuthorized("telegram")
+				if len(paired) > 0 {
+					return paired[0].SenderID
+				}
+			}
+		}
+		return ""
+	})
+
+	// Background listener for channel messages & proactive cron notifications
 	channelSub := eventBus.Subscribe(bus.EventAgentActionStarted)
+	doneSub := eventBus.Subscribe(bus.EventAgentActionDone)
 	go func() {
 		for {
 			select {
@@ -217,15 +249,49 @@ func main() {
 					if inMsg, ok := ev.Payload.(channels.InboundMessage); ok {
 						go func(msg channels.InboundMessage) {
 							target := "agent_system_core"
-							resp, err := engine.ExecuteStep(context.Background(), target, msg.Content)
+							senderID := msg.SenderID
+							if msg.Metadata != nil && msg.Metadata["chat_id"] != "" {
+								senderID = msg.Metadata["chat_id"]
+							}
+
+							// 1. Get or create deterministic intelligent session
+							convID, err := sessionMgr.GetOrCreateSession(context.Background(), msg.ChannelID, senderID, msg.SenderName, msg.Content, target)
+							if err != nil {
+								slog.Warn("failed to get/create channel session", "error", err)
+							}
+
+							// 2. Load short-term Working Memory (recent dialogue history)
+							history := sessionMgr.LoadRecentHistory(context.Background(), convID, 6)
+
+							// 3. Persist incoming user message into SQLite
+							_ = sessionMgr.SaveMessage(context.Background(), convID, target, "user", msg.Content, nil)
+
+							// 4. Construct contextual metadata prompt
+							chatMeta := ""
+							if msg.Metadata != nil && msg.Metadata["chat_id"] != "" {
+								chatMeta = fmt.Sprintf("[Channel: %s | User Chat ID: %s | Sender: %s]\n", msg.ChannelID, msg.Metadata["chat_id"], msg.SenderName)
+							} else if msg.ChannelID != "" {
+								chatMeta = fmt.Sprintf("[Channel: %s | Sender ID: %s]\n", msg.ChannelID, msg.SenderID)
+							}
+							promptWithMeta := chatMeta + msg.Content
+
+							// 5. Execute cognitive ReAct loop with multi-layer memory (Working + Episodic + Procedural + User Profile)
+							resp, err := engine.ExecuteStepWithHistory(context.Background(), target, promptWithMeta, history)
 							if err != nil {
 								slog.Error("failed to process channel message", "channel", msg.ChannelID, "error", err)
 								return
 							}
-							if msg.ChannelID == "telegram" && msg.Metadata != nil && msg.Metadata["chat_id"] != "" {
+
+							// 6. Persist assistant response into SQLite session history
+							if resp != nil {
+								_ = sessionMgr.SaveMessage(context.Background(), convID, target, "assistant", resp.Content, resp.ToolCalls)
+							}
+
+							// 7. Deliver outbound response to channel
+							if msg.ChannelID == "telegram" && senderID != "" {
 								_ = tgAdapter.SendMessage(context.Background(), channels.OutboundMessage{
 									ChannelID: "telegram",
-									Recipient: msg.Metadata["chat_id"],
+									Recipient: senderID,
 									Content:   resp.Content,
 								})
 							} else if msg.ChannelID == "whatsapp" {
@@ -236,6 +302,53 @@ func main() {
 								})
 							}
 						}(inMsg)
+					}
+				}
+			case ev, ok := <-doneSub:
+				if !ok {
+					return
+				}
+				if payloadMap, ok := ev.Payload.(map[string]any); ok {
+					if pType, ok := payloadMap["type"].(string); ok && pType == "proactive_cron_notification" {
+						content, _ := payloadMap["content"].(string)
+						jobName, _ := payloadMap["job_name"].(string)
+						targetChan, _ := payloadMap["target_channel"].(string)
+						targetRec, _ := payloadMap["target_recipient"].(string)
+
+						if targetChan == "" {
+							targetChan = "telegram"
+						}
+
+						msgText := fmt.Sprintf("⏰ **[Cron Reminder: %s]**\n\n%s", jobName, content)
+
+						// Route to Telegram
+						if targetChan == "telegram" || targetChan == "all" {
+							recipients := []string{}
+							if targetRec != "" {
+								recipients = append(recipients, targetRec)
+							} else if lastID := tgAdapter.GetLastChatID(); lastID != "" {
+								recipients = append(recipients, lastID)
+							} else {
+								recipients = tgAdapter.GetKnownChatIDs()
+							}
+
+							for _, rec := range recipients {
+								_ = tgAdapter.SendMessage(context.Background(), channels.OutboundMessage{
+									ChannelID: "telegram",
+									Recipient: rec,
+									Content:   msgText,
+								})
+							}
+						}
+
+						// Route to WhatsApp
+						if (targetChan == "whatsapp" || targetChan == "all") && targetRec != "" {
+							_ = waAdapter.SendMessage(context.Background(), channels.OutboundMessage{
+								ChannelID: "whatsapp",
+								Recipient: targetRec,
+								Content:   fmt.Sprintf("⏰ *[Cron Reminder: %s]*\n\n%s", jobName, content),
+							})
+						}
 					}
 				}
 			}
@@ -276,6 +389,8 @@ func main() {
 		HAL:                hal,
 		Tailscale:          tailscaleMgr,
 		TokenRefreshDaemon: tokenDaemon,
+		OAuthEngine:        oauthEngine,
+		StateStore:         stateStore,
 		EventBus:           eventBus,
 		PairingManager:     pairingMgr,
 		TelegramAdapter:    tgAdapter,
