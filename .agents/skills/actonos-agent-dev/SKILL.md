@@ -210,6 +210,6 @@ func TestEngine_ExecuteStep(t *testing.T) {
 
 ## Reference Files
 
-- [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) — Full architecture spec
-- [internal/bus/eventbus.go](../../internal/bus/eventbus.go) — Event bus implementation
-- [internal/llm/provider.go](../../internal/llm/provider.go) — LLM provider interface
+- [docs/ARCHITECTURE.md](../../../docs/ARCHITECTURE.md) — Full architecture spec
+- [internal/bus/eventbus.go](../../../internal/bus/eventbus.go) — Event bus implementation
+- [internal/llm/provider.go](../../../internal/llm/provider.go) — LLM provider interface

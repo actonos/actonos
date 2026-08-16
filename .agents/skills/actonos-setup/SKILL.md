@@ -103,6 +103,6 @@ This starts:
 
 ## Reference Files
 
-- [docs/DEVELOPMENT.md](../../docs/DEVELOPMENT.md) — Full development guide
-- [Makefile](../../Makefile) — Build targets reference
-- [.editorconfig](../../.editorconfig) — Editor configuration
+- [docs/DEVELOPMENT.md](../../../docs/DEVELOPMENT.md) — Full development guide
+- [Makefile](../../../Makefile) — Build targets reference
+- [.editorconfig](../../../.editorconfig) — Editor configuration

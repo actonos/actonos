@@ -206,8 +206,8 @@ After `1.0.0`:
 
 ## Reference Files
 
-- [docs/VERSIONING.md](../../docs/VERSIONING.md) — Versioning strategy
-- [docs/CONTRIBUTING.md](../../docs/CONTRIBUTING.md) — Release section
-- [scripts/version-bump.sh](../../scripts/version-bump.sh) — Version bump script
-- [scripts/changelog-gen.sh](../../scripts/changelog-gen.sh) — Changelog generator
-- [Makefile](../../Makefile) — Build and release targets
+- [docs/VERSIONING.md](../../../docs/VERSIONING.md) — Versioning strategy
+- [docs/CONTRIBUTING.md](../../../docs/CONTRIBUTING.md) — Release section
+- [scripts/version-bump.sh](../../../scripts/version-bump.sh) — Version bump script
+- [scripts/changelog-gen.sh](../../../scripts/changelog-gen.sh) — Changelog generator
+- [Makefile](../../../Makefile) — Build and release targets

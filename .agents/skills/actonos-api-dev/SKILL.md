@@ -279,5 +279,5 @@ func TestHandleCreateAgent(t *testing.T) {
 
 ## Reference Files
 
-- [docs/API.md](../../docs/API.md) — Full API reference
-- [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) — System architecture
+- [docs/API.md](../../../docs/API.md) — Full API reference
+- [docs/ARCHITECTURE.md](../../../docs/ARCHITECTURE.md) — System architecture

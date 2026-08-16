@@ -588,7 +588,7 @@ export function AgentCard({ agent, onSelect }: AgentCardProps) {
 
 ## 7. Reference Files
 
-- [docs/DESIGN.md](../../docs/DESIGN.md) — Comprehensive style reference and design tokens
-- [docs/API.md](../../docs/API.md) — REST API reference for frontend integration
-- [web/src/index.css](../../web/src/index.css) — Tailwind v4 theme definitions
-- [web/src/lib/i18n.ts](../../web/src/lib/i18n.ts) — i18n configuration
+- [docs/DESIGN.md](../../../../docs/DESIGN.md) — Comprehensive style reference and design tokens
+- [docs/API.md](../../../../docs/API.md) — REST API reference for frontend integration
+- [web/src/index.css](../../../../web/src/index.css) — Tailwind v4 theme definitions
+- [web/src/lib/i18n.ts](../../../../web/src/lib/i18n.ts) — i18n configuration

@@ -99,7 +99,7 @@ The built frontend assets are embedded into the Go binary:
 
 ```go
 // internal/server/static.go
-//go:embed all:../../web/dist
+//go:embed all:../../../web/dist
 var embeddedAssets embed.FS
 ```
 
@@ -136,7 +136,7 @@ kill %1
 
 ## Reference Files
 
-- [Makefile](../../Makefile) — Build pipeline definitions
-- [deploy/docker/Dockerfile](../../deploy/docker/Dockerfile) — Docker build config
-- [scripts/build-iso.sh](../../scripts/build-iso.sh) — ISO build script
-- [internal/server/static.go](../../internal/server/static.go) — go:embed config
+- [Makefile](../../../Makefile) — Build pipeline definitions
+- [deploy/docker/Dockerfile](../../../deploy/docker/Dockerfile) — Docker build config
+- [scripts/build-iso.sh](../../../scripts/build-iso.sh) — ISO build script
+- [internal/server/static.go](../../../internal/server/static.go) — go:embed config

@@ -247,5 +247,5 @@ internal/
 
 ## Reference Files
 
-- [docs/DEVELOPMENT.md](../../docs/DEVELOPMENT.md) — Testing section
-- [Makefile](../../Makefile) — Test targets
+- [docs/DEVELOPMENT.md](../../../docs/DEVELOPMENT.md) — Testing section
+- [Makefile](../../../Makefile) — Test targets
