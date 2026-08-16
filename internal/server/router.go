@@ -112,12 +112,25 @@ func (s *Server) setupRoutes() {
 			})
 		})
 
+		// Conversations & History
+		r.Route("/conversations", func(r chi.Router) {
+			r.Get("/", s.handleListConversations)
+			r.Post("/", s.handleCreateConversation)
+			r.Route("/{id}", func(r chi.Router) {
+				r.Get("/", s.handleGetConversation)
+				r.Put("/", s.handleUpdateConversation)
+				r.Delete("/", s.handleDeleteConversation)
+			})
+		})
+
 		// Tool Hub
 		r.Route("/tools", func(r chi.Router) {
 			r.Get("/", s.handleListTools)
 			r.Post("/mcp", s.handleConnectMCP)
 			r.Delete("/mcp/{serverID}", s.handleDisconnectMCP)
 			r.Post("/execute", s.handleExecuteTool)
+			r.Post("/skill", s.handleCreateSkill)
+			r.Post("/wasm", s.handleUploadWASM)
 		})
 
 		// Onboarding & Setup
@@ -126,10 +139,13 @@ func (s *Server) setupRoutes() {
 			r.Post("/wizard", s.handleSetupWizard)
 		})
 
-		// SaaS Integrations
+		// SaaS Integrations & Channel Adapters
 		r.Route("/integrations", func(r chi.Router) {
 			r.Get("/", s.handleListIntegrations)
 			r.Post("/{provider}/auth-url", s.handleGetAuthURL)
+			r.Post("/{provider}/toggle", s.handleToggleIntegration)
+			r.Get("/channels", s.handleGetChannels)
+			r.Post("/channels", s.handleSaveChannels)
 		})
 
 		// Workspace File Manager
@@ -138,11 +154,20 @@ func (s *Server) setupRoutes() {
 			r.Get("/file", s.handleGetWorkspaceFile)
 			r.Post("/file", s.handleSaveWorkspaceFile)
 			r.Delete("/file", s.handleDeleteWorkspaceFile)
+			r.Post("/mkdir", s.handleMkdirWorkspace)
+			r.Post("/upload", s.handleUploadWorkspaceFile)
 		})
 
-		// System, HAL & Tailscale
+		// System, HAL, Keys, Audit & Tailscale
 		r.Route("/system", func(r chi.Router) {
 			r.Get("/metrics", s.handleGetMetrics)
+			r.Get("/keys", s.handleGetAPIKeys)
+			r.Post("/keys", s.handleSaveAPIKeys)
+			r.Post("/keys/test", s.handleTestAPIKey)
+			r.Get("/audit", s.handleGetAuditLogs)
+			r.Get("/storage", s.handleGetStorageInfo)
+			r.Get("/backup", s.handleGetBackup)
+			r.Post("/ota/check", s.handleCheckOTA)
 			r.Get("/tailscale", s.handleGetTailscale)
 			r.Get("/wifi/scan", s.handleWifiScan)
 			r.Post("/wifi/connect", s.handleWifiConnect)

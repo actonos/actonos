@@ -27,6 +27,7 @@ export interface AgentManifest {
   description: string;
   avatar_icon?: string;
   status: AgentStatus;
+  is_system?: boolean;
   model_config: ModelConfig;
   system_instructions: string;
   authorized_tools: string[];

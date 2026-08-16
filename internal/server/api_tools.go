@@ -2,7 +2,10 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/actonos/actonos/internal/tools"
 	"github.com/go-chi/chi/v5"
@@ -97,4 +100,81 @@ func (s *Server) handleExecuteTool(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.respondJSON(w, http.StatusOK, res)
+}
+
+func (s *Server) handleCreateSkill(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Content     string `json:"content"`
+	}
+	if err := s.decodeJSON(r, &req); err != nil {
+		s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
+
+	if req.Name == "" {
+		s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", "skill name is required")
+		return
+	}
+
+	skillDir := filepath.Join("./data/skills", req.Name)
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		s.respondError(w, http.StatusInternalServerError, "MKDIR_FAILED", err.Error())
+		return
+	}
+
+	skillMD := fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n\n%s\n", req.Name, req.Description, req.Content)
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillMD), 0644); err != nil {
+		s.respondError(w, http.StatusInternalServerError, "WRITE_FAILED", err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]string{
+		"status": "created",
+		"name":   req.Name,
+		"path":   skillDir,
+	})
+}
+
+func (s *Server) handleUploadWASM(w http.ResponseWriter, r *http.Request) {
+	wasmDir := "./data/tools/wasm"
+	_ = os.MkdirAll(wasmDir, 0755)
+
+	err := r.ParseMultipartForm(32 << 20)
+	if err != nil {
+		s.respondError(w, http.StatusBadRequest, "PARSE_FORM_FAILED", err.Error())
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		s.respondError(w, http.StatusBadRequest, "FILE_MISSING", err.Error())
+		return
+	}
+	defer file.Close()
+
+	destPath := filepath.Join(wasmDir, header.Filename)
+	out, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "WRITE_FAILED", err.Error())
+		return
+	}
+	defer out.Close()
+
+	var buf [4096]byte
+	for {
+		n, err := file.Read(buf[:])
+		if n > 0 {
+			_, _ = out.Write(buf[:n])
+		}
+		if err != nil {
+			break
+		}
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]string{
+		"status":   "uploaded",
+		"filename": header.Filename,
+	})
 }

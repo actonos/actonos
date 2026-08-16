@@ -329,3 +329,8 @@ func (h *HybridEngine) getMemoriesByIDs(ctx context.Context, ids []string) ([]Me
 
 	return records, rows.Err()
 }
+
+// DB returns the underlying relational database pointer.
+func (h *HybridEngine) DB() *DB {
+	return h.db
+}

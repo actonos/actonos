@@ -1,7 +1,27 @@
 {
   "eyebrow": "Universal Agent Engine",
-  "title": "Configured Agents",
+  "title": "Autonomous Agents",
   "subtitle": "Create, customize, and orchestrate autonomous AI agents running on the ActonOS kernel.",
+  "systemAgentBadge": "Root System",
+  "protectedAgentNotice": "System agent is protected and cannot be deleted",
+  "quickChatSystem": "Chat with Root",
+  "onboarding": {
+    "title": "Welcome to ActonOS — Quickstart Guide",
+    "subtitle": "Follow these 4 simple steps to configure your appliance and unleash autonomous AI agents.",
+    "progress": "{{completed}} of {{total}} Steps Completed",
+    "step1Title": "Step 1: Configure LLM Provider",
+    "step1Desc": "Set your Anthropic, Gemini, or OpenAI API key to enable agent reasoning.",
+    "step1Action": "Configure Keys",
+    "step2Title": "Step 2: Meet Acton Core Assistant",
+    "step2Desc": "The built-in system operator is ready to assist with tool calling and workspace files.",
+    "step2Action": "Start Instant Chat",
+    "step3Title": "Step 3: Connect Tools & MCP",
+    "step3Desc": "Discover native tools, connect MCP servers over stdio, and load WASM plugins.",
+    "step3Action": "Explore Tools",
+    "step4Title": "Step 4: Enable Remote Access",
+    "step4Desc": "Connect embedded Tailscale (tsnet) to control ActonOS securely from anywhere.",
+    "step4Action": "Set Tailscale"
+  },
   "actions": {
     "createNew": "Create New Agent",
     "editAgent": "Edit Agent",
@@ -13,6 +33,8 @@
     "budget": "Max Budget: ${{amount}}/mo",
     "approval": "Approval: {{level}}",
     "openChat": "Launch Session",
+    "start": "Start Agent",
+    "stop": "Stop Agent",
     "noAgents": "No agents configured yet. Create your first agent to get started."
   },
   "modal": {

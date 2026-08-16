@@ -1,37 +1,59 @@
 {
   "eyebrow": "Universal Agent Engine",
-  "title": "Danh Sách Agents",
-  "subtitle": "Khởi tạo, tinh chỉnh và điều phối các AI Agent tự trị hoạt động trên nền tảng kernel ActonOS.",
+  "title": "Quản Lý Agents",
+  "subtitle": "Tạo, tùy biến và điều phối các AI Agent tự trị vận hành trực tiếp trên nhân hệ điều hành ActonOS.",
+  "systemAgentBadge": "Hệ Thống Gốc",
+  "protectedAgentNotice": "Agent hệ thống được bảo vệ và không thể xóa",
+  "quickChatSystem": "Chat Với Root Assistant",
+  "onboarding": {
+    "title": "Chào Mừng Đến Với ActonOS — Hướng Dẫn Nhanh",
+    "subtitle": "Thực hiện 4 bước đơn giản dưới đây để cấu hình thiết bị và bắt đầu vận hành các AI Agent tự trị.",
+    "progress": "Đã hoàn thành {{completed}} / {{total}} bước",
+    "step1Title": "Bước 1: Cấu hình khóa API LLM",
+    "step1Desc": "Nhập API Key của Anthropic Claude, Gemini hoặc OpenAI để cấp năng lực suy luận.",
+    "step1Action": "Cấu Hình Key",
+    "step2Title": "Bước 2: Khám phá Acton Core Assistant",
+    "step2Desc": "Trợ lý điều hành gốc của hệ thống đã sẵn sàng hỗ trợ gọi công cụ và xử lý tệp.",
+    "step2Action": "Bắt Đầu Chat Ngay",
+    "step3Title": "Bước 3: Kết nối Công Cụ & MCP",
+    "step3Desc": "Khám phá các công cụ native, kết nối MCP server qua stdio và nạp plugin WASM.",
+    "step3Action": "Khám Phá Tool Hub",
+    "step4Title": "Bước 4: Bật Truy Cập Từ Xa",
+    "step4Desc": "Kích hoạt mạng Tailscale (tsnet) nhúng để điều khiển ActonOS an toàn từ bất cứ đâu.",
+    "step4Action": "Cấu Hình Tailscale"
+  },
   "actions": {
     "createNew": "Tạo Agent Mới",
     "editAgent": "Chỉnh Sửa Agent",
-    "deleteConfirm": "Bạn có chắc chắn muốn xóa agent này không?",
-    "chat": "Trò Chuyện Với Agent"
+    "deleteConfirm": "Bạn có chắc chắn muốn xóa Agent này không?",
+    "chat": "Mở Phiên Hội Thoại"
   },
   "card": {
     "toolsCount": "{{count}} Công Cụ Được Cấp Quyền",
     "budget": "Ngân Sách Tối Đa: ${{amount}}/tháng",
     "approval": "Phê Duyệt: {{level}}",
-    "openChat": "Khởi Chạy Phiên",
-    "noAgents": "Chưa có agent nào được cấu hình. Hãy tạo agent đầu tiên để bắt đầu."
+    "openChat": "Bắt Đầu Phiên",
+    "start": "Kích Hoạt",
+    "stop": "Tạm Dừng",
+    "noAgents": "Chưa có Agent nào được cấu hình. Tạo Agent đầu tiên để bắt đầu."
   },
   "modal": {
     "createTitle": "Tạo Mới AI Agent",
     "editTitle": "Chỉnh Sửa Cấu Hình Agent",
     "nameLabel": "Tên Agent",
-    "namePlaceholder": "vd: Kỹ Sư Kiến Trúc Phần Mềm Cao Cấp",
-    "descLabel": "Mô Tả Chức Năng",
-    "descPlaceholder": "Mô tả vai trò, nhiệm vụ và chuyên môn của agent...",
+    "namePlaceholder": "Ví dụ: Kỹ Sư Kiến Trúc Phần Mềm",
+    "descLabel": "Mô Tả Nhiệm Vụ",
+    "descPlaceholder": "Mô tả vai trò, trách nhiệm và phạm vi chuyên môn của Agent...",
     "instructionsLabel": "Chỉ Dẫn Hệ Thống (System Prompt)",
-    "instructionsPlaceholder": "Bạn là chuyên gia phần mềm cao cấp. Luôn kiểm tra cú pháp mã nguồn...",
+    "instructionsPlaceholder": "Bạn là một chuyên gia phần mềm cao cấp. Luôn luôn kiểm tra cú pháp mã nguồn...",
     "primaryModelLabel": "Mô Hình LLM Chính",
-    "fallbackModelLabel": "Mô Hình LLM Dự Phòng (Khi vượt hạn mức Rate Limit)",
-    "temperatureLabel": "Nhiệt Độ Sáng Tạo (0.0 - 1.0)",
-    "toolsLabel": "Công Cụ Được Cấp Quyền",
-    "budgetLabel": "Hạn Mức Chi Phí Hàng Tháng (USD)",
-    "approvalLabel": "Cấp Độ Phê Duyệt Của Con Người",
+    "fallbackModelLabel": "Mô Hình Dự Phòng (Tự phục hồi khi chạm Rate-limit)",
+    "temperatureLabel": "Nhiệt Độ (Sáng Tạo: 0.0 - 1.0)",
+    "toolsLabel": "Danh Sách Công Cụ Được Cấp Quyền",
+    "budgetLabel": "Hạn Mức Ngân Sách Hàng Tháng (USD)",
+    "approvalLabel": "Mức Độ Phê Duyệt Của Con Người",
     "approvalLow": "Thấp (Tự động thực thi 100%)",
-    "approvalMed": "Trung Bình (Được phép ghi trong /workspace)",
-    "approvalHigh": "Cao (Luôn yêu cầu xác nhận thẻ duyệt)"
+    "approvalMed": "Vừa (Cho phép ghi tệp trong /workspace)",
+    "approvalHigh": "Cao (Luôn yêu cầu xác nhận trước khi thao tác)"
   }
 }

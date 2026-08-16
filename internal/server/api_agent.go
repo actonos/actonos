@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -103,6 +104,10 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
 	agentID := chi.URLParam(r, "agentID")
 	if err := s.agentMgr.Delete(r.Context(), agentID); err != nil {
+		if errors.Is(err, agent.ErrProtectedAgent) {
+			s.respondError(w, http.StatusForbidden, "PROTECTED_AGENT", "Cannot delete protected system agent")
+			return
+		}
 		s.respondError(w, http.StatusBadRequest, "DELETE_AGENT_FAILED", err.Error())
 		return
 	}

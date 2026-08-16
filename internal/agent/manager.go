@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/actonos/actonos/internal/bus"
+	"github.com/actonos/actonos/internal/llm"
 	"github.com/actonos/actonos/internal/memory"
 	"github.com/google/uuid"
 )
@@ -19,6 +20,7 @@ var (
 	ErrAgentNotFound    = errors.New("agent not found")
 	ErrAgentAlreadyOpen = errors.New("agent already exists")
 	ErrInvalidManifest  = errors.New("invalid agent manifest")
+	ErrProtectedAgent   = errors.New("cannot delete or modify protected system agent")
 )
 
 var slugRegex = regexp.MustCompile(`[^a-z0-9]+`)
@@ -41,6 +43,11 @@ func NewAgentManager(db *memory.DB, eventBus *bus.EventBus) (*AgentManager, erro
 
 	if err := mgr.loadAll(); err != nil {
 		return nil, fmt.Errorf("loading agents from database: %w", err)
+	}
+
+	// Always ensure the default root system agent exists
+	if err := mgr.EnsureDefaultAgent(context.Background()); err != nil {
+		return nil, fmt.Errorf("ensuring default system agent: %w", err)
 	}
 
 	return mgr, nil
@@ -215,13 +222,72 @@ func (m *AgentManager) Update(ctx context.Context, manifest AgentManifest) (*Age
 	return &updated, nil
 }
 
-// Delete removes an agent manifest from storage.
+// EnsureDefaultAgent creates and persists the built-in system root agent if not present.
+func (m *AgentManager) EnsureDefaultAgent(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, exists := m.agents[DefaultSystemAgentID]; exists {
+		return nil
+	}
+
+	now := time.Now().UTC()
+	sysAgent := AgentManifest{
+		AgentID:             DefaultSystemAgentID,
+		Name:                "Acton Core Assistant",
+		Description:         "Built-in autonomous root assistant for ActonOS. Manages appliance operations, system diagnosis, tool execution, and task orchestration.",
+		AvatarIcon:          "sparkles",
+		Status:              StatusActive,
+		IsSystem:            true,
+		ModelConfig: llm.ModelConfig{
+			PrimaryModel:  "anthropic/claude-3-7-sonnet",
+			FallbackModel: "google/gemini-2.5-flash",
+			Temperature:   0.2,
+			MaxTokens:     4096,
+		},
+		SystemInstructions: "You are Acton Core Assistant, the primary built-in AI operator for ActonOS. You help users manage agents, interact with tools, execute file operations inside the sandbox, and automate complex workflows.",
+		AuthorizedTools:     []string{"native_http_fetch", "native_file_read", "native_file_write", "native_sysinfo"},
+		DelegationScope: DelegationScope{
+			MaxMonthlyBudgetUSD:   100.0,
+			AllowedWorkspacePaths: []string{"*"},
+			RequireHumanApproval:  ApprovalMedium,
+		},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	manifestJSON, err := json.Marshal(sysAgent)
+	if err != nil {
+		return err
+	}
+
+	query := `
+		INSERT INTO agents (id, manifest_json, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO NOTHING
+	`
+	_, err = m.db.SQLDB().ExecContext(ctx, query, sysAgent.AgentID, string(manifestJSON), string(sysAgent.Status), now, now)
+	if err != nil {
+		return fmt.Errorf("persisting default system agent: %w", err)
+	}
+
+	stored := sysAgent
+	m.agents[DefaultSystemAgentID] = &stored
+	return nil
+}
+
+// Delete removes an agent manifest from storage. System agents cannot be deleted.
 func (m *AgentManager) Delete(ctx context.Context, agentID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.agents[agentID]; !exists {
+	agent, exists := m.agents[agentID]
+	if !exists {
 		return fmt.Errorf("%w: %s", ErrAgentNotFound, agentID)
+	}
+
+	if agentID == DefaultSystemAgentID || agent.IsSystem {
+		return ErrProtectedAgent
 	}
 
 	query := `DELETE FROM agents WHERE id = ?`

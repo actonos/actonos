@@ -39,6 +39,11 @@ type TriggerRule struct {
 	Expression string `json:"expression,omitempty"`
 }
 
+const (
+	// DefaultSystemAgentID is the fixed identifier for the built-in system operator agent.
+	DefaultSystemAgentID = "agent_system_core"
+)
+
 // AgentManifest contains the complete declaration and configuration of an agent.
 type AgentManifest struct {
 	AgentID             string           `json:"agent_id"`
@@ -46,6 +51,7 @@ type AgentManifest struct {
 	Description         string           `json:"description"`
 	AvatarIcon          string           `json:"avatar_icon"`
 	Status              AgentStatus      `json:"status"`
+	IsSystem            bool             `json:"is_system,omitempty"`
 	ModelConfig         llm.ModelConfig  `json:"model_config"`
 	SystemInstructions string           `json:"system_instructions"`
 	AuthorizedTools     []string         `json:"authorized_tools"`

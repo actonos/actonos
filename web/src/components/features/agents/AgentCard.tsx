@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Bot, Play, Square, MessageSquare, Trash2, Edit } from 'lucide-react';
+import { Bot, Play, Square, MessageSquare, Trash2, Edit, Shield, Sparkles } from 'lucide-react';
 import type { AgentManifest } from '@/lib/types';
 
 export interface AgentCardProps {
@@ -18,23 +18,35 @@ export function AgentCard({ agent, onChat, onEdit, onDelete, onToggleStatus }: A
   const { t: tCommon } = useTranslation('common');
 
   const isActive = agent.status === 'active';
+  const isSystem = agent.is_system || agent.agent_id === 'agent_system_core';
 
   return (
-    <Card className="flex flex-col justify-between h-full group hover:border-onyx/20 transition-all border border-transparent">
+    <Card className={`flex flex-col justify-between h-full group transition-all border ${
+      isSystem ? 'border-hi-yellow/60 bg-gradient-to-b from-soft-meadow to-canvas shadow-xs' : 'border-onyx/10 hover:border-onyx/20'
+    }`}>
       <div>
         {/* Top bar: Icon + Model tag + Status */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-full bg-canvas flex items-center justify-center text-deep-ink border border-onyx shadow-xs">
-              <Bot className="w-6 h-6" />
+            <div className={`w-11 h-11 rounded-full flex items-center justify-center border shadow-xs ${
+              isSystem ? 'bg-deep-ink text-hi-yellow border-deep-ink' : 'bg-canvas text-deep-ink border-onyx'
+            }`}>
+              {isSystem ? <Sparkles className="w-5 h-5" /> : <Bot className="w-6 h-6" />}
             </div>
             <div>
               <span className="text-caption uppercase tracking-wider text-slate font-semibold block">
                 {agent.model_config.primary_model || 'Standard LLM'}
               </span>
-              <Badge variant={isActive ? 'active' : 'stopped'}>
-                {isActive ? tCommon('status.active') : tCommon('status.stopped')}
-              </Badge>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <Badge variant={isActive ? 'active' : 'stopped'}>
+                  {isActive ? tCommon('status.active') : tCommon('status.stopped')}
+                </Badge>
+                {isSystem && (
+                  <Badge variant="accent">
+                    {t('systemAgentBadge', 'Root System')}
+                  </Badge>
+                )}
+              </div>
             </div>
           </div>
 
@@ -46,19 +58,28 @@ export function AgentCard({ agent, onChat, onEdit, onDelete, onToggleStatus }: A
             >
               <Edit className="w-4 h-4" />
             </button>
-            <button
-              onClick={() => onDelete(agent.agent_id)}
-              className="p-1.5 rounded-full hover:bg-canvas text-slate hover:text-red-600 cursor-pointer"
-              title={tCommon('buttons.delete')}
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            {isSystem ? (
+              <span
+                className="p-1.5 text-slate/40 cursor-not-allowed"
+                title={t('protectedAgentNotice', 'System agent is protected and cannot be deleted')}
+              >
+                <Shield className="w-4 h-4" />
+              </span>
+            ) : (
+              <button
+                onClick={() => onDelete(agent.agent_id)}
+                className="p-1.5 rounded-full hover:bg-canvas text-slate hover:text-red-600 cursor-pointer"
+                title={tCommon('buttons.delete')}
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 
         {/* Name and description */}
-        <h3 className="font-serif text-heading-sm text-deep-ink mb-2 leading-tight">
-          {agent.name}
+        <h3 className="font-serif text-heading-sm text-deep-ink mb-2 leading-tight flex items-center gap-2">
+          <span>{agent.name}</span>
         </h3>
 
         <p className="font-sans text-body-sm text-slate line-clamp-3 mb-4">
@@ -86,7 +107,7 @@ export function AgentCard({ agent, onChat, onEdit, onDelete, onToggleStatus }: A
       {/* Action CTA pair */}
       <div className="flex items-center gap-2 pt-4 border-t border-canvas">
         <Button
-          variant={isActive ? 'secondary' : 'primary'}
+          variant={isSystem ? 'primary' : (isActive ? 'secondary' : 'primary')}
           size="sm"
           className="flex-1"
           icon={<MessageSquare className="w-4 h-4" />}
@@ -95,14 +116,15 @@ export function AgentCard({ agent, onChat, onEdit, onDelete, onToggleStatus }: A
           {t('card.openChat')}
         </Button>
 
-        <Button
-          variant="ghost"
-          size="sm"
-          icon={isActive ? <Square className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-          onClick={() => onToggleStatus(agent.agent_id, agent.status)}
-        >
-          {isActive ? tCommon('buttons.stop') : tCommon('buttons.start')}
-        </Button>
+        {!isSystem && (
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={isActive ? <Square className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+            onClick={() => onToggleStatus(agent.agent_id, agent.status)}
+            title={isActive ? t('card.stop') : t('card.start')}
+          />
+        )}
       </div>
     </Card>
   );

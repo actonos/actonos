@@ -101,16 +101,21 @@ func TestAgentManager_CRUD(t *testing.T) {
 		t.Fatalf("expected StatusActive, got %s", started.Status)
 	}
 
-	// 5. List Agents
+	// 5. List Agents (1 system agent + 1 user created agent)
 	list, err := mgr.List(ctx)
 	if err != nil {
 		t.Fatalf("failed to list agents: %v", err)
 	}
-	if len(list) != 1 {
-		t.Fatalf("expected 1 agent in list, got %d", len(list))
+	if len(list) != 2 {
+		t.Fatalf("expected 2 agents in list, got %d", len(list))
 	}
 
-	// 6. Delete Agent
+	// 6. Attempt deleting protected system agent (Must Fail)
+	if err := mgr.Delete(ctx, DefaultSystemAgentID); err != ErrProtectedAgent {
+		t.Fatalf("expected ErrProtectedAgent when deleting system agent, got %v", err)
+	}
+
+	// 7. Delete User Agent
 	if err := mgr.Delete(ctx, created.AgentID); err != nil {
 		t.Fatalf("failed to delete agent: %v", err)
 	}

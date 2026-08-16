@@ -126,3 +126,81 @@ func (s *Server) handleDeleteWorkspaceFile(w http.ResponseWriter, r *http.Reques
 
 	s.respondJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
+
+func (s *Server) handleMkdirWorkspace(w http.ResponseWriter, r *http.Request) {
+	workspaceDir := "./data/workspace"
+	var req struct {
+		Path string `json:"path"`
+	}
+	if err := s.decodeJSON(r, &req); err != nil {
+		s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
+
+	cleanRel := filepath.Clean(req.Path)
+	if strings.HasPrefix(cleanRel, "..") {
+		s.respondError(w, http.StatusForbidden, "ACCESS_DENIED", "path escapes workspace")
+		return
+	}
+
+	targetDir := filepath.Join(workspaceDir, cleanRel)
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		s.respondError(w, http.StatusInternalServerError, "MKDIR_FAILED", err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]string{"status": "created", "path": cleanRel})
+}
+
+func (s *Server) handleUploadWorkspaceFile(w http.ResponseWriter, r *http.Request) {
+	workspaceDir := "./data/workspace"
+	_ = os.MkdirAll(workspaceDir, 0755)
+
+	err := r.ParseMultipartForm(32 << 20) // 32MB max
+	if err != nil {
+		s.respondError(w, http.StatusBadRequest, "PARSE_FORM_FAILED", err.Error())
+		return
+	}
+
+	relDir := r.FormValue("dir")
+	cleanRel := filepath.Clean(relDir)
+	if strings.HasPrefix(cleanRel, "..") {
+		s.respondError(w, http.StatusForbidden, "ACCESS_DENIED", "path escapes workspace")
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		s.respondError(w, http.StatusBadRequest, "FILE_MISSING", err.Error())
+		return
+	}
+	defer file.Close()
+
+	destDir := filepath.Join(workspaceDir, cleanRel)
+	_ = os.MkdirAll(destDir, 0755)
+	destPath := filepath.Join(destDir, header.Filename)
+
+	out, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "WRITE_FAILED", err.Error())
+		return
+	}
+	defer out.Close()
+
+	var buf [4096]byte
+	for {
+		n, err := file.Read(buf[:])
+		if n > 0 {
+			_, _ = out.Write(buf[:n])
+		}
+		if err != nil {
+			break
+		}
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]any{
+		"status":   "uploaded",
+		"filename": header.Filename,
+		"path":     filepath.ToSlash(filepath.Join(cleanRel, header.Filename)),
+	})
+}
