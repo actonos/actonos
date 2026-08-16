@@ -80,22 +80,78 @@ func (m *AgentManager) CreateAgent(manifest AgentManifest) (*Agent, error) {
 
 ## TypeScript/React Standards
 
+### Design System Compliance (`DESIGN.md`)
+
+- **Color Palette:** Strictly follow the semantic color tokens:
+  - Base canvas: `#f9fbf2`
+  - Card surfaces & nav: `#eff2e5`
+  - Primary text / headings / dark button: `#130e30` (Deep Ink)
+  - Primary CTA button: `#ffe228` (Hi-Yellow, max 1 per viewport)
+  - Body / helper text: `#5f5c6e` (Slate)
+  - Logo / fine strokes: `#000000` (Onyx)
+  - Background blobs only: `#59e25d` (Moss Green), `#e261e5` (Fuchsia) — **NEVER** use in UI controls or badges.
+- **Typography:**
+  - `Hedvig Letters Serif` exclusively for headings and display titles ($\ge 22\text{px}$).
+  - `Inter` for all UI controls, body text, buttons, and captions ($< 22\text{px}$).
+- **Geometry:**
+  - Signature `1440px` (or `rounded-full`) pill radius for **all** buttons, inputs, tags, badges, and nav containers.
+  - `24px` (`rounded-[24px]`) radius for cards.
+  - Zero sharp corners ($< 16\text{px}$) on interactive controls.
+- **Elevation:** Zero drop shadows. Cards rely on surface contrast (`#eff2e5` on `#f9fbf2`).
+
+### Component Decomposition & Reusability
+
+- Decompose UI into clean, reusable layers:
+  - `src/components/ui/` — Atomic primitives (`Button`, `Input`, `Card`, `Badge`, `Modal`, `BlobBackdrop`, `LanguageSwitcher`, etc.)
+  - `src/components/layout/` — Shell structures (`Navbar`, `Sidebar`, `PageContainer`, `SectionHeader`)
+  - `src/components/features/` — Domain-specific reusable modules (`AgentCard`, `ChatBubble`, `ToolCallCard`, etc.)
+  - `src/pages/` — Composed route views delegating to feature & UI components.
+- Co-locate subcomponents when they are only used within a single parent feature.
+- Extract common logic into custom hooks under `src/hooks/`.
+
+### Mandatory Internationalization (i18n) — Zero Hardcoded Text
+
+- **NO HARDCODED STRINGS:** Every user-facing text, label, placeholder, aria-label, and error message must be retrieved via `react-i18next` (`useTranslation()` or `<Trans>`).
+- Maintain locale files under `src/locales/{lang}/{namespace}.json` (`en/`, `vi/`, etc.).
+- Group keys hierarchically within namespaces (`common`, `nav`, `setup`, `chat`, `agents`, `tools`, `settings`).
+
 ### Component Structure
 
 ```tsx
-// ✅ Good: named export, functional component
-export function AgentCard({ agent }: AgentCardProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+// ✅ Good: named export, functional component, typed props, i18n
+import { useTranslation } from 'react-i18next';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+
+interface AgentCardProps {
+  agent: Agent;
+  onSelect: (id: string) => void;
+  isActive?: boolean;
+}
+
+export function AgentCard({ agent, onSelect, isActive = false }: AgentCardProps) {
+  const { t } = useTranslation('agents');
 
   return (
-    <div className="agent-card">
-      {/* ... */}
-    </div>
+    <Card hoverable onClick={() => onSelect(agent.agent_id)}>
+      <h3 className="font-serif text-heading-sm text-deep-ink">{agent.name}</h3>
+      <p className="font-sans text-body-sm text-slate">{agent.description}</p>
+      <Button variant="secondary" size="sm" onClick={() => onSelect(agent.agent_id)}>
+        {t('actions.select')}
+      </Button>
+    </Card>
   );
 }
 
-// ❌ Bad: default export
-export default function AgentCard() { /* ... */ }
+// ❌ Bad: default export, hardcoded text, untyped props, sharp corners
+export default function AgentCard(props: any) {
+  return (
+    <div className="rounded border shadow p-4">
+      <h3>{props.agent.name}</h3>
+      <button className="rounded bg-blue-500 text-white">Select Agent</button>
+    </div>
+  );
+}
 ```
 
 ### Type Safety
@@ -116,6 +172,7 @@ function AgentCard(props: any) { /* ... */ }
 - Use React hooks for local state
 - Use Context API for shared state across a page
 - Avoid prop drilling beyond 2 levels — use context instead
+
 
 ## Git Conventions
 
