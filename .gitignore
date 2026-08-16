@@ -19,7 +19,6 @@ vendor/
 
 # Binary output
 build/
-actond
 
 # Go workspace
 go.work
