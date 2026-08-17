@@ -26,6 +26,7 @@ export function Header({ activeTab, onOpenMobileSidebar, onLogout }: HeaderProps
     agents: { title: 'Agents', category: 'AI Management' },
     'agent-studio': { title: 'Agent Studio', category: 'Configuration' },
     chat: { title: 'Chat', category: 'Conversation' },
+    missions: { title: 'Missions & Tasks', category: 'Operations' },
     automations: { title: 'Automations', category: 'Scheduling' },
     tools: { title: 'Tools', category: 'System Tools' },
     skills: { title: 'Skills', category: 'Agent Skills' },

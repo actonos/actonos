@@ -74,11 +74,17 @@ To prevent unauthorized users from triggering agents via public messaging platfo
 
 ---
 
-## 4. Multi-Account Configuration (`ChannelAccount`)
+## 4. Multi-Account Configuration & Proactive Routing
 
-Channels support multiple configured accounts (e.g., separate Telegram bots or WhatsApp phone numbers).
-- Stored and queried via `GET /api/integrations/channels` and `POST /api/integrations/channels`.
-- Agents filter incoming messages using their `ListenChannels` array (`["*"]` or `["telegram"]`).
+Channels support multiple concurrently configured accounts (e.g. multiple distinct Telegram bots or WhatsApp phone numbers).
+- **Accounts Definition**: `ChannelAccount` (ID, Name, Channel, Token, PhoneID, Enabled, `BoundAgentIDs`).
+- **Dynamic Sync**: Auto-persisted via `POST /api/integrations/channels` and synced into active pollers.
+- **Proactive Push**: Proactive notifications from Cron or Heartbeat specify `target_channel`, `target_account_id`, and `target_recipient`.
+- **Automatic Long-Message Chunking**:
+  - Telegram limits single messages to 4096 characters.
+  - The adapter automatically chunks long articles (>3900 chars) along paragraph/newline boundaries (`\n\n` $\rightarrow$ `\n` $\rightarrow$ space) to prevent truncation or Telegram API errors.
+- **Anti-Double-Dispatch**:
+  - The ReAct loop and proactive schedulers cooperate so messages are delivered exactly once without duplicate spam.
 
 ---
 
@@ -86,6 +92,7 @@ Channels support multiple configured accounts (e.g., separate Telegram bots or W
 
 1. Implement `ChannelAdapter` in a new file (e.g., `internal/channels/slack.go`).
 2. Integrate with `PairingManager` for security authorization.
-3. Wire the adapter in `internal/server/router.go` and `internal/channels/`.
+3. Wire the adapter into `ChannelManager` and `internal/channels/`.
 4. Update `web/src/pages/Channels/ChannelsPage.tsx` and `web/src/locales/{en,vi}/channels.json`.
-5. Add unit tests verifying `SendMessage` and inbound message normalization.
+5. Implement message chunking for platform length limits (e.g. 4096 for Telegram, 2000 for Discord).
+6. Add unit tests verifying `SendMessage` and inbound message normalization.

@@ -277,7 +277,7 @@ func (t *TelegramAdapter) handleInboundMessage(ctx context.Context, upd tgUpdate
 	}
 }
 
-// SendMessage sends an outbound message to a Telegram chat with automatic Markdown and plain text fallback.
+// SendMessage sends an outbound message to a Telegram chat with automatic Markdown, plain text fallback, and chunking for long messages.
 func (t *TelegramAdapter) SendMessage(ctx context.Context, msg OutboundMessage) error {
 	t.mu.RLock()
 	token := t.token
@@ -287,12 +287,34 @@ func (t *TelegramAdapter) SendMessage(ctx context.Context, msg OutboundMessage) 
 		return fmt.Errorf("telegram token not configured")
 	}
 
+	content := strings.TrimSpace(msg.Content)
+	if content == "" {
+		return nil
+	}
+
+	// Telegram max message limit is 4096 chars. Chunk if longer than 3900.
+	const maxChunkLen = 3900
+	if len(content) <= maxChunkLen {
+		return t.sendSingleMessage(ctx, token, msg.Recipient, content)
+	}
+
+	chunks := splitTextIntoChunks(content, maxChunkLen)
+	for _, chunk := range chunks {
+		if err := t.sendSingleMessage(ctx, token, msg.Recipient, chunk); err != nil {
+			return err
+		}
+		time.Sleep(150 * time.Millisecond) // small delay to respect rate limits
+	}
+	return nil
+}
+
+func (t *TelegramAdapter) sendSingleMessage(ctx context.Context, token, recipient, text string) error {
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", token)
 
 	// 1. Try sending with Markdown formatting
 	bodyMD := map[string]any{
-		"chat_id":    msg.Recipient,
-		"text":       msg.Content,
+		"chat_id":    recipient,
+		"text":       text,
 		"parse_mode": "Markdown",
 	}
 	dataMD, _ := json.Marshal(bodyMD)
@@ -310,8 +332,8 @@ func (t *TelegramAdapter) SendMessage(ctx context.Context, msg OutboundMessage) 
 
 	// 2. Fallback: Send plain text without parse_mode
 	bodyPlain := map[string]any{
-		"chat_id": msg.Recipient,
-		"text":    msg.Content,
+		"chat_id": recipient,
+		"text":    text,
 	}
 	dataPlain, err := json.Marshal(bodyPlain)
 	if err != nil {
@@ -336,4 +358,40 @@ func (t *TelegramAdapter) SendMessage(ctx context.Context, msg OutboundMessage) 
 	}
 
 	return nil
+}
+
+func splitTextIntoChunks(text string, maxLen int) []string {
+	if len(text) <= maxLen {
+		return []string{text}
+	}
+
+	var chunks []string
+	remaining := text
+
+	for len(remaining) > 0 {
+		if len(remaining) <= maxLen {
+			chunks = append(chunks, remaining)
+			break
+		}
+
+		// Try to find a clean paragraph or newline split
+		splitIdx := strings.LastIndex(remaining[:maxLen], "\n\n")
+		if splitIdx == -1 {
+			splitIdx = strings.LastIndex(remaining[:maxLen], "\n")
+		}
+		if splitIdx == -1 || splitIdx < maxLen/2 {
+			splitIdx = strings.LastIndex(remaining[:maxLen], " ")
+		}
+		if splitIdx == -1 {
+			splitIdx = maxLen
+		}
+
+		chunk := strings.TrimSpace(remaining[:splitIdx])
+		if chunk != "" {
+			chunks = append(chunks, chunk)
+		}
+		remaining = strings.TrimSpace(remaining[splitIdx:])
+	}
+
+	return chunks
 }

@@ -1,0 +1,26 @@
+{
+  "title": "Nhiệm vụ & Điều phối Heartbeat",
+  "subtitle": "Quản lý công việc tự hành, chỉ thị định kỳ và nhịp đập nhận thức của Agent.",
+  "modal": {
+    "createTitle": "Tạo Nhiệm Vụ Mới",
+    "editTitle": "Chỉnh Sửa Nhiệm Vụ",
+    "taskTitle": "Tên Nhiệm Vụ *",
+    "directive": "Chỉ Thị & Tiêu Chí Thực Thi",
+    "priority": "Mức Độ Ưu Tiên",
+    "assignedAgent": "Agent Phụ Trách",
+    "status": "Trạng Thái",
+    "progress": "Tiến Độ",
+    "channel": "Kênh Thông Báo Đẩy",
+    "account": "Tài Khoản Đích"
+  },
+  "toast": {
+    "taskCreated": "Đã Tạo Nhiệm Vụ",
+    "taskUpdated": "Đã Cập Nhật Nhiệm Vụ",
+    "taskDeleted": "Đã Xoá Nhiệm Vụ",
+    "directivesSaved": "Đã Lưu Chỉ Thị"
+  },
+  "pulse": {
+    "triggering": "Đang Kích Hoạt Nhịp Đập",
+    "triggeredSuccess": "Nhịp Đập Hoàn Tất"
+  }
+}

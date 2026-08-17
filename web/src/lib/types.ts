@@ -219,6 +219,37 @@ export interface CronExecutionRecord {
   executed_at: string;
 }
 
+export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'blocked' | 'cancelled';
+export type TaskPriority = 'p0_critical' | 'p1_high' | 'p2_normal' | 'p3_low';
+
+export interface AutonomousTask {
+  id: string;
+  title: string;
+  description: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  assigned_agent_id: string;
+  target_channel?: string;
+  target_account_id?: string;
+  progress: number;
+  execution_log?: string;
+  session_id?: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  completed_at?: string;
+}
+
+export interface HeartbeatConfigData {
+  enabled: boolean;
+  interval_minutes: number;
+  directives: string;
+  target_channel: string;
+  target_account_id: string;
+  auto_delegate: boolean;
+  zero_noise: boolean;
+}
+
 export interface HeartbeatRun {
   id: string;
   agent_id: string;

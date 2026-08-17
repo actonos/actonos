@@ -506,6 +506,45 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  // Autonomous Tasks & Mission Control
+  listTasks: (params?: { status?: string; priority?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.status) query.set('status', params.status);
+    if (params?.priority) query.set('priority', params.priority);
+    const qStr = query.toString() ? `?${query.toString()}` : '';
+    return fetchJSON<{ tasks: import('./types').AutonomousTask[]; count: number }>(`/tasks${qStr}`);
+  },
+  createTask: (data: Partial<import('./types').AutonomousTask>) =>
+    fetchJSON<import('./types').AutonomousTask>('/tasks', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getTask: (id: string) => fetchJSON<import('./types').AutonomousTask>(`/tasks/${id}`),
+  updateTask: (id: string, data: Partial<import('./types').AutonomousTask>) =>
+    fetchJSON<import('./types').AutonomousTask>(`/tasks/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  deleteTask: (id: string) =>
+    fetchJSON<{ status: string; id: string }>(`/tasks/${id}`, {
+      method: 'DELETE',
+    }),
+
+  // Heartbeat Configuration & Manual Pulse Trigger
+  getHeartbeatConfig: () =>
+    fetchJSON<import('./types').HeartbeatConfigData>('/heartbeat/config'),
+  saveHeartbeatConfig: (data: import('./types').HeartbeatConfigData) =>
+    fetchJSON<import('./types').HeartbeatConfigData>('/heartbeat/config', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  triggerHeartbeatPulse: () =>
+    fetchJSON<import('./types').HeartbeatRun>('/heartbeat/trigger', {
+      method: 'POST',
+    }),
+  listHeartbeatRuns: () =>
+    fetchJSON<import('./types').HeartbeatRun[]>('/heartbeat/runs'),
+
   // Observability, Tokens & History
   getTokenUsage: () => fetchJSON<import('./types').TokenUsageSummary>('/system/token-usage'),
   getTokenHistory: (params?: { agent_id?: string; source?: string }) => {

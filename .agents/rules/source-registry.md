@@ -126,11 +126,33 @@
 | `POST` | `/api/workspace/mkdir` | `handleMkdirWorkspace` | `api_workspace.go` |
 | `POST` | `/api/workspace/upload` | `handleUploadWorkspaceFile` | `api_workspace.go` |
 
-#### System, HAL, Keys & Identity
+#### Autonomous Missions & Tasks Backlog
+
+| Method | Path | Handler | File |
+|:---|:---|:---|:---|
+| `GET` | `/api/tasks` | `handleListTasks` | `api_tasks.go` |
+| `POST` | `/api/tasks` | `handleCreateTask` | `api_tasks.go` |
+| `GET` | `/api/tasks/{id}` | `handleGetTask` | `api_tasks.go` |
+| `PUT` | `/api/tasks/{id}` | `handleUpdateTask` | `api_tasks.go` |
+| `DELETE` | `/api/tasks/{id}` | `handleDeleteTask` | `api_tasks.go` |
+
+#### Heartbeat Coordinator & Pulse
+
+| Method | Path | Handler | File |
+|:---|:---|:---|:---|
+| `GET` | `/api/heartbeat/config` | `handleGetHeartbeatConfig` | `api_tasks.go` |
+| `PUT` | `/api/heartbeat/config` | `handleSaveHeartbeatConfig` | `api_tasks.go` |
+| `POST` | `/api/heartbeat/trigger` | `handleTriggerHeartbeatPulse` | `api_tasks.go` |
+| `GET` | `/api/heartbeat/runs` | `handleListHeartbeatRuns` | `api_tasks.go` |
+
+#### System, HAL, Keys, Tokens & Identity
 
 | Method | Path | Handler | File |
 |:---|:---|:---|:---|
 | `GET` | `/api/system/metrics` | `handleGetMetrics` | `api_system.go` |
+| `GET` | `/api/system/token-usage` | `handleGetTokenUsage` | `api_system.go` |
+| `GET` | `/api/system/token-usage/history` | `handleGetTokenHistory` | `api_system.go` |
+| `GET` | `/api/system/heartbeat/history` | `handleGetHeartbeatHistory` | `api_system.go` |
 | `GET` | `/api/system/identity` | `handleGetIdentity` | `api_system.go` |
 | `PUT` | `/api/system/identity` | `handleSaveIdentity` | `api_system.go` |
 | `GET` | `/api/system/profile` | `handleGetIdentity` | `api_system.go` |
@@ -153,12 +175,12 @@
 
 | Package | Purpose | Key Files |
 |:---|:---|:---|
-| `agent` | Agent engine, manifests, cron, swarm, profile | `engine.go`, `manager.go`, `types.go`, `swarm.go`, `planner.go`, `verifier.go`, `reflection.go`, `profile.go`, `heartbeat.go`, `context.go`, `cron_scheduler.go` |
+| `agent` | Agent engine, manifests, tasks, cron, swarm, profile | `engine.go`, `manager.go`, `types.go`, `tasks.go`, `swarm.go`, `planner.go`, `verifier.go`, `reflection.go`, `profile.go`, `heartbeat.go`, `context.go`, `cron_scheduler.go` |
 | `auth` | System auth, OAuth 2.1, token refresh, delegation | `system_auth.go`, `oauth2.go`, `token_refresher.go`, `delegation.go`, `state.go`, `dcr.go` |
 | `bus` | Event bus (Go channels) | `eventbus.go` |
 | `channels` | Multi-platform messaging adapters | `adapter.go`, `telegram.go`, `whatsapp.go`, `discord.go`, `pairing.go`, `session.go`, `webhook.go` |
 | `llm` | LLM provider abstraction, model cascading | `provider.go`, `router.go`, `openai_compat.go` |
-| `memory` | Hybrid RAG, vector search, FTS5, vault | `hybrid.go`, `vector.go`, `fts.go`, `decay.go`, `vault.go`, `db.go` |
+| `memory` | Hybrid RAG, vector search, FTS5, token ledger, vault | `hybrid.go`, `vector.go`, `fts.go`, `decay.go`, `tokens.go`, `vault.go`, `db.go` |
 | `sandbox` | Command execution isolation | `sandbox.go`, `bwrap_linux.go`, `jail_docker.go` |
 | `server` | HTTP router, API handlers, static assets | `router.go`, `api_*.go`, `static.go`, `layered_fs.go` |
 | `system` | HAL, hardware metrics, Tailscale, Wi-Fi | `hal.go`, `hal_linux.go`, `hal_docker.go`, `tailscale.go`, `metrics.go` |
@@ -170,17 +192,18 @@
 
 | Directory | NavTab ID | Component | Purpose |
 |:---|:---|:---|:---|
-| `Dashboard/` | `dashboard` | `DashboardPage` | System overview, agent summaries |
+| `Dashboard/` | `dashboard` | `DashboardPage` | System overview, agent summaries, token launcher |
 | `Agents/` | `agents` | `AgentsPage` | Agent list (responsive table) |
 | `Agents/` | `agent-studio` | `AgentStudioPage` | Agent detail editor (config, soul, memory) |
+| `Missions/` | `missions` | `MissionsPage` | Autonomous task matrix, standing directives, pulse audit |
 | `Chat/` | `chat` | `ChatPage` | Conversational interface |
 | `Automations/` | `automations` | `AutomationsPage` | Cron jobs, scheduled tasks |
-| `Channels/` | `channels` | `ChannelsPage` | Telegram, WhatsApp, Discord config |
+| `Channels/` | `channels` | `ChannelsPage` | Telegram, WhatsApp, Discord multi-account config |
 | `Connectors/` | `connectors` | `ConnectorsPage` | SaaS integrations (OAuth) |
 | `ToolHub/` | `tools` | `ToolHubPage` | MCP servers, WASM plugins |
 | `Skills/` | `skills` | `SkillsPage` | Skill marketplace |
 | `Workspace/` | `workspace` | `WorkspacePage` | File manager |
-| `Settings/` | `settings` | `SettingsPage` | System settings, keys, backup |
+| `Settings/` | `settings` | `SettingsPage` | System settings, keys, backup, token ledger |
 | `Auth/` | — | `SetupWizardPage` | First-run onboarding |
 | `Auth/` | — | `LoginPage` | Password login |
 
@@ -188,64 +211,32 @@
 
 ## UI Components (`web/src/components/`)
 
-### Atomic Primitives (`ui/`)
+### Modals (`modals/` & `ui/`)
 
 | File | Component | Purpose |
 |:---|:---|:---|
-| `Button.tsx` | `Button` | Primary/secondary/ghost pill buttons |
-| `Input.tsx` | `Input` | Capsule text inputs with labels |
-| `Card.tsx` | `Card` | Soft Meadow 24px surface cards |
-| `Badge.tsx` | `Badge` | Status pill badges |
-| `Modal.tsx` | `Modal` | Accessible dialog container |
-| `ConfirmModal.tsx` | `ConfirmModal` | Confirmation dialog with actions |
-| `PromptModal.tsx` | `PromptModal` | Text input modal dialog |
-| `Toast.tsx` | `ToastProvider`, `useToast` | Toast notification system |
-| `BlobBackdrop.tsx` | `BlobBackdrop` | Decorative organic SVG blobs |
-| `LanguageSwitcher.tsx` | `LanguageSwitcher` | Globe icon + language trigger |
-| `LanguageSelectModal.tsx` | `LanguageSelectModal` | Language selection overlay |
-
-### Layout (`layout/`)
-
-| File | Component | Purpose |
-|:---|:---|:---|
-| `Sidebar.tsx` | `Sidebar` | Collapsible left navigation sidebar |
-| `Header.tsx` | `Header` | Sticky top header bar |
-| `Navbar.tsx` | `Navbar` | Top navigation bar (alternate) |
-| `PageContainer.tsx` | `PageContainer` | Max-width centered container |
-
-### Feature Components (`features/`)
-
-| File | Component | Purpose |
-|:---|:---|:---|
-| `features/agents/AgentCard.tsx` | `AgentCard` | Agent persona display card |
-| `features/agents/AgentFormModal.tsx` | `AgentFormModal` | Create/edit agent dialog |
-| `features/agents/CronJobModal.tsx` | `CronJobModal` | Cron job create/edit dialog |
-| `features/agents/SoulEditorModal.tsx` | `SoulEditorModal` | SOUL.md editor modal |
-| `features/onboarding/` | (setup forms) | Onboarding wizard forms |
-| `features/tools/` | (tool cards) | Tool display components |
-
-### Chat Components (`chat/`)
-
-| File | Component | Purpose |
-|:---|:---|:---|
-| `chat/MarkdownContent.tsx` | `MarkdownContent` | Markdown renderer for chat messages |
+| `modals/TokenLedgerModal.tsx` | `TokenLedgerModal` | Comprehensive token usage analytics & ledger table |
+| `pages/Missions/components/TaskModal.tsx` | `TaskModal` | Mission backlog task create/edit modal |
+| `ui/Modal.tsx` | `Modal` | Accessible dialog container |
+| `ui/ConfirmModal.tsx` | `ConfirmModal` | Confirmation dialog with actions |
 
 ---
 
 ## Locale Namespaces (`web/src/locales/`)
 
-Both `en/` and `vi/` contain the following 14 namespace files:
+Both `en/` and `vi/` contain the following 15 namespace files:
 
 | Namespace | File | UI Coverage |
 |:---|:---|:---|
 | `common` | `common.json` | Buttons, validation, generic labels |
 | `nav` | `nav.json` | Navigation items, sidebar labels |
+| `missions` | `missions.json` | Mission control, task matrix, heartbeat directives |
 | `setup` | `setup.json` | Setup wizard, onboarding |
 | `chat` | `chat.json` | Chat input, streaming states |
 | `agents` | `agents.json` | Agent table, create/edit modal |
 | `tools` | `tools.json` | MCP servers, tool management |
 | `skills` | `skills.json` | Skills marketplace |
-| `settings` | `settings.json` | System settings, API keys |
+| `settings` | `settings.json` | System settings, API keys, token ledger tab |
 | `workspace` | `workspace.json` | File manager |
 | `integrations` | `integrations.json` | OAuth connectors |
 | `channels` | `channels.json` | Messaging channels config |
@@ -257,8 +248,14 @@ Both `en/` and `vi/` contain the following 14 namespace files:
 
 ## Go Types ↔ TypeScript Types Mapping
 
-| Go Type (`internal/agent/types.go`) | TS Type (`web/src/lib/types.ts`) | Notes |
+| Go Type (`internal/agent/types.go`, `tasks.go`, `memory/tokens.go`) | TS Type (`web/src/lib/types.ts`) | Notes |
 |:---|:---|:---|
+| `AutonomousTask` | `AutonomousTask` | Backlog missions, priority, status, progress, execution_log |
+| `HeartbeatConfig` | `HeartbeatConfigData` | Standing directives, interval, zero-noise |
+| `HeartbeatRun` | `HeartbeatRun` | Cognitive pulse execution audit record |
+| `TokenUsageSummary` | `TokenUsageSummary` | Full token usage stats & trend models |
+| `TokenUsageRecord` | `TokenUsageRecord` | Token ledger transaction entry |
+| `CronJob` | `CronJob` | Proactive cron definition |
 | `AgentManifest` | `AgentManifest` | Must stay in sync. Go uses `llm.ModelConfig`, TS has inline `ModelConfig` |
 | `DelegationScope` | `DelegationScope` | Same field names |
 | `TriggerRule` | `TriggerRule` | Same field names |

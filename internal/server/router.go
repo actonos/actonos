@@ -26,6 +26,7 @@ type Server struct {
 	engine         *agent.Engine
 	cronSched      *agent.CronScheduler
 	heartbeat      *agent.HeartbeatDaemon
+	taskMgr        *agent.TaskManager
 	tokenTracker   *memory.TokenTracker
 	profileMgr     *agent.UserProfileManager
 	llmRouter      *llm.ModelCascadeRouter
@@ -54,6 +55,7 @@ type Config struct {
 	Engine             *agent.Engine
 	CronScheduler      *agent.CronScheduler
 	HeartbeatDaemon    *agent.HeartbeatDaemon
+	TaskManager        *agent.TaskManager
 	TokenTracker       *memory.TokenTracker
 	ProfileManager     *agent.UserProfileManager
 	LLMRouter          *llm.ModelCascadeRouter
@@ -82,6 +84,7 @@ func NewServer(cfg Config) *Server {
 		engine:       cfg.Engine,
 		cronSched:    cfg.CronScheduler,
 		heartbeat:    cfg.HeartbeatDaemon,
+		taskMgr:      cfg.TaskManager,
 		tokenTracker: cfg.TokenTracker,
 		profileMgr:   cfg.ProfileManager,
 		llmRouter:    cfg.LLMRouter,
@@ -264,6 +267,23 @@ func (s *Server) setupRoutes() {
 				r.Delete("/file", s.handleDeleteWorkspaceFile)
 				r.Post("/mkdir", s.handleMkdirWorkspace)
 				r.Post("/upload", s.handleUploadWorkspaceFile)
+			})
+
+			// Autonomous Tasks & Operations Backlog
+			r.Route("/tasks", func(r chi.Router) {
+				r.Get("/", s.handleListTasks)
+				r.Post("/", s.handleCreateTask)
+				r.Get("/{id}", s.handleGetTask)
+				r.Put("/{id}", s.handleUpdateTask)
+				r.Delete("/{id}", s.handleDeleteTask)
+			})
+
+			// Autonomous Heartbeat Coordinator
+			r.Route("/heartbeat", func(r chi.Router) {
+				r.Get("/config", s.handleGetHeartbeatConfig)
+				r.Put("/config", s.handleSaveHeartbeatConfig)
+				r.Post("/trigger", s.handleTriggerHeartbeatPulse)
+				r.Get("/runs", s.handleListHeartbeatRuns)
 			})
 
 			// System, HAL, Keys, Identity, Audit & Tailscale

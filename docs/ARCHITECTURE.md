@@ -247,6 +247,29 @@ sequenceDiagram
     Orchestrator-->>User: Final consolidated response
 ```
 
+### C. Autonomous Mission Control & Heartbeat Cognitive Pulse
+
+```mermaid
+graph TD
+    PULSE["Heartbeat Daemon\n5m Cognitive Pulse\n(or Instant UI Trigger)"] --> READ_MD["Load Standing Directives\n(HEARTBEAT.md) & Backlog\n(TASKS.md / SQLite)"]
+    READ_MD --> CHECK_TASK{"Pending / Active\nTasks in Backlog?"}
+    
+    CHECK_TASK -- "Yes (P0 -> P3)" --> RESUME_SESSION["Resume Dedicated Session\n(conv_task_<id>)\nLoad Working Memory Context"]
+    RESUME_SESSION --> REACT_LOOP["Execute ReAct Step\nAuthorized Tools Sandbox"]
+    REACT_LOOP --> PERSIST_STEP["Save Message in Session\nUpdate Progress (0-100%)\nSync to TASKS.md"]
+    PERSIST_STEP --> PUSH_ALERT{"Task Complete or\nAction Needed?"}
+    PUSH_ALERT -- "Yes" --> PROACTIVE_PUSH["Proactive Channel Push\n(Telegram, Discord, WhatsApp)\nAnti-Double-Dispatch Guard"]
+    PUSH_ALERT -- "No" --> AUDIT_RECORD["Record Pulse Run in SQLite"]
+    
+    CHECK_TASK -- "No (Backlog Clean)" --> ZERO_NOISE{"System Nominal?"}
+    ZERO_NOISE -- "Yes" --> HB_OK["Return HEARTBEAT_OK\nZero Noise Policy\n(No Channel Spam)"]
+    ZERO_NOISE -- "Alert" --> PROACTIVE_PUSH
+```
+
+- **Working Memory Continuity**: Automatically preserves dialogue and intermediate thoughts inside SQLite `chat_sessions` per task ID (`conv_task_<id>`), allowing multi-step task execution without losing progress across pulses.
+- **Bi-directional Synchronization**: Changes in the Web UI, REST API, or Agent ReAct steps automatically synchronize between SQLite and `data/workspace/TASKS.md` and `data/workspace/HEARTBEAT.md`.
+- **Zero-Noise Guarantee**: If all systems are nominal and no task needs human escalation, the kernel records the run in SQLite and remains completely silent without sending spam to external messaging channels.
+
 ---
 
 ## 5. Dynamic Tooling Hub

@@ -9,11 +9,14 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/actonos/actonos/internal/bus"
+	"github.com/actonos/actonos/internal/llm"
 )
 
 // HeartbeatRun represents an execution record of a proactive heartbeat cycle.
@@ -26,6 +29,13 @@ type HeartbeatRun struct {
 	TokensUsed int       `json:"tokens_used"`
 }
 
+// SessionHistoryProvider defines capabilities for loading and persisting task conversational sessions.
+type SessionHistoryProvider interface {
+	GetOrCreateSession(ctx context.Context, channelID, senderID, senderName, firstMessage, agentID string) (string, error)
+	LoadRecentHistory(ctx context.Context, convID string, limit int) []llm.Message
+	SaveMessage(ctx context.Context, convID, agentID, role, content string, toolCalls any) error
+}
+
 // HeartbeatDaemon monitors proactive trigger rules, executes cognitive self-driving checks, and manages autonomous agent pulse.
 type HeartbeatDaemon struct {
 	mu           sync.RWMutex
@@ -33,6 +43,8 @@ type HeartbeatDaemon struct {
 	engine       *Engine
 	eventBus     *bus.EventBus
 	db           *sql.DB
+	taskMgr      *TaskManager
+	sessionMgr   SessionHistoryProvider
 	workspaceDir string
 	interval     time.Duration
 	stopCh       chan struct{}
@@ -66,6 +78,20 @@ func NewHeartbeatDaemon(
 	}
 }
 
+// SetTaskManager injects the task backlog coordinator.
+func (h *HeartbeatDaemon) SetTaskManager(tm *TaskManager) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.taskMgr = tm
+}
+
+// SetSessionManager injects the working session persistence provider.
+func (h *HeartbeatDaemon) SetSessionManager(sm SessionHistoryProvider) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.sessionMgr = sm
+}
+
 // Start launches the autonomous heartbeat evaluation loop.
 func (h *HeartbeatDaemon) Start(ctx context.Context) {
 	h.mu.Lock()
@@ -96,96 +122,262 @@ func (h *HeartbeatDaemon) loop(ctx context.Context) {
 	}
 }
 
+// TriggerManualPulse executes an immediate on-demand heartbeat pulse.
+func (h *HeartbeatDaemon) TriggerManualPulse(ctx context.Context) (*HeartbeatRun, error) {
+	slog.Info("manual heartbeat pulse triggered by user")
+	run := h.checkCycle(ctx)
+	return run, nil
+}
+
 // checkCycle runs the autonomous cognitive heartbeat iteration.
-func (h *HeartbeatDaemon) checkCycle(ctx context.Context) {
+func (h *HeartbeatDaemon) checkCycle(ctx context.Context) *HeartbeatRun {
 	h.mu.Lock()
 	h.lastRun = time.Now().UTC()
 	h.mu.Unlock()
 
-	agents, err := h.agentMgr.List(ctx)
-	if err != nil || len(agents) == 0 {
-		return
-	}
+	primaryAgentID := "agent_system_core"
 
-	// Check workspace tasks
+	// 1. Read standing directives
 	heartbeatMDPath := filepath.Join(h.workspaceDir, "HEARTBEAT.md")
-	tasksMDPath := filepath.Join(h.workspaceDir, "TASKS.md")
-
-	workspaceTaskContext := ""
+	standingDirectives := "Monitor background tasks, verify system health, maintain Zero-Noise if nominal."
 	if data, err := os.ReadFile(heartbeatMDPath); err == nil && len(data) > 0 {
-		workspaceTaskContext += fmt.Sprintf("\n[Workspace HEARTBEAT.md Instructions]:\n%s\n", string(data))
-	}
-	if data, err := os.ReadFile(tasksMDPath); err == nil && len(data) > 0 {
-		workspaceTaskContext += fmt.Sprintf("\n[Workspace TASKS.md Active Backlog]:\n%s\n", string(data))
+		standingDirectives = string(data)
 	}
 
-	for _, ag := range agents {
-		if ag.Status != StatusActive {
-			continue
+	var activeTask *AutonomousTask
+	if h.taskMgr != nil {
+		// Priority order: in_progress first, then pending
+		inProg, _ := h.taskMgr.ListTasks(ctx, "in_progress", "")
+		if len(inProg) > 0 {
+			activeTask = &inProg[0]
+		} else {
+			pending, _ := h.taskMgr.ListTasks(ctx, "pending", "")
+			if len(pending) > 0 {
+				activeTask = &pending[0]
+			}
+		}
+	}
+
+	run := &HeartbeatRun{
+		AgentID:    primaryAgentID,
+		ExecutedAt: time.Now().UTC(),
+	}
+	b := make([]byte, 8)
+	_, _ = rand.Read(b)
+	run.ID = "hb_" + hex.EncodeToString(b)
+
+	// CASE A: Active Task Execution with Session Resume Memory
+	if activeTask != nil {
+		assignedAgent := activeTask.AssignedAgentID
+		if assignedAgent == "" || assignedAgent == "auto" {
+			assignedAgent = primaryAgentID
+		}
+		run.AgentID = assignedAgent
+
+		// 1. Resume or create task working session
+		var history []llm.Message
+		convID := activeTask.SessionID
+		if convID == "" {
+			convID = fmt.Sprintf("conv_task_%s", activeTask.ID)
+			activeTask.SessionID = convID
 		}
 
-		// Only evaluate agents designated for autonomous operation or the primary core agent
-		isPrimary := ag.AgentID == "agent_system_core" || ag.IsSystem
-		hasRules := len(ag.TriggerRules) > 0
-		hasTasks := workspaceTaskContext != ""
+		if h.sessionMgr != nil {
+			realConvID, err := h.sessionMgr.GetOrCreateSession(
+				ctx,
+				"mission",
+				activeTask.ID,
+				activeTask.Title,
+				activeTask.Description,
+				assignedAgent,
+			)
+			if err == nil && realConvID != "" {
+				convID = realConvID
+			}
 
-		if !isPrimary && !hasRules && !hasTasks {
-			continue
+			// Load recent working memory of past steps
+			history = h.sessionMgr.LoadRecentHistory(ctx, convID, 8)
+
+			// Record incoming pulse step in session
+			userPrompt := fmt.Sprintf(
+				"[Heartbeat Task Step]\nTask: %s (Priority: %s, Current Progress: %d%%)\nDirective: %s\nStanding Directives: %s",
+				activeTask.Title, activeTask.Priority, activeTask.Progress, activeTask.Description, standingDirectives,
+			)
+			_ = h.sessionMgr.SaveMessage(ctx, convID, assignedAgent, "user", userPrompt, nil)
 		}
 
-		prompt := fmt.Sprintf(
-			"[AUTONOMOUS HEARTBEAT BRAIN CYCLE]\nCurrent UTC Time: %s\n%s\n"+
-				"Evaluate system health, pending background tasks, or reminders. "+
-				"If everything is nominal and no proactive action or user notification is needed, reply exactly 'HEARTBEAT_OK'. "+
-				"Otherwise, perform necessary actions using authorized tools and provide a clear summary of what was performed.",
-			time.Now().UTC().Format(time.RFC3339),
-			workspaceTaskContext,
+		prompt := fmt.Sprintf(`[AUTONOMOUS MISSION EXECUTION CYCLE]
+Task ID: %s | Title: %s | Priority: %s | Progress: %d%%
+Task Directive: %s
+Standing Directives: %s
+
+YOU ARE EXECUTING THIS MISSION AUTONOMOUSLY.
+Review your previous dialogue history for context so you do not repeat already completed actions.
+CRITICAL INSTRUCTIONS:
+1. Carry out the next logical action using your authorized tools.
+2. DO NOT call 'native_channel_notify' tool because the ActonOS Mission Coordinator will automatically deliver your summary and status updates to '%s'.
+3. At the end of your response, specify task progress:
+   - If completely finished, end with: "[TASK_COMPLETED]" followed by a concise executive summary of the result.
+   - If ongoing, end with: "[PROGRESS: X%%]" (where X is an integer 1-99) followed by a short note on what was accomplished.
+   - If blocked on missing requirements or errors, end with: "[TASK_BLOCKED: reason]".
+4. Keep your output professional, structured, and factual. Do not include meta-filler like "The notification has been sent".`,
+			activeTask.ID, activeTask.Title, activeTask.Priority, activeTask.Progress,
+			activeTask.Description, standingDirectives, activeTask.TargetChannel,
 		)
 
-		resp, execErr := h.engine.ExecuteStepWithHistory(ctx, ag.AgentID, prompt, nil)
-
-		run := HeartbeatRun{
-			AgentID:    ag.AgentID,
-			ExecutedAt: time.Now().UTC(),
-		}
-
-		b := make([]byte, 8)
-		_, _ = rand.Read(b)
-		run.ID = "hb_" + hex.EncodeToString(b)
-
+		resp, execErr := h.engine.ExecuteStepWithHistory(ctx, assignedAgent, prompt, history)
 		if execErr != nil {
 			run.Status = "error"
-			run.Summary = execErr.Error()
-			slog.Warn("heartbeat execution failed", "agent_id", ag.AgentID, "error", execErr)
+			run.Summary = fmt.Sprintf("Failed executing task '%s': %v", activeTask.Title, execErr)
+			slog.Error("heartbeat task execution error", "task_id", activeTask.ID, "error", execErr)
 		} else if resp != nil {
 			run.TokensUsed = resp.Usage.TotalTokens
-			trimmed := strings.TrimSpace(resp.Content)
+			content := strings.TrimSpace(resp.Content)
 
-			if strings.Contains(trimmed, "HEARTBEAT_OK") || trimmed == "" {
-				run.Status = "ok"
-				run.Summary = "System nominal. No proactive user notification required."
-				slog.Debug("heartbeat nominal (zero noise)", "agent_id", ag.AgentID)
-			} else {
+			// Persist step in session history
+			if h.sessionMgr != nil {
+				_ = h.sessionMgr.SaveMessage(ctx, convID, assignedAgent, "assistant", resp.Content, resp.ToolCalls)
+			}
+
+			fullCleaned := cleanFullContent(content)
+			shortLog := shortSummary(content, 250)
+
+			// Parse Task status transitions
+			if strings.Contains(content, "[TASK_COMPLETED]") {
+				activeTask.Status = "completed"
+				activeTask.Progress = 100
+				activeTask.ExecutionLog = shortLog
 				run.Status = "action_taken"
-				run.Summary = trimmed
-				slog.Info("heartbeat performed proactive action", "agent_id", ag.AgentID, "summary_len", len(trimmed))
-
-				// Proactively notify user through event bus
-				if h.eventBus != nil {
-					h.eventBus.Publish(bus.NewEvent(bus.EventAgentActionDone, ag.AgentID, map[string]any{
-						"type":              "proactive_cron_notification",
-						"job_name":          "Proactive Heartbeat Pulse",
-						"content":           trimmed,
-						"target_channel":    "all",
-						"target_account_id": "all",
-						"target_recipient":  "",
-					}))
+				run.Summary = fmt.Sprintf("Completed mission: '%s'. %s", activeTask.Title, shortLog)
+			} else if strings.Contains(content, "[TASK_BLOCKED") {
+				activeTask.Status = "blocked"
+				activeTask.ExecutionLog = shortLog
+				run.Status = "action_taken"
+				run.Summary = fmt.Sprintf("Mission '%s' blocked. %s", activeTask.Title, shortLog)
+			} else {
+				activeTask.Status = "in_progress"
+				// Extract progress percentage if present
+				reProg := regexp.MustCompile(`\[PROGRESS:\s*(\d+)%?\]`)
+				match := reProg.FindStringSubmatch(content)
+				if len(match) > 1 {
+					if pVal, err := strconv.Atoi(match[1]); err == nil && pVal > activeTask.Progress {
+						activeTask.Progress = pVal
+					}
+				} else if activeTask.Progress < 50 {
+					activeTask.Progress = 50
 				}
+				activeTask.ExecutionLog = shortLog
+				run.Status = "action_taken"
+				run.Summary = fmt.Sprintf("Advanced mission '%s' to %d%%. %s", activeTask.Title, activeTask.Progress, shortLog)
+			}
+
+			if h.taskMgr != nil {
+				_ = h.taskMgr.UpdateTask(ctx, *activeTask)
+			}
+
+			// Check if tool already notified user directly to prevent double dispatch
+			alreadyNotified := false
+			for _, tc := range resp.ToolCalls {
+				if tc.Function.Name == "native_channel_notify" || tc.Function.Name == "channel_notify" {
+					alreadyNotified = true
+					break
+				}
+			}
+
+			isRedundantToolReport := strings.HasPrefix(content, "The notification has been successfully sent") ||
+				strings.HasPrefix(content, "Successfully dispatched proactive notification") ||
+				strings.HasPrefix(content, "Notification sent")
+
+			// Proactively notify user with FULL UNTRUNCATED content through event bus if target channel configured
+			if h.eventBus != nil && !alreadyNotified && !isRedundantToolReport && activeTask.TargetChannel != "none" && activeTask.TargetChannel != "" {
+				h.eventBus.Publish(bus.NewEvent(bus.EventAgentActionDone, assignedAgent, map[string]any{
+					"type":              "proactive_cron_notification",
+					"job_name":          fmt.Sprintf("Mission: %s", activeTask.Title),
+					"content":           fullCleaned,
+					"target_channel":    activeTask.TargetChannel,
+					"target_account_id": activeTask.TargetAccountID,
+					"target_recipient":  "",
+				}))
 			}
 		}
 
-		h.recordRun(run)
+		h.recordRun(*run)
+		return run
 	}
+
+	// CASE B: Routine System Health & Zero-Noise Evaluation
+	prompt := fmt.Sprintf(
+		"[AUTONOMOUS HEARTBEAT BRAIN CYCLE]\nCurrent UTC Time: %s\nStanding Directives: %s\n\n"+
+			"Evaluate system health and background status. "+
+			"Instructions:\n"+
+			"1. If everything is nominal and no proactive action or user notification is needed, reply exactly 'HEARTBEAT_OK'.\n"+
+			"2. If an action or alert is necessary, execute it and provide a concise summary. DO NOT call 'native_channel_notify' tool as the system will route your response automatically.",
+		time.Now().UTC().Format(time.RFC3339),
+		standingDirectives,
+	)
+
+	resp, execErr := h.engine.ExecuteStepWithHistory(ctx, primaryAgentID, prompt, nil)
+	if execErr != nil {
+		run.Status = "error"
+		run.Summary = execErr.Error()
+		slog.Warn("heartbeat execution failed", "agent_id", primaryAgentID, "error", execErr)
+	} else if resp != nil {
+		run.TokensUsed = resp.Usage.TotalTokens
+		trimmed := strings.TrimSpace(resp.Content)
+
+		if strings.Contains(trimmed, "HEARTBEAT_OK") || trimmed == "" {
+			run.Status = "ok"
+			run.Summary = "System nominal. Zero tasks pending. No proactive notification required."
+			slog.Debug("heartbeat nominal (zero noise)", "agent_id", primaryAgentID)
+		} else {
+			run.Status = "action_taken"
+			run.Summary = shortSummary(trimmed, 250)
+			slog.Info("heartbeat performed proactive action", "agent_id", primaryAgentID)
+
+			alreadyNotified := false
+			for _, tc := range resp.ToolCalls {
+				if tc.Function.Name == "native_channel_notify" || tc.Function.Name == "channel_notify" {
+					alreadyNotified = true
+					break
+				}
+			}
+
+			isRedundantToolReport := strings.HasPrefix(trimmed, "The notification has been successfully sent") ||
+				strings.HasPrefix(trimmed, "Successfully dispatched proactive notification") ||
+				strings.HasPrefix(trimmed, "Notification sent")
+
+			if h.eventBus != nil && !alreadyNotified && !isRedundantToolReport {
+				h.eventBus.Publish(bus.NewEvent(bus.EventAgentActionDone, primaryAgentID, map[string]any{
+					"type":              "proactive_cron_notification",
+					"job_name":          "Heartbeat Pulse",
+					"content":           cleanFullContent(trimmed),
+					"target_channel":    "all",
+					"target_account_id": "all",
+					"target_recipient":  "",
+				}))
+			}
+		}
+	}
+
+	h.recordRun(*run)
+	return run
+}
+
+func cleanFullContent(content string) string {
+	cleaned := strings.ReplaceAll(content, "[TASK_COMPLETED]", "")
+	reProg := regexp.MustCompile(`\[PROGRESS:\s*\d+%?\]`)
+	cleaned = reProg.ReplaceAllString(cleaned, "")
+	reBlocked := regexp.MustCompile(`\[TASK_BLOCKED:[^\]]*\]`)
+	cleaned = reBlocked.ReplaceAllString(cleaned, "")
+	return strings.TrimSpace(cleaned)
+}
+
+func shortSummary(content string, maxLen int) string {
+	cleaned := cleanFullContent(content)
+	if maxLen > 3 && len(cleaned) > maxLen {
+		return cleaned[:maxLen-3] + "..."
+	}
+	return cleaned
 }
 
 func (h *HeartbeatDaemon) recordRun(run HeartbeatRun) {
@@ -229,6 +421,9 @@ func (h *HeartbeatDaemon) GetRecentRuns(ctx context.Context, limit int) ([]Heart
 		if err := rows.Scan(&r.ID, &r.AgentID, &r.ExecutedAt, &r.Status, &r.Summary, &r.TokensUsed); err == nil {
 			runs = append(runs, r)
 		}
+	}
+	if runs == nil {
+		runs = []HeartbeatRun{}
 	}
 	return runs, nil
 }

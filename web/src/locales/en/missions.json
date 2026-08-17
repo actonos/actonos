@@ -1,0 +1,26 @@
+{
+  "title": "Missions & Heartbeat Control",
+  "subtitle": "Intelligent task coordination, standing directives, and continuous cognitive pulse.",
+  "modal": {
+    "createTitle": "New Mission / Task",
+    "editTitle": "Edit Mission / Task",
+    "taskTitle": "Mission Title *",
+    "directive": "Directive & Criteria",
+    "priority": "Priority Level",
+    "assignedAgent": "Assigned Agent",
+    "status": "Status",
+    "progress": "Progress",
+    "channel": "Push Notification Channel",
+    "account": "Target Account"
+  },
+  "toast": {
+    "taskCreated": "Mission Created",
+    "taskUpdated": "Mission Updated",
+    "taskDeleted": "Mission Deleted",
+    "directivesSaved": "Directives Saved"
+  },
+  "pulse": {
+    "triggering": "Heartbeat Triggered",
+    "triggeredSuccess": "Pulse Completed"
+  }
+}

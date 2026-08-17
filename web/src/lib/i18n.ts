@@ -16,6 +16,7 @@ import enIntegrations from '../locales/en/integrations.json';
 import enChannels from '../locales/en/channels.json';
 import enConnectors from '../locales/en/connectors.json';
 import enDashboard from '../locales/en/dashboard.json';
+import enMissions from '../locales/en/missions.json';
 
 // Vietnamese translations
 import viCommon from '../locales/vi/common.json';
@@ -31,6 +32,7 @@ import viIntegrations from '../locales/vi/integrations.json';
 import viChannels from '../locales/vi/channels.json';
 import viConnectors from '../locales/vi/connectors.json';
 import viDashboard from '../locales/vi/dashboard.json';
+import viMissions from '../locales/vi/missions.json';
 
 export const defaultNS = 'common';
 export const resources = {
@@ -48,6 +50,7 @@ export const resources = {
     channels: enChannels,
     connectors: enConnectors,
     dashboard: enDashboard,
+    missions: enMissions,
   },
   vi: {
     common: viCommon,
@@ -63,6 +66,7 @@ export const resources = {
     channels: viChannels,
     connectors: viConnectors,
     dashboard: viDashboard,
+    missions: viMissions,
   },
 } as const;
 
@@ -72,7 +76,7 @@ i18n
   .init({
     fallbackLng: 'en',
     defaultNS,
-    ns: ['common', 'nav', 'agents', 'tools', 'skills', 'settings', 'chat', 'setup', 'workspace', 'integrations', 'channels', 'connectors', 'dashboard'],
+    ns: ['common', 'nav', 'agents', 'tools', 'skills', 'settings', 'chat', 'setup', 'workspace', 'integrations', 'channels', 'connectors', 'dashboard', 'missions'],
     resources,
     interpolation: {
       escapeValue: false,

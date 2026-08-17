@@ -3,6 +3,7 @@
   "links": {
     "dashboard": "Dashboard",
     "agents": "Agents",
+    "missions": "Missions",
     "agentStudio": "Agent Studio",
     "chat": "Chat",
     "automations": "Automations",

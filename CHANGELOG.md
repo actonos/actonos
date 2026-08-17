@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Autonomous Mission Control & Task Backlog Matrix**:
+  - Dedicated Sidebar page `Missions` (`web/src/pages/Missions/MissionsPage.tsx`) for visual task management, standing directives editor, and real-time pulse audit ledger.
+  - SQLite table `autonomous_tasks` with priority queues (P0 Critical -> P3 Low), progress (0-100%), and automatic bi-directional sync with `data/workspace/TASKS.md` and `data/workspace/HEARTBEAT.md`.
+  - Instant on-demand pulse trigger (`POST /api/heartbeat/trigger`) with live UI loading states.
+  - REST endpoints `/api/tasks`, `/api/tasks/{id}`, `/api/heartbeat/config`, `/api/heartbeat/trigger`, `/api/heartbeat/runs`.
+- **Working Memory Continuity (`chat_sessions` Resume)**:
+  - Autonomous task execution automatically resolves and resumes dedicated sessions (`conv_task_<id>`), loading recent history to solve multi-step problems seamlessly across heartbeat pulses.
+- **Outbound Notification Precision & Anti-Double-Dispatch**:
+  - Anti-double-dispatch safeguards across Cron and Heartbeat to prevent duplicate confirmation messages.
+  - Full untruncated content preservation for proactive channel notifications.
+  - Automatic paragraph chunking for long articles (>3900 chars) on Telegram.
+- **Token Ledger & Cost Analytics Modal**:
+  - `internal/memory/tokens.go`: Added `GetHistory` method and REST endpoint `/api/system/token-usage/history`.
+  - `web/src/components/modals/TokenLedgerModal.tsx`: Real-time transaction ledger with 14-day daily traffic trend and model distribution charts.
 - **Multi-Account Channel Architecture & Dynamic Agent Binding**:
   - `internal/channels/manager.go`: Orchestrates multiple configured accounts per channel (e.g. Support Bot, DevOps Bot, Customer Hotline) with real-time lifecycle start/stop and targeted dispatching.
   - Inbound intelligent routing: inbound messages automatically resolve to the specific bound Agent (or wildcard `*`), executing dedicated sessions with cognitive working memory.

@@ -60,12 +60,13 @@ ActonOS uses a **sunlit wildflower compliance atelier** aesthetic:
 **Every user-facing string in JSX/TSX must be loaded via `useTranslation()` or `<Trans>` components.**
 Hardcoded strings in components violate build verification.
 
-### Active 14 Locale Namespaces (`web/src/locales/{en,vi}/`)
+### Active 15 Locale Namespaces (`web/src/locales/{en,vi}/`)
 
 | Namespace | Usage |
 |:---|:---|
 | `common.json` | Buttons, badges, modal actions, validation messages, generic labels |
 | `nav.json` | Sidebar navigation tabs, header titles, breadcrumbs |
+| `missions.json` | Mission control, autonomous backlog, task modal, standing directives |
 | `setup.json` | Setup wizard, initial admin identity, password setup |
 | `chat.json` | Chat interface, streaming thoughts, tool invocation outputs |
 | `agents.json` | Agent management, agent table, manifest editor, memory inspector |
@@ -77,7 +78,7 @@ Hardcoded strings in components violate build verification.
 | `dashboard.json` | System metrics, quick actions, agent status cards |
 | `integrations.json` | Integration settings, API keys, pairing verification |
 | `workspace.json` | File manager, file preview, workspace browser |
-| `settings.json` | System configuration, backup snapshots, OTA updates, Tailscale |
+| `settings.json` | System configuration, token ledger, backup snapshots, OTA updates, Tailscale |
 
 ### Usage in Components
 

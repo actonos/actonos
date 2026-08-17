@@ -1,0 +1,669 @@
+import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
+import { Card } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { useToast } from '@/components/ui/Toast';
+import {
+  HeartPulse,
+  CheckSquare,
+  Plus,
+  RefreshCw,
+  Bot,
+  Play,
+  CheckCircle2,
+  Trash2,
+  Edit2,
+  Sparkles,
+  Save,
+  MessageSquare,
+} from 'lucide-react';
+import { api } from '@/lib/api';
+import type { AutonomousTask, HeartbeatConfigData, HeartbeatRun, TaskPriority, TaskStatus } from '@/lib/types';
+import { TaskModal } from './components/TaskModal';
+
+export interface MissionsPageProps {
+  onOpenChat?: (agentID?: string) => void;
+}
+
+export function MissionsPage({ onOpenChat }: MissionsPageProps) {
+  const { t } = useTranslation('missions');
+  const { success, error, info } = useToast();
+
+  const [activeTab, setActiveTab] = useState<'tasks' | 'directives' | 'audit'>('tasks');
+  const [tasks, setTasks] = useState<AutonomousTask[]>([]);
+  const [heartbeatConfig, setHeartbeatConfig] = useState<HeartbeatConfigData>({
+    enabled: true,
+    interval_minutes: 5,
+    directives: '',
+    target_channel: 'all',
+    target_account_id: 'all',
+    auto_delegate: true,
+    zero_noise: true,
+  });
+  const [heartbeatRuns, setHeartbeatRuns] = useState<HeartbeatRun[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [priorityFilter, setPriorityFilter] = useState<string>('all');
+
+  const [loading, setLoading] = useState(true);
+  const [triggeringPulse, setTriggeringPulse] = useState(false);
+  const [savingDirectives, setSavingDirectives] = useState(false);
+
+  // Modal states
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<AutonomousTask | null>(null);
+  const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [tasksRes, cfgRes, runsRes] = await Promise.all([
+        api.listTasks({
+          status: statusFilter !== 'all' ? statusFilter : undefined,
+          priority: priorityFilter !== 'all' ? priorityFilter : undefined,
+        }).catch(() => ({ tasks: [], count: 0 })),
+        api.getHeartbeatConfig().catch(() => null),
+        api.listHeartbeatRuns().catch(() => []),
+      ]);
+
+      if (tasksRes && tasksRes.tasks) setTasks(tasksRes.tasks);
+      if (cfgRes) setHeartbeatConfig(cfgRes);
+      if (runsRes) setHeartbeatRuns(runsRes);
+    } catch (err: any) {
+      error('Failed to load mission data', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+    const interval = setInterval(loadData, 10000);
+    return () => clearInterval(interval);
+  }, [statusFilter, priorityFilter]);
+
+  const handleCreateOrUpdateTask = async (taskData: Partial<AutonomousTask>) => {
+    try {
+      if (taskData.id) {
+        await api.updateTask(taskData.id, taskData);
+        success(t('toast.taskUpdated', 'Mission Updated'), `Task '${taskData.title}' updated successfully.`);
+      } else {
+        await api.createTask(taskData);
+        success(t('toast.taskCreated', 'Mission Created'), `Task '${taskData.title}' added to active backlog.`);
+      }
+      loadData();
+    } catch (err: any) {
+      error('Failed to save task', err.message);
+      throw err;
+    }
+  };
+
+  const handleDeleteTask = async () => {
+    if (!deletingTaskId) return;
+    try {
+      await api.deleteTask(deletingTaskId);
+      success(t('toast.taskDeleted', 'Mission Deleted'), 'Task removed from backlog.');
+      setDeletingTaskId(null);
+      loadData();
+    } catch (err: any) {
+      error('Failed to delete task', err.message);
+    }
+  };
+
+  const handleQuickStatusChange = async (task: AutonomousTask, newStatus: TaskStatus) => {
+    try {
+      const updated = {
+        ...task,
+        status: newStatus,
+        progress: newStatus === 'completed' ? 100 : task.progress,
+      };
+      await api.updateTask(task.id, updated);
+      loadData();
+    } catch (err: any) {
+      error('Failed to update status', err.message);
+    }
+  };
+
+  const handleTriggerPulse = async () => {
+    setTriggeringPulse(true);
+    try {
+      info(t('pulse.triggering', 'Heartbeat Triggered'), 'Master agent is evaluating backlog and system state...');
+      const run = await api.triggerHeartbeatPulse();
+      success(
+        t('pulse.triggeredSuccess', 'Pulse Completed'),
+        run.status === 'ok' ? 'System Nominal (Zero Noise)' : `Action executed: ${run.summary}`
+      );
+      loadData();
+    } catch (err: any) {
+      error('Pulse execution failed', err.message);
+    } finally {
+      setTriggeringPulse(false);
+    }
+  };
+
+  const handleSaveDirectives = async () => {
+    setSavingDirectives(true);
+    try {
+      await api.saveHeartbeatConfig(heartbeatConfig);
+      success(t('toast.directivesSaved', 'Directives Saved'), 'Standing HEARTBEAT instructions synchronized.');
+    } catch (err: any) {
+      error('Failed to save directives', err.message);
+    } finally {
+      setSavingDirectives(false);
+    }
+  };
+
+  const activeCount = tasks.filter((t) => t.status === 'pending' || t.status === 'in_progress').length;
+  const completedCount = tasks.filter((t) => t.status === 'completed').length;
+  const lastRun = heartbeatRuns[0];
+
+  const getPriorityBadge = (p: TaskPriority) => {
+    switch (p) {
+      case 'p0_critical':
+        return <Badge variant="stopped" className="text-[10px] font-mono">P0 Critical</Badge>;
+      case 'p1_high':
+        return <Badge variant="accent" className="text-[10px] font-mono">P1 High</Badge>;
+      case 'p2_normal':
+        return <Badge variant="neutral" className="text-[10px] font-mono">P2 Normal</Badge>;
+      case 'p3_low':
+      default:
+        return <Badge variant="neutral" className="text-[10px] font-mono opacity-70">P3 Low</Badge>;
+    }
+  };
+
+  const getStatusPill = (s: TaskStatus) => {
+    switch (s) {
+      case 'completed':
+        return <Badge variant="active" className="text-[11px]">✅ Completed</Badge>;
+      case 'in_progress':
+        return <Badge variant="accent" className="text-[11px] animate-pulse">⚡ In Progress</Badge>;
+      case 'blocked':
+        return <Badge variant="stopped" className="text-[11px]">🚫 Blocked</Badge>;
+      case 'cancelled':
+        return <Badge variant="neutral" className="text-[11px] line-through">Cancelled</Badge>;
+      case 'pending':
+      default:
+        return <Badge variant="neutral" className="text-[11px]">⏳ Pending</Badge>;
+    }
+  };
+
+  return (
+    <div className="relative min-h-screen bg-soft-meadow/40 pb-16">
+      <BlobBackdrop />
+
+      <PageContainer>
+        {/* Header Strip */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div>
+            <span className="text-caption uppercase tracking-wider text-slate font-semibold block mb-1">
+              Autonomous Operations
+            </span>
+            <h1 className="font-serif text-heading-lg text-deep-ink tracking-tight flex items-center gap-3">
+              <span>{t('title', 'Missions & Heartbeat Control')}</span>
+              <Badge variant="active" className="text-caption font-mono">
+                {activeCount} Active Backlog
+              </Badge>
+            </h1>
+            <p className="font-sans text-body text-slate mt-1 max-w-2xl">
+              {t('subtitle', 'Intelligent task coordination, standing directives, and continuous cognitive pulse.')}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-center">
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />}
+              onClick={loadData}
+            >
+              Refresh
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Play className={`w-3.5 h-3.5 ${triggeringPulse ? 'animate-spin' : ''}`} />}
+              onClick={handleTriggerPulse}
+              disabled={triggeringPulse}
+            >
+              {triggeringPulse ? 'Pulsing...' : 'Trigger Pulse Now'}
+            </Button>
+          </div>
+        </div>
+
+        {/* 3 Metric Cards Strip */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+          {/* Active Missions Card */}
+          <Card className="p-5 border border-onyx/10 bg-canvas/90 shadow-xs flex items-center justify-between">
+            <div>
+              <span className="text-caption font-semibold uppercase text-slate block mb-1">
+                Active Missions
+              </span>
+              <div className="text-heading font-serif text-deep-ink">
+                {activeCount} <span className="text-body-sm font-sans text-slate font-normal">/ {tasks.length} total</span>
+              </div>
+              <span className="text-[11px] text-emerald-700 font-mono font-semibold">
+                {completedCount} completed
+              </span>
+            </div>
+            <div className="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+              <CheckSquare className="w-5 h-5" />
+            </div>
+          </Card>
+
+          {/* Heartbeat Pulse Status Card */}
+          <Card className="p-5 border border-onyx/10 bg-canvas/90 shadow-xs flex items-center justify-between">
+            <div>
+              <span className="text-caption font-semibold uppercase text-slate block mb-1">
+                Heartbeat Pulse
+              </span>
+              <div className="text-heading font-serif text-deep-ink flex items-center gap-2">
+                <span>{heartbeatConfig.interval_minutes}m Interval</span>
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              </div>
+              <span className="text-[11px] text-slate font-mono truncate block max-w-[200px]">
+                Last: {lastRun ? lastRun.status : 'Nominal'}
+              </span>
+            </div>
+            <div className="w-10 h-10 rounded-full bg-rose-500/10 text-rose-600 flex items-center justify-center">
+              <HeartPulse className="w-5 h-5" />
+            </div>
+          </Card>
+
+          {/* Coordinator Master Agent */}
+          <Card className="p-5 border border-onyx/10 bg-canvas/90 shadow-xs flex items-center justify-between">
+            <div>
+              <span className="text-caption font-semibold uppercase text-slate block mb-1">
+                Coordinator Core
+              </span>
+              <div className="text-heading-sm font-serif font-bold text-deep-ink">
+                agent_system_core
+              </div>
+              <span className="text-[11px] text-slate font-mono">
+                {heartbeatConfig.auto_delegate ? '⚡ Swarm Auto-Delegation Active' : 'Single Agent Execution'}
+              </span>
+            </div>
+            <div className="w-10 h-10 rounded-full bg-hi-yellow/20 text-deep-ink flex items-center justify-center">
+              <Bot className="w-5 h-5" />
+            </div>
+          </Card>
+        </div>
+
+        {/* Tab Navigation Capsule */}
+        <div className="flex items-center gap-1.5 bg-canvas/80 backdrop-blur-sm p-1 rounded-full border border-onyx/10 shadow-xs mb-6 self-start max-w-fit">
+          <button
+            type="button"
+            onClick={() => setActiveTab('tasks')}
+            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer ${
+              activeTab === 'tasks' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
+            }`}
+          >
+            📋 Tasks & Backlog ({tasks.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('directives')}
+            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer ${
+              activeTab === 'directives' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
+            }`}
+          >
+            💓 Standing Directives (HEARTBEAT.md)
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('audit')}
+            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer ${
+              activeTab === 'audit' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
+            }`}
+          >
+            🛡️ Pulse Audit Ledger ({heartbeatRuns.length})
+          </button>
+        </div>
+
+        {/* TAB 1: Tasks & Backlog */}
+        {activeTab === 'tasks' && (
+          <div className="space-y-4">
+            {/* Control Bar: Filters & New Task Button */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-canvas rounded-2xl border border-onyx/10">
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="bg-soft-meadow text-deep-ink text-[12px] font-sans px-3 py-1.5 rounded-full border border-onyx/10 focus:outline-none"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="pending">⏳ Pending</option>
+                  <option value="in_progress">⚡ In Progress</option>
+                  <option value="completed">✅ Completed</option>
+                  <option value="blocked">🚫 Blocked</option>
+                </select>
+
+                <select
+                  value={priorityFilter}
+                  onChange={(e) => setPriorityFilter(e.target.value)}
+                  className="bg-soft-meadow text-deep-ink text-[12px] font-sans px-3 py-1.5 rounded-full border border-onyx/10 focus:outline-none"
+                >
+                  <option value="all">All Priorities</option>
+                  <option value="p0_critical">🔴 P0 Critical</option>
+                  <option value="p1_high">🟠 P1 High</option>
+                  <option value="p2_normal">🔵 P2 Normal</option>
+                  <option value="p3_low">⚪ P3 Low</option>
+                </select>
+              </div>
+
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<Plus className="w-3.5 h-3.5" />}
+                onClick={() => {
+                  setEditingTask(null);
+                  setIsTaskModalOpen(true);
+                }}
+              >
+                New Mission
+              </Button>
+            </div>
+
+            {/* Task Cards List */}
+            {tasks.length > 0 ? (
+              <div className="grid grid-cols-1 gap-3">
+                {tasks.map((tItem) => (
+                  <Card
+                    key={tItem.id}
+                    className="p-5 border border-onyx/10 bg-canvas/95 hover:border-onyx/25 transition-all shadow-xs space-y-3"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {getPriorityBadge(tItem.priority)}
+                        <h3 className="font-serif text-heading-sm font-semibold text-deep-ink truncate">
+                          {tItem.title}
+                        </h3>
+                        {getStatusPill(tItem.status)}
+                      </div>
+
+                      <div className="flex items-center gap-1.5 self-end sm:self-auto shrink-0">
+                        {onOpenChat && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onOpenChat(tItem.assigned_agent_id === 'auto' ? 'agent_system_core' : tItem.assigned_agent_id)}
+                            className="text-[11px]"
+                            icon={<MessageSquare className="w-3.5 h-3.5" />}
+                          >
+                            Chat
+                          </Button>
+                        )}
+                        {tItem.status !== 'completed' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleQuickStatusChange(tItem, 'completed')}
+                            className="text-[11px] text-emerald-700"
+                            icon={<CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
+                          >
+                            Complete
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setEditingTask(tItem);
+                            setIsTaskModalOpen(true);
+                          }}
+                          className="text-[11px]"
+                          icon={<Edit2 className="w-3.5 h-3.5" />}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setDeletingTaskId(tItem.id)}
+                          className="text-[11px] text-red-600 hover:text-red-700"
+                          icon={<Trash2 className="w-3.5 h-3.5" />}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Directive / Description */}
+                    {tItem.description && (
+                      <p className="text-caption font-sans text-slate line-clamp-2">
+                        {tItem.description}
+                      </p>
+                    )}
+
+                    {/* Progress Bar & Latest Log */}
+                    <div className="space-y-1.5 pt-1">
+                      <div className="flex items-center justify-between text-[11px] font-mono text-slate">
+                        <div className="flex items-center gap-2">
+                          <span>Agent: <strong className="text-deep-ink">{tItem.assigned_agent_id}</strong></span>
+                          <span>•</span>
+                          <span>Channel: <strong className="text-deep-ink">{tItem.target_channel || 'all'}</strong></span>
+                        </div>
+                        <span className="font-semibold text-deep-ink">{tItem.progress}%</span>
+                      </div>
+                      <div className="w-full bg-onyx/10 h-1.5 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            tItem.status === 'completed'
+                              ? 'bg-emerald-600'
+                              : tItem.status === 'blocked'
+                              ? 'bg-rose-500'
+                              : 'bg-deep-ink'
+                          }`}
+                          style={{ width: `${tItem.progress}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Latest Execution Log Note */}
+                    {tItem.execution_log && (
+                      <div className="p-2.5 bg-soft-meadow rounded-xl border border-onyx/5 text-[11px] font-mono text-slate flex items-start gap-2">
+                        <Sparkles className="w-3.5 h-3.5 text-deep-ink shrink-0 mt-0.5" />
+                        <span className="truncate">{tItem.execution_log}</span>
+                      </div>
+                    )}
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <Card className="p-12 text-center border border-onyx/10 bg-canvas space-y-3">
+                <CheckSquare className="w-10 h-10 text-slate/40 mx-auto" />
+                <h3 className="font-serif text-heading-sm text-deep-ink">No Missions Found</h3>
+                <p className="text-caption text-slate max-w-md mx-auto">
+                  Your autonomous backlog is clear. Create a mission above or let the Heartbeat daemon schedule routine maintenance.
+                </p>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    setEditingTask(null);
+                    setIsTaskModalOpen(true);
+                  }}
+                  icon={<Plus className="w-3.5 h-3.5" />}
+                >
+                  Create Mission
+                </Button>
+              </Card>
+            )}
+          </div>
+        )}
+
+        {/* TAB 2: Standing Directives (HEARTBEAT.md) */}
+        {activeTab === 'directives' && (
+          <div className="space-y-6">
+            <Card className="p-6 border border-onyx/10 bg-canvas space-y-5 max-w-3xl">
+              <div className="flex items-center justify-between border-b border-onyx/10 pb-4">
+                <div>
+                  <h3 className="font-serif text-heading-sm text-deep-ink font-semibold flex items-center gap-2">
+                    <HeartPulse className="w-5 h-5 text-rose-600" />
+                    <span>Standing Autonomous Directives</span>
+                  </h3>
+                  <p className="text-caption text-slate mt-0.5">
+                    Instructions loaded on every cognitive pulse (`data/workspace/HEARTBEAT.md`).
+                  </p>
+                </div>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={<Save className="w-3.5 h-3.5" />}
+                  onClick={handleSaveDirectives}
+                  disabled={savingDirectives}
+                >
+                  {savingDirectives ? 'Saving...' : 'Save Directives'}
+                </Button>
+              </div>
+
+              {/* Directives Markdown Editor */}
+              <div className="space-y-2">
+                <label className="block text-caption font-semibold text-deep-ink">
+                  Standing Instructions (Markdown)
+                </label>
+                <textarea
+                  rows={8}
+                  value={heartbeatConfig.directives}
+                  onChange={(e) => setHeartbeatConfig({ ...heartbeatConfig, directives: e.target.value })}
+                  placeholder="# Standing Directives&#10;- Continuously verify local storage and database integrity&#10;- If everything is nominal, reply HEARTBEAT_OK"
+                  className="w-full bg-soft-meadow text-deep-ink font-mono text-[13px] p-4 rounded-2xl border border-onyx/10 focus:outline-none focus:border-onyx/30 resize-none leading-relaxed"
+                />
+              </div>
+
+              {/* Settings: Interval & Zero-Noise */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                <div>
+                  <label className="block text-caption font-semibold text-deep-ink mb-1.5">
+                    Pulse Interval
+                  </label>
+                  <select
+                    value={heartbeatConfig.interval_minutes}
+                    onChange={(e) => setHeartbeatConfig({ ...heartbeatConfig, interval_minutes: Number(e.target.value) })}
+                    className="w-full bg-soft-meadow text-deep-ink text-body-sm font-sans p-2.5 rounded-full border border-onyx/10 focus:outline-none"
+                  >
+                    <option value={1}>Every 1 minute (High Frequency)</option>
+                    <option value={5}>Every 5 minutes (Recommended Standard)</option>
+                    <option value={15}>Every 15 minutes</option>
+                    <option value={30}>Every 30 minutes</option>
+                    <option value={60}>Every 1 hour</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-caption font-semibold text-deep-ink mb-1.5">
+                    Notification Target Channel
+                  </label>
+                  <select
+                    value={heartbeatConfig.target_channel}
+                    onChange={(e) => setHeartbeatConfig({ ...heartbeatConfig, target_channel: e.target.value })}
+                    className="w-full bg-soft-meadow text-deep-ink text-body-sm font-sans p-2.5 rounded-full border border-onyx/10 focus:outline-none"
+                  >
+                    <option value="all">📢 All Active Channels</option>
+                    <option value="telegram">Telegram</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="discord">Discord</option>
+                    <option value="none">🔕 None (Zero External Noise)</option>
+                  </select>
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* TAB 3: Pulse Audit Ledger */}
+        {activeTab === 'audit' && (
+          <div className="space-y-4">
+            <Card className="p-6 border border-onyx/10 bg-canvas space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-serif text-heading-sm text-deep-ink font-semibold">
+                    Cognitive Pulse Execution Ledger
+                  </h3>
+                  <p className="text-caption text-slate mt-0.5">
+                    Historical record of autonomous 5-minute cognitive pulses and zero-noise evaluations.
+                  </p>
+                </div>
+              </div>
+
+              <div className="border border-onyx/10 rounded-2xl overflow-hidden">
+                <table className="w-full text-left border-collapse text-body-sm font-sans">
+                  <thead>
+                    <tr className="border-b border-onyx/10 bg-soft-meadow text-[11px] font-semibold uppercase text-slate">
+                      <th className="py-2.5 px-3">Time</th>
+                      <th className="py-2.5 px-3">Agent</th>
+                      <th className="py-2.5 px-3">Status</th>
+                      <th className="py-2.5 px-3">Tokens</th>
+                      <th className="py-2.5 px-3">Summary & Action Trace</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-onyx/5 font-mono text-[12px]">
+                    {heartbeatRuns.length > 0 ? (
+                      heartbeatRuns.map((r) => (
+                        <tr key={r.id} className="hover:bg-soft-meadow/30 transition-colors">
+                          <td className="py-2.5 px-3 text-slate whitespace-nowrap">
+                            {new Date(r.executed_at).toLocaleTimeString()}
+                          </td>
+                          <td className="py-2.5 px-3 font-semibold text-deep-ink">
+                            {r.agent_id}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold ${
+                              r.status === 'ok'
+                                ? 'bg-emerald-500/10 text-emerald-700'
+                                : r.status === 'action_taken'
+                                ? 'bg-hi-yellow/20 text-deep-ink'
+                                : 'bg-red-500/10 text-red-700'
+                            }`}>
+                              {r.status === 'ok' ? 'Zero Noise' : r.status}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-slate">
+                            {r.tokens_used.toLocaleString()}
+                          </td>
+                          <td className="py-2.5 px-3 text-slate truncate max-w-md font-sans">
+                            {r.summary}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-caption text-slate font-sans">
+                          No pulse runs recorded yet. Click "Trigger Pulse Now" to execute an immediate cycle.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Task Modal */}
+        <TaskModal
+          isOpen={isTaskModalOpen}
+          onClose={() => {
+            setIsTaskModalOpen(false);
+            setEditingTask(null);
+          }}
+          onSave={handleCreateOrUpdateTask}
+          task={editingTask}
+        />
+
+        {/* Delete Confirmation Modal */}
+        <ConfirmModal
+          isOpen={deletingTaskId !== null}
+          onClose={() => setDeletingTaskId(null)}
+          onConfirm={handleDeleteTask}
+          title="Delete Mission"
+          description="Are you sure you want to remove this mission from the autonomous backlog?"
+          confirmLabel="Delete Mission"
+          variant="danger"
+        />
+      </PageContainer>
+    </div>
+  );
+}

@@ -3,6 +3,7 @@
   "links": {
     "dashboard": "Tổng quan",
     "agents": "Agents",
+    "missions": "Nhiệm vụ",
     "agentStudio": "Agent Studio",
     "chat": "Chat",
     "automations": "Tự động",

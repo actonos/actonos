@@ -217,6 +217,53 @@ Inspect long-term episodic reflections from `MEMORY.md`.
 
 ---
 
+## Autonomous Missions & Task Backlog
+
+### `GET /api/tasks`
+List autonomous tasks with optional `status` (`pending`, `in_progress`, `completed`, `blocked`) and `priority` filters.
+
+### `POST /api/tasks`
+Create a new autonomous mission / task. Automatically synchronizes with `data/workspace/TASKS.md`.
+
+**Request:**
+```json
+{
+  "title": "Inspect disk storage & database WAL",
+  "description": "Examine local disk usage and archive expired temporary log files.",
+  "priority": "p1_high",
+  "assigned_agent_id": "auto",
+  "target_channel": "all",
+  "target_account_id": "all"
+}
+```
+
+### `GET /api/tasks/{id}`
+Retrieve a specific task details and execution history.
+
+### `PUT /api/tasks/{id}`
+Update task status, progress (0-100%), priority, or execution log.
+
+### `DELETE /api/tasks/{id}`
+Delete a task from the database and workspace `TASKS.md`.
+
+---
+
+## Heartbeat Coordinator & Autonomous Pulse
+
+### `GET /api/heartbeat/config`
+Get current standing directives (`HEARTBEAT.md`), pulse interval, and zero-noise settings.
+
+### `PUT /api/heartbeat/config`
+Save standing directives and pulse configuration.
+
+### `POST /api/heartbeat/trigger`
+Trigger an immediate on-demand cognitive heartbeat pulse.
+
+### `GET /api/heartbeat/runs`
+List recent heartbeat cognitive pulses and audit evaluations.
+
+---
+
 ## Cron Automations
 
 ### `GET /api/agents/cron` (or `/api/cron`)

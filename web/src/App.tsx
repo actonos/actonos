@@ -13,6 +13,7 @@ import { ChannelsPage } from '@/pages/Channels/ChannelsPage';
 import { ConnectorsPage } from '@/pages/Connectors/ConnectorsPage';
 import { WorkspacePage } from '@/pages/Workspace/WorkspacePage';
 import { ChatPage } from '@/pages/Chat/ChatPage';
+import { MissionsPage } from '@/pages/Missions/MissionsPage';
 import { SettingsPage } from '@/pages/Settings/SettingsPage';
 import { SetupWizardPage } from '@/pages/Auth/SetupWizardPage';
 import { LoginPage } from '@/pages/Auth/LoginPage';
@@ -171,6 +172,11 @@ export function App() {
                   selectedAgentID={selectedAgentID}
                   onSelectAgentID={setSelectedAgentID}
                   onNavigateTab={setActiveTab}
+                />
+              )}
+              {activeTab === 'missions' && (
+                <MissionsPage
+                  onOpenChat={handleOpenChatWithAgent}
                 />
               )}
               {activeTab === 'automations' && <AutomationsPage />}
