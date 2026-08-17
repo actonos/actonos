@@ -33,6 +33,7 @@ import {
 import { api, type DashboardSummaryData } from '@/lib/api';
 import type { TokenUsageSummary, HeartbeatRun } from '@/lib/types';
 import type { NavTab } from '@/components/layout/Sidebar';
+import { TokenLedgerModal } from '@/components/modals/TokenLedgerModal';
 
 export interface DashboardPageProps {
   onNavigateTab: (tab: NavTab) => void;
@@ -46,6 +47,7 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
   const [data, setData] = useState<DashboardSummaryData | null>(null);
   const [tokenStats, setTokenStats] = useState<TokenUsageSummary | null>(null);
   const [heartbeatRuns, setHeartbeatRuns] = useState<HeartbeatRun[]>([]);
+  const [isTokenLedgerOpen, setIsTokenLedgerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // QuickStart Checklist State stored in localStorage
@@ -514,67 +516,91 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
         {/* Token Traffic & Autonomous Heartbeat Banner */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
           {/* Token Usage Card */}
-          <Card className="lg:col-span-2 p-5 border border-onyx/10 bg-canvas/90 shadow-xs">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
-                  <Coins className="w-4 h-4" />
+          <Card className="lg:col-span-2 p-5 border border-onyx/10 bg-canvas/90 shadow-xs hover:border-onyx/20 transition-all flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+                    <Coins className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-serif text-heading-sm text-deep-ink font-semibold">
+                      {t('tokens.title', 'Token Consumption & Cost Ledger')}
+                    </h3>
+                    <p className="text-[12px] text-slate">
+                      {t('tokens.subtitle', 'Live tracking across ReAct loops, Crons, and autonomous Heartbeats')}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-serif text-heading-sm text-deep-ink font-semibold">
-                    {t('tokens.title', 'Token Consumption & Cost Ledger')}
-                  </h3>
-                  <p className="text-[12px] text-slate">
-                    {t('tokens.subtitle', 'Live tracking across ReAct loops, Crons, and autonomous Heartbeats')}
-                  </p>
+                <div className="flex items-center gap-2">
+                  <Badge variant="neutral" className="font-mono">
+                    ${(tokenStats?.total_cost_usd || 0).toFixed(4)} USD
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsTokenLedgerOpen(true)}
+                    className="text-[12px] font-sans"
+                    icon={<ArrowUpRight className="w-3.5 h-3.5" />}
+                  >
+                    View Full Ledger
+                  </Button>
                 </div>
               </div>
-              <Badge variant="neutral" className="font-mono">
-                ${(tokenStats?.total_cost_usd || 0).toFixed(4)} USD
-              </Badge>
-            </div>
 
-            <div className="grid grid-cols-3 gap-3 pt-1">
-              <div className="p-3 bg-soft-meadow rounded-2xl border border-onyx/5">
-                <span className="text-[11px] font-semibold uppercase text-slate block mb-1">Today Tokens</span>
-                <span className="text-body font-serif font-bold text-deep-ink">
-                  {(tokenStats?.today_tokens || 0).toLocaleString()}
-                </span>
-                <span className="text-[10px] text-slate block font-mono">
-                  ${(tokenStats?.today_cost_usd || 0).toFixed(4)}
-                </span>
-              </div>
-              <div className="p-3 bg-soft-meadow rounded-2xl border border-onyx/5">
-                <span className="text-[11px] font-semibold uppercase text-slate block mb-1">Month Tokens</span>
-                <span className="text-body font-serif font-bold text-deep-ink">
-                  {(tokenStats?.month_tokens || 0).toLocaleString()}
-                </span>
-                <span className="text-[10px] text-slate block font-mono">
-                  ${(tokenStats?.month_cost_usd || 0).toFixed(4)}
-                </span>
-              </div>
-              <div className="p-3 bg-soft-meadow rounded-2xl border border-onyx/5">
-                <span className="text-[11px] font-semibold uppercase text-slate block mb-1">Lifetime Total</span>
-                <span className="text-body font-serif font-bold text-deep-ink">
-                  {(tokenStats?.total_tokens || 0).toLocaleString()}
-                </span>
-                <span className="text-[10px] text-slate block font-mono">
-                  ${(tokenStats?.total_cost_usd || 0).toFixed(4)}
-                </span>
+              <div className="grid grid-cols-3 gap-3 pt-1">
+                <div className="p-3 bg-soft-meadow rounded-2xl border border-onyx/5">
+                  <span className="text-[11px] font-semibold uppercase text-slate block mb-1">Today Tokens</span>
+                  <span className="text-body font-serif font-bold text-deep-ink">
+                    {(tokenStats?.today_tokens || 0).toLocaleString()}
+                  </span>
+                  <span className="text-[10px] text-slate block font-mono">
+                    ${(tokenStats?.today_cost_usd || 0).toFixed(4)}
+                  </span>
+                </div>
+                <div className="p-3 bg-soft-meadow rounded-2xl border border-onyx/5">
+                  <span className="text-[11px] font-semibold uppercase text-slate block mb-1">Month Tokens</span>
+                  <span className="text-body font-serif font-bold text-deep-ink">
+                    {(tokenStats?.month_tokens || 0).toLocaleString()}
+                  </span>
+                  <span className="text-[10px] text-slate block font-mono">
+                    ${(tokenStats?.month_cost_usd || 0).toFixed(4)}
+                  </span>
+                </div>
+                <div className="p-3 bg-soft-meadow rounded-2xl border border-onyx/5">
+                  <span className="text-[11px] font-semibold uppercase text-slate block mb-1">Lifetime Total</span>
+                  <span className="text-body font-serif font-bold text-deep-ink">
+                    {(tokenStats?.total_tokens || 0).toLocaleString()}
+                  </span>
+                  <span className="text-[10px] text-slate block font-mono">
+                    ${(tokenStats?.total_cost_usd || 0).toFixed(4)}
+                  </span>
+                </div>
               </div>
             </div>
 
             {/* Model Breakdown Bars */}
-            {tokenStats?.by_model && tokenStats.by_model.length > 0 && (
-              <div className="mt-4 pt-3 border-t border-onyx/5 flex flex-wrap gap-2 items-center">
+            <div className="mt-4 pt-3 border-t border-onyx/5 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap gap-2 items-center">
                 <span className="text-[11px] font-semibold text-slate uppercase mr-1">Models:</span>
-                {tokenStats.by_model.slice(0, 4).map((m) => (
-                  <span key={m.model} className="text-[11px] bg-canvas border border-onyx/10 px-2 py-0.5 rounded-full font-mono text-deep-ink">
-                    {m.model}: <strong className="text-emerald-700">{m.percentage.toFixed(0)}%</strong>
-                  </span>
-                ))}
+                {tokenStats?.by_model && tokenStats.by_model.length > 0 ? (
+                  tokenStats.by_model.slice(0, 4).map((m) => (
+                    <span key={m.model} className="text-[11px] bg-canvas border border-onyx/10 px-2 py-0.5 rounded-full font-mono text-deep-ink">
+                      {m.model}: <strong className="text-emerald-700">{m.percentage.toFixed(0)}%</strong>
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-[11px] text-slate font-mono">No active usage recorded</span>
+                )}
               </div>
-            )}
+              <button
+                type="button"
+                onClick={() => setIsTokenLedgerOpen(true)}
+                className="text-[11px] font-semibold text-deep-ink hover:text-emerald-700 underline cursor-pointer"
+              >
+                Inspect Ledger & History →
+              </button>
+            </div>
           </Card>
 
           {/* Autonomous Heartbeat Status Card */}
@@ -771,6 +797,12 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
             </div>
           </Card>
         </div>
+
+        {/* Full Token Consumption & Cost Ledger Modal */}
+        <TokenLedgerModal
+          isOpen={isTokenLedgerOpen}
+          onClose={() => setIsTokenLedgerOpen(false)}
+        />
       </PageContainer>
     </div>
   );

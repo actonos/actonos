@@ -178,6 +178,20 @@ export interface DailyUsagePoint {
   cost_usd: number;
 }
 
+export interface TokenUsageRecord {
+  id: string;
+  timestamp: string;
+  agent_id: string;
+  model: string;
+  provider: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  estimated_cost_usd: number;
+  source: string; // 'chat' | 'stream' | 'cron' | 'heartbeat' | 'swarm' | 'channel'
+  conversation_id?: string;
+}
+
 export interface TokenUsageSummary {
   total_prompt_tokens: number;
   total_completion_tokens: number;

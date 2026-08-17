@@ -508,6 +508,13 @@ export const api = {
 
   // Observability, Tokens & History
   getTokenUsage: () => fetchJSON<import('./types').TokenUsageSummary>('/system/token-usage'),
+  getTokenHistory: (params?: { agent_id?: string; source?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.agent_id) query.set('agent_id', params.agent_id);
+    if (params?.source) query.set('source', params.source);
+    const qStr = query.toString() ? `?${query.toString()}` : '';
+    return fetchJSON<import('./types').TokenUsageRecord[]>(`/system/token-usage/history${qStr}`);
+  },
   getHeartbeatHistory: () => fetchJSON<import('./types').HeartbeatRun[]>('/system/heartbeat/history'),
   getCronHistory: (jobID?: string) =>
     fetchJSON<import('./types').CronExecutionRecord[]>(

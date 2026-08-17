@@ -883,6 +883,24 @@ func (s *Server) handleGetTokenUsage(w http.ResponseWriter, r *http.Request) {
 	s.respondJSON(w, http.StatusOK, summary)
 }
 
+func (s *Server) handleGetTokenHistory(w http.ResponseWriter, r *http.Request) {
+	if s.tokenTracker == nil {
+		s.respondJSON(w, http.StatusOK, []any{})
+		return
+	}
+
+	limit := 50
+	agentID := r.URL.Query().Get("agent_id")
+	source := r.URL.Query().Get("source")
+
+	records, err := s.tokenTracker.GetHistory(r.Context(), limit, agentID, source)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "TOKEN_HISTORY_FAILED", err.Error())
+		return
+	}
+	s.respondJSON(w, http.StatusOK, records)
+}
+
 func (s *Server) handleGetHeartbeatHistory(w http.ResponseWriter, r *http.Request) {
 	if s.heartbeat == nil {
 		s.respondJSON(w, http.StatusOK, []any{})

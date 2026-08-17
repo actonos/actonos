@@ -54,13 +54,12 @@ export function ChannelCard({
 
   return (
     <Card
-      className={`flex flex-col justify-between p-6 border transition-all duration-200 ${
-        channel.isComingSoon
+      className={`flex flex-col justify-between p-6 border transition-all duration-200 ${channel.isComingSoon
           ? 'border-onyx/5 bg-canvas/40 opacity-75'
           : activeAccounts.length > 0
-          ? 'border-emerald-500/30 bg-canvas/95 shadow-xs'
-          : 'border-onyx/10 bg-canvas/85 hover:border-onyx/20'
-      }`}
+            ? 'border-emerald-500/30 bg-canvas/95 shadow-xs'
+            : 'border-onyx/10 bg-canvas/85 hover:border-onyx/20'
+        }`}
     >
       <div>
         {/* Top bar: Icon, Channel Name, Badges */}
@@ -133,27 +132,25 @@ export function ChannelCard({
               {accounts.map((acc) => (
                 <div
                   key={acc.id}
-                  className={`p-2 rounded-xl border text-caption flex items-center justify-between transition-colors ${
-                    acc.enabled
+                  className={`p-2 rounded-xl border text-caption flex items-center justify-between transition-colors ${acc.enabled
                       ? 'bg-soft-meadow/70 border-onyx/10 text-deep-ink'
                       : 'bg-canvas/50 border-onyx/5 text-slate opacity-60'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <button
                       type="button"
                       onClick={() => onQuickToggle(channel.id, acc.id)}
                       title={acc.enabled ? 'Disable' : 'Enable'}
-                      className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
-                        acc.enabled
+                      className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors cursor-pointer ${acc.enabled
                           ? 'bg-emerald-500 border-emerald-500 text-white'
                           : 'bg-canvas border-onyx/20 hover:border-onyx/40'
-                      }`}
+                        }`}
                     >
                       {acc.enabled && <Check className="w-2.5 h-2.5" />}
                     </button>
                     <span className="font-medium truncate max-w-[140px]">
-                      {acc.label}
+                      {acc.name}
                     </span>
                   </div>
 

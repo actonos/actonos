@@ -119,7 +119,10 @@ Test connectivity for a specific LLM provider API key.
 Retrieve system audit log entries.
 
 ### `GET /api/system/token-usage`
-Get lifetime, today, and month token consumption statistics, estimated USD cost, and model usage breakdown.
+Get aggregated token consumption metrics, USD cost estimations, model breakdown, agent breakdown, and 14-day daily trends.
+
+### `GET /api/system/token-usage/history`
+Query recent token transaction audit ledger records with optional `agent_id` and `source` filtering.
 
 ### `GET /api/system/heartbeat/history`
 Get execution logs for autonomous 5-minute heartbeat cycles (Zero-Noise evaluation).

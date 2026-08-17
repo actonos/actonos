@@ -2,9 +2,11 @@ package agent
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -334,12 +336,12 @@ Task Name: %s
 Task Directive / Reminder Content: %s
 Push Channel: %s
 
-YOU ARE EXECUTING AN AUTOMATED NOTIFICATION TO YOUR OWNER.
-Instructions:
-1. Compose the actual reminder / update message intended FOR THE OWNER.
-2. Address the owner respectfully and directly in their language (Vietnamese if applicable).
-3. Deliver the reminder clearly with any relevant action items or context.
-4. DO NOT say "Cảm ơn bạn đã nhắc nhở" or pretend the user is reminding you. YOU are the autonomous AI assistant sending this scheduled notification to your owner.`, job.Name, job.Prompt, job.TargetChannel)
+YOU ARE EXECUTING AN AUTOMATED NOTIFICATION / REPORT TO YOUR OWNER.
+CRITICAL INSTRUCTIONS:
+1. Output the complete, actual message/content directly as your final response text.
+2. DO NOT invoke 'native_channel_notify' tool because the ActonOS Cron Engine will automatically push your response text directly to the target channel (%s).
+3. DO NOT output meta-commentary, conversational filler, or status updates like "The notification has been sent via Telegram" or "Dispatched successfully". Simply output the actual content itself.
+4. Address the owner respectfully and naturally in their language (Vietnamese if applicable).`, job.Name, job.Prompt, job.TargetChannel, job.TargetChannel)
 }
 
 // CronExecutionRecord represents a past execution of a cron task.
@@ -361,25 +363,26 @@ func (cs *CronScheduler) recordExecution(rec CronExecutionRecord) {
 		return
 	}
 	if rec.ID == "" {
-		rec.ID = fmt.Sprintf("ceh_%d", time.Now().UnixNano())
+		b := make([]byte, 6)
+		_, _ = rand.Read(b)
+		rec.ID = fmt.Sprintf("ceh_%d_%x", time.Now().UnixNano(), b)
 	}
-	query := `
-	INSERT INTO cron_execution_history (id, job_id, agent_id, status, prompt, output, error, duration_ms, tokens_used, executed_at)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`
-	_, err := cs.db.Exec(query, rec.ID, rec.JobID, rec.AgentID, rec.Status, rec.Prompt, rec.Output, rec.Error, rec.DurationMS, rec.TokensUsed, rec.ExecutedAt)
+	_, err := cs.db.Exec(`
+		INSERT OR REPLACE INTO cron_execution_history (id, job_id, agent_id, status, prompt, output, error, duration_ms, tokens_used, executed_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, rec.ID, rec.JobID, rec.AgentID, rec.Status, rec.Prompt, rec.Output, rec.Error, rec.DurationMS, rec.TokensUsed, rec.ExecutedAt)
 	if err != nil {
-		slog.Warn("failed to record cron execution history", "error", err, "job_id", rec.JobID)
+		slog.Warn("failed to record cron execution in sqlite", "error", err, "job_id", rec.JobID)
 	}
 }
 
-// GetExecutionHistory returns execution logs for a specific cron job.
+// GetExecutionHistory returns past execution runs for a specific cron job.
 func (cs *CronScheduler) GetExecutionHistory(jobID string, limit int) ([]CronExecutionRecord, error) {
 	if cs.db == nil {
 		return []CronExecutionRecord{}, nil
 	}
-	if limit <= 0 || limit > 100 {
-		limit = 20
+	if limit <= 0 || limit > 50 {
+		limit = 10
 	}
 	rows, err := cs.db.Query(`
 		SELECT id, job_id, agent_id, status, prompt, output, error, duration_ms, tokens_used, executed_at
@@ -475,6 +478,7 @@ func (cs *CronScheduler) executeJob(job *CronJob) {
 
 	// Record execution in history
 	rec := CronExecutionRecord{
+		ID:         fmt.Sprintf("ceh_%d_%s", time.Now().UnixNano(), job.ID),
 		JobID:      job.ID,
 		AgentID:    job.AgentID,
 		Prompt:     job.Prompt,
@@ -491,8 +495,13 @@ func (cs *CronScheduler) executeJob(job *CronJob) {
 	}
 	cs.recordExecution(rec)
 
-	// Publish Proactive Outbound Notification Event to EventBus
-	if cs.eventBus != nil && responseContent != "" {
+	// Suppress redundant tool delivery if LLM just returned a tool dispatch status report
+	isRedundantToolReport := strings.HasPrefix(responseContent, "The notification has been successfully sent") ||
+		strings.HasPrefix(responseContent, "Successfully dispatched proactive notification") ||
+		strings.HasPrefix(responseContent, "Notification sent")
+
+	// Publish Proactive Outbound Notification Event to EventBus if not suppressed and target configured
+	if cs.eventBus != nil && responseContent != "" && !isRedundantToolReport && job.TargetChannel != "none" && job.TargetChannel != "" {
 		cs.eventBus.Publish(bus.NewEvent(bus.EventAgentActionDone, job.AgentID, map[string]any{
 			"type":              "proactive_cron_notification",
 			"job_id":            job.ID,

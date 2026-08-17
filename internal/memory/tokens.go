@@ -325,3 +325,50 @@ func (t *TokenTracker) GetAgentMonthlyCost(ctx context.Context, agentID string) 
 	err := row.Scan(&cost)
 	return cost, err
 }
+
+// GetHistory returns recent token usage ledger records with optional filtering.
+func (t *TokenTracker) GetHistory(ctx context.Context, limit int, agentID, source string) ([]TokenUsageRecord, error) {
+	if t.db == nil {
+		return []TokenUsageRecord{}, nil
+	}
+	if limit <= 0 || limit > 500 {
+		limit = 50
+	}
+
+	query := `
+		SELECT id, timestamp, agent_id, model, provider, prompt_tokens, completion_tokens, total_tokens, estimated_cost_usd, source, COALESCE(conversation_id, '')
+		FROM token_usage
+		WHERE 1=1
+	`
+	var args []any
+
+	if agentID != "" && agentID != "all" {
+		query += " AND agent_id = ?"
+		args = append(args, agentID)
+	}
+	if source != "" && source != "all" {
+		query += " AND source = ?"
+		args = append(args, source)
+	}
+
+	query += " ORDER BY timestamp DESC LIMIT ?"
+	args = append(args, limit)
+
+	rows, err := t.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var records []TokenUsageRecord
+	for rows.Next() {
+		var r TokenUsageRecord
+		if err := rows.Scan(&r.ID, &r.Timestamp, &r.AgentID, &r.Model, &r.Provider, &r.PromptTokens, &r.CompletionTokens, &r.TotalTokens, &r.EstimatedCostUSD, &r.Source, &r.ConversationID); err == nil {
+			records = append(records, r)
+		}
+	}
+	if records == nil {
+		records = []TokenUsageRecord{}
+	}
+	return records, nil
+}

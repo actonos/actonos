@@ -271,6 +271,7 @@ func (s *Server) setupRoutes() {
 				r.Get("/metrics", s.handleGetMetrics)
 				r.Get("/metrics/prometheus", s.handlePrometheusMetrics)
 				r.Get("/token-usage", s.handleGetTokenUsage)
+				r.Get("/token-usage/history", s.handleGetTokenHistory)
 				r.Get("/heartbeat/history", s.handleGetHeartbeatHistory)
 				r.Get("/identity", s.handleGetIdentity)
 				r.Put("/identity", s.handleSaveIdentity)

@@ -32,6 +32,10 @@ import {
   Server,
   Terminal,
   User,
+  Coins,
+  TrendingUp,
+  Bot,
+  Database,
 } from 'lucide-react';
 import {
   api,
@@ -39,9 +43,9 @@ import {
   type StorageInfoData,
   type UserIdentityProfile,
 } from '@/lib/api';
-import type { SystemMetrics, TailscaleStatus, LLMProviderInfo } from '@/lib/types';
+import type { SystemMetrics, TailscaleStatus, LLMProviderInfo, TokenUsageSummary, TokenUsageRecord } from '@/lib/types';
 
-type SettingsTab = 'identity' | 'keys' | 'network' | 'audit' | 'maintenance';
+type SettingsTab = 'identity' | 'keys' | 'tokens' | 'network' | 'audit' | 'maintenance';
 
 interface ProviderMeta {
   id: string;
@@ -235,6 +239,13 @@ export function SettingsPage() {
   const [checkingOTA, setCheckingOTA] = useState(false);
   const [isRestartModalOpen, setIsRestartModalOpen] = useState(false);
 
+  // Token Analytics & Ledger state
+  const [tokenStats, setTokenStats] = useState<TokenUsageSummary | null>(null);
+  const [tokenHistory, setTokenHistory] = useState<TokenUsageRecord[]>([]);
+  const [tokenAgentFilter, setTokenAgentFilter] = useState<string>('all');
+  const [tokenSourceFilter, setTokenSourceFilter] = useState<string>('all');
+  const [agentsList, setAgentsList] = useState<any[]>([]);
+
   // Identity & Persona state
   const [identityProfile, setIdentityProfile] = useState<UserIdentityProfile>({
     user_name: 'Operator',
@@ -250,18 +261,27 @@ export function SettingsPage() {
 
   const loadStatus = async () => {
     try {
-      const [m, ts, k, logs, stor, ident] = await Promise.all([
+      const [m, ts, k, logs, stor, ident, tokSum, tokHist, ags] = await Promise.all([
         api.getMetrics().catch(() => null),
         api.getTailscale().catch(() => null),
         api.getAPIKeys().catch(() => null),
         api.getAuditLogs().catch(() => ({ entries: [], count: 0 })),
         api.getStorageInfo().catch(() => null),
         api.getIdentity().catch(() => null),
+        api.getTokenUsage().catch(() => null),
+        api.getTokenHistory({
+          agent_id: tokenAgentFilter !== 'all' ? tokenAgentFilter : undefined,
+          source: tokenSourceFilter !== 'all' ? tokenSourceFilter : undefined,
+        }).catch(() => []),
+        api.listAgents().catch(() => ({ agents: [], count: 0 })),
       ]);
       setMetrics(m);
       setTailscale(ts);
       setAuditLogs(logs.entries || []);
       setStorageInfo(stor);
+      if (tokSum) setTokenStats(tokSum);
+      setTokenHistory(tokHist || []);
+      if (ags && ags.agents) setAgentsList(ags.agents);
       if (ident) {
         setIdentityProfile((prev) => ({ ...prev, ...ident }));
       }
@@ -497,6 +517,14 @@ export function SettingsPage() {
             }`}
           >
             🔑 LLM Providers ({configuredCount})
+          </button>
+          <button
+            onClick={() => setActiveTab('tokens')}
+            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'tokens' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
+            }`}
+          >
+            🪙 Token Ledger & Cost
           </button>
           <button
             onClick={() => setActiveTab('network')}
@@ -868,7 +896,290 @@ export function SettingsPage() {
           </div>
         )}
 
-        {/* TAB 2: Hardware & Network */}
+        {/* TAB: Token Consumption & Cost Ledger */}
+        {activeTab === 'tokens' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="font-serif text-heading-sm font-semibold text-deep-ink flex items-center gap-2">
+                  <Coins className="w-5 h-5 text-emerald-600" />
+                  <span>Token Consumption & Cost Ledger</span>
+                </h3>
+                <p className="font-sans text-caption text-slate mt-0.5">
+                  Audited live token traffic, cost estimation per model, and comprehensive execution transaction ledger.
+                </p>
+              </div>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<RefreshCw className="w-3.5 h-3.5" />}
+                onClick={loadStatus}
+              >
+                Refresh Ledger
+              </Button>
+            </div>
+
+            {/* 4 Summary Metric Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <Card className="p-4 bg-canvas border border-onyx/10 space-y-1">
+                <span className="text-[11px] font-semibold uppercase text-slate block">Today Tokens</span>
+                <div className="text-heading-sm font-serif font-bold text-deep-ink">
+                  {(tokenStats?.today_tokens || 0).toLocaleString()}
+                </div>
+                <span className="text-[11px] font-mono text-emerald-700 font-semibold block">
+                  ${(tokenStats?.today_cost_usd || 0).toFixed(4)} USD
+                </span>
+              </Card>
+
+              <Card className="p-4 bg-canvas border border-onyx/10 space-y-1">
+                <span className="text-[11px] font-semibold uppercase text-slate block">This Month</span>
+                <div className="text-heading-sm font-serif font-bold text-deep-ink">
+                  {(tokenStats?.month_tokens || 0).toLocaleString()}
+                </div>
+                <span className="text-[11px] font-mono text-emerald-700 font-semibold block">
+                  ${(tokenStats?.month_cost_usd || 0).toFixed(4)} USD
+                </span>
+              </Card>
+
+              <Card className="p-4 bg-canvas border border-onyx/10 space-y-1">
+                <span className="text-[11px] font-semibold uppercase text-slate block">Lifetime Total</span>
+                <div className="text-heading-sm font-serif font-bold text-deep-ink">
+                  {(tokenStats?.total_tokens || 0).toLocaleString()}
+                </div>
+                <span className="text-[11px] font-mono text-slate block">
+                  {(tokenStats?.total_prompt_tokens || 0).toLocaleString()} in / {(tokenStats?.total_completion_tokens || 0).toLocaleString()} out
+                </span>
+              </Card>
+
+              <Card className="p-4 bg-canvas border border-onyx/10 space-y-1">
+                <span className="text-[11px] font-semibold uppercase text-slate block">Estimated Cost Burn</span>
+                <div className="text-heading-sm font-serif font-bold text-emerald-700">
+                  ${(tokenStats?.total_cost_usd || 0).toFixed(4)} USD
+                </div>
+                <span className="text-[11px] font-mono text-slate block">
+                  Official Pricing Catalog
+                </span>
+              </Card>
+            </div>
+
+            {/* 14-Day Trend Chart */}
+            <Card className="p-6 border border-onyx/10 bg-canvas/90 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-deep-ink" />
+                  <h4 className="font-serif text-body-sm font-semibold text-deep-ink">
+                    14-Day Token Traffic & Cost Trend
+                  </h4>
+                </div>
+                <span className="text-[11px] text-slate font-mono">Daily Volume</span>
+              </div>
+
+              {tokenStats?.daily_trend && tokenStats.daily_trend.length > 0 ? (
+                <div className="space-y-2 pt-2">
+                  <div className="flex items-end gap-1.5 h-36 pt-4 px-2 bg-soft-meadow/50 rounded-xl border border-onyx/5">
+                    {tokenStats.daily_trend.map((d) => {
+                      const maxDaily = Math.max(...tokenStats.daily_trend.map((x) => x.total_tokens), 1);
+                      const heightPercent = Math.max(8, (d.total_tokens / maxDaily) * 100);
+                      return (
+                        <div key={d.date} className="flex-1 flex flex-col items-center gap-1 group relative h-full justify-end">
+                          <div className="absolute -top-10 bg-deep-ink text-white text-[10px] py-1 px-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 font-mono shadow-md">
+                            {d.date}: {d.total_tokens.toLocaleString()} tokens (${d.cost_usd.toFixed(4)})
+                          </div>
+                          <div
+                            className="w-full bg-deep-ink rounded-t-md hover:bg-emerald-600 transition-all duration-300 min-h-[4px]"
+                            style={{ height: `${heightPercent}%` }}
+                          />
+                          <span className="text-[9px] text-slate font-mono truncate w-full text-center">
+                            {d.date.slice(5)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-8 text-center text-caption text-slate bg-soft-meadow rounded-xl">
+                  No token consumption recorded yet.
+                </div>
+              )}
+            </Card>
+
+            {/* Model & Agent Breakdown Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Model Breakdown */}
+              <Card className="p-6 border border-onyx/10 bg-canvas space-y-4">
+                <div className="flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-deep-ink" />
+                  <h4 className="font-serif text-body-sm font-semibold text-deep-ink">
+                    Consumption by Model
+                  </h4>
+                </div>
+
+                {tokenStats?.by_model && tokenStats.by_model.length > 0 ? (
+                  <div className="space-y-3">
+                    {tokenStats.by_model.map((m) => (
+                      <div key={m.model} className="space-y-1">
+                        <div className="flex items-center justify-between text-caption">
+                          <span className="font-mono font-semibold text-deep-ink truncate">{m.model}</span>
+                          <span className="font-mono text-slate text-[11px]">
+                            {m.total_tokens.toLocaleString()} tok (${m.cost_usd.toFixed(4)}) • <strong className="text-emerald-700">{m.percentage.toFixed(1)}%</strong>
+                          </span>
+                        </div>
+                        <div className="w-full bg-onyx/10 h-1.5 rounded-full overflow-hidden">
+                          <div
+                            className="bg-deep-ink h-full rounded-full transition-all duration-500"
+                            style={{ width: `${m.percentage}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-caption text-slate">No model metrics available yet.</p>
+                )}
+              </Card>
+
+              {/* Agent Breakdown */}
+              <Card className="p-6 border border-onyx/10 bg-canvas space-y-4">
+                <div className="flex items-center gap-2">
+                  <Bot className="w-4 h-4 text-deep-ink" />
+                  <h4 className="font-serif text-body-sm font-semibold text-deep-ink">
+                    Consumption by Agent
+                  </h4>
+                </div>
+
+                {tokenStats?.by_agent && tokenStats.by_agent.length > 0 ? (
+                  <div className="space-y-3">
+                    {tokenStats.by_agent.map((a) => (
+                      <div key={a.agent_id} className="space-y-1">
+                        <div className="flex items-center justify-between text-caption">
+                          <span className="font-mono font-semibold text-deep-ink truncate">{a.agent_id}</span>
+                          <span className="font-mono text-slate text-[11px]">
+                            {a.total_tokens.toLocaleString()} tok (${a.cost_usd.toFixed(4)}) • <strong className="text-emerald-700">{a.percentage.toFixed(1)}%</strong>
+                          </span>
+                        </div>
+                        <div className="w-full bg-onyx/10 h-1.5 rounded-full overflow-hidden">
+                          <div
+                            className="bg-emerald-600 h-full rounded-full transition-all duration-500"
+                            style={{ width: `${a.percentage}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-caption text-slate">No agent metrics available yet.</p>
+                )}
+              </Card>
+            </div>
+
+            {/* Live Transaction Ledger Table */}
+            <Card className="p-6 border border-onyx/10 bg-canvas space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h4 className="font-serif text-heading-sm font-semibold text-deep-ink flex items-center gap-2">
+                    <Database className="w-4 h-4 text-deep-ink" />
+                    <span>Transaction Ledger & Audit Trail</span>
+                  </h4>
+                  <p className="text-caption text-slate mt-0.5">
+                    Individual inference events recorded per cognitive cycle.
+                  </p>
+                </div>
+
+                {/* Filters */}
+                <div className="flex items-center gap-2">
+                  <select
+                    value={tokenAgentFilter}
+                    onChange={(e) => setTokenAgentFilter(e.target.value)}
+                    className="bg-soft-meadow text-deep-ink text-[12px] font-sans px-3 py-1.5 rounded-full border border-onyx/10 focus:outline-none"
+                  >
+                    <option value="all">All Agents</option>
+                    {agentsList.map((ag: any) => (
+                      <option key={ag.agent_id} value={ag.agent_id}>
+                        {ag.name || ag.agent_id}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={tokenSourceFilter}
+                    onChange={(e) => setTokenSourceFilter(e.target.value)}
+                    className="bg-soft-meadow text-deep-ink text-[12px] font-sans px-3 py-1.5 rounded-full border border-onyx/10 focus:outline-none"
+                  >
+                    <option value="all">All Sources</option>
+                    <option value="chat">Chat</option>
+                    <option value="stream">Chat Stream</option>
+                    <option value="cron">Cron Automation</option>
+                    <option value="heartbeat">Heartbeat Loop</option>
+                    <option value="channel">External Channel</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="border border-onyx/10 rounded-2xl overflow-hidden">
+                <div className="max-h-96 overflow-y-auto">
+                  <table className="w-full text-left border-collapse text-body-sm font-sans">
+                    <thead>
+                      <tr className="border-b border-onyx/10 bg-soft-meadow/60 text-[11px] font-semibold uppercase tracking-wider text-slate sticky top-0 bg-soft-meadow z-10">
+                        <th className="py-2.5 px-3">Time</th>
+                        <th className="py-2.5 px-3">Agent</th>
+                        <th className="py-2.5 px-3">Model</th>
+                        <th className="py-2.5 px-3">Source</th>
+                        <th className="py-2.5 px-3 text-right">Prompt</th>
+                        <th className="py-2.5 px-3 text-right">Completion</th>
+                        <th className="py-2.5 px-3 text-right">Total</th>
+                        <th className="py-2.5 px-3 text-right">Cost (USD)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-onyx/5 font-mono text-[12px]">
+                      {tokenHistory.length > 0 ? (
+                        tokenHistory.map((rec) => (
+                          <tr key={rec.id} className="hover:bg-soft-meadow/30 transition-colors">
+                            <td className="py-2.5 px-3 whitespace-nowrap text-slate text-[11px]">
+                              {new Date(rec.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            </td>
+                            <td className="py-2.5 px-3 font-semibold text-deep-ink max-w-[120px] truncate">
+                              {rec.agent_id}
+                            </td>
+                            <td className="py-2.5 px-3 text-deep-ink max-w-[130px] truncate">
+                              {rec.model}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-onyx/5 border border-onyx/10 text-deep-ink">
+                                {rec.source}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-right text-slate">
+                              {rec.prompt_tokens.toLocaleString()}
+                            </td>
+                            <td className="py-2.5 px-3 text-right text-slate">
+                              {rec.completion_tokens.toLocaleString()}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-semibold text-deep-ink">
+                              {rec.total_tokens.toLocaleString()}
+                            </td>
+                            <td className="py-2.5 px-3 text-right text-emerald-700 font-semibold">
+                              ${rec.estimated_cost_usd.toFixed(5)}
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={8} className="py-8 text-center text-caption text-slate font-sans">
+                            No token ledger events recorded yet. Start interacting with agents to generate live usage statistics.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* TAB: Hardware & Network */}
         {activeTab === 'network' && (
           <div className="space-y-6">
             {/* Live Telemetry Card */}

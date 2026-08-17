@@ -121,34 +121,82 @@ export function ChannelsPage() {
     loadData();
   }, []);
 
-  const handleAddAccount = (channelId: string, accountData: Omit<ChannelAccount, 'id'>) => {
+  const handleAddAccount = async (channelId: string, accountData: Omit<ChannelAccount, 'id'>) => {
     const account: ChannelAccount = {
       ...accountData,
       id: `${channelId}_${Date.now()}`,
     };
 
-    setChannelAccounts((prev) => ({
-      ...prev,
-      [channelId]: [...(prev[channelId] || []), account],
-    }));
+    const updatedAccounts = {
+      ...channelAccounts,
+      [channelId]: [...(channelAccounts[channelId] || []), account],
+    };
+    setChannelAccounts(updatedAccounts);
 
-    success(t('addAccount', 'Account Added'), `${account.label} added to ${channelId}. Remember to click Save.`);
+    setSaving(true);
+    try {
+      await api.saveChannels({
+        telegram_accounts: updatedAccounts.telegram,
+        discord_accounts: updatedAccounts.discord,
+        whatsapp_accounts: updatedAccounts.whatsapp,
+        webhook_secret: webhookSecret,
+      });
+      success(t('addAccount', 'Account Added'), `${account.label} added and active on ${channelId}.`);
+      await loadData();
+    } catch (err: any) {
+      error('Failed to save channel account', err.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleRemoveAccount = (channelId: string, accountId: string) => {
-    setChannelAccounts((prev) => ({
-      ...prev,
-      [channelId]: (prev[channelId] || []).filter((a) => a.id !== accountId),
-    }));
+  const handleRemoveAccount = async (channelId: string, accountId: string) => {
+    const updatedAccounts = {
+      ...channelAccounts,
+      [channelId]: (channelAccounts[channelId] || []).filter((a) => a.id !== accountId),
+    };
+    setChannelAccounts(updatedAccounts);
+
+    setSaving(true);
+    try {
+      await api.saveChannels({
+        telegram_accounts: updatedAccounts.telegram,
+        discord_accounts: updatedAccounts.discord,
+        whatsapp_accounts: updatedAccounts.whatsapp,
+        webhook_secret: webhookSecret,
+      });
+      success('Account Removed', `Account deleted from ${channelId}.`);
+      await loadData();
+    } catch (err: any) {
+      error('Failed to remove channel account', err.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleToggleAccount = (channelId: string, accountId: string) => {
-    setChannelAccounts((prev) => ({
-      ...prev,
-      [channelId]: (prev[channelId] || []).map((a) =>
+  const handleToggleAccount = async (channelId: string, accountId: string) => {
+    const updatedAccounts = {
+      ...channelAccounts,
+      [channelId]: (channelAccounts[channelId] || []).map((a) =>
         a.id === accountId ? { ...a, enabled: !a.enabled } : a
       ),
-    }));
+    };
+    setChannelAccounts(updatedAccounts);
+
+    setSaving(true);
+    try {
+      await api.saveChannels({
+        telegram_accounts: updatedAccounts.telegram,
+        discord_accounts: updatedAccounts.discord,
+        whatsapp_accounts: updatedAccounts.whatsapp,
+        webhook_secret: webhookSecret,
+      });
+      await loadData();
+    } catch (err: any) {
+      error('Failed to toggle channel account', err.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleSaveAll = async () => {
@@ -161,7 +209,7 @@ export function ChannelsPage() {
         webhook_secret: webhookSecret,
       });
       success(t('saveAll', 'Saved'), 'Channel configuration stored in encrypted vault.');
-      loadData();
+      await loadData();
     } catch (err: any) {
       error('Failed to save channels', err.message);
     } finally {

@@ -798,7 +798,7 @@ func saveChannelAccounts(configDir, channelType string, accounts []channels.Chan
 
 	for i := range accounts {
 		accounts[i].Channel = channelType
-		if strings.Contains(accounts[i].Token, "...") {
+		if strings.Contains(accounts[i].Token, "•") || strings.Contains(accounts[i].Token, "...") {
 			if realTok, ok := existingMap[accounts[i].ID]; ok && realTok != "" {
 				accounts[i].Token = realTok
 			}
@@ -845,44 +845,68 @@ func (s *Server) handleSaveChannels(w http.ResponseWriter, r *http.Request) {
 	var allAccounts []channels.ChannelAccount
 
 	// Handle multi-account saves
-	if len(req.TelegramAccounts) > 0 {
+	if req.TelegramAccounts != nil {
 		_ = saveChannelAccounts(configDir, "telegram", req.TelegramAccounts)
 		rawTg := loadRawChannelAccounts(configDir, "telegram")
 		allAccounts = append(allAccounts, rawTg...)
+		foundActive := false
 		for _, acc := range rawTg {
 			if acc.Enabled && acc.Token != "" {
 				_ = os.WriteFile(filepath.Join(configDir, "telegram.token"), []byte(strings.TrimSpace(acc.Token)), 0600)
 				if s.tgAdapter != nil {
 					_ = s.tgAdapter.RestartWithToken(acc.Token)
 				}
+				foundActive = true
 				break
 			}
 		}
+		if !foundActive {
+			_ = os.Remove(filepath.Join(configDir, "telegram.token"))
+		}
+	} else {
+		allAccounts = append(allAccounts, loadRawChannelAccounts(configDir, "telegram")...)
 	}
-	if len(req.DiscordAccounts) > 0 {
+
+	if req.DiscordAccounts != nil {
 		_ = saveChannelAccounts(configDir, "discord", req.DiscordAccounts)
 		rawDc := loadRawChannelAccounts(configDir, "discord")
 		allAccounts = append(allAccounts, rawDc...)
+		foundActive := false
 		for _, acc := range rawDc {
 			if acc.Enabled && acc.Token != "" {
 				_ = os.WriteFile(filepath.Join(configDir, "discord.token"), []byte(strings.TrimSpace(acc.Token)), 0600)
+				foundActive = true
 				break
 			}
 		}
+		if !foundActive {
+			_ = os.Remove(filepath.Join(configDir, "discord.token"))
+		}
+	} else {
+		allAccounts = append(allAccounts, loadRawChannelAccounts(configDir, "discord")...)
 	}
-	if len(req.WhatsAppAccounts) > 0 {
+
+	if req.WhatsAppAccounts != nil {
 		_ = saveChannelAccounts(configDir, "whatsapp", req.WhatsAppAccounts)
 		rawWa := loadRawChannelAccounts(configDir, "whatsapp")
 		allAccounts = append(allAccounts, rawWa...)
+		foundActive := false
 		for _, acc := range rawWa {
 			if acc.Enabled && acc.Token != "" {
 				_ = os.WriteFile(filepath.Join(configDir, "whatsapp.token"), []byte(strings.TrimSpace(acc.Token)), 0600)
 				if acc.PhoneID != "" {
 					_ = os.WriteFile(filepath.Join(configDir, "whatsapp.phone_id"), []byte(strings.TrimSpace(acc.PhoneID)), 0600)
 				}
+				foundActive = true
 				break
 			}
 		}
+		if !foundActive {
+			_ = os.Remove(filepath.Join(configDir, "whatsapp.token"))
+			_ = os.Remove(filepath.Join(configDir, "whatsapp.phone_id"))
+		}
+	} else {
+		allAccounts = append(allAccounts, loadRawChannelAccounts(configDir, "whatsapp")...)
 	}
 
 	// Legacy single-token save (backward compat)
@@ -906,7 +930,7 @@ func (s *Server) handleSaveChannels(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Dynamically sync all active accounts with ChannelManager
-	if s.channelMgr != nil && len(allAccounts) > 0 {
+	if s.channelMgr != nil {
 		_ = s.channelMgr.SyncAccounts(r.Context(), allAccounts)
 	}
 
