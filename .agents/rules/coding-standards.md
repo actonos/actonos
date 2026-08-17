@@ -2,200 +2,114 @@
 
 > Enforced coding standards for all ActonOS contributions.
 
-## Go Standards
+---
+
+## 1. Go Standards
 
 ### Naming Conventions
-
-- **Packages**: short, lowercase, single word (e.g., `agent`, `memory`, `bus`)
-- **Interfaces**: verb-based or capability-based (e.g., `LLMProvider`, `ChannelAdapter`, `Executor`)
-- **Structs**: noun-based (e.g., `AgentManager`, `TokenRefresher`, `VaultStore`)
-- **Functions**: verb-based (e.g., `CreateAgent`, `RefreshToken`, `DecryptKey`)
+- **Packages**: short, lowercase, single word (e.g., `agent`, `memory`, `bus`, `channels`, `tools`)
+- **Interfaces**: verb-based or capability-based (e.g., `LLMProvider`, `ChannelAdapter`, `Executor`, `HAL`)
+- **Structs**: noun-based (e.g., `AgentManager`, `TokenRefresher`, `VaultStore`, `CronScheduler`)
+- **Functions**: verb-based (e.g., `CreateAgent`, `RefreshToken`, `DecryptKey`, `ScheduleTask`)
 - **Constants**: `CamelCase` for exported, `camelCase` for unexported
 - **Error variables**: `Err` prefix (e.g., `ErrAgentNotFound`, `ErrTokenExpired`)
 
 ### Error Handling
-
 ```go
 // ✅ Good: wrap errors with context
 if err := db.Save(agent); err != nil {
     return fmt.Errorf("saving agent %s: %w", agent.ID, err)
 }
 
-// ❌ Bad: raw error propagation
+// ❌ Bad: raw error propagation or capitalized messages
 if err := db.Save(agent); err != nil {
-    return err
+    return err // Missing context
 }
-
-// ❌ Bad: uppercase error messages
-return fmt.Errorf("Failed to save agent: %w", err)
+return fmt.Errorf("Failed to save: %w", err) // Capitalized
 ```
 
 ### Logging
-
 Use `log/slog` for structured logging:
-
 ```go
 // ✅ Good
-slog.Info("agent started",
-    "agent_id", agent.ID,
-    "model", agent.ModelConfig.PrimaryModel,
-)
+slog.Info("agent started", "agent_id", agent.AgentID, "model", agent.ModelConfig.PrimaryModel)
+slog.Error("tool execution failed", "agent_id", agent.AgentID, "tool", toolName, "error", err)
 
-slog.Error("tool execution failed",
-    "agent_id", agent.ID,
-    "tool", toolName,
-    "error", err,
-)
-
-// ❌ Bad: fmt.Printf or log.Printf
-log.Printf("Agent %s started", agent.ID)
+// ❌ Bad: fmt.Printf or standard log.Printf
+fmt.Println("Agent started: " + agent.AgentID)
 ```
 
 ### Context Usage
-
+Always pass `context.Context` as the first argument to functions performing I/O, database access, or blocking operations:
 ```go
-// ✅ Good: context as first parameter
-func (m *AgentManager) CreateAgent(ctx context.Context, manifest AgentManifest) (*Agent, error) {
-    // ...
-}
-
-// ❌ Bad: no context
-func (m *AgentManager) CreateAgent(manifest AgentManifest) (*Agent, error) {
-    // ...
-}
+func (m *AgentManager) CreateAgent(ctx context.Context, manifest AgentManifest) (*Agent, error)
 ```
 
-### Function Length
+---
 
-- Keep functions under **60 lines** where possible
-- Extract helper functions for complex logic
-- Each function should do **one thing**
+## 2. TypeScript / React Standards
 
-### Testing
-
-- Use **table-driven tests** for parameterized scenarios
-- Name test cases descriptively: `TestDecayScore/recent_memory_high_score`
-- Use `testify` assertions sparingly; prefer stdlib `testing` package
-- Integration tests must have `//go:build integration` build tag
-
-## TypeScript/React Standards
-
-### Design System Compliance (`DESIGN.md`)
-
-- **Color Palette:** Strictly follow the semantic color tokens:
-  - Base canvas: `#f9fbf2`
-  - Card surfaces & nav: `#eff2e5`
-  - Primary text / headings / dark button: `#130e30` (Deep Ink)
+### Design System Compliance (`docs/DESIGN.md`)
+- **Color Tokens**:
+  - Base canvas: `#f9fbf2` (Canvas)
+  - Surfaces / cards / sidebar: `#eff2e5` (Soft Meadow)
+  - Primary text / headings / dark pills: `#130e30` (Deep Ink)
   - Primary CTA button: `#ffe228` (Hi-Yellow, max 1 per viewport)
-  - Body / helper text: `#5f5c6e` (Slate)
-  - Logo / fine strokes: `#000000` (Onyx)
-  - Background blobs only: `#59e25d` (Moss Green), `#e261e5` (Fuchsia) — **NEVER** use in UI controls or badges.
-- **Typography:**
-  - `Hedvig Letters Serif` exclusively for headings and display titles ($\ge 22\text{px}$).
-  - `Inter` for all UI controls, body text, buttons, and captions ($< 22\text{px}$).
-- **Geometry:**
-  - Signature `1440px` (or `rounded-full`) pill radius for **all** buttons, inputs, tags, badges, and nav containers.
-  - `24px` (`rounded-[24px]`) radius for cards.
-  - Zero sharp corners ($< 16\text{px}$) on interactive controls.
-- **Elevation:** Zero drop shadows. Cards rely on surface contrast (`#eff2e5` on `#f9fbf2`).
+  - Secondary text / muted icons: `#5f5c6e` (Slate)
+  - Logo / high-contrast borders: `#000000` (Onyx)
+  - Decorative backdrop blobs only: `#59e25d` (Moss Green), `#e261e5` (Fuchsia) — **NEVER** in UI controls.
+- **Geometry**:
+  - `rounded-full` (1440px pill) on all buttons, inputs, badges, and language switchers.
+  - `rounded-[24px]` for cards.
+  - Zero sharp corners on interactive elements.
+- **Scrollbars**:
+  - Use custom 6px slim minimalist pill scrollbars defined in `index.css`.
+- **Elevation**:
+  - Zero drop shadows. Surface separation relies strictly on color contrast (`#eff2e5` on `#f9fbf2`).
 
-### Component Decomposition & Reusability
+### Mandatory Internationalization (i18n)
+- **Zero hardcoded text**: Every string in UI must use `useTranslation()` or `<Trans>`.
+- Maintain keys across all **14 namespaces** in `web/src/locales/` (`en/` and `vi/`):
+  `common`, `nav`, `setup`, `chat`, `agents`, `tools`, `skills`, `automations`, `channels`, `connectors`, `dashboard`, `integrations`, `workspace`, `settings`.
 
-- Decompose UI into clean, reusable layers:
-  - `src/components/ui/` — Atomic primitives (`Button`, `Input`, `Card`, `Badge`, `Modal`, `BlobBackdrop`, `LanguageSwitcher`, etc.)
-  - `src/components/layout/` — Shell structures (`Navbar`, `Sidebar`, `PageContainer`, `SectionHeader`)
-  - `src/components/features/` — Domain-specific reusable modules (`AgentCard`, `ChatBubble`, `ToolCallCard`, etc.)
-  - `src/pages/` — Composed route views delegating to feature & UI components.
-- Co-locate subcomponents when they are only used within a single parent feature.
-- Extract common logic into custom hooks under `src/hooks/`.
-
-### Mandatory Internationalization (i18n) — Zero Hardcoded Text
-
-- **NO HARDCODED STRINGS:** Every user-facing text, label, placeholder, aria-label, and error message must be retrieved via `react-i18next` (`useTranslation()` or `<Trans>`).
-- Maintain locale files under `src/locales/{lang}/{namespace}.json` (`en/`, `vi/`, etc.).
-- Group keys hierarchically within namespaces (`common`, `nav`, `setup`, `chat`, `agents`, `tools`, `settings`).
-
-### Component Structure
-
+### Component Structure & Exports
 ```tsx
-// ✅ Good: named export, functional component, typed props, i18n
+// ✅ Good: Named export, typed props, i18n
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import type { AgentManifest } from '@/lib/types';
 
-interface AgentCardProps {
-  agent: Agent;
-  onSelect: (id: string) => void;
-  isActive?: boolean;
+interface AgentRowProps {
+  agent: AgentManifest;
+  onEdit: (id: string) => void;
 }
 
-export function AgentCard({ agent, onSelect, isActive = false }: AgentCardProps) {
+export function AgentRow({ agent, onEdit }: AgentRowProps) {
   const { t } = useTranslation('agents');
-
   return (
-    <Card hoverable onClick={() => onSelect(agent.agent_id)}>
-      <h3 className="font-serif text-heading-sm text-deep-ink">{agent.name}</h3>
-      <p className="font-sans text-body-sm text-slate">{agent.description}</p>
-      <Button variant="secondary" size="sm" onClick={() => onSelect(agent.agent_id)}>
-        {t('actions.select')}
-      </Button>
-    </Card>
+    <tr className="hover:bg-soft-meadow transition-colors">
+      <td className="font-medium text-deep-ink">{agent.name}</td>
+      <td>
+        <Button variant="ghost" size="sm" onClick={() => onEdit(agent.agent_id)}>
+          {t('actions.edit')}
+        </Button>
+      </td>
+    </tr>
   );
 }
 
-// ❌ Bad: default export, hardcoded text, untyped props, sharp corners
-export default function AgentCard(props: any) {
-  return (
-    <div className="rounded border shadow p-4">
-      <h3>{props.agent.name}</h3>
-      <button className="rounded bg-blue-500 text-white">Select Agent</button>
-    </div>
-  );
+// ❌ Bad: Default export, untyped props, hardcoded text
+export default function AgentRow(props: any) {
+  return <tr><td>{props.agent.name}</td><button>Edit</button></tr>;
 }
 ```
 
-### Type Safety
+---
 
-```tsx
-// ✅ Good: explicit types
-interface AgentCardProps {
-  agent: Agent;
-  onSelect: (id: string) => void;
-}
+## 3. Mandatory Pre-Flight Verification
 
-// ❌ Bad: any
-function AgentCard(props: any) { /* ... */ }
-```
-
-### State Management
-
-- Use React hooks for local state
-- Use Context API for shared state across a page
-- Avoid prop drilling beyond 2 levels — use context instead
-
-
-## Git Conventions
-
-### Branch Names
-
-```
-feat/swarm-delegation-timeout
-fix/fts5-concurrent-write
-docs/api-reference-oauth
-refactor/llm-retry-middleware
-```
-
-### Commit Messages
-
-```
-feat(agent): implement swarm delegation with configurable timeout
-fix(memory): prevent concurrent FTS5 write corruption
-docs: update API reference with new agent endpoints
-test(auth): add edge case tests for expired token refresh
-```
-
-### PR Size
-
-- Target **under 400 lines** of changes per PR
-- Split large features into incremental PRs
-- Each PR should be independently reviewable and testable
+Before concluding any development step, verify according to `.agents/rules/verification-checklist.md`:
+1. `go vet ./...` passes without errors.
+2. `cd web && npx tsc --noEmit` passes with zero type errors.
+3. Every new route or endpoint is recorded in `docs/API.md` and `.agents/rules/source-registry.md`.

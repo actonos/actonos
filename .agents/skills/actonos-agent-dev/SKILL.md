@@ -1,215 +1,115 @@
 ---
 name: actonos-agent-dev
-description: "Skill for developing AI agent engine components in internal/agent/. Covers the ReAct loop, swarm delegation, planning, verification, and memory reflection."
+description: "Skill for developing AI agent engine components in internal/agent/. Covers the ReAct loop, swarm delegation, planning, verification, memory reflection, and cron automation."
 ---
 
 # ActonOS Agent Development Skill
 
-Use this skill when developing components in the `internal/agent/` package — the core AI engine that powers all user-created agents.
+Use this skill when developing components in the `internal/agent/` package — the core AI engine powering autonomous execution, reasoning, multi-agent swarms, and scheduled automations.
 
-## Package Overview
+---
+
+## 1. Package Overview
 
 ```
 internal/agent/
-├── engine.go       # POMDP & ReAct state machine (main orchestration loop)
-├── manager.go      # Agent CRUD — create, read, update, delete agent manifests
-├── swarm.go        # Multi-agent swarm delegation via Goroutines
-├── planner.go      # Task decomposition and planning (Tree-of-Thoughts, LATS)
-├── verifier.go     # Deterministic static analysis (AST, invariant, schema)
-├── reflection.go   # Background fact extraction and learning (async goroutine)
-├── profile.go      # User persona management and dynamic preferences
-├── heartbeat.go    # Proactive task daemon (cron-scheduled agent actions)
-├── context.go      # Context window management and token pruning
-└── types.go        # Shared types, interfaces, and constants
+├── engine.go            # POMDP & ReAct execution loop with streaming SSE events
+├── manager.go           # Agent CRUD & persistence (AgentManifest stored in SQLite/JSON)
+├── cron_scheduler.go    # Scheduled autonomous task engine (cron expressions & triggers)
+├── swarm.go             # Multi-agent swarm delegation via Goroutines & channels
+├── planner.go           # Dynamic task decomposition & multi-path tree search (LATS)
+├── verifier.go          # Two-tier deterministic static analysis & semantic verification
+├── reflection.go        # Async background learning, fact extraction, and memory update
+├── profile.go           # User persona, profile management, dynamic SOUL.md & MEMORY.md
+├── heartbeat.go         # Proactive heartbeat daemon triggering periodic checks
+├── context.go           # Context window management, message sliding, and token pruning
+├── types.go             # Manifests, delegation scopes, stream events, audit log types
+└── *_test.go            # Unit & integration test suites for all agent capabilities
 ```
 
-## Core Concepts
+---
 
-### Agent Manifest (types.go)
+## 2. Core Structs & Data Contracts (`types.go`)
 
-Every agent is defined by a manifest:
-
+### Agent Manifest
 ```go
 type AgentManifest struct {
-    AgentID           string          `json:"agent_id"`
-    Name              string          `json:"name"`
-    Description       string          `json:"description"`
-    AvatarIcon        string          `json:"avatar_icon"`
-    ModelConfig       ModelConfig     `json:"model_config"`
-    SystemInstructions string         `json:"system_instructions"`
-    AuthorizedTools   []string        `json:"authorized_tools"`
-    DelegationScope   DelegationScope `json:"delegation_scope"`
-    TriggerRules      []TriggerRule   `json:"trigger_rules"`
+    AgentID             string           `json:"agent_id"`
+    Name                string           `json:"name"`
+    Description         string           `json:"description"`
+    AvatarIcon          string           `json:"avatar_icon"`
+    Status              AgentStatus      `json:"status"` // "active", "stopped", "error"
+    IsSystem            bool             `json:"is_system,omitempty"`
+    ModelConfig         llm.ModelConfig  `json:"model_config"`
+    SystemInstructions string           `json:"system_instructions"`
+    AuthorizedTools     []string         `json:"authorized_tools"`
+    ListenChannels      []string         `json:"listen_channels"` // ["*"] for all, or specific ["telegram"]
+    DelegationScope     DelegationScope  `json:"delegation_scope"`
+    TriggerRules        []TriggerRule    `json:"trigger_rules"`
+    CreatedAt           time.Time        `json:"created_at"`
+    UpdatedAt           time.Time        `json:"updated_at"`
 }
+```
 
-type ModelConfig struct {
-    PrimaryModel  string  `json:"primary_model"`
-    FallbackModel string  `json:"fallback_model"`
-    Temperature   float64 `json:"temperature"`
-}
-
+### Delegation Scope & Approval Levels
+```go
 type DelegationScope struct {
-    MaxMonthlyBudgetUSD     float64  `json:"max_monthly_budget_usd"`
-    AllowedWorkspacePaths   []string `json:"allowed_workspace_paths"`
-    RequireHumanApproval    string   `json:"require_human_approval_level"` // Low, Medium, High
+    MaxMonthlyBudgetUSD     float64       `json:"max_monthly_budget_usd"`
+    AllowedWorkspacePaths   []string      `json:"allowed_workspace_paths"`
+    RequireHumanApproval    ApprovalLevel `json:"require_human_approval_level"` // "Low", "Medium", "High"
 }
 ```
 
-### ReAct Loop (engine.go)
+### Streaming Events (`AgentStreamEvent`)
+The agent engine emits structured stream events:
+- `thought`: Internal reasoning chain (ReAct)
+- `token`: Streamed text content chunks
+- `tool_call`: Invocation of an authorized tool
+- `tool_result`: Output payload returned by tool execution
+- `audit`: Security/governance log entry
+- `done`: Completion of execution step
+- `error`: Execution failure details
 
-The main agent execution loop follows the ReAct (Reasoning + Acting) pattern:
+---
 
-```
-User Message → Entropy Check → [Greedy 1-Step | Tree Search] → Tool Calls → Verification → Response
-```
+## 3. Cognitive Subsystems
 
-Key decision point (Uncertainty-Gated):
-- **Low entropy (H < θ)**: Greedy ReAct — single-step execution for ultra-low latency
-- **High entropy (H ≥ θ)**: Tree-of-Thoughts / LATS — multi-path search with reward function
+### A. ReAct Reasoning Loop (`engine.go`)
+1. **Entropy Check**: Evaluates uncertainty $H(p)$. Low entropy $\rightarrow$ 1-step Greedy ReAct; High entropy $\rightarrow$ Tree-of-Thoughts exploration.
+2. **Tool Invocation**: Validates tool against `agent.AuthorizedTools` and executes inside isolated sandbox or MCP host.
+3. **Verification**: Passes candidate output through `verifier.go` (AST checks + policy guards) before returning to user.
 
-### Swarm Delegation (swarm.go)
+### B. Dynamic Soul & Memory Files (`profile.go`)
+- **`SOUL.md`**: Dedicated per-agent identity and instructions.
+- **`MEMORY.md`**: Persisted long-term reflections and episodic summaries, auto-updated by `reflection.go`.
 
-Orchestration agents decompose complex tasks and dispatch to sub-agents:
-
+### C. Swarm Delegation (`swarm.go`)
+Parent agents can spawn asynchronous sub-agents with constrained budgets and scoped tool access:
 ```go
-type SwarmManager struct {
-    agentManager *AgentManager
-    bus          *bus.EventBus
-}
-
-// SpawnSubAgent creates a sub-agent goroutine for a specific sub-task
-func (s *SwarmManager) SpawnSubAgent(ctx context.Context, parentID string, task SubTask) (<-chan SubTaskResult, error) {
-    // 1. Find or create the specialized sub-agent
-    // 2. Launch in a new goroutine
-    // 3. Return result channel
-}
+func (s *SwarmManager) SpawnSubAgent(ctx context.Context, parentID string, task SubTask) (<-chan SubTaskResult, error)
 ```
 
-### Verification (verifier.go)
+### D. Scheduled Automations (`cron_scheduler.go`)
+Manages cron expressions (e.g. `0 9 * * *`), dispatches autonomous prompt triggers, and records run logs.
 
-Two-tier verification system:
+---
 
-**Tier 1 — Static Analysis (Pure Go, ~0ms):**
-- AST parsing for Shell, Python, JSON, SQL
-- Path escape detection (must stay within `/workspace`)
-- JSON schema validation
-- Blocks immediately on violation
+## 4. Key Dependencies
 
-**Tier 2 — Semantic Verification:**
-- Content consistency against user profile
-- Activated for language-logic tasks
-
-### Memory Reflection (reflection.go)
-
-Background goroutine that:
-1. Analyzes completed conversations
-2. Extracts facts, preferences, and patterns
-3. Updates User Profile Memory and Procedural Memory
-4. Runs asynchronously to avoid blocking the main loop
-
-## Development Guidelines
-
-### Adding a New Agent Capability
-
-1. Define the interface in `types.go`
-2. Implement in a new or existing file
-3. Wire it into `engine.go`'s ReAct loop
-4. Add unit tests with table-driven patterns
-5. Update `docs/ARCHITECTURE.md`
-
-### Working with the Event Bus
-
-Agents communicate through `internal/bus/`:
-
-```go
-// Publishing an event
-s.bus.Publish(bus.Event{
-    Type:    bus.EventToolResult,
-    AgentID: agentID,
-    Payload: result,
-})
-
-// Subscribing to events
-ch := s.bus.Subscribe(bus.EventUserMessage)
-for event := range ch {
-    // Handle incoming message
-}
-```
-
-### Error Handling Pattern
-
-```go
-func (e *Engine) ExecuteStep(ctx context.Context, agentID string, msg Message) (*Response, error) {
-    agent, err := e.manager.Get(ctx, agentID)
-    if err != nil {
-        return nil, fmt.Errorf("getting agent %s: %w", agentID, err)
-    }
-
-    // ... execute step ...
-
-    if err := e.verifier.Check(ctx, response); err != nil {
-        slog.Warn("verification failed, retrying",
-            "agent_id", agentID,
-            "error", err,
-        )
-        return e.retry(ctx, agent, msg, err)
-    }
-
-    return response, nil
-}
-```
-
-### Testing Agent Components
-
-```go
-func TestEngine_ExecuteStep(t *testing.T) {
-    tests := []struct {
-        name        string
-        message     Message
-        mockLLM     *MockLLMProvider
-        wantErr     bool
-        wantTools   []string
-    }{
-        {
-            name:    "simple_greeting",
-            message: Message{Content: "Hello"},
-            mockLLM: NewMockLLM(Response{Content: "Hi there!"}),
-        },
-        {
-            name:    "tool_call_triggered",
-            message: Message{Content: "Search for ActonOS docs"},
-            mockLLM: NewMockLLM(Response{ToolCalls: []ToolCall{{Name: "web_fetch"}}}),
-            wantTools: []string{"web_fetch"},
-        },
-    }
-
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            engine := NewEngine(tt.mockLLM, NewTestVerifier(), NewTestMemory())
-            resp, err := engine.ExecuteStep(context.Background(), "test-agent", tt.message)
-            if (err != nil) != tt.wantErr {
-                t.Fatalf("ExecuteStep() error = %v, wantErr %v", err, tt.wantErr)
-            }
-            if resp != nil && len(tt.wantTools) > 0 {
-                // verify tool calls
-            }
-        })
-    }
-}
-```
-
-## Key Dependencies
-
-| Package | Import Path | Purpose |
+| Subsystem | Package | Integration Purpose |
 |:---|:---|:---|
-| Event Bus | `internal/bus` | Inter-component messaging |
-| LLM Router | `internal/llm` | LLM provider abstraction |
-| Tools | `internal/tools` | Tool registry and execution |
-| Memory | `internal/memory` | Hybrid RAG and vault |
-| Sandbox | `internal/sandbox` | Command execution isolation |
+| **Event Bus** | `internal/bus` | Decoupled event publishing (`bus.EventAgentMessage`, etc.) |
+| **LLM Router** | `internal/llm` | Multi-model cascade and failover provider routing |
+| **Memory Engine** | `internal/memory` | Hybrid RAG, vector retrieval, and FTS5 decay search |
+| **Channels** | `internal/channels` | Multi-channel ingress and response dispatch |
+| **Tools Hub** | `internal/tools` | Native tools, MCP clients, and WASM runner |
+| **Auth** | `internal/auth` | User profile encryption and token lifecycle |
 
-## Reference Files
+---
 
-- [docs/ARCHITECTURE.md](../../../docs/ARCHITECTURE.md) — Full architecture spec
-- [internal/bus/eventbus.go](../../../internal/bus/eventbus.go) — Event bus implementation
-- [internal/llm/provider.go](../../../internal/llm/provider.go) — LLM provider interface
+## 5. Development & Testing Rules
+
+1. Always add table-driven tests in `*_test.go`.
+2. Wrap all error returns with context: `fmt.Errorf("agent %s step failed: %w", agentID, err)`.
+3. Keep Goroutines governed by `context.Context` cancellation.
+4. When modifying `AgentManifest` or `DelegationScope`, update `web/src/lib/types.ts` immediately.
