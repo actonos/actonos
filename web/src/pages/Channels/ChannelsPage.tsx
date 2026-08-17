@@ -1,42 +1,62 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
-import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { useToast } from '@/components/ui/Toast';
 import {
-  Send,
-  Phone,
-  Bot,
-  Sliders,
-  ShieldCheck,
-  Key,
-  Trash2,
   RefreshCw,
-  Copy,
-  Check,
-  Plus,
-  X,
+  Search,
+  Radio,
+  Users,
+  Sliders,
+  Send,
+  Save,
 } from 'lucide-react';
 import { api, type ChannelAuthorizationItem } from '@/lib/api';
-import type { ChannelAccount } from '@/lib/types';
+import type { ChannelAccount, ChannelDefinition } from '@/lib/types';
+import { ChannelCard } from './components/ChannelCard';
+import { ChannelAccountModal } from './components/ChannelAccountModal';
+import { PairingSection } from './components/PairingSection';
+import { WebhookCard } from './components/WebhookCard';
 
-interface ChannelType {
-  id: string;
-  nameKey: string;
-  descKey: string;
-  icon: React.ElementType;
-  hasPhoneId?: boolean;
-}
-
-const CHANNEL_TYPES: ChannelType[] = [
-  { id: 'telegram', nameKey: 'telegram.name', descKey: 'telegram.desc', icon: Send },
-  { id: 'whatsapp', nameKey: 'whatsapp.name', descKey: 'whatsapp.desc', icon: Phone, hasPhoneId: true },
-  { id: 'discord', nameKey: 'discord.name', descKey: 'discord.desc', icon: Bot },
+// Catalog of available & upcoming chat channels
+const CHANNEL_DEFINITIONS: ChannelDefinition[] = [
+  {
+    id: 'telegram',
+    nameKey: 'telegram.name',
+    descKey: 'telegram.desc',
+    category: 'messaging',
+    capabilities: ['Direct Messages', 'Group Chats', 'Voice Notes', 'Slash Commands'],
+    docsUrl: 'https://core.telegram.org/bots',
+  },
+  {
+    id: 'whatsapp',
+    nameKey: 'whatsapp.name',
+    descKey: 'whatsapp.desc',
+    category: 'messaging',
+    capabilities: ['Direct Messages', 'Media Attachments', 'Template Messaging'],
+    hasPhoneId: true,
+    docsUrl: 'https://developers.facebook.com/docs/whatsapp/cloud-api',
+  },
+  {
+    id: 'discord',
+    nameKey: 'discord.name',
+    descKey: 'discord.desc',
+    category: 'community',
+    capabilities: ['Server Guilds', 'Channel Mentions', 'Thread Replies', 'Slash Commands'],
+    docsUrl: 'https://discord.com/developers/docs/intro',
+  },
+  {
+    id: 'slack',
+    nameKey: 'slack.name',
+    descKey: 'slack.desc',
+    category: 'enterprise',
+    capabilities: ['Workspaces', 'Channel Mentions', 'Direct Messages'],
+    docsUrl: 'https://api.slack.com/bot-users',
+    isComingSoon: true,
+  },
 ];
 
 export function ChannelsPage() {
@@ -48,25 +68,30 @@ export function ChannelsPage() {
     telegram: [],
     discord: [],
     whatsapp: [],
+    slack: [],
   });
   const [webhookSecret, setWebhookSecret] = useState('acton_sec_89fa2bc4d1');
-  const [copiedWH, setCopiedWH] = useState(false);
-  const [copiedSecret, setCopiedSecret] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // New account form
-  const [addingChannel, setAddingChannel] = useState<string | null>(null);
-  const [newLabel, setNewLabel] = useState('');
-  const [newToken, setNewToken] = useState('');
-  const [newPhoneId, setNewPhoneId] = useState('');
+  // Filter & Search state
+  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'pairing' | 'webhook'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Account Management Modal state
+  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
+  const [modalMode, setModalMode] = useState<'manage' | 'add'>('manage');
 
   // Pairing state
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [pairingChannel, setPairingChannel] = useState<'telegram' | 'whatsapp'>('telegram');
   const [authorizations, setAuthorizations] = useState<ChannelAuthorizationItem[]>([]);
   const [generatingCode, setGeneratingCode] = useState(false);
-  const [revokingUser, setRevokingUser] = useState<{ channel_id: string; sender_id: string } | null>(null);
+  const [revokingUser, setRevokingUser] = useState<{
+    channel_id: string;
+    sender_id: string;
+    sender_name?: string;
+  } | null>(null);
 
   const loadData = async () => {
     try {
@@ -80,6 +105,7 @@ export function ChannelsPage() {
           telegram: chanRes.telegram || [],
           discord: chanRes.discord || [],
           whatsapp: chanRes.whatsapp || [],
+          slack: (chanRes as any).slack || [],
         });
         if (chanRes.webhook_secret) setWebhookSecret(chanRes.webhook_secret);
       }
@@ -95,15 +121,10 @@ export function ChannelsPage() {
     loadData();
   }, []);
 
-  const handleAddAccount = (channelId: string) => {
-    if (!newToken.trim()) return;
-
+  const handleAddAccount = (channelId: string, accountData: Omit<ChannelAccount, 'id'>) => {
     const account: ChannelAccount = {
+      ...accountData,
       id: `${channelId}_${Date.now()}`,
-      label: newLabel.trim() || 'New Account',
-      token: newToken.trim(),
-      phone_id: newPhoneId.trim() || undefined,
-      enabled: true,
     };
 
     setChannelAccounts((prev) => ({
@@ -111,10 +132,7 @@ export function ChannelsPage() {
       [channelId]: [...(prev[channelId] || []), account],
     }));
 
-    setAddingChannel(null);
-    setNewLabel('');
-    setNewToken('');
-    setNewPhoneId('');
+    success(t('addAccount', 'Account Added'), `${account.label} added to ${channelId}. Remember to click Save.`);
   };
 
   const handleRemoveAccount = (channelId: string, accountId: string) => {
@@ -142,7 +160,7 @@ export function ChannelsPage() {
         whatsapp_accounts: channelAccounts.whatsapp,
         webhook_secret: webhookSecret,
       });
-      success(t('saveAll', 'Saved'), 'Channel configuration updated.');
+      success(t('saveAll', 'Saved'), 'Channel configuration stored in encrypted vault.');
       loadData();
     } catch (err: any) {
       error('Failed to save channels', err.message);
@@ -168,27 +186,47 @@ export function ChannelsPage() {
   const handleConfirmRevoke = async () => {
     if (!revokingUser) return;
     try {
-      await api.revokeAuthorization(revokingUser);
-      success(t('pairing.revoke', 'Revoked'), `User ${revokingUser.sender_id} removed.`);
+      await api.revokeAuthorization({
+        channel_id: revokingUser.channel_id,
+        sender_id: revokingUser.sender_id,
+      });
+      success(t('pairing.revoke', 'Revoked'), `User ${revokingUser.sender_name || revokingUser.sender_id} removed.`);
       setRevokingUser(null);
       loadData();
     } catch (err: any) {
-      error('Failed to revoke', err.message);
+      error('Failed to revoke authorization', err.message);
     }
   };
 
-  const copyToClipboard = (text: string, type: 'url' | 'secret' | 'pin') => {
-    navigator.clipboard.writeText(text);
-    if (type === 'url') {
-      setCopiedWH(true);
-      setTimeout(() => setCopiedWH(false), 2000);
-    } else if (type === 'secret') {
-      setCopiedSecret(true);
-      setTimeout(() => setCopiedSecret(false), 2000);
-    }
-    success('Copied', 'Copied to clipboard.');
-  };
+  // Metrics calculation
+  const totalAccounts = Object.values(channelAccounts).reduce(
+    (sum, accs) => sum + accs.length,
+    0
+  );
+  const activeChannelsCount = Object.values(channelAccounts).filter((accs) =>
+    accs.some((a) => a.enabled)
+  ).length;
 
+  const filteredChannels = useMemo(() => {
+    return CHANNEL_DEFINITIONS.filter((ch) => {
+      const accs = channelAccounts[ch.id] || [];
+      const hasActive = accs.some((a) => a.enabled);
+
+      if (activeTab === 'active' && !hasActive) return false;
+
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchesName = ch.id.toLowerCase().includes(q) || t(ch.nameKey).toLowerCase().includes(q);
+        const matchesDesc = t(ch.descKey).toLowerCase().includes(q);
+        const matchesCap = ch.capabilities.some((c) => c.toLowerCase().includes(q));
+        if (!matchesName && !matchesDesc && !matchesCap) return false;
+      }
+
+      return true;
+    });
+  }, [channelAccounts, activeTab, searchQuery, t]);
+
+  const selectedChannelDef = CHANNEL_DEFINITIONS.find((c) => c.id === selectedChannelId) || null;
   const webhookEndpoint = `${window.location.origin}/api/webhooks/inbound`;
 
   return (
@@ -196,298 +234,243 @@ export function ChannelsPage() {
       <BlobBackdrop />
 
       <PageContainer>
-        {/* Header */}
+        {/* Top Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div className="flex-1">
             <span className="text-caption uppercase tracking-wider text-slate font-semibold block mb-1">
-              {t('eyebrow', 'Channels')}
+              {t('eyebrow', 'Channels & Gateways')}
             </span>
-            <h1 className="font-serif text-heading-lg text-deep-ink tracking-tight">
-              {t('title', 'Chat Channels')}
+            <h1 className="font-serif text-heading-lg text-deep-ink tracking-tight flex items-center gap-3">
+              <span>{t('title', 'Chat Channels')}</span>
             </h1>
             <p className="font-sans text-body text-slate mt-1 max-w-2xl">
-              {t('subtitle', 'Connect Telegram, Discord, WhatsApp to receive and reply messages automatically.')}
+              {t(
+                'subtitle',
+                'Connect Telegram, Discord, WhatsApp, and Webhooks to receive and reply messages automatically.'
+              )}
             </p>
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-center">
-            <Button variant="ghost" size="sm" icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />} onClick={loadData}>
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />}
+              onClick={loadData}
+            >
               {t('actions.refresh', 'Refresh')}
             </Button>
-            <Button variant="primary" size="sm" onClick={handleSaveAll} disabled={saving}>
-              {saving ? '...' : t('saveAll', 'Save')}
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Save className="w-3.5 h-3.5" />}
+              onClick={handleSaveAll}
+              disabled={saving}
+            >
+              {saving ? '...' : t('saveAll', 'Save Changes')}
             </Button>
           </div>
         </div>
 
-        {/* Channel Cards Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
-          {CHANNEL_TYPES.map((ch) => {
-            const Icon = ch.icon;
-            const accounts = channelAccounts[ch.id] || [];
-            const activeCount = accounts.filter((a) => a.enabled).length;
-
-            return (
-              <Card key={ch.id} className="p-6 border border-onyx/10 bg-canvas/90">
-                {/* Channel Header */}
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-full bg-deep-ink text-hi-yellow flex items-center justify-center">
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <span className="font-semibold text-body-sm text-deep-ink block">
-                        {t(ch.nameKey)}
-                      </span>
-                      <span className="text-caption text-slate">{t(ch.descKey)}</span>
-                    </div>
-                  </div>
-                  <Badge variant={activeCount > 0 ? 'active' : 'stopped'}>
-                    {activeCount > 0 ? `${activeCount} ${t('status.active', 'Active')}` : t('status.offline', 'Offline')}
-                  </Badge>
-                </div>
-
-                {/* Accounts List */}
-                {accounts.length > 0 && (
-                  <div className="space-y-2 mb-4">
-                    {accounts.map((acc) => (
-                      <div
-                        key={acc.id}
-                        className={`p-3 rounded-2xl border transition-all flex items-center justify-between ${
-                          acc.enabled ? 'bg-soft-meadow border-onyx/10' : 'bg-canvas/50 border-onyx/5 opacity-60'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <button
-                            onClick={() => handleToggleAccount(ch.id, acc.id)}
-                            className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
-                              acc.enabled ? 'bg-emerald-500 border-emerald-500 text-white' : 'bg-canvas border-onyx/20'
-                            }`}
-                          >
-                            {acc.enabled && <Check className="w-3 h-3" />}
-                          </button>
-                          <div className="min-w-0">
-                            <span className="text-body-sm font-medium text-deep-ink block truncate">
-                              {acc.label}
-                            </span>
-                            <span className="text-caption font-mono text-slate truncate block">
-                              {acc.token || '••••••'}
-                              {acc.phone_id ? ` • ${acc.phone_id}` : ''}
-                            </span>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => handleRemoveAccount(ch.id, acc.id)}
-                          className="p-1.5 rounded-full hover:bg-red-50 text-slate hover:text-red-600 transition-colors shrink-0 cursor-pointer"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Add Account Form */}
-                {addingChannel === ch.id ? (
-                  <div className="space-y-2 p-3 rounded-2xl bg-soft-meadow border border-onyx/10">
-                    <Input
-                      placeholder={t('accounts.label', 'Account Label')}
-                      value={newLabel}
-                      onChange={(e) => setNewLabel(e.target.value)}
-                    />
-                    <Input
-                      type="password"
-                      placeholder={t('accounts.token', 'Bot Token')}
-                      value={newToken}
-                      onChange={(e) => setNewToken(e.target.value)}
-                    />
-                    {ch.hasPhoneId && (
-                      <Input
-                        placeholder={t('accounts.phoneId', 'Phone Number ID')}
-                        value={newPhoneId}
-                        onChange={(e) => setNewPhoneId(e.target.value)}
-                      />
-                    )}
-                    <div className="flex items-center gap-2">
-                      <Button variant="primary" size="sm" onClick={() => handleAddAccount(ch.id)}>
-                        {t('addAccount', 'Add')}
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setAddingChannel(null)}>
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon={<Plus className="w-3.5 h-3.5" />}
-                    onClick={() => {
-                      setAddingChannel(ch.id);
-                      setNewLabel('');
-                      setNewToken('');
-                      setNewPhoneId('');
-                    }}
-                    className="w-full justify-center"
-                  >
-                    {t('addAccount', 'Add Account')}
-                  </Button>
-                )}
-              </Card>
-            );
-          })}
-
-          {/* Generic Webhook Card */}
-          <Card className="p-6 border border-onyx/10 bg-canvas/90">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-full bg-deep-ink text-hi-yellow flex items-center justify-center">
-                  <Sliders className="w-4 h-4" />
-                </div>
-                <div>
-                  <span className="font-semibold text-body-sm text-deep-ink block">{t('webhook.name', 'Webhook')}</span>
-                  <span className="text-caption text-slate">{t('webhook.desc')}</span>
-                </div>
-              </div>
-              <Badge variant="active">{t('status.listening', 'Listening')}</Badge>
+        {/* Quick Stats Strip */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <div className="p-4 rounded-2xl bg-canvas/90 border border-onyx/10 flex items-center gap-3 shadow-xs">
+            <div className="w-10 h-10 rounded-full bg-soft-meadow border border-onyx/10 flex items-center justify-center text-deep-ink">
+              <Radio className="w-4 h-4 text-emerald-600" />
             </div>
-            <div className="space-y-2">
-              <div className="p-2 bg-soft-meadow rounded-[10px] border border-onyx/10 flex items-center justify-between text-caption font-mono text-deep-ink">
-                <span className="truncate max-w-[240px]">{webhookEndpoint}</span>
-                <button onClick={() => copyToClipboard(webhookEndpoint, 'url')} className="p-1 hover:text-slate cursor-pointer">
-                  {copiedWH ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                </button>
-              </div>
-              <div className="p-2 bg-soft-meadow rounded-[10px] border border-onyx/10 flex items-center justify-between text-caption font-mono text-deep-ink">
-                <span className="truncate">Secret: {webhookSecret}</span>
-                <button onClick={() => copyToClipboard(webhookSecret, 'secret')} className="p-1 hover:text-slate cursor-pointer">
-                  {copiedSecret ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                </button>
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        {/* Pairing & Whitelist Section */}
-        <div className="mb-10">
-          <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="font-serif text-heading-sm text-deep-ink flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-emerald-600" />
-                <span>{t('pairing.title', 'User Pairing')}</span>
-              </h2>
-              <p className="font-sans text-caption text-slate mt-0.5">
-                {t('pairing.subtitle', 'Generate a 6-digit PIN to authenticate new chat users.')}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={loadData}>
-                Refresh
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                icon={<Key className="w-3.5 h-3.5" />}
-                onClick={() => handleGeneratePairingCode('telegram')}
-                disabled={generatingCode}
-              >
-                {t('pairing.generate', 'Generate PIN')}
-              </Button>
+              <span className="text-caption text-slate block">{t('stats.activeChannels', 'Active Channels')}</span>
+              <span className="text-heading-sm font-serif font-bold text-deep-ink">
+                {activeChannelsCount} / {CHANNEL_DEFINITIONS.length}
+              </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* PIN Card */}
-            {pairingCode ? (
-              <Card className="p-6 border-2 border-emerald-500/40 bg-emerald-500/5 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-caption font-semibold uppercase tracking-wider text-emerald-700">
-                      {t('pairing.activeCode', 'Active PIN')} ({pairingChannel})
-                    </span>
-                    <Badge variant="active">10m</Badge>
-                  </div>
-                  <div className="my-4 text-center">
-                    <span className="font-mono text-heading-lg font-bold tracking-widest text-deep-ink bg-canvas px-6 py-2.5 rounded-xl border border-onyx/10 shadow-xs inline-block">
-                      {pairingCode}
-                    </span>
-                  </div>
-                  <p className="font-sans text-caption text-slate text-center">
-                    {t('pairing.instructions')}
-                  </p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => copyToClipboard(pairingCode, 'pin')}
-                  className="w-full mt-4 justify-center"
-                >
-                  Copy
-                </Button>
-              </Card>
-            ) : (
-              <Card className="p-6 border border-onyx/10 bg-canvas/60 flex flex-col items-center justify-center text-center">
-                <Key className="w-8 h-8 text-slate mb-2" />
-                <p className="font-sans text-caption text-slate mb-3">
-                  {t('pairing.empty', 'No active PIN.')}
-                </p>
-                <Button variant="ghost" size="sm" onClick={() => handleGeneratePairingCode('telegram')}>
-                  {t('pairing.generate', 'Generate PIN')}
-                </Button>
-              </Card>
-            )}
+          <div className="p-4 rounded-2xl bg-canvas/90 border border-onyx/10 flex items-center gap-3 shadow-xs">
+            <div className="w-10 h-10 rounded-full bg-soft-meadow border border-onyx/10 flex items-center justify-center text-deep-ink">
+              <Send className="w-4 h-4 text-deep-ink" />
+            </div>
+            <div>
+              <span className="text-caption text-slate block">{t('stats.connectedBots', 'Connected Bots')}</span>
+              <span className="text-heading-sm font-serif font-bold text-deep-ink">
+                {totalAccounts}
+              </span>
+            </div>
+          </div>
 
-            {/* Authorized Users List */}
-            <Card className="lg:col-span-2 p-6 border border-onyx/10 bg-canvas/90">
-              <h3 className="font-serif text-body text-deep-ink font-semibold mb-3">
-                {t('pairing.whitelist', 'Authorized Users')} ({authorizations.length})
-              </h3>
-              {authorizations.length === 0 ? (
-                <div className="py-8 text-center text-caption text-slate font-sans">
-                  {t('pairing.empty', 'No users paired yet.')}
-                </div>
-              ) : (
-                <div className="divide-y divide-onyx/5 max-h-48 overflow-y-auto">
-                  {authorizations.map((u) => (
-                    <div key={`${u.channel_id}:${u.sender_id}`} className="py-2.5 flex items-center justify-between text-body-sm">
-                      <div className="flex items-center gap-3">
-                        <Badge variant="active" className="uppercase text-caption font-mono">
-                          {u.channel_id}
-                        </Badge>
-                        <div>
-                          <div className="font-semibold text-deep-ink">{u.sender_name || u.sender_id}</div>
-                          <div className="text-caption font-mono text-slate">
-                            ID: {u.sender_id} • {new Date(u.paired_at).toLocaleDateString()}
-                          </div>
-                        </div>
-                      </div>
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        icon={<Trash2 className="w-3.5 h-3.5" />}
-                        onClick={() => setRevokingUser({ channel_id: u.channel_id, sender_id: u.sender_id })}
-                      >
-                        {t('pairing.revoke', 'Revoke')}
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Card>
+          <div className="p-4 rounded-2xl bg-canvas/90 border border-onyx/10 flex items-center gap-3 shadow-xs">
+            <div className="w-10 h-10 rounded-full bg-soft-meadow border border-onyx/10 flex items-center justify-center text-deep-ink">
+              <Users className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div>
+              <span className="text-caption text-slate block">{t('stats.pairedUsers', 'Paired Users')}</span>
+              <span className="text-heading-sm font-serif font-bold text-deep-ink">
+                {authorizations.length}
+              </span>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-canvas/90 border border-onyx/10 flex items-center gap-3 shadow-xs">
+            <div className="w-10 h-10 rounded-full bg-soft-meadow border border-onyx/10 flex items-center justify-center text-deep-ink">
+              <Sliders className="w-4 h-4 text-deep-ink" />
+            </div>
+            <div>
+              <span className="text-caption text-slate block">{t('stats.webhookGateway', 'Webhook Gateway')}</span>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className="text-body-sm font-semibold text-deep-ink">Active</span>
+              </div>
+            </div>
           </div>
         </div>
-      </PageContainer>
 
-      {/* Revoke Confirmation Modal */}
-      <ConfirmModal
-        isOpen={!!revokingUser}
-        onClose={() => setRevokingUser(null)}
-        onConfirm={handleConfirmRevoke}
-        title={t('pairing.revoke', 'Revoke Access')}
-        description={`Remove user ${revokingUser?.sender_id} from ${revokingUser?.channel_id}?`}
-        confirmLabel={t('pairing.revoke', 'Revoke')}
-        variant="danger"
-      />
+        {/* View Tabs & Filter Bar */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+          <div className="flex items-center gap-1.5 bg-soft-meadow p-1 rounded-full border border-onyx/10 shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveTab('all')}
+              className={`px-4 py-1.5 rounded-full text-caption font-sans font-semibold transition-all cursor-pointer ${
+                activeTab === 'all'
+                  ? 'bg-deep-ink text-white shadow-xs'
+                  : 'text-deep-ink hover:text-slate'
+              }`}
+            >
+              {t('tabs.all', 'All Channels')} ({CHANNEL_DEFINITIONS.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('active')}
+              className={`px-4 py-1.5 rounded-full text-caption font-sans font-semibold transition-all cursor-pointer ${
+                activeTab === 'active'
+                  ? 'bg-deep-ink text-white shadow-xs'
+                  : 'text-deep-ink hover:text-slate'
+              }`}
+            >
+              {t('tabs.active', 'Active')} ({activeChannelsCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('pairing')}
+              className={`px-4 py-1.5 rounded-full text-caption font-sans font-semibold transition-all cursor-pointer ${
+                activeTab === 'pairing'
+                  ? 'bg-deep-ink text-white shadow-xs'
+                  : 'text-deep-ink hover:text-slate'
+              }`}
+            >
+              {t('tabs.pairing', 'Pairing & Whitelist')} ({authorizations.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('webhook')}
+              className={`px-4 py-1.5 rounded-full text-caption font-sans font-semibold transition-all cursor-pointer ${
+                activeTab === 'webhook'
+                  ? 'bg-deep-ink text-white shadow-xs'
+                  : 'text-deep-ink hover:text-slate'
+              }`}
+            >
+              {t('tabs.webhook', 'Webhook Gateway')}
+            </button>
+          </div>
+
+          {activeTab !== 'pairing' && activeTab !== 'webhook' && (
+            <div className="relative w-full md:w-72">
+              <Search className="w-3.5 h-3.5 text-slate absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder={t('actions.searchChannels', 'Search channels or capabilities...')}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 text-caption bg-canvas rounded-full border border-onyx/10 focus:outline-none focus:border-onyx/30 shadow-xs"
+              />
+            </div>
+          )}
+        </div>
+
+        {/* TAB CONTENT: Channels Grid */}
+        {(activeTab === 'all' || activeTab === 'active') && (
+          <div className="space-y-6 mb-12">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
+              {filteredChannels.map((ch) => (
+                <ChannelCard
+                  key={ch.id}
+                  channel={ch}
+                  accounts={channelAccounts[ch.id] || []}
+                  onOpenManage={(id) => {
+                    setSelectedChannelId(id);
+                    setModalMode('manage');
+                  }}
+                  onQuickToggle={handleToggleAccount}
+                  onOpenAdd={(id) => {
+                    setSelectedChannelId(id);
+                    setModalMode('add');
+                  }}
+                />
+              ))}
+            </div>
+
+            {/* Inbound Webhook Card Banner */}
+            <div className="mt-8">
+              <WebhookCard
+                webhookSecret={webhookSecret}
+                webhookEndpoint={webhookEndpoint}
+                onCopySuccess={(msg) => success('Copied', msg)}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* TAB CONTENT: Pairing & Whitelist Dedicated View */}
+        {activeTab === 'pairing' && (
+          <div className="mb-12">
+            <PairingSection
+              pairingCode={pairingCode}
+              pairingChannel={pairingChannel}
+              authorizations={authorizations}
+              generatingCode={generatingCode}
+              onGenerateCode={handleGeneratePairingCode}
+              onRevokeUser={(item) => setRevokingUser(item)}
+              onRefresh={loadData}
+            />
+          </div>
+        )}
+
+        {/* TAB CONTENT: Webhook Dedicated View */}
+        {activeTab === 'webhook' && (
+          <div className="max-w-3xl mb-12">
+            <WebhookCard
+              webhookSecret={webhookSecret}
+              webhookEndpoint={webhookEndpoint}
+              onCopySuccess={(msg) => success('Copied', msg)}
+            />
+          </div>
+        )}
+
+        {/* Channel Account Modal */}
+        <ChannelAccountModal
+          isOpen={!!selectedChannelId}
+          onClose={() => setSelectedChannelId(null)}
+          channel={selectedChannelDef}
+          accounts={selectedChannelId ? channelAccounts[selectedChannelId] || [] : []}
+          onAddAccount={handleAddAccount}
+          onToggleAccount={handleToggleAccount}
+          onRemoveAccount={handleRemoveAccount}
+          initialMode={modalMode}
+        />
+
+        {/* Revoke Confirmation Modal */}
+        <ConfirmModal
+          isOpen={!!revokingUser}
+          onClose={() => setRevokingUser(null)}
+          onConfirm={handleConfirmRevoke}
+          title={t('pairing.revoke', 'Revoke Access')}
+          description={`Revoke chat authorization for user ${
+            revokingUser?.sender_name || revokingUser?.sender_id
+          } on ${revokingUser?.channel_id}?`}
+          confirmLabel={t('pairing.revoke', 'Revoke Access')}
+          variant="danger"
+        />
+      </PageContainer>
     </div>
   );
 }

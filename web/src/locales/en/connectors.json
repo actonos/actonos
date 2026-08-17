@@ -1,19 +1,45 @@
 {
-  "eyebrow": "Connectors",
+  "eyebrow": "Integrations & SaaS",
   "title": "Service Connectors",
-  "subtitle": "Connect external services like Google, Notion, and GitHub.",
+  "subtitle": "Connect external services like Google, Notion, GitHub, and Slack with OAuth 2.1 or Personal Access Tokens.",
+  "stats": {
+    "active": "Connected Services",
+    "vault": "Hardware Vault",
+    "auth": "OAuth Protocol",
+    "catalog": "Available Services"
+  },
+  "categories": {
+    "all": "All Connectors",
+    "productivity": "Productivity",
+    "development": "Development",
+    "knowledge": "Knowledge & AI",
+    "messaging": "Messaging",
+    "database": "Databases & Storage"
+  },
+  "filter": {
+    "all": "All"
+  },
   "actions": {
     "connect": "Connect",
+    "reauth": "Config",
     "disconnect": "Disconnect",
-    "simulate": "Test Webhook"
+    "test": "Test",
+    "searchConnectors": "Search connectors or scopes..."
   },
   "status": {
     "connected": "Connected",
-    "disconnected": "Disconnected"
+    "disconnected": "Available",
+    "available": "Available",
+    "comingSoon": "Coming Soon"
   },
   "risk": {
     "low": "Low Risk",
     "medium": "Medium Risk",
     "high": "High Risk"
+  },
+  "details": {
+    "account": "Account",
+    "email": "Email",
+    "authMethod": "Method"
   }
 }

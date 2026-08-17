@@ -1,9 +1,21 @@
 {
-  "eyebrow": "Channels",
+  "eyebrow": "Channels & Gateways",
   "title": "Chat Channels",
-  "subtitle": "Connect Telegram, Discord, WhatsApp to receive and reply messages automatically.",
+  "subtitle": "Connect Telegram, Discord, WhatsApp, and Webhooks to receive and reply messages automatically.",
   "addAccount": "Add Account",
-  "saveAll": "Save",
+  "saveAll": "Save Changes",
+  "stats": {
+    "activeChannels": "Active Channels",
+    "connectedBots": "Connected Bots",
+    "pairedUsers": "Paired Users",
+    "webhookGateway": "Webhook Gateway"
+  },
+  "tabs": {
+    "all": "All Channels",
+    "active": "Active",
+    "pairing": "Pairing & Whitelist",
+    "webhook": "Webhook Gateway"
+  },
   "telegram": {
     "name": "Telegram",
     "desc": "Two-way bot. Message directly and receive automatic replies."
@@ -16,31 +28,49 @@
     "name": "Discord",
     "desc": "Listen to messages and @mentions in Discord servers."
   },
+  "slack": {
+    "name": "Slack",
+    "desc": "Integrate directly with Slack workspaces and team channels."
+  },
   "webhook": {
-    "name": "Webhook",
+    "name": "Generic Webhook",
     "desc": "Receive HTTP POST requests from external systems."
   },
   "pairing": {
-    "title": "User Pairing",
+    "title": "User Pairing & Whitelist",
     "subtitle": "Generate a 6-digit PIN to authenticate new chat users.",
     "generate": "Generate PIN",
+    "generateCard": "Security PIN",
     "activeCode": "Active PIN",
     "instructions": "Send this code or /pair <PIN> from your chat app to authorize.",
     "whitelist": "Authorized Users",
     "empty": "No users paired yet. Generate a PIN and send it from your chat.",
-    "revoke": "Revoke"
+    "emptySubtitle": "Once a user sends a valid PIN via chat bot, their identity is stored here in the encrypted enclave.",
+    "revoke": "Revoke Access"
   },
   "status": {
     "active": "Active",
     "offline": "Offline",
-    "listening": "Listening"
+    "listening": "Listening",
+    "paused": "Paused",
+    "notConfigured": "Not Configured",
+    "comingSoon": "Coming Soon"
   },
   "accounts": {
+    "title": "Accounts",
     "label": "Account Label",
     "token": "Bot Token",
     "phoneId": "Phone Number ID",
     "enabled": "Enabled",
     "remove": "Remove",
-    "primary": "Primary"
+    "primary": "Primary",
+    "empty": "No accounts added yet",
+    "emptyHint": "Connect your first bot token to start receiving and processing messages."
+  },
+  "actions": {
+    "refresh": "Refresh",
+    "manage": "Manage",
+    "guide": "Setup Guide",
+    "searchChannels": "Search channels or capabilities..."
   }
 }

@@ -1,19 +1,45 @@
 {
-  "eyebrow": "Kết nối",
-  "title": "Kết nối dịch vụ",
-  "subtitle": "Kết nối các dịch vụ bên ngoài như Google, Notion, GitHub.",
+  "eyebrow": "Tích hợp & Dịch vụ SaaS",
+  "title": "Kết Nối Dịch Vụ",
+  "subtitle": "Kết nối các dịch vụ bên ngoài như Google, Notion, GitHub và Slack thông qua OAuth 2.1 hoặc Personal Access Token.",
+  "stats": {
+    "active": "Dịch vụ đã kết nối",
+    "vault": "Vault phần cứng",
+    "auth": "Giao thức OAuth",
+    "catalog": "Dịch vụ sẵn có"
+  },
+  "categories": {
+    "all": "Tất cả kết nối",
+    "productivity": "Năng suất & Văn phòng",
+    "development": "Phát triển phần mềm",
+    "knowledge": "Tri thức & AI",
+    "messaging": "Tin nhắn & Trao đổi",
+    "database": "Cơ sở dữ liệu & Lưu trữ"
+  },
+  "filter": {
+    "all": "Tất cả"
+  },
   "actions": {
     "connect": "Kết nối",
+    "reauth": "Cấu hình",
     "disconnect": "Ngắt kết nối",
-    "simulate": "Test Webhook"
+    "test": "Kiểm tra",
+    "searchConnectors": "Tìm kiếm kết nối hoặc phạm vi quyền..."
   },
   "status": {
     "connected": "Đã kết nối",
-    "disconnected": "Chưa kết nối"
+    "disconnected": "Sẵn sàng kết nối",
+    "available": "Sẵn sàng",
+    "comingSoon": "Sắp ra mắt"
   },
   "risk": {
     "low": "Rủi ro thấp",
     "medium": "Rủi ro trung bình",
     "high": "Rủi ro cao"
+  },
+  "details": {
+    "account": "Tài khoản",
+    "email": "Email",
+    "authMethod": "Phương thức"
   }
 }

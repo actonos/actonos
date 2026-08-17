@@ -138,3 +138,16 @@ export interface LLMProviderInfo {
   status: 'connected' | 'error' | 'not_configured' | 'configured';
 }
 
+export interface ChannelDefinition {
+  id: string;
+  nameKey: string;
+  descKey: string;
+  category: 'messaging' | 'enterprise' | 'custom' | 'community';
+  capabilities: string[];
+  hasPhoneId?: boolean;
+  docsUrl?: string;
+  isComingSoon?: boolean;
+}
+
+export type ConnectorCategory = 'all' | 'productivity' | 'development' | 'knowledge' | 'messaging' | 'database';
+

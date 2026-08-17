@@ -1,9 +1,21 @@
 {
-  "eyebrow": "Kênh chat",
+  "eyebrow": "Kênh chat & Cổng kết nối",
   "title": "Kênh Chat",
-  "subtitle": "Kết nối Telegram, Discord, WhatsApp để nhận và trả lời tin nhắn tự động.",
+  "subtitle": "Kết nối Telegram, Discord, WhatsApp và Webhook để nhận và trả lời tin nhắn tự động.",
   "addAccount": "Thêm tài khoản",
-  "saveAll": "Lưu",
+  "saveAll": "Lưu thay đổi",
+  "stats": {
+    "activeChannels": "Kênh đang hoạt động",
+    "connectedBots": "Bot đã kết nối",
+    "pairedUsers": "Người dùng đã ghép nối",
+    "webhookGateway": "Cổng Webhook"
+  },
+  "tabs": {
+    "all": "Tất cả kênh",
+    "active": "Đang hoạt động",
+    "pairing": "Ghép nối & Whitelist",
+    "webhook": "Cổng Webhook"
+  },
   "telegram": {
     "name": "Telegram",
     "desc": "Bot hai chiều. Nhắn tin trực tiếp và nhận phản hồi tự động."
@@ -16,31 +28,49 @@
     "name": "Discord",
     "desc": "Lắng nghe tin nhắn và @mention trong Discord server."
   },
+  "slack": {
+    "name": "Slack",
+    "desc": "Tích hợp trực tiếp với không gian làm việc và kênh nhóm Slack."
+  },
   "webhook": {
-    "name": "Webhook",
-    "desc": "Nhận HTTP POST từ hệ thống bên ngoài."
+    "name": "Webhook Chung",
+    "desc": "Nhận HTTP POST từ các hệ thống hoặc kịch bản bên ngoài."
   },
   "pairing": {
-    "title": "Ghép nối người dùng",
-    "subtitle": "Tạo mã PIN 6 chữ số để xác thực người dùng chat mới.",
+    "title": "Ghép nối người dùng & Whitelist",
+    "subtitle": "Tạo mã PIN 6 chữ số để xác thực người dùng chat mới trước khi tương tác.",
     "generate": "Tạo mã PIN",
+    "generateCard": "Mã PIN Bảo mật",
     "activeCode": "Mã PIN đang hoạt động",
     "instructions": "Gửi mã này hoặc /pair <PIN> từ ứng dụng chat để xác thực.",
     "whitelist": "Người dùng đã xác thực",
     "empty": "Chưa có người dùng nào được ghép nối. Tạo mã PIN và gửi từ chat.",
-    "revoke": "Thu hồi"
+    "emptySubtitle": "Khi người dùng gửi mã PIN hợp lệ qua bot, thông tin sẽ được lưu an toàn trong vault phần cứng.",
+    "revoke": "Thu hồi quyền"
   },
   "status": {
     "active": "Hoạt động",
-    "offline": "Ngoại tuyến",
-    "listening": "Đang lắng nghe"
+    "offline": "Vô hiệu hóa",
+    "listening": "Đang lắng nghe",
+    "paused": "Tạm dừng",
+    "notConfigured": "Chưa cấu hình",
+    "comingSoon": "Sắp ra mắt"
   },
   "accounts": {
+    "title": "Tài khoản",
     "label": "Tên tài khoản",
     "token": "Token bot",
     "phoneId": "Số điện thoại ID",
     "enabled": "Bật",
     "remove": "Xoá",
-    "primary": "Chính"
+    "primary": "Chính",
+    "empty": "Chưa có tài khoản nào được thêm",
+    "emptyHint": "Kết nối token bot đầu tiên của bạn để bắt đầu nhận và xử lý tin nhắn tự động."
+  },
+  "actions": {
+    "refresh": "Làm mới",
+    "manage": "Quản lý",
+    "guide": "Hướng dẫn",
+    "searchChannels": "Tìm kiếm kênh hoặc tính năng..."
   }
 }
