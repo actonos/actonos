@@ -13,8 +13,10 @@ import {
   Info,
   ExternalLink,
   Sparkles,
+  Bot,
 } from 'lucide-react';
-import type { ChannelAccount, ChannelDefinition } from '@/lib/types';
+import type { ChannelAccount, ChannelDefinition, AgentManifest } from '@/lib/types';
+import { api } from '@/lib/api';
 
 interface ChannelAccountModalProps {
   isOpen: boolean;
@@ -65,6 +67,8 @@ export function ChannelAccountModal({
   const [label, setLabel] = useState('');
   const [token, setToken] = useState('');
   const [phoneId, setPhoneId] = useState('');
+  const [boundAgentIds, setBoundAgentIds] = useState<string[]>(['*']);
+  const [availableAgents, setAvailableAgents] = useState<AgentManifest[]>([]);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -73,7 +77,15 @@ export function ChannelAccountModal({
       setLabel('');
       setToken('');
       setPhoneId('');
+      setBoundAgentIds(['*']);
       setDeleteConfirmId(null);
+
+      // Load agents list
+      api.listAgents().then((res) => {
+        if (res && res.agents) {
+          setAvailableAgents(res.agents);
+        }
+      }).catch(() => {});
     }
   }, [isOpen, initialMode]);
 
@@ -86,15 +98,19 @@ export function ChannelAccountModal({
     if (!token.trim()) return;
 
     onAddAccount(channel.id, {
+      name: label.trim() || `${channel.nameKey || channel.id} Account`,
       label: label.trim() || `${channel.nameKey || channel.id} Bot`,
+      channel: channel.id,
       token: token.trim(),
       phone_id: phoneId.trim() || undefined,
+      bound_agent_ids: boundAgentIds.length > 0 ? boundAgentIds : ['*'],
       enabled: true,
     });
 
     setLabel('');
     setToken('');
     setPhoneId('');
+    setBoundAgentIds(['*']);
     setMode('manage');
   };
 
@@ -183,11 +199,22 @@ export function ChannelAccountModal({
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-body-sm text-deep-ink truncate">
-                            {acc.label}
+                            {acc.name || acc.label}
                           </span>
                           <Badge variant={acc.enabled ? 'active' : 'stopped'} className="text-[10px]">
                             {acc.enabled ? t('status.active', 'Active') : t('status.offline', 'Disabled')}
                           </Badge>
+                          {acc.bound_agent_ids && acc.bound_agent_ids.includes('*') ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] bg-onyx/5 text-deep-ink px-1.5 py-0.5 rounded-md font-medium">
+                              <Sparkles className="w-3 h-3 text-amber-500" />
+                              All Agents
+                            </span>
+                          ) : acc.bound_agent_ids && acc.bound_agent_ids.length > 0 ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] bg-onyx/5 text-deep-ink px-1.5 py-0.5 rounded-md font-medium">
+                              <Bot className="w-3 h-3 text-indigo-500" />
+                              {acc.bound_agent_ids.join(', ')}
+                            </span>
+                          ) : null}
                         </div>
                         <div className="text-caption font-mono text-slate truncate flex items-center gap-2 mt-0.5">
                           <span>Token: {acc.token ? '••••••••' + acc.token.slice(-4) : '••••••'}</span>
@@ -297,6 +324,56 @@ export function ChannelAccountModal({
                 />
               </div>
             )}
+
+            {/* Agent Binding Selector */}
+            <div className="pt-1">
+              <label className="text-caption font-semibold text-deep-ink block mb-1 flex items-center gap-1.5">
+                <Bot className="w-3.5 h-3.5 text-deep-ink" />
+                <span>Assigned Agent(s)</span>
+              </label>
+              <p className="text-[11px] text-slate mb-2">
+                Choose which agent responds to incoming messages on this account.
+              </p>
+              <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                <label className="flex items-center gap-2 text-caption text-deep-ink p-2 rounded-xl bg-canvas border border-onyx/10 hover:border-onyx/30 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={boundAgentIds.includes('*')}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setBoundAgentIds(['*']);
+                      } else {
+                        setBoundAgentIds([]);
+                      }
+                    }}
+                    className="rounded text-deep-ink focus:ring-onyx"
+                  />
+                  <span className="font-semibold">All Agents (Broadcast / Default)</span>
+                </label>
+
+                {!boundAgentIds.includes('*') &&
+                  availableAgents.map((ag) => (
+                    <label
+                      key={ag.agent_id}
+                      className="flex items-center gap-2 text-caption text-deep-ink p-2 rounded-xl bg-canvas border border-onyx/10 hover:border-onyx/30 cursor-pointer ml-3"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={boundAgentIds.includes(ag.agent_id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setBoundAgentIds([...boundAgentIds.filter((x) => x !== '*'), ag.agent_id]);
+                          } else {
+                            setBoundAgentIds(boundAgentIds.filter((x) => x !== ag.agent_id));
+                          }
+                        }}
+                        className="rounded text-deep-ink focus:ring-onyx"
+                      />
+                      <span>{ag.name} <span className="text-[11px] font-mono text-slate">({ag.agent_id})</span></span>
+                    </label>
+                  ))}
+              </div>
+            </div>
 
             <div className="pt-2 flex items-center gap-2">
               <Button

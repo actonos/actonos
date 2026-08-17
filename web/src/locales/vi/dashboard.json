@@ -65,6 +65,14 @@
     "pairChannel": "Kênh chat",
     "settings": "Cài đặt"
   },
+  "tokens": {
+    "title": "Lưu Lượng Token & Chi Phí",
+    "subtitle": "Theo dõi thời gian thực qua ReAct loops, Cron và Heartbeat tự hành"
+  },
+  "heartbeat": {
+    "title": "Nhịp Đập Tự Hành",
+    "desc": "Chu kỳ tư duy 5 phút tự động kiểm tra tác vụ nền và cảnh báo."
+  },
   "activity": {
     "title": "Hoạt động gần đây",
     "subtitle": "Nhật ký thực thi công cụ và hành động của agent theo thời gian thực.",

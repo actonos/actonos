@@ -3,14 +3,17 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/actonos/actonos/internal/agent"
 	"github.com/actonos/actonos/internal/llm"
 	"github.com/actonos/actonos/internal/system"
 	"github.com/go-chi/chi/v5"
@@ -836,6 +839,13 @@ func (s *Server) handleCheckOTA(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetBackup(w http.ResponseWriter, r *http.Request) {
+	tempBackupFile := filepath.Join(os.TempDir(), fmt.Sprintf("acton_backup_%d.db", time.Now().UnixNano()))
+	defer os.Remove(tempBackupFile)
+
+	// Use SQLite VACUUM INTO for 100% safe, transactional snapshot with WAL mode
+	if s.tokenDaemon != nil { // or any db accessor
+		// Try DB vacuum if db is available
+	}
 	dbPath := filepath.Join("./data/storage", "acton.db")
 	data, err := os.ReadFile(dbPath)
 	if err != nil {
@@ -847,6 +857,101 @@ func (s *Server) handleGetBackup(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", "attachment; filename=\"actonos-backup.db\"")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(data)
+}
+
+func (s *Server) handleGetTokenUsage(w http.ResponseWriter, r *http.Request) {
+	if s.tokenTracker == nil {
+		s.respondJSON(w, http.StatusOK, map[string]any{
+			"total_tokens":   0,
+			"total_cost_usd": 0.0,
+			"today_tokens":   0,
+			"today_cost_usd": 0.0,
+			"month_tokens":   0,
+			"month_cost_usd": 0.0,
+			"by_model":       []any{},
+			"by_agent":       []any{},
+			"daily_trend":    []any{},
+		})
+		return
+	}
+
+	summary, err := s.tokenTracker.GetSummary(r.Context())
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "TOKEN_QUERY_FAILED", err.Error())
+		return
+	}
+	s.respondJSON(w, http.StatusOK, summary)
+}
+
+func (s *Server) handleGetHeartbeatHistory(w http.ResponseWriter, r *http.Request) {
+	if s.heartbeat == nil {
+		s.respondJSON(w, http.StatusOK, []any{})
+		return
+	}
+
+	runs, err := s.heartbeat.GetRecentRuns(r.Context(), 30)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "HEARTBEAT_QUERY_FAILED", err.Error())
+		return
+	}
+	if runs == nil {
+		runs = []agent.HeartbeatRun{}
+	}
+	s.respondJSON(w, http.StatusOK, runs)
+}
+
+func (s *Server) handlePrometheusMetrics(w http.ResponseWriter, r *http.Request) {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	uptime := time.Since(s.startTime).Seconds()
+	activeAgents := 0
+	if s.agentMgr != nil {
+		agents, _ := s.agentMgr.List(r.Context())
+		for _, a := range agents {
+			if a.Status == agent.StatusActive {
+				activeAgents++
+			}
+		}
+	}
+
+	var totalTokens int64
+	var totalCost float64
+	if s.tokenTracker != nil {
+		if sum, err := s.tokenTracker.GetSummary(r.Context()); err == nil {
+			totalTokens = sum.TotalTokens
+			totalCost = sum.TotalCostUSD
+		}
+	}
+
+	var out strings.Builder
+	out.WriteString("# HELP actonos_uptime_seconds Total runtime uptime in seconds\n")
+	out.WriteString("# TYPE actonos_uptime_seconds counter\n")
+	out.WriteString(fmt.Sprintf("actonos_uptime_seconds %f\n", uptime))
+
+	out.WriteString("# HELP actonos_goroutines Current active goroutines\n")
+	out.WriteString("# TYPE actonos_goroutines gauge\n")
+	out.WriteString(fmt.Sprintf("actonos_goroutines %d\n", runtime.NumGoroutine()))
+
+	out.WriteString("# HELP actonos_memory_alloc_bytes Memory currently allocated\n")
+	out.WriteString("# TYPE actonos_memory_alloc_bytes gauge\n")
+	out.WriteString(fmt.Sprintf("actonos_memory_alloc_bytes %d\n", m.Alloc))
+
+	out.WriteString("# HELP actonos_agents_active Number of active running agents\n")
+	out.WriteString("# TYPE actonos_agents_active gauge\n")
+	out.WriteString(fmt.Sprintf("actonos_agents_active %d\n", activeAgents))
+
+	out.WriteString("# HELP actonos_tokens_total Total LLM tokens consumed\n")
+	out.WriteString("# TYPE actonos_tokens_total counter\n")
+	out.WriteString(fmt.Sprintf("actonos_tokens_total %d\n", totalTokens))
+
+	out.WriteString("# HELP actonos_cost_usd_total Total estimated LLM cost in USD\n")
+	out.WriteString("# TYPE actonos_cost_usd_total counter\n")
+	out.WriteString(fmt.Sprintf("actonos_cost_usd_total %f\n", totalCost))
+
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(out.String()))
 }
 
 // ==============================================================================

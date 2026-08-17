@@ -25,6 +25,8 @@ type Server struct {
 	swarmMgr       *agent.SwarmManager
 	engine         *agent.Engine
 	cronSched      *agent.CronScheduler
+	heartbeat      *agent.HeartbeatDaemon
+	tokenTracker   *memory.TokenTracker
 	profileMgr     *agent.UserProfileManager
 	llmRouter      *llm.ModelCascadeRouter
 	toolReg        *tools.ToolRegistry
@@ -39,6 +41,7 @@ type Server struct {
 	sysAuth        *auth.SystemAuthManager
 	bus            *bus.EventBus
 	pairingMgr     *channels.PairingManager
+	channelMgr     *channels.ChannelManager
 	tgAdapter      *channels.TelegramAdapter
 	waAdapter      *channels.WhatsAppAdapter
 	startTime      time.Time
@@ -50,6 +53,8 @@ type Config struct {
 	SwarmManager       *agent.SwarmManager
 	Engine             *agent.Engine
 	CronScheduler      *agent.CronScheduler
+	HeartbeatDaemon    *agent.HeartbeatDaemon
+	TokenTracker       *memory.TokenTracker
 	ProfileManager     *agent.UserProfileManager
 	LLMRouter          *llm.ModelCascadeRouter
 	ToolRegistry       *tools.ToolRegistry
@@ -64,6 +69,7 @@ type Config struct {
 	SystemAuth         *auth.SystemAuthManager
 	EventBus           *bus.EventBus
 	PairingManager     *channels.PairingManager
+	ChannelManager     *channels.ChannelManager
 	TelegramAdapter    *channels.TelegramAdapter
 	WhatsAppAdapter    *channels.WhatsAppAdapter
 }
@@ -71,27 +77,30 @@ type Config struct {
 // NewServer initializes the HTTP API Server with all endpoints and middlewares.
 func NewServer(cfg Config) *Server {
 	s := &Server{
-		agentMgr:    cfg.AgentManager,
-		swarmMgr:    cfg.SwarmManager,
-		engine:      cfg.Engine,
-		cronSched:   cfg.CronScheduler,
-		profileMgr:  cfg.ProfileManager,
-		llmRouter:   cfg.LLMRouter,
-		toolReg:     cfg.ToolRegistry,
-		mcpHost:     cfg.MCPHost,
-		hubMgr:      cfg.HubManager,
-		memory:      cfg.Memory,
-		hal:         cfg.HAL,
-		tailscale:   cfg.Tailscale,
-		tokenDaemon: cfg.TokenRefreshDaemon,
-		oauthEngine: cfg.OAuthEngine,
-		stateStore:  cfg.StateStore,
-		sysAuth:     cfg.SystemAuth,
-		bus:         cfg.EventBus,
-		pairingMgr:  cfg.PairingManager,
-		tgAdapter:   cfg.TelegramAdapter,
-		waAdapter:   cfg.WhatsAppAdapter,
-		startTime:   time.Now(),
+		agentMgr:     cfg.AgentManager,
+		swarmMgr:     cfg.SwarmManager,
+		engine:       cfg.Engine,
+		cronSched:    cfg.CronScheduler,
+		heartbeat:    cfg.HeartbeatDaemon,
+		tokenTracker: cfg.TokenTracker,
+		profileMgr:   cfg.ProfileManager,
+		llmRouter:    cfg.LLMRouter,
+		toolReg:      cfg.ToolRegistry,
+		mcpHost:      cfg.MCPHost,
+		hubMgr:       cfg.HubManager,
+		memory:       cfg.Memory,
+		hal:          cfg.HAL,
+		tailscale:    cfg.Tailscale,
+		tokenDaemon:  cfg.TokenRefreshDaemon,
+		oauthEngine:  cfg.OAuthEngine,
+		stateStore:   cfg.StateStore,
+		sysAuth:      cfg.SystemAuth,
+		bus:          cfg.EventBus,
+		pairingMgr:   cfg.PairingManager,
+		channelMgr:   cfg.ChannelManager,
+		tgAdapter:    cfg.TelegramAdapter,
+		waAdapter:    cfg.WhatsAppAdapter,
+		startTime:    time.Now(),
 	}
 
 	s.setupRoutes()
@@ -103,12 +112,23 @@ func (s *Server) Router() chi.Router {
 	return s.router
 }
 
+func (s *Server) securityHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("X-XSS-Protection", "1; mode=block")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (s *Server) setupRoutes() {
 	r := chi.NewRouter()
 
 	// Global Middlewares
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
+	r.Use(s.securityHeadersMiddleware)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 
@@ -173,6 +193,7 @@ func (s *Server) setupRoutes() {
 					r.Post("/start", s.handleStartAgent)
 					r.Post("/stop", s.handleStopAgent)
 					r.Post("/chat", s.handleChat)
+					r.Post("/chat/stream", s.handleChatStream)
 				})
 			})
 
@@ -180,6 +201,8 @@ func (s *Server) setupRoutes() {
 			r.Route("/cron", func(r chi.Router) {
 				r.Get("/", s.handleListCronJobs)
 				r.Post("/", s.handleSaveCronJob)
+				r.Get("/history", s.handleListAllCronHistory)
+				r.Get("/{id}/history", s.handleGetCronJobHistory)
 				r.Post("/{id}/run", s.handleRunCronJob)
 				r.Delete("/{id}", s.handleDeleteCronJob)
 			})
@@ -225,6 +248,7 @@ func (s *Server) setupRoutes() {
 				r.Post("/{provider}/disconnect", s.handleDisconnectIntegration)
 				r.Post("/{provider}/toggle", s.handleToggleIntegration)
 				r.Get("/channels", s.handleGetChannels)
+				r.Get("/channels/accounts", s.handleListAllChannelAccounts)
 				r.Post("/channels", s.handleSaveChannels)
 				r.Post("/pairing/code", s.handleGeneratePairingCode)
 				r.Post("/pairing/verify", s.handleVerifyPairingCode)
@@ -245,6 +269,9 @@ func (s *Server) setupRoutes() {
 			// System, HAL, Keys, Identity, Audit & Tailscale
 			r.Route("/system", func(r chi.Router) {
 				r.Get("/metrics", s.handleGetMetrics)
+				r.Get("/metrics/prometheus", s.handlePrometheusMetrics)
+				r.Get("/token-usage", s.handleGetTokenUsage)
+				r.Get("/heartbeat/history", s.handleGetHeartbeatHistory)
 				r.Get("/identity", s.handleGetIdentity)
 				r.Put("/identity", s.handleSaveIdentity)
 				r.Get("/profile", s.handleGetIdentity)

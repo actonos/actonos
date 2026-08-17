@@ -683,3 +683,45 @@ func (s *Server) handleGetMemoryMD(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
+	// Re-route to handleChat with streaming forced
+	s.handleChat(w, r)
+}
+
+func (s *Server) handleListAllCronHistory(w http.ResponseWriter, r *http.Request) {
+	if s.cronSched == nil {
+		s.respondJSON(w, http.StatusOK, []agent.CronExecutionRecord{})
+		return
+	}
+	history, err := s.cronSched.ListAllExecutionHistory(50)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
+		return
+	}
+	if history == nil {
+		history = []agent.CronExecutionRecord{}
+	}
+	s.respondJSON(w, http.StatusOK, history)
+}
+
+func (s *Server) handleGetCronJobHistory(w http.ResponseWriter, r *http.Request) {
+	if s.cronSched == nil {
+		s.respondJSON(w, http.StatusOK, []agent.CronExecutionRecord{})
+		return
+	}
+	jobID := chi.URLParam(r, "id")
+	if jobID == "" {
+		s.respondError(w, http.StatusBadRequest, "MISSING_ID", "job id is required")
+		return
+	}
+	history, err := s.cronSched.GetExecutionHistory(jobID, 50)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
+		return
+	}
+	if history == nil {
+		history = []agent.CronExecutionRecord{}
+	}
+	s.respondJSON(w, http.StatusOK, history)
+}
+

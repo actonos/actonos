@@ -25,5 +25,23 @@ export default defineConfig({
   build: {
     outDir: '../internal/server/dist',
     emptyOutDir: true,
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          editor: [
+            '@tiptap/react',
+            '@tiptap/starter-kit',
+            '@tiptap/extension-code-block',
+            '@tiptap/extension-highlight',
+            '@tiptap/extension-link',
+            '@tiptap/extension-typography',
+          ],
+          i18n: ['i18next', 'react-i18next', 'i18next-browser-languagedetector'],
+          icons: ['lucide-react'],
+        },
+      },
+    },
   },
 });

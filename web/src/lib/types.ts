@@ -42,10 +42,15 @@ export interface AgentManifest {
 /** A single connected account for a channel type (multi-account support). */
 export interface ChannelAccount {
   id: string;
-  label: string;
+  name?: string;
+  label?: string;
+  channel?: string; // 'telegram' | 'whatsapp' | 'discord' | 'webhook'
   token?: string;
   phone_id?: string;
+  webhook_secret?: string;
   enabled: boolean;
+  bound_agent_ids?: string[]; // e.g. ['*'] or ['agent_support', 'agent_devops']
+  default_chat_id?: string;
 }
 
 export interface ConversationItem {
@@ -150,4 +155,62 @@ export interface ChannelDefinition {
 }
 
 export type ConnectorCategory = 'all' | 'productivity' | 'development' | 'knowledge' | 'messaging' | 'database';
+
+export interface ModelUsageStat {
+  model: string;
+  total_tokens: number;
+  cost_usd: number;
+  percentage: number;
+}
+
+export interface AgentUsageStat {
+  agent_id: string;
+  total_tokens: number;
+  cost_usd: number;
+  percentage: number;
+}
+
+export interface DailyUsagePoint {
+  date: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  cost_usd: number;
+}
+
+export interface TokenUsageSummary {
+  total_prompt_tokens: number;
+  total_completion_tokens: number;
+  total_tokens: number;
+  total_cost_usd: number;
+  today_tokens: number;
+  today_cost_usd: number;
+  month_tokens: number;
+  month_cost_usd: number;
+  by_model: ModelUsageStat[];
+  by_agent: AgentUsageStat[];
+  daily_trend: DailyUsagePoint[];
+}
+
+export interface CronExecutionRecord {
+  id: string;
+  job_id: string;
+  agent_id: string;
+  status: 'success' | 'failed';
+  prompt: string;
+  output?: string;
+  error?: string;
+  duration_ms: number;
+  tokens_used: number;
+  executed_at: string;
+}
+
+export interface HeartbeatRun {
+  id: string;
+  agent_id: string;
+  executed_at: string;
+  status: 'ok' | 'action_taken' | 'error';
+  summary: string;
+  tokens_used: number;
+}
 

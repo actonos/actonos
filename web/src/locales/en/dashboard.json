@@ -65,6 +65,14 @@
     "pairChannel": "Chat Channels",
     "settings": "Settings"
   },
+  "tokens": {
+    "title": "Token Consumption & Cost Ledger",
+    "subtitle": "Live tracking across ReAct loops, Crons, and autonomous Heartbeats"
+  },
+  "heartbeat": {
+    "title": "Heartbeat Pulse",
+    "desc": "Autonomous 5m cognitive loop reviewing pending tasks and alerts."
+  },
   "activity": {
     "title": "Recent Activity",
     "subtitle": "Real-time log of tool executions and agent actions.",

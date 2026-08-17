@@ -27,8 +27,11 @@ import {
   X,
   Key,
   Radio,
+  Coins,
+  HeartPulse,
 } from 'lucide-react';
 import { api, type DashboardSummaryData } from '@/lib/api';
+import type { TokenUsageSummary, HeartbeatRun } from '@/lib/types';
 import type { NavTab } from '@/components/layout/Sidebar';
 
 export interface DashboardPageProps {
@@ -41,6 +44,8 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
   const { t } = useTranslation('dashboard');
   const { error } = useToast();
   const [data, setData] = useState<DashboardSummaryData | null>(null);
+  const [tokenStats, setTokenStats] = useState<TokenUsageSummary | null>(null);
+  const [heartbeatRuns, setHeartbeatRuns] = useState<HeartbeatRun[]>([]);
   const [loading, setLoading] = useState(true);
 
   // QuickStart Checklist State stored in localStorage
@@ -60,17 +65,29 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
   const loadSummary = async () => {
     try {
       setLoading(true);
-      const summary = await api.getDashboardSummary();
-      setData(summary);
+      const [summary, tokens, hb] = await Promise.allSettled([
+        api.getDashboardSummary(),
+        api.getTokenUsage(),
+        api.getHeartbeatHistory(),
+      ]);
 
-      // Auto-detect completed steps based on server state
-      setCompletedSteps((prev) => {
-        const next = { ...prev };
-        if (summary.agents_count > 1) next['agent'] = true;
-        if (summary.tools_count > 4) next['skills'] = true;
-        localStorage.setItem('actonos_quickstart_steps', JSON.stringify(next));
-        return next;
-      });
+      if (summary.status === 'fulfilled') {
+        setData(summary.value);
+        // Auto-detect completed steps based on server state
+        setCompletedSteps((prev) => {
+          const next = { ...prev };
+          if (summary.value.agents_count > 1) next['agent'] = true;
+          if (summary.value.tools_count > 4) next['skills'] = true;
+          localStorage.setItem('actonos_quickstart_steps', JSON.stringify(next));
+          return next;
+        });
+      }
+      if (tokens.status === 'fulfilled') {
+        setTokenStats(tokens.value);
+      }
+      if (hb.status === 'fulfilled') {
+        setHeartbeatRuns(hb.value);
+      }
     } catch (err: any) {
       error('Failed to load dashboard summary', err.message);
     } finally {
@@ -492,6 +509,105 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
                 : 'Standalone Local Mode'}
             </p>
           </div>
+        </div>
+
+        {/* Token Traffic & Autonomous Heartbeat Banner */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
+          {/* Token Usage Card */}
+          <Card className="lg:col-span-2 p-5 border border-onyx/10 bg-canvas/90 shadow-xs">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+                  <Coins className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-serif text-heading-sm text-deep-ink font-semibold">
+                    {t('tokens.title', 'Token Consumption & Cost Ledger')}
+                  </h3>
+                  <p className="text-[12px] text-slate">
+                    {t('tokens.subtitle', 'Live tracking across ReAct loops, Crons, and autonomous Heartbeats')}
+                  </p>
+                </div>
+              </div>
+              <Badge variant="neutral" className="font-mono">
+                ${(tokenStats?.total_cost_usd || 0).toFixed(4)} USD
+              </Badge>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 pt-1">
+              <div className="p-3 bg-soft-meadow rounded-2xl border border-onyx/5">
+                <span className="text-[11px] font-semibold uppercase text-slate block mb-1">Today Tokens</span>
+                <span className="text-body font-serif font-bold text-deep-ink">
+                  {(tokenStats?.today_tokens || 0).toLocaleString()}
+                </span>
+                <span className="text-[10px] text-slate block font-mono">
+                  ${(tokenStats?.today_cost_usd || 0).toFixed(4)}
+                </span>
+              </div>
+              <div className="p-3 bg-soft-meadow rounded-2xl border border-onyx/5">
+                <span className="text-[11px] font-semibold uppercase text-slate block mb-1">Month Tokens</span>
+                <span className="text-body font-serif font-bold text-deep-ink">
+                  {(tokenStats?.month_tokens || 0).toLocaleString()}
+                </span>
+                <span className="text-[10px] text-slate block font-mono">
+                  ${(tokenStats?.month_cost_usd || 0).toFixed(4)}
+                </span>
+              </div>
+              <div className="p-3 bg-soft-meadow rounded-2xl border border-onyx/5">
+                <span className="text-[11px] font-semibold uppercase text-slate block mb-1">Lifetime Total</span>
+                <span className="text-body font-serif font-bold text-deep-ink">
+                  {(tokenStats?.total_tokens || 0).toLocaleString()}
+                </span>
+                <span className="text-[10px] text-slate block font-mono">
+                  ${(tokenStats?.total_cost_usd || 0).toFixed(4)}
+                </span>
+              </div>
+            </div>
+
+            {/* Model Breakdown Bars */}
+            {tokenStats?.by_model && tokenStats.by_model.length > 0 && (
+              <div className="mt-4 pt-3 border-t border-onyx/5 flex flex-wrap gap-2 items-center">
+                <span className="text-[11px] font-semibold text-slate uppercase mr-1">Models:</span>
+                {tokenStats.by_model.slice(0, 4).map((m) => (
+                  <span key={m.model} className="text-[11px] bg-canvas border border-onyx/10 px-2 py-0.5 rounded-full font-mono text-deep-ink">
+                    {m.model}: <strong className="text-emerald-700">{m.percentage.toFixed(0)}%</strong>
+                  </span>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          {/* Autonomous Heartbeat Status Card */}
+          <Card className="p-5 border border-onyx/10 bg-canvas/90 shadow-xs flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-rose-500/10 text-rose-600 flex items-center justify-center">
+                    <HeartPulse className="w-4 h-4" />
+                  </div>
+                  <h3 className="font-serif text-heading-sm text-deep-ink font-semibold">
+                    {t('heartbeat.title', 'Heartbeat Pulse')}
+                  </h3>
+                </div>
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              </div>
+              <p className="text-caption text-slate mb-3">
+                {t('heartbeat.desc', 'Autonomous 5m cognitive loop reviewing pending tasks and alerts.')}
+              </p>
+            </div>
+
+            <div className="p-3 bg-soft-meadow rounded-2xl border border-onyx/5 text-[11px]">
+              <div className="flex justify-between items-center mb-1 text-slate">
+                <span>Last Cycle Status:</span>
+                <span className="font-semibold text-emerald-700 font-mono">
+                  {heartbeatRuns[0]?.status || 'Nominal (Zero Noise)'}
+                </span>
+              </div>
+              <div className="text-slate/70 font-mono truncate">
+                {heartbeatRuns[0]?.summary || 'All background systems running nominally.'}
+              </div>
+            </div>
+          </Card>
         </div>
 
         {/* Quick Launchpad & Activity Feed Grid */}

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ToastProvider } from '@/components/ui/Toast';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { Sidebar, type NavTab } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
 import { DashboardPage } from '@/pages/Dashboard/DashboardPage';
@@ -143,41 +144,43 @@ export function App() {
 
           {/* Page Views */}
           <main className="flex-1 w-full pb-12">
-            {activeTab === 'dashboard' && (
-              <DashboardPage
-                onNavigateTab={setActiveTab}
-                onOpenChat={handleOpenChatWithAgent}
-                onEditAgent={handleEditAgent}
-              />
-            )}
-            {activeTab === 'agents' && (
-              <AgentsPage
-                onOpenChat={handleOpenChatWithAgent}
-                onNavigateTab={setActiveTab}
-                onEditAgent={handleEditAgent}
-              />
-            )}
-            {activeTab === 'agent-studio' && (
-              <AgentStudioPage
-                agentID={studioAgentID}
-                onBack={() => setActiveTab('agents')}
-                onOpenChat={handleOpenChatWithAgent}
-              />
-            )}
-            {activeTab === 'chat' && (
-              <ChatPage
-                selectedAgentID={selectedAgentID}
-                onSelectAgentID={setSelectedAgentID}
-                onNavigateTab={setActiveTab}
-              />
-            )}
-            {activeTab === 'automations' && <AutomationsPage />}
-            {activeTab === 'channels' && <ChannelsPage />}
-            {activeTab === 'connectors' && <ConnectorsPage />}
-            {activeTab === 'tools' && <ToolHubPage />}
-            {activeTab === 'skills' && <SkillsPage />}
-            {activeTab === 'workspace' && <WorkspacePage />}
-            {activeTab === 'settings' && <SettingsPage />}
+            <ErrorBoundary>
+              {activeTab === 'dashboard' && (
+                <DashboardPage
+                  onNavigateTab={setActiveTab}
+                  onOpenChat={handleOpenChatWithAgent}
+                  onEditAgent={handleEditAgent}
+                />
+              )}
+              {activeTab === 'agents' && (
+                <AgentsPage
+                  onOpenChat={handleOpenChatWithAgent}
+                  onNavigateTab={setActiveTab}
+                  onEditAgent={handleEditAgent}
+                />
+              )}
+              {activeTab === 'agent-studio' && (
+                <AgentStudioPage
+                  agentID={studioAgentID}
+                  onBack={() => setActiveTab('agents')}
+                  onOpenChat={handleOpenChatWithAgent}
+                />
+              )}
+              {activeTab === 'chat' && (
+                <ChatPage
+                  selectedAgentID={selectedAgentID}
+                  onSelectAgentID={setSelectedAgentID}
+                  onNavigateTab={setActiveTab}
+                />
+              )}
+              {activeTab === 'automations' && <AutomationsPage />}
+              {activeTab === 'channels' && <ChannelsPage />}
+              {activeTab === 'connectors' && <ConnectorsPage />}
+              {activeTab === 'tools' && <ToolHubPage />}
+              {activeTab === 'skills' && <SkillsPage />}
+              {activeTab === 'workspace' && <WorkspacePage />}
+              {activeTab === 'settings' && <SettingsPage />}
+            </ErrorBoundary>
           </main>
         </div>
       </div>

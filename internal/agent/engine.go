@@ -18,14 +18,15 @@ const DefaultEntropyThreshold = 0.65
 
 // Engine orchestrates the POMDP & ReAct cognitive loop for agents.
 type Engine struct {
-	agentMgr   *AgentManager
-	bus        *bus.EventBus
-	llm        *llm.ModelCascadeRouter
-	memory     *memory.HybridEngine
-	profileMgr *UserProfileManager
-	tools      *tools.ToolRegistry
-	verifier   *Verifier
-	theta      float64 // Entropy threshold
+	agentMgr     *AgentManager
+	bus          *bus.EventBus
+	llm          *llm.ModelCascadeRouter
+	memory       *memory.HybridEngine
+	profileMgr   *UserProfileManager
+	tools        *tools.ToolRegistry
+	verifier     *Verifier
+	tokenTracker *memory.TokenTracker
+	theta        float64 // Entropy threshold
 }
 
 // NewEngine creates an Engine instance.
@@ -53,6 +54,30 @@ func (e *Engine) SetProfileManager(m *UserProfileManager) {
 // SetToolRegistry attaches the system tool registry to enable tool execution.
 func (e *Engine) SetToolRegistry(r *tools.ToolRegistry) {
 	e.tools = r
+}
+
+// SetTokenTracker attaches the token usage tracker.
+func (e *Engine) SetTokenTracker(t *memory.TokenTracker) {
+	e.tokenTracker = t
+}
+
+// RecordTokenUsage records usage metrics if token tracker is configured.
+func (e *Engine) RecordTokenUsage(ctx context.Context, agentID, model, provider, source, convID string, usage llm.Usage) {
+	if e.tokenTracker == nil {
+		return
+	}
+	go func() {
+		_ = e.tokenTracker.Record(context.Background(), memory.TokenUsageRecord{
+			AgentID:          agentID,
+			Model:            model,
+			Provider:         provider,
+			PromptTokens:     usage.PromptTokens,
+			CompletionTokens: usage.CompletionTokens,
+			TotalTokens:      usage.TotalTokens,
+			Source:           source,
+			ConversationID:   convID,
+		})
+	}()
 }
 
 // buildCognitivePrompt synthesizes all 4 layers of memory into a structured cognitive context:
@@ -270,6 +295,10 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 			"duration_ms": time.Since(startTime).Milliseconds(),
 			"tokens":      finalResp.Usage.TotalTokens,
 		}))
+	}
+
+	if finalResp != nil {
+		e.RecordTokenUsage(ctx, agentID, finalResp.Model, finalResp.Model, "chat", "", finalResp.Usage)
 	}
 
 	return finalResp, nil
@@ -558,6 +587,10 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 			"duration_ms": time.Since(startTime).Milliseconds(),
 			"tokens":      finalResp.Usage.TotalTokens,
 		}))
+	}
+
+	if finalResp != nil {
+		e.RecordTokenUsage(ctx, agentID, finalResp.Model, finalResp.Model, "stream", "", finalResp.Usage)
 	}
 
 	eventChan <- AgentStreamEvent{

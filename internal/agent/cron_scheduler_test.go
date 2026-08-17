@@ -109,7 +109,7 @@ func TestCronScheduler_Persistence(t *testing.T) {
 
 	// 1. Create first scheduler instance, write job to DB
 	cs1 := NewCronScheduler(nil, eb, db)
-	err = cs1.RegisterCron("persisted_job", "agent_system_core", "0 9 * * *", "Daily sync", "telegram", "chat_123")
+	err = cs1.RegisterCron("persisted_job", "agent_system_core", "0 9 * * *", "Daily sync", "telegram", "all", "chat_123")
 	if err != nil {
 		t.Fatalf("failed to register cron: %v", err)
 	}

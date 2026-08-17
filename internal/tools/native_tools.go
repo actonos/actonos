@@ -12,6 +12,9 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/actonos/actonos/internal/bus"
+	"github.com/actonos/actonos/internal/sandbox"
 )
 
 var (
@@ -20,7 +23,7 @@ var (
 
 // CronSchedulerProvider defines interface for managing background cron schedules.
 type CronSchedulerProvider interface {
-	RegisterCron(id, agentID, cronExpr, prompt, targetChannel, targetRecipient string) error
+	RegisterCron(id, agentID, cronExpr, prompt, targetChannel, targetAccountID, targetRecipient string) error
 	RemoveCron(id string)
 	ListCrons() []map[string]any
 }
@@ -33,6 +36,12 @@ func RegisterNativeTools(r *ToolRegistry, workspaceDir string) {
 	_ = r.Register(NewHTTPFetchTool())
 	_ = r.Register(NewFileReadTool(workspaceDir))
 	_ = r.Register(NewFileWriteTool(workspaceDir))
+	_ = r.Register(NewFileListTool(workspaceDir))
+	_ = r.Register(NewFileDeleteTool(workspaceDir))
+	_ = r.Register(NewFileSearchTool(workspaceDir))
+	_ = r.Register(NewExecTool(workspaceDir))
+	_ = r.Register(NewWebSearchTool())
+	_ = r.Register(NewChannelNotifyTool(r.bus))
 	_ = r.Register(NewSysInfoTool())
 	_ = r.Register(NewBrowserNavigateTool())
 	_ = r.Register(NewBrowserScreenshotTool(workspaceDir))
@@ -293,7 +302,519 @@ func (t *FileWriteTool) Execute(ctx context.Context, inputJSON json.RawMessage) 
 }
 
 // -----------------------------------------------------------------------------
-// 4. SysInfo Tool
+// 4. File List Tool
+// -----------------------------------------------------------------------------
+
+type FileListTool struct {
+	workspaceDir string
+}
+
+func NewFileListTool(workspaceDir string) *FileListTool {
+	return &FileListTool{workspaceDir: workspaceDir}
+}
+
+func (t *FileListTool) Name() string        { return "native_file_list" }
+func (t *FileListTool) Description() string { return "List files and directories within the authorized workspace." }
+func (t *FileListTool) Category() string    { return "native" }
+
+func (t *FileListTool) ParametersSchema() json.RawMessage {
+	return json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"path": { "type": "string", "description": "Relative subdirectory in workspace (optional, default root '')" },
+			"recursive": { "type": "boolean", "description": "Whether to list subdirectories recursively (default false)" }
+		}
+	}`)
+}
+
+func (t *FileListTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {
+	inputJSON = NormalizeToolInput(inputJSON)
+	var input struct {
+		Path      string `json:"path"`
+		Recursive bool   `json:"recursive"`
+	}
+	_ = json.Unmarshal(inputJSON, &input)
+
+	cleanRel := filepath.Clean(input.Path)
+	if strings.HasPrefix(cleanRel, "..") || filepath.IsAbs(input.Path) {
+		return nil, ErrPathEscape
+	}
+
+	absWorkspace, _ := filepath.Abs(t.workspaceDir)
+	targetDir := filepath.Join(absWorkspace, cleanRel)
+	if !strings.HasPrefix(targetDir, absWorkspace) {
+		return nil, ErrPathEscape
+	}
+
+	_ = os.MkdirAll(targetDir, 0755)
+
+	type FileEntry struct {
+		Name    string `json:"name"`
+		Path    string `json:"path"`
+		IsDir   bool   `json:"is_dir"`
+		Size    int64  `json:"size"`
+		ModTime string `json:"mod_time"`
+	}
+
+	var entries []FileEntry
+	if input.Recursive {
+		err := filepath.Walk(targetDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil || path == targetDir {
+				return nil
+			}
+			rel, _ := filepath.Rel(absWorkspace, path)
+			entries = append(entries, FileEntry{
+				Name:    info.Name(),
+				Path:    rel,
+				IsDir:   info.IsDir(),
+				Size:    info.Size(),
+				ModTime: info.ModTime().Format(time.RFC3339),
+			})
+			if len(entries) >= 200 {
+				return filepath.SkipAll
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		dirEntries, err := os.ReadDir(targetDir)
+		if err != nil {
+			return nil, err
+		}
+		for _, de := range dirEntries {
+			info, _ := de.Info()
+			size := int64(0)
+			modTime := ""
+			if info != nil {
+				size = info.Size()
+				modTime = info.ModTime().Format(time.RFC3339)
+			}
+			rel, _ := filepath.Rel(absWorkspace, filepath.Join(targetDir, de.Name()))
+			entries = append(entries, FileEntry{
+				Name:    de.Name(),
+				Path:    rel,
+				IsDir:   de.IsDir(),
+				Size:    size,
+				ModTime: modTime,
+			})
+		}
+	}
+
+	rawJSON, _ := json.MarshalIndent(entries, "", "  ")
+	return &ToolResult{
+		Content: fmt.Sprintf("Found %d file(s) in %s:\n%s", len(entries), input.Path, string(rawJSON)),
+		Data:    map[string]any{"count": len(entries), "files": entries},
+	}, nil
+}
+
+// -----------------------------------------------------------------------------
+// 5. File Delete Tool
+// -----------------------------------------------------------------------------
+
+type FileDeleteTool struct {
+	workspaceDir string
+}
+
+func NewFileDeleteTool(workspaceDir string) *FileDeleteTool {
+	return &FileDeleteTool{workspaceDir: workspaceDir}
+}
+
+func (t *FileDeleteTool) Name() string        { return "native_file_delete" }
+func (t *FileDeleteTool) Description() string { return "Delete a file or empty directory in the authorized workspace." }
+func (t *FileDeleteTool) Category() string    { return "native" }
+
+func (t *FileDeleteTool) ParametersSchema() json.RawMessage {
+	return json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"path": { "type": "string", "description": "Relative path of file to delete" }
+		},
+		"required": ["path"]
+	}`)
+}
+
+func (t *FileDeleteTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {
+	inputJSON = NormalizeToolInput(inputJSON)
+	var input struct {
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal(inputJSON, &input); err != nil || input.Path == "" {
+		return nil, errors.New("path is required")
+	}
+
+	cleanRel := filepath.Clean(input.Path)
+	if strings.HasPrefix(cleanRel, "..") || filepath.IsAbs(input.Path) || cleanRel == "." || cleanRel == "" {
+		return nil, ErrPathEscape
+	}
+
+	absWorkspace, _ := filepath.Abs(t.workspaceDir)
+	targetPath := filepath.Join(absWorkspace, cleanRel)
+	if !strings.HasPrefix(targetPath, absWorkspace) {
+		return nil, ErrPathEscape
+	}
+
+	if err := os.Remove(targetPath); err != nil {
+		return nil, fmt.Errorf("deleting file: %w", err)
+	}
+
+	return &ToolResult{
+		Content: fmt.Sprintf("Successfully deleted %s", input.Path),
+		Data:    map[string]any{"deleted": input.Path},
+	}, nil
+}
+
+// -----------------------------------------------------------------------------
+// 6. File Search Tool (Grep / Find)
+// -----------------------------------------------------------------------------
+
+type FileSearchTool struct {
+	workspaceDir string
+}
+
+func NewFileSearchTool(workspaceDir string) *FileSearchTool {
+	return &FileSearchTool{workspaceDir: workspaceDir}
+}
+
+func (t *FileSearchTool) Name() string        { return "native_file_search" }
+func (t *FileSearchTool) Description() string { return "Search for text patterns or filenames inside the workspace." }
+func (t *FileSearchTool) Category() string    { return "native" }
+
+func (t *FileSearchTool) ParametersSchema() json.RawMessage {
+	return json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"query": { "type": "string", "description": "Text query or keyword to search for" },
+			"extension": { "type": "string", "description": "Filter by file extension (e.g. '.md', '.go', '.json')" }
+		},
+		"required": ["query"]
+	}`)
+}
+
+func (t *FileSearchTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {
+	inputJSON = NormalizeToolInput(inputJSON)
+	var input struct {
+		Query     string `json:"query"`
+		Extension string `json:"extension"`
+	}
+	if err := json.Unmarshal(inputJSON, &input); err != nil || input.Query == "" {
+		return nil, errors.New("query is required")
+	}
+
+	absWorkspace, _ := filepath.Abs(t.workspaceDir)
+	queryLower := strings.ToLower(input.Query)
+
+	type SearchMatch struct {
+		Path    string `json:"path"`
+		LineNum int    `json:"line_num,omitempty"`
+		Snippet string `json:"snippet"`
+	}
+
+	var matches []SearchMatch
+	_ = filepath.Walk(absWorkspace, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		if input.Extension != "" && !strings.HasSuffix(strings.ToLower(path), strings.ToLower(input.Extension)) {
+			return nil
+		}
+
+		rel, _ := filepath.Rel(absWorkspace, path)
+		// Check filename match
+		if strings.Contains(strings.ToLower(info.Name()), queryLower) {
+			matches = append(matches, SearchMatch{
+				Path:    rel,
+				Snippet: fmt.Sprintf("[Filename Match] %s", info.Name()),
+			})
+		}
+
+		// Search file contents (up to 512KB per file)
+		if info.Size() < 512*1024 {
+			data, err := os.ReadFile(path)
+			if err == nil {
+				lines := strings.Split(string(data), "\n")
+				for idx, line := range lines {
+					if strings.Contains(strings.ToLower(line), queryLower) {
+						snippet := strings.TrimSpace(line)
+						if len(snippet) > 120 {
+							snippet = snippet[:120] + "..."
+						}
+						matches = append(matches, SearchMatch{
+							Path:    rel,
+							LineNum: idx + 1,
+							Snippet: snippet,
+						})
+						if len(matches) >= 50 {
+							return filepath.SkipAll
+						}
+					}
+				}
+			}
+		}
+		return nil
+	})
+
+	rawJSON, _ := json.MarshalIndent(matches, "", "  ")
+	return &ToolResult{
+		Content: fmt.Sprintf("Search for '%s' found %d match(es):\n%s", input.Query, len(matches), string(rawJSON)),
+		Data:    map[string]any{"query": input.Query, "count": len(matches), "matches": matches},
+	}, nil
+}
+
+// -----------------------------------------------------------------------------
+// 7. Exec Tool (Sandboxed Command Execution)
+// -----------------------------------------------------------------------------
+
+type ExecTool struct {
+	workspaceDir string
+}
+
+func NewExecTool(workspaceDir string) *ExecTool {
+	return &ExecTool{workspaceDir: workspaceDir}
+}
+
+func (t *ExecTool) Name() string { return "native_exec" }
+func (t *ExecTool) Description() string {
+	return "Execute a shell or PowerShell command inside the sandboxed workspace directory (timeout: 60s, max memory: 512MB)."
+}
+func (t *ExecTool) Category() string { return "native" }
+
+func (t *ExecTool) ParametersSchema() json.RawMessage {
+	return json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"command": { "type": "string", "description": "The shell command to execute" },
+			"timeout_seconds": { "type": "integer", "description": "Execution timeout in seconds (default: 60)" }
+		},
+		"required": ["command"]
+	}`)
+}
+
+func (t *ExecTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {
+	inputJSON = NormalizeToolInput(inputJSON)
+	var input struct {
+		Command        string `json:"command"`
+		TimeoutSeconds int    `json:"timeout_seconds"`
+	}
+	if err := json.Unmarshal(inputJSON, &input); err != nil || input.Command == "" {
+		return nil, errors.New("command is required")
+	}
+
+	timeout := 60 * time.Second
+	if input.TimeoutSeconds > 0 && input.TimeoutSeconds <= 300 {
+		timeout = time.Duration(input.TimeoutSeconds) * time.Second
+	}
+
+	sb := sandbox.AutoDetectSandbox()
+	result, err := sb.Execute(ctx, sandbox.CommandRequest{
+		Command:      input.Command,
+		WorkspaceDir: t.workspaceDir,
+		Timeout:      timeout,
+		MaxMemoryMB:  512,
+		MaxProcesses: 30,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("sandbox execution error: %w", err)
+	}
+
+	output := result.Stdout
+	if result.Stderr != "" {
+		if output != "" {
+			output += "\n[STDERR]\n" + result.Stderr
+		} else {
+			output = result.Stderr
+		}
+	}
+	if output == "" {
+		output = fmt.Sprintf("(Command completed with exit code %d, no output)", result.ExitCode)
+	}
+
+	return &ToolResult{
+		Content: output,
+		Data: map[string]any{
+			"exit_code":      result.ExitCode,
+			"execution_time": result.ExecutionTime.String(),
+			"killed":         result.Killed,
+		},
+	}, nil
+}
+
+// -----------------------------------------------------------------------------
+// 8. Web Search Tool
+// -----------------------------------------------------------------------------
+
+type WebSearchTool struct {
+	client *http.Client
+}
+
+func NewWebSearchTool() *WebSearchTool {
+	return &WebSearchTool{
+		client: &http.Client{Timeout: 15 * time.Second},
+	}
+}
+
+func (t *WebSearchTool) Name() string        { return "native_web_search" }
+func (t *WebSearchTool) Description() string { return "Search the web for real-time information, documentation, news, or solutions." }
+func (t *WebSearchTool) Category() string    { return "native" }
+
+func (t *WebSearchTool) ParametersSchema() json.RawMessage {
+	return json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"query": { "type": "string", "description": "Search query keywords" },
+			"max_results": { "type": "integer", "description": "Max results to return (default 5)" }
+		},
+		"required": ["query"]
+	}`)
+}
+
+func (t *WebSearchTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {
+	inputJSON = NormalizeToolInput(inputJSON)
+	var input struct {
+		Query      string `json:"query"`
+		MaxResults int    `json:"max_results"`
+	}
+	if err := json.Unmarshal(inputJSON, &input); err != nil || input.Query == "" {
+		return nil, errors.New("query is required")
+	}
+	if input.MaxResults <= 0 || input.MaxResults > 10 {
+		input.MaxResults = 5
+	}
+
+	// Use DuckDuckGo Instant Answer / HTML Search API
+	searchURL := fmt.Sprintf("https://html.duckduckgo.com/html/?q=%s", strings.ReplaceAll(input.Query, " ", "+"))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+	resp, err := t.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("web search request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 512*1024))
+	bodyStr := string(bodyBytes)
+
+	// Clean basic snippet extraction from DDG HTML
+	type SearchItem struct {
+		Title   string `json:"title"`
+		Snippet string `json:"snippet"`
+		URL     string `json:"url"`
+	}
+	var results []SearchItem
+
+	snippets := strings.Split(bodyStr, "class=\"result__snippet\"")
+	for i := 1; i < len(snippets) && len(results) < input.MaxResults; i++ {
+		chunk := snippets[i]
+		if closeTag := strings.Index(chunk, ">"); closeTag != -1 {
+			chunk = chunk[closeTag+1:]
+		}
+		if endTag := strings.Index(chunk, "</a>"); endTag != -1 {
+			snippet := strings.TrimSpace(chunk[:endTag])
+			// Strip simple html tags
+			snippet = strings.ReplaceAll(snippet, "<b>", "")
+			snippet = strings.ReplaceAll(snippet, "</b>", "")
+			if len(snippet) > 10 {
+				results = append(results, SearchItem{
+					Title:   fmt.Sprintf("Result #%d for %s", len(results)+1, input.Query),
+					Snippet: snippet,
+					URL:     "https://duckduckgo.com/?q=" + strings.ReplaceAll(input.Query, " ", "+"),
+				})
+			}
+		}
+	}
+
+	if len(results) == 0 {
+		return &ToolResult{
+			Content: fmt.Sprintf("Search completed for query '%s', but no structured snippet results were extracted.", input.Query),
+			Data:    map[string]any{"query": input.Query, "count": 0},
+		}, nil
+	}
+
+	rawJSON, _ := json.MarshalIndent(results, "", "  ")
+	return &ToolResult{
+		Content: fmt.Sprintf("Web Search Results for '%s':\n%s", input.Query, string(rawJSON)),
+		Data:    map[string]any{"query": input.Query, "count": len(results), "results": results},
+	}, nil
+}
+
+// -----------------------------------------------------------------------------
+// 9. Channel Notify Tool (Proactive Message Dispatch)
+// -----------------------------------------------------------------------------
+
+type ChannelNotifyTool struct {
+	bus *bus.EventBus
+}
+
+func NewChannelNotifyTool(eventBus *bus.EventBus) *ChannelNotifyTool {
+	return &ChannelNotifyTool{bus: eventBus}
+}
+
+func (t *ChannelNotifyTool) Name() string { return "native_channel_notify" }
+func (t *ChannelNotifyTool) Description() string {
+	return "Proactively send a message or status update to the user via Telegram, WhatsApp, Discord, or Web."
+}
+func (t *ChannelNotifyTool) Category() string { return "native" }
+
+func (t *ChannelNotifyTool) ParametersSchema() json.RawMessage {
+	return json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"channel": { "type": "string", "enum": ["telegram", "whatsapp", "discord", "all"], "description": "Target channel (default 'telegram')" },
+			"account_id": { "type": "string", "description": "Target account ID or 'all' (default 'all')" },
+			"recipient": { "type": "string", "description": "Optional recipient chat ID or phone number" },
+			"message": { "type": "string", "description": "Message content to send" }
+		},
+		"required": ["message"]
+	}`)
+}
+
+func (t *ChannelNotifyTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {
+	inputJSON = NormalizeToolInput(inputJSON)
+	var input struct {
+		Channel   string `json:"channel"`
+		AccountID string `json:"account_id"`
+		Recipient string `json:"recipient"`
+		Message   string `json:"message"`
+	}
+	if err := json.Unmarshal(inputJSON, &input); err != nil || input.Message == "" {
+		return nil, errors.New("message parameter is required")
+	}
+	if input.Channel == "" {
+		input.Channel = "telegram"
+	}
+	if input.AccountID == "" {
+		input.AccountID = "all"
+	}
+
+	if t.bus != nil {
+		t.bus.Publish(bus.NewEvent(bus.EventAgentActionDone, "channel_notify", map[string]any{
+			"type":              "proactive_cron_notification",
+			"job_name":          "Direct Agent Notification",
+			"content":           input.Message,
+			"target_channel":    input.Channel,
+			"target_account_id": input.AccountID,
+			"target_recipient":  input.Recipient,
+		}))
+	}
+
+	return &ToolResult{
+		Content: fmt.Sprintf("Successfully dispatched proactive notification to channel '%s' (account: %s)", input.Channel, input.AccountID),
+		Data: map[string]any{
+			"channel":    input.Channel,
+			"account_id": input.AccountID,
+			"recipient":  input.Recipient,
+			"status":     "dispatched",
+		},
+	}, nil
+}
+
+// -----------------------------------------------------------------------------
+// 10. SysInfo Tool
 // -----------------------------------------------------------------------------
 
 type SysInfoTool struct{}
@@ -333,7 +854,7 @@ func (t *SysInfoTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*
 }
 
 // -----------------------------------------------------------------------------
-// 5. Cron Schedule Tool
+// 11. Cron Schedule Tool
 // -----------------------------------------------------------------------------
 
 type CronScheduleTool struct {
@@ -364,6 +885,7 @@ func (t *CronScheduleTool) ParametersSchema() json.RawMessage {
 			"cron_expression": { "type": "string", "description": "Standard 5-part cron expression (e.g. '0 8 * * *' for 8:00 AM daily, '0 10 17 8 *' for 10:00 AM on August 17th)" },
 			"prompt": { "type": "string", "description": "Instructions/prompt that the agent will run autonomously on schedule to generate the reminder content" },
 			"target_channel": { "type": "string", "description": "Outbound channel to deliver the notification (e.g. 'telegram', 'whatsapp', 'all'). Default: 'telegram'" },
+			"target_account_id": { "type": "string", "description": "Target channel account ID or 'all' (default 'all')" },
 			"target_recipient": { "type": "string", "description": "Destination chat ID or phone number (optional, will automatically route to the user's active channel if omitted)" }
 		},
 		"required": ["action"]
@@ -379,6 +901,7 @@ func (t *CronScheduleTool) Execute(ctx context.Context, inputJSON json.RawMessag
 		CronExpression  string `json:"cron_expression"`
 		Prompt          string `json:"prompt"`
 		TargetChannel   string `json:"target_channel"`
+		TargetAccountID string `json:"target_account_id"`
 		TargetRecipient string `json:"target_recipient"`
 	}
 	if err := json.Unmarshal(inputJSON, &input); err != nil {
@@ -424,21 +947,25 @@ func (t *CronScheduleTool) Execute(ctx context.Context, inputJSON json.RawMessag
 		if input.TargetChannel == "" {
 			input.TargetChannel = "telegram"
 		}
+		if input.TargetAccountID == "" {
+			input.TargetAccountID = "all"
+		}
 
-		if err := t.scheduler.RegisterCron(input.JobID, input.AgentID, input.CronExpression, input.Prompt, input.TargetChannel, input.TargetRecipient); err != nil {
+		if err := t.scheduler.RegisterCron(input.JobID, input.AgentID, input.CronExpression, input.Prompt, input.TargetChannel, input.TargetAccountID, input.TargetRecipient); err != nil {
 			return nil, fmt.Errorf("registering cron schedule: %w", err)
 		}
 
 		return &ToolResult{
-			Content: fmt.Sprintf("Successfully registered scheduled reminder '%s'\nCron: %s\nTarget Channel: %s\nPrompt: %s", input.JobID, input.CronExpression, input.TargetChannel, input.Prompt),
+			Content: fmt.Sprintf("Successfully registered scheduled reminder '%s'\nCron: %s\nTarget Channel: %s\nTarget Account: %s\nPrompt: %s", input.JobID, input.CronExpression, input.TargetChannel, input.TargetAccountID, input.Prompt),
 			Data: map[string]any{
-				"job_id":           input.JobID,
-				"cron_expression":  input.CronExpression,
-				"agent_id":         input.AgentID,
-				"prompt":           input.Prompt,
-				"target_channel":   input.TargetChannel,
-				"target_recipient": input.TargetRecipient,
-				"status":           "created",
+				"job_id":            input.JobID,
+				"cron_expression":   input.CronExpression,
+				"agent_id":          input.AgentID,
+				"prompt":            input.Prompt,
+				"target_channel":    input.TargetChannel,
+				"target_account_id": input.TargetAccountID,
+				"target_recipient":  input.TargetRecipient,
+				"status":            "created",
 			},
 		}, nil
 

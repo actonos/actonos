@@ -118,6 +118,15 @@ Test connectivity for a specific LLM provider API key.
 ### `GET /api/system/audit`
 Retrieve system audit log entries.
 
+### `GET /api/system/token-usage`
+Get lifetime, today, and month token consumption statistics, estimated USD cost, and model usage breakdown.
+
+### `GET /api/system/heartbeat/history`
+Get execution logs for autonomous 5-minute heartbeat cycles (Zero-Noise evaluation).
+
+### `GET /api/system/metrics/prometheus`
+Export Prometheus-compatible telemetry metrics (`actonos_uptime_seconds`, `actonos_goroutines`, `actonos_memory_alloc_bytes`, `actonos_agents_active`, `actonos_tokens_total`, `actonos_cost_usd_total`).
+
 ### `GET /api/system/backup`
 Download full system state snapshot (SQLite DB, manifests, profiles, SOUL.md).
 
@@ -185,6 +194,9 @@ Create a new agent manifest.
 ### `GET /api/agents/{agentID}`
 Retrieve single agent manifest.
 
+### `POST /api/agents/{agentID}/chat/stream`
+Send user prompt and stream real-time Server-Sent Events (SSE) token stream with tool invocation badges.
+
 ### `PUT /api/agents/{agentID}`
 Update agent manifest.
 
@@ -221,6 +233,12 @@ Create or update scheduled cron task.
   "enabled": true
 }
 ```
+
+### `GET /api/cron/history`
+List past execution history across all scheduled cron jobs and autonomous triggers.
+
+### `GET /api/cron/{id}/history`
+List past execution history for a specific scheduled task.
 
 ### `POST /api/agents/cron/{id}/run`
 Manually trigger execution of a cron job immediately.
@@ -261,7 +279,10 @@ Generate OAuth 2.1 PKCE authorization URL.
 Save direct API token for SaaS connector.
 
 ### `GET /api/integrations/channels` | `POST /api/integrations/channels`
-Get and configure multi-account credentials for Telegram, WhatsApp, and Discord.
+Get and configure multi-account credentials for Telegram, WhatsApp, and Discord with agent bindings.
+
+### `GET /api/integrations/channels/accounts`
+List all configured channel accounts across all channels with their assigned agent bindings.
 
 ### `POST /api/integrations/pairing/code`
 Generate pairing code.

@@ -129,8 +129,10 @@ export interface CronJobItem {
   cron_expr: string;
   prompt: string;
   target_channel?: string;
+  target_account_id?: string;
   target_recipient?: string;
   channel?: string;
+  account_id?: string;
   recipient?: string;
   enabled: boolean;
   last_run?: string;
@@ -251,12 +253,14 @@ export const api = {
     return fetchJSON<{ memory_md: string; agent_id?: string }>(url);
   },
   listCronJobs: () => fetchJSON<{ jobs: CronJobItem[]; count: number }>('/cron'),
-  saveCronJob: (job: Partial<CronJobItem> & { target_channel?: string; target_recipient?: string }) =>
+  saveCronJob: (job: Partial<CronJobItem> & { target_channel?: string; target_account_id?: string; target_recipient?: string }) =>
     fetchJSON<{ status: string; job?: CronJobItem; job_id?: string }>('/cron', {
       method: 'POST',
       body: JSON.stringify({
         ...job,
         channel: job.channel || job.target_channel,
+        account_id: job.account_id || job.target_account_id || 'all',
+        target_account_id: job.target_account_id || job.account_id || 'all',
         recipient: job.recipient || job.target_recipient,
       }),
     }),
@@ -466,6 +470,8 @@ export const api = {
       webhook_secret: string;
       webhook_url: string;
     }>('/integrations/channels'),
+  listAllChannelAccounts: () =>
+    fetchJSON<{ accounts: ChannelAccount[]; count: number }>('/integrations/channels/accounts'),
   saveChannels: (cfg: {
     telegram_token?: string;
     discord_token?: string;
@@ -499,6 +505,14 @@ export const api = {
       method: 'DELETE',
       body: JSON.stringify(data),
     }),
+
+  // Observability, Tokens & History
+  getTokenUsage: () => fetchJSON<import('./types').TokenUsageSummary>('/system/token-usage'),
+  getHeartbeatHistory: () => fetchJSON<import('./types').HeartbeatRun[]>('/system/heartbeat/history'),
+  getCronHistory: (jobID?: string) =>
+    fetchJSON<import('./types').CronExecutionRecord[]>(
+      jobID ? `/cron/${jobID}/history` : '/cron/history'
+    ),
 
   // HAL & Network
   getMetrics: () => fetchJSON<SystemMetrics>('/system/metrics'),

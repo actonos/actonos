@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/actonos/actonos/internal/auth"
+	"github.com/actonos/actonos/internal/channels"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -683,22 +684,13 @@ func (s *Server) handleToggleIntegration(w http.ResponseWriter, r *http.Request)
 
 // Channels & Inbound Webhooks
 
-// ChannelAccount represents a single connected account for a channel type.
-type ChannelAccount struct {
-	ID      string `json:"id"`
-	Label   string `json:"label"`
-	Token   string `json:"token,omitempty"`
-	PhoneID string `json:"phone_id,omitempty"`
-	Enabled bool   `json:"enabled"`
-}
-
 // ChannelConfigResponse returns channel configurations with multi-account support.
 type ChannelConfigResponse struct {
-	Telegram      []ChannelAccount `json:"telegram"`
-	Discord       []ChannelAccount `json:"discord"`
-	WhatsApp      []ChannelAccount `json:"whatsapp"`
-	WebhookSecret string           `json:"webhook_secret"`
-	WebhookURL    string           `json:"webhook_url"`
+	Telegram      []channels.ChannelAccount `json:"telegram"`
+	Discord       []channels.ChannelAccount `json:"discord"`
+	WhatsApp      []channels.ChannelAccount `json:"whatsapp"`
+	WebhookSecret string                    `json:"webhook_secret"`
+	WebhookURL    string                    `json:"webhook_url"`
 }
 
 func (s *Server) handleGetChannels(w http.ResponseWriter, r *http.Request) {
@@ -715,8 +707,8 @@ func (s *Server) handleGetChannels(w http.ResponseWriter, r *http.Request) {
 	tgAccounts := loadChannelAccounts(configDir, "telegram")
 	if len(tgAccounts) == 0 {
 		if tg := readKey("telegram.token"); tg != "" {
-			tgAccounts = []ChannelAccount{{
-				ID: "default", Label: "Primary Bot", Token: maskKey(tg), Enabled: true,
+			tgAccounts = []channels.ChannelAccount{{
+				ID: "tg_default", Name: "Primary Bot", Channel: "telegram", Token: maskKey(tg), Enabled: true, BoundAgentIDs: []string{"*"},
 			}}
 		}
 	}
@@ -724,8 +716,8 @@ func (s *Server) handleGetChannels(w http.ResponseWriter, r *http.Request) {
 	dcAccounts := loadChannelAccounts(configDir, "discord")
 	if len(dcAccounts) == 0 {
 		if dc := readKey("discord.token"); dc != "" {
-			dcAccounts = []ChannelAccount{{
-				ID: "default", Label: "Primary Bot", Token: maskKey(dc), Enabled: true,
+			dcAccounts = []channels.ChannelAccount{{
+				ID: "dc_default", Name: "Primary Bot", Channel: "discord", Token: maskKey(dc), Enabled: true, BoundAgentIDs: []string{"*"},
 			}}
 		}
 	}
@@ -735,9 +727,9 @@ func (s *Server) handleGetChannels(w http.ResponseWriter, r *http.Request) {
 		waToken := readKey("whatsapp.token")
 		waPhone := readKey("whatsapp.phone_id")
 		if waToken != "" && waPhone != "" {
-			waAccounts = []ChannelAccount{{
-				ID: "default", Label: "Primary", Token: maskKey(waToken),
-				PhoneID: waPhone, Enabled: true,
+			waAccounts = []channels.ChannelAccount{{
+				ID: "wa_default", Name: "Primary Number", Channel: "whatsapp", Token: maskKey(waToken),
+				PhoneID: waPhone, Enabled: true, BoundAgentIDs: []string{"*"},
 			}}
 		}
 	}
@@ -756,25 +748,63 @@ func (s *Server) handleGetChannels(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleListAllChannelAccounts returns a flat list of all channel accounts across all channels.
+func (s *Server) handleListAllChannelAccounts(w http.ResponseWriter, r *http.Request) {
+	configDir := "./data/config"
+	var all []channels.ChannelAccount
+
+	tg := loadChannelAccounts(configDir, "telegram")
+	dc := loadChannelAccounts(configDir, "discord")
+	wa := loadChannelAccounts(configDir, "whatsapp")
+
+	all = append(all, tg...)
+	all = append(all, dc...)
+	all = append(all, wa...)
+
+	s.respondJSON(w, http.StatusOK, map[string]any{
+		"accounts": all,
+		"count":    len(all),
+	})
+}
+
 // loadChannelAccounts reads the multi-account JSON file for a channel type.
-func loadChannelAccounts(configDir, channelType string) []ChannelAccount {
+func loadChannelAccounts(configDir, channelType string) []channels.ChannelAccount {
 	data, err := os.ReadFile(filepath.Join(configDir, channelType+"_accounts.json"))
 	if err != nil {
 		return nil
 	}
-	var accounts []ChannelAccount
+	var accounts []channels.ChannelAccount
 	if err := json.Unmarshal(data, &accounts); err != nil {
 		return nil
 	}
 	// Mask tokens for API responses
 	for i := range accounts {
-		accounts[i].Token = maskKey(accounts[i].Token)
+		accounts[i].Channel = channelType
+		if accounts[i].Token != "" {
+			accounts[i].Token = maskKey(accounts[i].Token)
+		}
 	}
 	return accounts
 }
 
 // saveChannelAccounts writes the multi-account JSON file for a channel type.
-func saveChannelAccounts(configDir, channelType string, accounts []ChannelAccount) error {
+func saveChannelAccounts(configDir, channelType string, accounts []channels.ChannelAccount) error {
+	// Preserve actual tokens if masked was passed
+	existing := loadRawChannelAccounts(configDir, channelType)
+	existingMap := make(map[string]string)
+	for _, e := range existing {
+		existingMap[e.ID] = e.Token
+	}
+
+	for i := range accounts {
+		accounts[i].Channel = channelType
+		if strings.Contains(accounts[i].Token, "...") {
+			if realTok, ok := existingMap[accounts[i].ID]; ok && realTok != "" {
+				accounts[i].Token = realTok
+			}
+		}
+	}
+
 	data, err := json.MarshalIndent(accounts, "", "  ")
 	if err != nil {
 		return err
@@ -782,19 +812,29 @@ func saveChannelAccounts(configDir, channelType string, accounts []ChannelAccoun
 	return os.WriteFile(filepath.Join(configDir, channelType+"_accounts.json"), data, 0600)
 }
 
+func loadRawChannelAccounts(configDir, channelType string) []channels.ChannelAccount {
+	data, err := os.ReadFile(filepath.Join(configDir, channelType+"_accounts.json"))
+	if err != nil {
+		return nil
+	}
+	var accounts []channels.ChannelAccount
+	_ = json.Unmarshal(data, &accounts)
+	return accounts
+}
+
 func (s *Server) handleSaveChannels(w http.ResponseWriter, r *http.Request) {
 	configDir := "./data/config"
 	_ = os.MkdirAll(configDir, 0755)
 
 	var req struct {
-		TelegramToken    string           `json:"telegram_token,omitempty"`
-		DiscordToken     string           `json:"discord_token,omitempty"`
-		WhatsAppToken    string           `json:"whatsapp_token,omitempty"`
-		WhatsAppPhone    string           `json:"whatsapp_phone_id,omitempty"`
-		WebhookSecret    string           `json:"webhook_secret,omitempty"`
-		TelegramAccounts []ChannelAccount `json:"telegram_accounts,omitempty"`
-		DiscordAccounts  []ChannelAccount `json:"discord_accounts,omitempty"`
-		WhatsAppAccounts []ChannelAccount `json:"whatsapp_accounts,omitempty"`
+		TelegramToken    string                    `json:"telegram_token,omitempty"`
+		DiscordToken     string                    `json:"discord_token,omitempty"`
+		WhatsAppToken    string                    `json:"whatsapp_token,omitempty"`
+		WhatsAppPhone    string                    `json:"whatsapp_phone_id,omitempty"`
+		WebhookSecret    string                    `json:"webhook_secret,omitempty"`
+		TelegramAccounts []channels.ChannelAccount `json:"telegram_accounts,omitempty"`
+		DiscordAccounts  []channels.ChannelAccount `json:"discord_accounts,omitempty"`
+		WhatsAppAccounts []channels.ChannelAccount `json:"whatsapp_accounts,omitempty"`
 	}
 
 	if err := s.decodeJSON(r, &req); err != nil {
@@ -802,10 +842,14 @@ func (s *Server) handleSaveChannels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var allAccounts []channels.ChannelAccount
+
 	// Handle multi-account saves
 	if len(req.TelegramAccounts) > 0 {
 		_ = saveChannelAccounts(configDir, "telegram", req.TelegramAccounts)
-		for _, acc := range req.TelegramAccounts {
+		rawTg := loadRawChannelAccounts(configDir, "telegram")
+		allAccounts = append(allAccounts, rawTg...)
+		for _, acc := range rawTg {
 			if acc.Enabled && acc.Token != "" {
 				_ = os.WriteFile(filepath.Join(configDir, "telegram.token"), []byte(strings.TrimSpace(acc.Token)), 0600)
 				if s.tgAdapter != nil {
@@ -817,7 +861,9 @@ func (s *Server) handleSaveChannels(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(req.DiscordAccounts) > 0 {
 		_ = saveChannelAccounts(configDir, "discord", req.DiscordAccounts)
-		for _, acc := range req.DiscordAccounts {
+		rawDc := loadRawChannelAccounts(configDir, "discord")
+		allAccounts = append(allAccounts, rawDc...)
+		for _, acc := range rawDc {
 			if acc.Enabled && acc.Token != "" {
 				_ = os.WriteFile(filepath.Join(configDir, "discord.token"), []byte(strings.TrimSpace(acc.Token)), 0600)
 				break
@@ -826,7 +872,9 @@ func (s *Server) handleSaveChannels(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(req.WhatsAppAccounts) > 0 {
 		_ = saveChannelAccounts(configDir, "whatsapp", req.WhatsAppAccounts)
-		for _, acc := range req.WhatsAppAccounts {
+		rawWa := loadRawChannelAccounts(configDir, "whatsapp")
+		allAccounts = append(allAccounts, rawWa...)
+		for _, acc := range rawWa {
 			if acc.Enabled && acc.Token != "" {
 				_ = os.WriteFile(filepath.Join(configDir, "whatsapp.token"), []byte(strings.TrimSpace(acc.Token)), 0600)
 				if acc.PhoneID != "" {
@@ -855,6 +903,11 @@ func (s *Server) handleSaveChannels(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.WebhookSecret != "" {
 		_ = os.WriteFile(filepath.Join(configDir, "webhook.secret"), []byte(strings.TrimSpace(req.WebhookSecret)), 0600)
+	}
+
+	// Dynamically sync all active accounts with ChannelManager
+	if s.channelMgr != nil && len(allAccounts) > 0 {
+		_ = s.channelMgr.SyncAccounts(r.Context(), allAccounts)
 	}
 
 	s.respondJSON(w, http.StatusOK, map[string]string{"status": "saved"})

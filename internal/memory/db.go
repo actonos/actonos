@@ -130,6 +130,51 @@ func (d *DB) migrate() error {
 		created_at TIMESTAMP NOT NULL,
 		updated_at TIMESTAMP NOT NULL
 	);
+
+	CREATE TABLE IF NOT EXISTS token_usage (
+		id TEXT PRIMARY KEY,
+		timestamp TIMESTAMP NOT NULL,
+		agent_id TEXT NOT NULL,
+		model TEXT NOT NULL,
+		provider TEXT NOT NULL,
+		prompt_tokens INTEGER NOT NULL,
+		completion_tokens INTEGER NOT NULL,
+		total_tokens INTEGER NOT NULL,
+		estimated_cost_usd REAL NOT NULL DEFAULT 0.0,
+		source TEXT NOT NULL,
+		conversation_id TEXT
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_token_usage_timestamp ON token_usage(timestamp);
+	CREATE INDEX IF NOT EXISTS idx_token_usage_agent ON token_usage(agent_id);
+	CREATE INDEX IF NOT EXISTS idx_token_usage_model ON token_usage(model);
+
+	CREATE TABLE IF NOT EXISTS cron_execution_history (
+		id TEXT PRIMARY KEY,
+		job_id TEXT NOT NULL,
+		agent_id TEXT NOT NULL,
+		status TEXT NOT NULL,
+		prompt TEXT NOT NULL,
+		output TEXT,
+		error TEXT,
+		duration_ms INTEGER NOT NULL,
+		tokens_used INTEGER NOT NULL DEFAULT 0,
+		executed_at TIMESTAMP NOT NULL
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_cron_history_job ON cron_execution_history(job_id);
+	CREATE INDEX IF NOT EXISTS idx_cron_history_executed ON cron_execution_history(executed_at);
+
+	CREATE TABLE IF NOT EXISTS heartbeat_runs (
+		id TEXT PRIMARY KEY,
+		agent_id TEXT NOT NULL,
+		executed_at TIMESTAMP NOT NULL,
+		status TEXT NOT NULL,
+		summary TEXT,
+		tokens_used INTEGER NOT NULL DEFAULT 0
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_heartbeat_runs_executed ON heartbeat_runs(executed_at);
 	`
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

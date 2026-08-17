@@ -57,13 +57,49 @@ func TestToolRegistry_RegisterAndExecute(t *testing.T) {
 		t.Fatal("expected path escape error, got nil")
 	}
 
-	// Test native_sysinfo
-	sysRes, err := registry.Execute(ctx, "test_agent", "native_sysinfo", json.RawMessage(`{}`))
+	// Test native_file_list
+	listRes, err := registry.Execute(ctx, "test_agent", "native_file_list", json.RawMessage(`{}`))
 	if err != nil {
-		t.Fatalf("native_sysinfo failed: %v", err)
+		t.Fatalf("native_file_list failed: %v", err)
 	}
-	if sysRes.Content == "" {
-		t.Fatal("expected sysinfo content")
+	if listRes.Content == "" {
+		t.Fatal("expected file list content")
+	}
+
+	// Test native_file_search
+	searchRes, err := registry.Execute(ctx, "test_agent", "native_file_search", json.RawMessage(`{"query": "ActonOS"}`))
+	if err != nil {
+		t.Fatalf("native_file_search failed: %v", err)
+	}
+	if searchRes.Content == "" {
+		t.Fatal("expected search result content")
+	}
+
+	// Test native_exec
+	execRes, err := registry.Execute(ctx, "test_agent", "native_exec", json.RawMessage(`{"command": "echo 'sandbox test'"}`))
+	if err != nil {
+		t.Fatalf("native_exec failed: %v", err)
+	}
+	if execRes.Content == "" {
+		t.Fatal("expected exec result content")
+	}
+
+	// Test native_channel_notify
+	notifyRes, err := registry.Execute(ctx, "test_agent", "native_channel_notify", json.RawMessage(`{"channel": "telegram", "message": "Test notification"}`))
+	if err != nil {
+		t.Fatalf("native_channel_notify failed: %v", err)
+	}
+	if notifyRes.Content == "" {
+		t.Fatal("expected notify result content")
+	}
+
+	// Test native_file_delete
+	delRes, err := registry.Execute(ctx, "test_agent", "native_file_delete", json.RawMessage(`{"path": "test.txt"}`))
+	if err != nil {
+		t.Fatalf("native_file_delete failed: %v", err)
+	}
+	if delRes.Content == "" {
+		t.Fatal("expected delete result content")
 	}
 }
 

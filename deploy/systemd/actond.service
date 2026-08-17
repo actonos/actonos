@@ -1,0 +1,33 @@
+[Unit]
+Description=ActonOS Extensible AI Agent Operating System Daemon
+Documentation=https://github.com/actonos/actonos
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=acton
+Group=acton
+WorkingDirectory=/var/lib/acton
+ExecStart=/usr/local/bin/actond \
+    -data-dir /var/lib/acton \
+    -listen-addr :8080 \
+    -log-level info \
+    -log-format text
+Restart=always
+RestartSec=5s
+LimitNOFILE=65536
+KillMode=mixed
+TimeoutStopSec=15s
+
+# Security Hardening Sandbox
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/acton
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictRealtime=true
+
+[Install]
+WantedBy=multi-user.target

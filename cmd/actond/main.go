@@ -36,11 +36,26 @@ func main() {
 	var (
 		dataDir    = flag.String("data-dir", "./data", "Directory for persistent storage and databases")
 		logLevel   = flag.String("log-level", "info", "Log level (debug, info, warn, error)")
+		logFormat  = flag.String("log-format", "text", "Log format (text, json)")
 		listenAddr = flag.String("listen-addr", ":8080", "HTTP server listen address")
 		hostname   = flag.String("hostname", "acton-mini", "Appliance network hostname")
 		showVer    = flag.Bool("version", false, "Print version information and exit")
 	)
 	flag.Parse()
+
+	// Environment variable overrides
+	if envData := os.Getenv("ACTON_DATA_DIR"); envData != "" {
+		*dataDir = envData
+	}
+	if envLog := os.Getenv("ACTON_LOG_LEVEL"); envLog != "" {
+		*logLevel = envLog
+	}
+	if envFormat := os.Getenv("ACTON_LOG_FORMAT"); envFormat != "" {
+		*logFormat = envFormat
+	}
+	if envAddr := os.Getenv("ACTON_LISTEN_ADDR"); envAddr != "" {
+		*listenAddr = envAddr
+	}
 
 	if *showVer {
 		fmt.Printf("ActonOS Daemon (actond) v%s (commit: %s, built: %s)\n", Version, GitCommit, BuildTime)
@@ -49,7 +64,7 @@ func main() {
 
 	// Setup Structured Logger
 	var level slog.Level
-	switch *logLevel {
+	switch strings.ToLower(*logLevel) {
 	case "debug":
 		level = slog.LevelDebug
 	case "warn":
@@ -60,7 +75,14 @@ func main() {
 		level = slog.LevelInfo
 	}
 
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
+	var handler slog.Handler
+	if strings.ToLower(*logFormat) == "json" {
+		handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level})
+	} else {
+		handler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level})
+	}
+
+	logger := slog.New(handler)
 	slog.SetDefault(logger)
 
 	slog.Info("starting ActonOS daemon...",
@@ -188,46 +210,62 @@ func main() {
 		engine.SetProfileManager(profileMgr)
 	}
 
+	tokenTracker := memory.NewTokenTracker(db.SQLDB())
+	engine.SetTokenTracker(tokenTracker)
+
 	cronSched := agent.NewCronScheduler(engine, eventBus, db.SQLDB())
 	tools.AttachCronScheduler(toolReg, cronSched)
 	cronSched.Start(ctx)
 	defer cronSched.Stop()
 
-	// 10. Initialize Zero-Trust Channel Pairing & Multi-Channel Adapters
+	// Initialize Autonomous Heartbeat Daemon
+	heartbeatDaemon := agent.NewHeartbeatDaemon(agentMgr, engine, eventBus, db.SQLDB(), workspaceDir, 5*time.Minute)
+	heartbeatDaemon.Start(ctx)
+	defer heartbeatDaemon.Stop()
+
+	// 10. Initialize Zero-Trust Channel Pairing & Multi-Account Channel Manager
 	pairingMgr, err := channels.NewPairingManager(db.SQLDB())
 	if err != nil {
 		slog.Warn("failed to initialize pairing manager", "error", err)
 	}
 
-	tgToken := readKey("telegram.token")
-	tgAdapter := channels.NewTelegramAdapter(tgToken, eventBus, pairingMgr)
-	if err := tgAdapter.Start(ctx); err != nil {
-		slog.Warn("failed to start telegram adapter", "error", err)
-	}
-	defer tgAdapter.Stop()
+	channelMgr := channels.NewChannelManager(eventBus, pairingMgr)
 
+	// Load initial channel accounts from disk
+	tgToken := readKey("telegram.token")
 	waToken := readKey("whatsapp.token")
 	waPhone := readKey("whatsapp.phone_id")
-	waAdapter := channels.NewWhatsAppAdapter(waToken, waPhone, "acton_verify_token", eventBus, pairingMgr)
+	dcToken := readKey("discord.token")
+
+	var initialAccounts []channels.ChannelAccount
+	if tgToken != "" {
+		initialAccounts = append(initialAccounts, channels.ChannelAccount{
+			ID: "tg_default", Name: "Primary Telegram Bot", Channel: "telegram", Token: tgToken, Enabled: true, BoundAgentIDs: []string{"*"},
+		})
+	}
+	if waToken != "" {
+		initialAccounts = append(initialAccounts, channels.ChannelAccount{
+			ID: "wa_default", Name: "Primary WhatsApp Number", Channel: "whatsapp", Token: waToken, PhoneID: waPhone, Enabled: true, BoundAgentIDs: []string{"*"},
+		})
+	}
+	if dcToken != "" {
+		initialAccounts = append(initialAccounts, channels.ChannelAccount{
+			ID: "dc_default", Name: "Primary Discord Bot", Channel: "discord", Token: dcToken, Enabled: true, BoundAgentIDs: []string{"*"},
+		})
+	}
+	_ = channelMgr.SyncAccounts(ctx, initialAccounts)
+	_ = channelMgr.Start(ctx)
+	defer channelMgr.Stop()
 
 	// Multi-Channel Cognitive Session Manager
 	sessionMgr := channels.NewChannelSessionManager(db.SQLDB())
 
 	// Set Default Recipient Resolver for Proactive Schedulers
 	cronSched.SetDefaultRecipientGetter(func(channel string) string {
-		if channel == "telegram" && tgAdapter != nil {
-			if lastID := tgAdapter.GetLastChatID(); lastID != "" {
-				return lastID
-			}
-			known := tgAdapter.GetKnownChatIDs()
-			if len(known) > 0 {
-				return known[0]
-			}
-			if pairingMgr != nil {
-				paired := pairingMgr.ListAuthorized("telegram")
-				if len(paired) > 0 {
-					return paired[0].SenderID
-				}
+		if pairingMgr != nil {
+			paired := pairingMgr.ListAuthorized(channel)
+			if len(paired) > 0 {
+				return paired[0].SenderID
 			}
 		}
 		return ""
@@ -245,10 +283,14 @@ func main() {
 				if !ok {
 					return
 				}
-				if ev.AgentID == "telegram" || ev.AgentID == "whatsapp" {
+				if ev.AgentID == "telegram" || ev.AgentID == "whatsapp" || ev.AgentID == "discord" {
 					if inMsg, ok := ev.Payload.(channels.InboundMessage); ok {
 						go func(msg channels.InboundMessage) {
-							target := "agent_system_core"
+							// Determine bound agent for this specific channel account
+							target := channelMgr.FindBoundAgent(msg.ChannelID, msg.AccountID)
+							if target == "" {
+								target = "agent_system_core"
+							}
 							senderID := msg.SenderID
 							if msg.Metadata != nil && msg.Metadata["chat_id"] != "" {
 								senderID = msg.Metadata["chat_id"]
@@ -269,9 +311,9 @@ func main() {
 							// 4. Construct contextual metadata prompt
 							chatMeta := ""
 							if msg.Metadata != nil && msg.Metadata["chat_id"] != "" {
-								chatMeta = fmt.Sprintf("[Channel: %s | User Chat ID: %s | Sender: %s]\n", msg.ChannelID, msg.Metadata["chat_id"], msg.SenderName)
+								chatMeta = fmt.Sprintf("[Channel: %s | Account: %s | User Chat ID: %s | Sender: %s]\n", msg.ChannelID, msg.AccountID, msg.Metadata["chat_id"], msg.SenderName)
 							} else if msg.ChannelID != "" {
-								chatMeta = fmt.Sprintf("[Channel: %s | Sender ID: %s]\n", msg.ChannelID, msg.SenderID)
+								chatMeta = fmt.Sprintf("[Channel: %s | Account: %s | Sender ID: %s]\n", msg.ChannelID, msg.AccountID, msg.SenderID)
 							}
 							promptWithMeta := chatMeta + msg.Content
 
@@ -287,20 +329,13 @@ func main() {
 								_ = sessionMgr.SaveMessage(context.Background(), convID, target, "assistant", resp.Content, resp.ToolCalls)
 							}
 
-							// 7. Deliver outbound response to channel
-							if msg.ChannelID == "telegram" && senderID != "" {
-								_ = tgAdapter.SendMessage(context.Background(), channels.OutboundMessage{
-									ChannelID: "telegram",
-									Recipient: senderID,
-									Content:   resp.Content,
-								})
-							} else if msg.ChannelID == "whatsapp" {
-								_ = waAdapter.SendMessage(context.Background(), channels.OutboundMessage{
-									ChannelID: "whatsapp",
-									Recipient: msg.SenderID,
-									Content:   resp.Content,
-								})
-							}
+							// 7. Deliver outbound response via ChannelManager
+							_ = channelMgr.SendMessage(context.Background(), channels.OutboundMessage{
+								ChannelID: msg.ChannelID,
+								AccountID: msg.AccountID,
+								Recipient: senderID,
+								Content:   resp.Content,
+							})
 						}(inMsg)
 					}
 				}
@@ -313,42 +348,25 @@ func main() {
 						content, _ := payloadMap["content"].(string)
 						jobName, _ := payloadMap["job_name"].(string)
 						targetChan, _ := payloadMap["target_channel"].(string)
+						targetAcc, _ := payloadMap["target_account_id"].(string)
 						targetRec, _ := payloadMap["target_recipient"].(string)
 
 						if targetChan == "" {
-							targetChan = "telegram"
+							targetChan = "all"
+						}
+						if targetAcc == "" {
+							targetAcc = "all"
 						}
 
-						msgText := fmt.Sprintf("⏰ **[Cron Reminder: %s]**\n\n%s", jobName, content)
+						msgText := fmt.Sprintf("⏰ **[%s]**\n\n%s", jobName, content)
 
-						// Route to Telegram
-						if targetChan == "telegram" || targetChan == "all" {
-							recipients := []string{}
-							if targetRec != "" {
-								recipients = append(recipients, targetRec)
-							} else if lastID := tgAdapter.GetLastChatID(); lastID != "" {
-								recipients = append(recipients, lastID)
-							} else {
-								recipients = tgAdapter.GetKnownChatIDs()
-							}
-
-							for _, rec := range recipients {
-								_ = tgAdapter.SendMessage(context.Background(), channels.OutboundMessage{
-									ChannelID: "telegram",
-									Recipient: rec,
-									Content:   msgText,
-								})
-							}
-						}
-
-						// Route to WhatsApp
-						if (targetChan == "whatsapp" || targetChan == "all") && targetRec != "" {
-							_ = waAdapter.SendMessage(context.Background(), channels.OutboundMessage{
-								ChannelID: "whatsapp",
-								Recipient: targetRec,
-								Content:   fmt.Sprintf("⏰ *[Cron Reminder: %s]*\n\n%s", jobName, content),
-							})
-						}
+						// Route through ChannelManager to target channel and account(s)
+						_ = channelMgr.SendMessage(context.Background(), channels.OutboundMessage{
+							ChannelID: targetChan,
+							AccountID: targetAcc,
+							Recipient: targetRec,
+							Content:   msgText,
+						})
 					}
 				}
 			}
@@ -381,6 +399,8 @@ func main() {
 		SwarmManager:       swarmMgr,
 		Engine:             engine,
 		CronScheduler:      cronSched,
+		HeartbeatDaemon:    heartbeatDaemon,
+		TokenTracker:       tokenTracker,
 		ProfileManager:     profileMgr,
 		LLMRouter:          llmRouter,
 		ToolRegistry:       toolReg,
@@ -395,8 +415,9 @@ func main() {
 		SystemAuth:         sysAuth,
 		EventBus:           eventBus,
 		PairingManager:     pairingMgr,
-		TelegramAdapter:    tgAdapter,
-		WhatsAppAdapter:    waAdapter,
+		ChannelManager:     channelMgr,
+		TelegramAdapter:    nil,
+		WhatsAppAdapter:    nil,
 	}
 
 	apiServer := server.NewServer(srvConfig)
@@ -438,6 +459,9 @@ func main() {
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		slog.Error("http server shutdown error", "error", err)
 	}
+
+	// Checkpoint SQLite WAL mode to ensure 100% clean persistent disk state
+	_, _ = db.SQLDB().Exec("PRAGMA wal_checkpoint(TRUNCATE);")
 
 	eventBus.Publish(bus.NewEvent(bus.EventSystemShutdown, "kernel", nil))
 	slog.Info("ActonOS daemon stopped cleanly")

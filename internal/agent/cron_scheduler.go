@@ -19,7 +19,8 @@ type CronJob struct {
 	Name            string    `json:"name"`
 	CronExpr        string    `json:"cron_expr"`
 	Prompt          string    `json:"prompt"`
-	TargetChannel   string    `json:"target_channel"` // "telegram", "discord", "whatsapp", "webhook"
+	TargetChannel   string    `json:"target_channel"`    // "telegram", "discord", "whatsapp", "webhook", "all"
+	TargetAccountID string    `json:"target_account_id"` // specific account ID or "all"
 	TargetRecipient string    `json:"target_recipient"`
 	Enabled         bool      `json:"enabled"`
 	LastRun         time.Time `json:"last_run,omitempty"`
@@ -94,6 +95,7 @@ func (cs *CronScheduler) initDB() {
 		cron_expr TEXT NOT NULL,
 		prompt TEXT NOT NULL,
 		target_channel TEXT NOT NULL DEFAULT 'telegram',
+		target_account_id TEXT NOT NULL DEFAULT 'all',
 		target_recipient TEXT NOT NULL DEFAULT '',
 		enabled INTEGER NOT NULL DEFAULT 1,
 		last_run TIMESTAMP,
@@ -105,13 +107,15 @@ func (cs *CronScheduler) initDB() {
 	if err != nil {
 		slog.Error("failed to initialize cron_jobs table", "error", err)
 	}
+	// Run non-destructive column migration for existing DB
+	_, _ = cs.db.Exec("ALTER TABLE cron_jobs ADD COLUMN target_account_id TEXT NOT NULL DEFAULT 'all'")
 }
 
 func (cs *CronScheduler) loadJobsFromDB() {
 	if cs.db == nil {
 		return
 	}
-	rows, err := cs.db.Query("SELECT id, agent_id, name, cron_expr, prompt, target_channel, target_recipient, enabled, last_run FROM cron_jobs")
+	rows, err := cs.db.Query("SELECT id, agent_id, name, cron_expr, prompt, target_channel, target_account_id, target_recipient, enabled, last_run FROM cron_jobs")
 	if err != nil {
 		slog.Error("failed to load cron jobs from database", "error", err)
 		return
@@ -125,8 +129,11 @@ func (cs *CronScheduler) loadJobsFromDB() {
 		var job CronJob
 		var enabledInt int
 		var lastRun sql.NullTime
-		if err := rows.Scan(&job.ID, &job.AgentID, &job.Name, &job.CronExpr, &job.Prompt, &job.TargetChannel, &job.TargetRecipient, &enabledInt, &lastRun); err != nil {
+		if err := rows.Scan(&job.ID, &job.AgentID, &job.Name, &job.CronExpr, &job.Prompt, &job.TargetChannel, &job.TargetAccountID, &job.TargetRecipient, &enabledInt, &lastRun); err != nil {
 			continue
+		}
+		if job.TargetAccountID == "" {
+			job.TargetAccountID = "all"
 		}
 		job.Enabled = (enabledInt == 1)
 		if lastRun.Valid {
@@ -206,25 +213,29 @@ func (cs *CronScheduler) RegisterJob(job CronJob) error {
 			enabledInt = 1
 		}
 		now := time.Now().UTC()
+		if jobCopy.TargetAccountID == "" {
+			jobCopy.TargetAccountID = "all"
+		}
 		_, err := cs.db.Exec(`
-			INSERT INTO cron_jobs (id, agent_id, name, cron_expr, prompt, target_channel, target_recipient, enabled, last_run, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			INSERT INTO cron_jobs (id, agent_id, name, cron_expr, prompt, target_channel, target_account_id, target_recipient, enabled, last_run, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET
 				agent_id = excluded.agent_id,
 				name = excluded.name,
 				cron_expr = excluded.cron_expr,
 				prompt = excluded.prompt,
 				target_channel = excluded.target_channel,
+				target_account_id = excluded.target_account_id,
 				target_recipient = excluded.target_recipient,
 				enabled = excluded.enabled,
 				updated_at = excluded.updated_at;
-		`, jobCopy.ID, jobCopy.AgentID, jobCopy.Name, jobCopy.CronExpr, jobCopy.Prompt, jobCopy.TargetChannel, jobCopy.TargetRecipient, enabledInt, jobCopy.LastRun, now, now)
+		`, jobCopy.ID, jobCopy.AgentID, jobCopy.Name, jobCopy.CronExpr, jobCopy.Prompt, jobCopy.TargetChannel, jobCopy.TargetAccountID, jobCopy.TargetRecipient, enabledInt, jobCopy.LastRun, now, now)
 		if err != nil {
 			slog.Error("failed to persist cron job to db", "id", jobCopy.ID, "error", err)
 		}
 	}
 
-	slog.Info("registered proactive cron job", "id", jobCopy.ID, "agent", jobCopy.AgentID, "cron", jobCopy.CronExpr)
+	slog.Info("registered proactive cron job", "id", jobCopy.ID, "agent", jobCopy.AgentID, "cron", jobCopy.CronExpr, "target_channel", jobCopy.TargetChannel, "target_account", jobCopy.TargetAccountID)
 	return nil
 }
 
@@ -266,9 +277,12 @@ func (cs *CronScheduler) ListJobs() []CronJob {
 }
 
 // RegisterCron implements tools.CronSchedulerProvider.
-func (cs *CronScheduler) RegisterCron(id, agentID, cronExpr, prompt, targetChannel, targetRecipient string) error {
+func (cs *CronScheduler) RegisterCron(id, agentID, cronExpr, prompt, targetChannel, targetAccountID, targetRecipient string) error {
 	if targetChannel == "" {
 		targetChannel = "telegram"
+	}
+	if targetAccountID == "" {
+		targetAccountID = "all"
 	}
 	if targetRecipient == "" && cs.defaultRecipientGetter != nil {
 		targetRecipient = cs.defaultRecipientGetter(targetChannel)
@@ -280,6 +294,7 @@ func (cs *CronScheduler) RegisterCron(id, agentID, cronExpr, prompt, targetChann
 		CronExpr:        cronExpr,
 		Prompt:          prompt,
 		TargetChannel:   targetChannel,
+		TargetAccountID: targetAccountID,
 		TargetRecipient: targetRecipient,
 		Enabled:         true,
 	})
@@ -296,16 +311,17 @@ func (cs *CronScheduler) ListCrons() []map[string]any {
 	var res []map[string]any
 	for _, j := range jobs {
 		res = append(res, map[string]any{
-			"id":               j.ID,
-			"name":             j.Name,
-			"agent_id":         j.AgentID,
-			"cron_expression":  j.CronExpr,
-			"prompt":           j.Prompt,
-			"target_channel":   j.TargetChannel,
-			"target_recipient": j.TargetRecipient,
-			"enabled":          j.Enabled,
-			"last_run":         j.LastRun,
-			"next_run":         j.NextRun,
+			"id":                j.ID,
+			"name":              j.Name,
+			"agent_id":          j.AgentID,
+			"cron_expr":         j.CronExpr,
+			"prompt":            j.Prompt,
+			"target_channel":    j.TargetChannel,
+			"target_account_id": j.TargetAccountID,
+			"target_recipient":  j.TargetRecipient,
+			"enabled":           j.Enabled,
+			"next_run":          j.NextRun,
+			"last_run":          j.LastRun,
 		})
 	}
 	return res
@@ -326,11 +342,109 @@ Instructions:
 4. DO NOT say "Cảm ơn bạn đã nhắc nhở" or pretend the user is reminding you. YOU are the autonomous AI assistant sending this scheduled notification to your owner.`, job.Name, job.Prompt, job.TargetChannel)
 }
 
+// CronExecutionRecord represents a past execution of a cron task.
+type CronExecutionRecord struct {
+	ID         string    `json:"id"`
+	JobID      string    `json:"job_id"`
+	AgentID    string    `json:"agent_id"`
+	Status     string    `json:"status"` // "success", "failed"
+	Prompt     string    `json:"prompt"`
+	Output     string    `json:"output,omitempty"`
+	Error      string    `json:"error,omitempty"`
+	DurationMS int64     `json:"duration_ms"`
+	TokensUsed int       `json:"tokens_used"`
+	ExecutedAt time.Time `json:"executed_at"`
+}
+
+func (cs *CronScheduler) recordExecution(rec CronExecutionRecord) {
+	if cs.db == nil {
+		return
+	}
+	if rec.ID == "" {
+		rec.ID = fmt.Sprintf("ceh_%d", time.Now().UnixNano())
+	}
+	query := `
+	INSERT INTO cron_execution_history (id, job_id, agent_id, status, prompt, output, error, duration_ms, tokens_used, executed_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	_, err := cs.db.Exec(query, rec.ID, rec.JobID, rec.AgentID, rec.Status, rec.Prompt, rec.Output, rec.Error, rec.DurationMS, rec.TokensUsed, rec.ExecutedAt)
+	if err != nil {
+		slog.Warn("failed to record cron execution history", "error", err, "job_id", rec.JobID)
+	}
+}
+
+// GetExecutionHistory returns execution logs for a specific cron job.
+func (cs *CronScheduler) GetExecutionHistory(jobID string, limit int) ([]CronExecutionRecord, error) {
+	if cs.db == nil {
+		return []CronExecutionRecord{}, nil
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	rows, err := cs.db.Query(`
+		SELECT id, job_id, agent_id, status, prompt, output, error, duration_ms, tokens_used, executed_at
+		FROM cron_execution_history
+		WHERE job_id = ?
+		ORDER BY executed_at DESC
+		LIMIT ?
+	`, jobID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var records []CronExecutionRecord
+	for rows.Next() {
+		var r CronExecutionRecord
+		var out, errStr sql.NullString
+		if err := rows.Scan(&r.ID, &r.JobID, &r.AgentID, &r.Status, &r.Prompt, &out, &errStr, &r.DurationMS, &r.TokensUsed, &r.ExecutedAt); err == nil {
+			r.Output = out.String
+			r.Error = errStr.String
+			records = append(records, r)
+		}
+	}
+	return records, nil
+}
+
+// ListAllExecutionHistory returns recent execution history across all cron jobs.
+func (cs *CronScheduler) ListAllExecutionHistory(limit int) ([]CronExecutionRecord, error) {
+	if cs.db == nil {
+		return []CronExecutionRecord{}, nil
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 30
+	}
+	rows, err := cs.db.Query(`
+		SELECT id, job_id, agent_id, status, prompt, output, error, duration_ms, tokens_used, executed_at
+		FROM cron_execution_history
+		ORDER BY executed_at DESC
+		LIMIT ?
+	`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var records []CronExecutionRecord
+	for rows.Next() {
+		var r CronExecutionRecord
+		var out, errStr sql.NullString
+		if err := rows.Scan(&r.ID, &r.JobID, &r.AgentID, &r.Status, &r.Prompt, &out, &errStr, &r.DurationMS, &r.TokensUsed, &r.ExecutedAt); err == nil {
+			r.Output = out.String
+			r.Error = errStr.String
+			records = append(records, r)
+		}
+	}
+	return records, nil
+}
+
 func (cs *CronScheduler) executeJob(job *CronJob) {
 	slog.Info("executing proactive cron job", "job_id", job.ID, "agent_id", job.AgentID)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
+
+	startTime := time.Now()
 
 	cs.mu.Lock()
 	job.LastRun = time.Now().UTC()
@@ -340,30 +454,54 @@ func (cs *CronScheduler) executeJob(job *CronJob) {
 	cs.mu.Unlock()
 
 	var responseContent string
+	var tokensUsed int
+	var execErr error
+
 	if cs.engine != nil {
 		executionPrompt := BuildCronExecutionPrompt(job)
 		resp, err := cs.engine.ExecuteStep(ctx, job.AgentID, executionPrompt)
 		if err != nil {
+			execErr = err
 			slog.Error("proactive cron job failed", "job_id", job.ID, "error", err)
-			return
-		}
-		if resp != nil {
+		} else if resp != nil {
 			responseContent = resp.Content
+			tokensUsed = resp.Usage.TotalTokens
 		}
 	} else {
 		responseContent = fmt.Sprintf("Simulated proactive output for %s", job.Name)
 	}
 
+	duration := time.Since(startTime).Milliseconds()
+
+	// Record execution in history
+	rec := CronExecutionRecord{
+		JobID:      job.ID,
+		AgentID:    job.AgentID,
+		Prompt:     job.Prompt,
+		Output:     responseContent,
+		DurationMS: duration,
+		TokensUsed: tokensUsed,
+		ExecutedAt: job.LastRun,
+	}
+	if execErr != nil {
+		rec.Status = "failed"
+		rec.Error = execErr.Error()
+	} else {
+		rec.Status = "success"
+	}
+	cs.recordExecution(rec)
+
 	// Publish Proactive Outbound Notification Event to EventBus
 	if cs.eventBus != nil && responseContent != "" {
 		cs.eventBus.Publish(bus.NewEvent(bus.EventAgentActionDone, job.AgentID, map[string]any{
-			"type":             "proactive_cron_notification",
-			"job_id":           job.ID,
-			"job_name":         job.Name,
-			"target_channel":   job.TargetChannel,
-			"target_recipient": job.TargetRecipient,
-			"content":          responseContent,
-			"timestamp":        time.Now().UTC(),
+			"type":              "proactive_cron_notification",
+			"job_id":            job.ID,
+			"job_name":          job.Name,
+			"target_channel":    job.TargetChannel,
+			"target_account_id": job.TargetAccountID,
+			"target_recipient":  job.TargetRecipient,
+			"content":           responseContent,
+			"timestamp":         time.Now().UTC(),
 		}))
 	}
 }
