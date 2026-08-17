@@ -48,7 +48,7 @@ export function AgentFormModal({
     } else {
       setName('');
       setDescription('');
-      setSystemInstructions('You are an autonomous AI Agent running on ActonOS. Always verify actions before execution.');
+      setSystemInstructions('You are an intelligent, empathetic, and proactive AI companion on ActonOS. Communicate naturally, solve problems with technical brilliance, and avoid robotic clichés.');
       setPrimaryModel('anthropic/claude-3-7-sonnet');
       setFallbackModel('google/gemini-2.5-flash');
       setTemperature(0.2);
@@ -141,11 +141,45 @@ export function AgentFormModal({
               onChange={(e) => setPrimaryModel(e.target.value)}
               className="w-full bg-white text-deep-ink font-sans text-body px-4 py-2.5 rounded-full border border-onyx focus:outline-none focus:ring-2 focus:ring-deep-ink"
             >
-              <option value="anthropic/claude-3-7-sonnet">Claude 3.7 Sonnet (Anthropic)</option>
-              <option value="google/gemini-2.5-flash">Gemini 2.5 Flash (Google)</option>
-              <option value="openai/gpt-4o">GPT-4o (OpenAI)</option>
-              <option value="deepseek/deepseek-r1">DeepSeek R1</option>
-              <option value="ollama/llama3">Llama 3 (Local Ollama)</option>
+              <optgroup label="Anthropic">
+                <option value="anthropic/claude-3-7-sonnet">Claude 3.7 Sonnet (Flagship Hybrid Reasoning)</option>
+                <option value="anthropic/claude-opus-4-8">Claude Opus 4.8 (Supreme Intelligence)</option>
+                <option value="anthropic/claude-sonnet-4-6">Claude Sonnet 4.6 (Frontier Coding)</option>
+                <option value="anthropic/claude-haiku-4-5">Claude Haiku 4.5 (Ultra-Fast)</option>
+              </optgroup>
+              <optgroup label="OpenAI">
+                <option value="openai/gpt-5.6">GPT-5.6 (Omni Flagship 2026)</option>
+                <option value="openai/gpt-5.5">GPT-5.5 (General Multimodal)</option>
+                <option value="openai/gpt-5.4-pro">GPT-5.4 Pro (Enterprise Reasoning)</option>
+                <option value="openai/gpt-5.4-mini">GPT-5.4 Mini (Light Fast)</option>
+                <option value="openai/o3">o3 (Next-Gen Reasoning)</option>
+                <option value="openai/o3-mini">o3-mini (STEM & Code)</option>
+                <option value="openai/gpt-4o">GPT-4o</option>
+              </optgroup>
+              <optgroup label="Google Gemini">
+                <option value="google/gemini-3.1-pro">Gemini 3.1 Pro (2M Context)</option>
+                <option value="google/gemini-3-flash">Gemini 3 Flash (1M Realtime)</option>
+                <option value="google/gemini-2.5-pro">Gemini 2.5 Pro</option>
+                <option value="google/gemini-2.5-flash">Gemini 2.5 Flash</option>
+              </optgroup>
+              <optgroup label="xAI Grok">
+                <option value="xai/grok-4.5">Grok 4.5</option>
+                <option value="xai/grok-4.1-fast">Grok 4.1 Fast</option>
+                <option value="xai/grok-code-fast">Grok Code Fast</option>
+                <option value="xai/grok-3">Grok 3 (Supercomputing)</option>
+              </optgroup>
+              <optgroup label="DeepSeek">
+                <option value="deepseek/deepseek-v4-pro">DeepSeek-V4 Pro (1M MoE)</option>
+                <option value="deepseek/deepseek-v4-flash">DeepSeek-V4 Flash</option>
+                <option value="deepseek/deepseek-r1">DeepSeek-R1 (Reasoner)</option>
+              </optgroup>
+              <optgroup label="Local / Ollama">
+                <option value="ollama/qwen3-coder">Qwen3 Coder (Local)</option>
+                <option value="ollama/gemma4:latest">Gemma 4 (Local)</option>
+                <option value="ollama/llama-3.3-70b">Llama 3.3 70B (Local)</option>
+                <option value="ollama/minimax-m3">MiniMax M3 (Local 4M)</option>
+                <option value="ollama/kimi-k2.7">Kimi K2.7 (Local)</option>
+              </optgroup>
             </select>
           </div>
 
@@ -159,8 +193,12 @@ export function AgentFormModal({
               className="w-full bg-white text-deep-ink font-sans text-body px-4 py-2.5 rounded-full border border-onyx focus:outline-none focus:ring-2 focus:ring-deep-ink"
             >
               <option value="google/gemini-2.5-flash">Gemini 2.5 Flash (Google)</option>
+              <option value="anthropic/claude-haiku-4-5">Claude Haiku 4.5 (Anthropic)</option>
+              <option value="openai/gpt-5.4-mini">GPT-5.4 Mini (OpenAI)</option>
               <option value="openai/gpt-4o-mini">GPT-4o Mini (OpenAI)</option>
-              <option value="ollama/llama3">Llama 3 (Local Ollama)</option>
+              <option value="deepseek/deepseek-v4-flash">DeepSeek-V4 Flash</option>
+              <option value="xai/grok-4.1-fast">Grok 4.1 Fast</option>
+              <option value="ollama/llama-3.3-70b">Llama 3.3 70B (Local)</option>
             </select>
           </div>
         </div>

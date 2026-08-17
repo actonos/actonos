@@ -121,6 +121,15 @@ func (d *DB) migrate() error {
 		encrypted_val TEXT NOT NULL,
 		updated_at TIMESTAMP NOT NULL
 	);
+
+	CREATE TABLE IF NOT EXISTS system_auth (
+		id TEXT PRIMARY KEY,
+		password_hash TEXT NOT NULL,
+		salt TEXT NOT NULL,
+		is_initialized BOOLEAN NOT NULL DEFAULT 0,
+		created_at TIMESTAMP NOT NULL,
+		updated_at TIMESTAMP NOT NULL
+	);
 	`
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

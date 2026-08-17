@@ -355,7 +355,8 @@ func main() {
 		}
 	}()
 
-	// 11. Initialize OAuth 2.1 PKCE Engine & Token Refresh Daemon
+	// 11. Initialize System Auth, OAuth 2.1 PKCE Engine & Token Refresh Daemon
+	sysAuth := auth.NewSystemAuthManager(db.SQLDB())
 	stateStore := auth.NewStateStore(10 * time.Minute)
 	oauthEngine := auth.NewOAuthEngine(stateStore)
 	tokenDaemon := auth.NewTokenRefreshDaemon(oauthEngine, vault, db, eventBus)
@@ -391,6 +392,7 @@ func main() {
 		TokenRefreshDaemon: tokenDaemon,
 		OAuthEngine:        oauthEngine,
 		StateStore:         stateStore,
+		SystemAuth:         sysAuth,
 		EventBus:           eventBus,
 		PairingManager:     pairingMgr,
 		TelegramAdapter:    tgAdapter,

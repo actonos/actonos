@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
+import { SUPPORTED_LANGUAGES } from '@/components/ui/LanguageSelectModal';
 import {
   LayoutDashboard,
   Bot,
@@ -14,6 +16,9 @@ import {
   X,
   Radio,
   Link2,
+  Globe,
+  Search,
+  Check,
 } from 'lucide-react';
 
 export type NavTab =
@@ -57,7 +62,11 @@ export function Sidebar({
   mobileOpen,
   onCloseMobile,
 }: SidebarProps) {
-  const { t } = useTranslation('nav');
+  const { t, i18n } = useTranslation('nav');
+  const [showLangOverlay, setShowLangOverlay] = useState(false);
+  const [langSearch, setLangSearch] = useState('');
+
+  const currentLangCode = (i18n.language || 'en').split('-')[0].toLowerCase();
 
   const sections: NavSection[] = [
     {
@@ -96,6 +105,13 @@ export function Sidebar({
     onCloseMobile();
   };
 
+  const filteredLanguages = SUPPORTED_LANGUAGES.filter(
+    (l) =>
+      l.name.toLowerCase().includes(langSearch.toLowerCase()) ||
+      l.nativeName.toLowerCase().includes(langSearch.toLowerCase()) ||
+      l.code.toLowerCase().includes(langSearch.toLowerCase())
+  );
+
   return (
     <>
       {/* Mobile Drawer Overlay */}
@@ -108,22 +124,30 @@ export function Sidebar({
 
       {/* Sidebar Container */}
       <aside
-        className={`fixed top-0 left-0 bottom-0 z-50 bg-soft-meadow border-r border-onyx/10 flex flex-col justify-between transition-all duration-200 ease-in-out ${collapsed ? 'w-20' : 'w-64'
-          } ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-          }`}
+        className={`fixed top-0 left-0 bottom-0 z-50 bg-soft-meadow border-r border-onyx/10 flex flex-col justify-between transition-all duration-200 ease-in-out ${collapsed && !showLangOverlay ? 'w-20' : 'w-64'
+          } ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
       >
         {/* Top: Logo & Title */}
         <div>
           <div className="h-16 px-4 flex items-center justify-between border-b border-onyx/10">
             <div
-              className="flex items-center gap-3 cursor-pointer select-none overflow-hidden"
+              className={`flex items-center gap-3 cursor-pointer select-none overflow-hidden ${collapsed && !showLangOverlay ? 'justify-center w-full' : ''
+                }`}
               onClick={() => handleSelect('dashboard')}
             >
-              <img
-                src="/actonos_logo.png"
-                alt="ActonOS"
-                className="h-8 w-auto object-contain shrink-0"
-              />
+              {collapsed && !showLangOverlay ? (
+                <img
+                  src="/actonos_icon.png"
+                  alt="ActonOS"
+                  className="h-8 w-8 object-contain shrink-0"
+                />
+              ) : (
+                <img
+                  src="/actonos_logo.png"
+                  alt="ActonOS"
+                  className="h-8 w-auto max-w-[190px] object-contain shrink-0"
+                />
+              )}
             </div>
 
             {/* Mobile close button */}
@@ -141,8 +165,8 @@ export function Sidebar({
               <div key={sIdx}>
                 {/* Section Divider Label */}
                 {section.label && (
-                  <div className={`flex items-center gap-2 mt-4 mb-2 ${collapsed ? 'justify-center' : 'px-3'}`}>
-                    {!collapsed ? (
+                  <div className={`flex items-center gap-2 mt-4 mb-2 ${collapsed && !showLangOverlay ? 'justify-center' : 'px-3'}`}>
+                    {!collapsed || showLangOverlay ? (
                       <span className="text-[10px] font-semibold uppercase tracking-widest text-slate/70 select-none">
                         {section.label}
                       </span>
@@ -161,11 +185,11 @@ export function Sidebar({
                       <button
                         key={item.id}
                         onClick={() => handleSelect(item.id)}
-                        title={collapsed ? item.label : undefined}
-                        className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[16px] transition-all cursor-pointer text-left group select-none ${isActive
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl transition-all duration-150 group cursor-pointer ${isActive
                             ? 'bg-deep-ink text-white font-semibold shadow-xs'
-                            : 'text-deep-ink hover:bg-canvas hover:text-deep-ink'
-                          }`}
+                            : 'text-slate hover:text-deep-ink hover:bg-black/5'
+                          } ${collapsed && !showLangOverlay ? 'justify-center' : ''}`}
+                        title={collapsed && !showLangOverlay ? item.label : undefined}
                       >
                         <div
                           className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${isActive
@@ -176,7 +200,7 @@ export function Sidebar({
                           <Icon className="w-4 h-4" />
                         </div>
 
-                        {!collapsed && (
+                        {(!collapsed || showLangOverlay) && (
                           <span className="text-body-sm font-medium leading-snug truncate">
                             {item.label}
                           </span>
@@ -193,7 +217,7 @@ export function Sidebar({
         {/* Bottom: System Status, Language & Collapse button */}
         <div className="p-3 border-t border-onyx/10 space-y-2 bg-soft-meadow">
           {/* Live Status Pill */}
-          {!collapsed ? (
+          {!collapsed || showLangOverlay ? (
             <div className="p-2.5 rounded-[14px] bg-canvas border border-onyx/5 flex items-center justify-between text-caption">
               <div className="flex items-center gap-2">
                 <span className="relative flex h-2 w-2">
@@ -214,18 +238,117 @@ export function Sidebar({
           )}
 
           {/* Language Switcher & Collapse Toggle */}
-          <div className={`flex items-center ${collapsed ? 'flex-col gap-2' : 'justify-between gap-2'}`}>
-            <LanguageSwitcher />
+          <div className={`flex items-center ${collapsed && !showLangOverlay ? 'flex-col gap-2 justify-center' : 'justify-between gap-2'}`}>
+            <LanguageSwitcher
+              onClick={() => setShowLangOverlay(true)}
+              compact={collapsed && !showLangOverlay}
+            />
 
             <button
               onClick={onToggleCollapse}
-              className="hidden lg:flex items-center justify-center p-2 rounded-full hover:bg-canvas text-slate hover:text-deep-ink transition-colors border border-onyx/10 cursor-pointer"
+              className="hidden lg:flex items-center justify-center w-9 h-9 p-0 rounded-full hover:bg-canvas text-slate hover:text-deep-ink transition-colors border border-onyx/10 cursor-pointer shrink-0"
               title={collapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
             >
-              {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+              {collapsed && !showLangOverlay ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
             </button>
           </div>
         </div>
+
+        {/* Sidebar-scoped Language Selection Overlay */}
+        {showLangOverlay && (
+          <div className="absolute inset-0 z-50 bg-soft-meadow flex flex-col justify-between p-4 animate-in fade-in duration-150">
+            <div className="flex-1 flex flex-col min-h-0">
+              {/* Header */}
+              <div className="flex items-center justify-between pb-3 mb-3 border-b border-onyx/10 shrink-0">
+                <div className="flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-deep-ink" />
+                  <h3 className="font-serif font-bold text-body text-deep-ink">Language</h3>
+                </div>
+                <button
+                  onClick={() => setShowLangOverlay(false)}
+                  className="p-1.5 rounded-full hover:bg-black/5 text-deep-ink transition-colors cursor-pointer"
+                  title="Close language selector"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Search Input */}
+              <div className="relative mb-3 shrink-0">
+                <Search className="w-3.5 h-3.5 text-slate absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search language..."
+                  value={langSearch}
+                  onChange={(e) => setLangSearch(e.target.value)}
+                  className="w-full bg-canvas text-deep-ink pl-8 pr-3 py-1.5 rounded-full border border-onyx/10 text-caption font-sans focus:outline-none focus:ring-1 focus:ring-deep-ink"
+                  autoFocus
+                />
+              </div>
+
+              {/* Language List */}
+              <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 min-h-0">
+                {filteredLanguages.map((lang) => {
+                  const isSelected = currentLangCode === lang.code;
+                  return (
+                    <button
+                      key={lang.code}
+                      onClick={() => {
+                        i18n.changeLanguage(lang.code);
+                        localStorage.setItem('i18nextLng', lang.code);
+                        setShowLangOverlay(false);
+                      }}
+                      className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left transition-all cursor-pointer select-none ${isSelected
+                          ? 'bg-deep-ink text-white border-deep-ink shadow-2xs'
+                          : 'bg-canvas hover:bg-white border-onyx/5 text-deep-ink'
+                        }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="text-base shrink-0">{lang.flag}</span>
+                        <div className="min-w-0">
+                          <div className="font-sans font-semibold text-caption truncate leading-snug">
+                            {lang.nativeName}
+                          </div>
+                          <div
+                            className={`text-[10px] font-sans truncate ${isSelected ? 'text-white/70' : 'text-slate'
+                              }`}
+                          >
+                            {lang.name}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0 ml-2">
+                        {lang.coverage === '100%' && (
+                          <span
+                            className={`text-[9px] font-mono px-1.5 py-0.5 rounded-full font-semibold ${isSelected
+                                ? 'bg-hi-yellow text-deep-ink'
+                                : 'bg-emerald-100 text-emerald-800'
+                              }`}
+                          >
+                            Full
+                          </span>
+                        )}
+                        {isSelected && <Check className="w-3.5 h-3.5 text-hi-yellow" />}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="pt-3 border-t border-onyx/10 flex items-center justify-between text-[11px] font-mono text-slate shrink-0">
+              <span>ActonOS</span>
+              <button
+                onClick={() => setShowLangOverlay(false)}
+                className="text-caption font-sans font-medium text-deep-ink hover:underline cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
       </aside>
     </>
   );

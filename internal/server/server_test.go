@@ -6,9 +6,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/actonos/actonos/internal/agent"
+	"github.com/actonos/actonos/internal/auth"
 	"github.com/actonos/actonos/internal/bus"
 	"github.com/actonos/actonos/internal/llm"
 	"github.com/actonos/actonos/internal/memory"
@@ -159,3 +161,92 @@ func TestServer_ToolsAndSystem(t *testing.T) {
 		t.Fatalf("expected 200 OK, got %d", wMetrics.Code)
 	}
 }
+
+func TestServer_AuthAndProtection(t *testing.T) {
+	tempDir := t.TempDir()
+	db, err := memory.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("failed to create db: %v", err)
+	}
+	defer db.Close()
+
+	sysAuth := auth.NewSystemAuthManager(db.SQLDB())
+	eventBus := bus.NewEventBus()
+	defer eventBus.Close()
+	agentMgr, _ := agent.NewAgentManager(db, eventBus)
+	profileMgr, _ := agent.NewUserProfileManager(db, tempDir)
+
+	cfg := Config{
+		AgentManager:   agentMgr,
+		EventBus:       eventBus,
+		SystemAuth:     sysAuth,
+		ProfileManager: profileMgr,
+	}
+	srv := NewServer(cfg)
+
+	// 1. Status initially should be not initialized
+	reqStatus := httptest.NewRequest(http.MethodGet, "/api/auth/status", nil)
+	wStatus := httptest.NewRecorder()
+	srv.Router().ServeHTTP(wStatus, reqStatus)
+	if wStatus.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", wStatus.Code)
+	}
+
+	// 2. Protected endpoint before setup should be 403 Forbidden
+	reqProtected := httptest.NewRequest(http.MethodGet, "/api/agents", nil)
+	wProtected := httptest.NewRecorder()
+	srv.Router().ServeHTTP(wProtected, reqProtected)
+	if wProtected.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden before setup, got %d", wProtected.Code)
+	}
+
+	// 3. Setup Initial Admin
+	setupBody := `{"password":"AdminPassword123!","user_name":"TestAdmin"}`
+	reqSetup := httptest.NewRequest(http.MethodPost, "/api/auth/setup", strings.NewReader(setupBody))
+	reqSetup.Header.Set("Content-Type", "application/json")
+	wSetup := httptest.NewRecorder()
+	srv.Router().ServeHTTP(wSetup, reqSetup)
+	if wSetup.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for setup, got %d: %s", wSetup.Code, wSetup.Body.String())
+	}
+
+	var setupResp struct {
+		Data struct {
+			Token string `json:"token"`
+		} `json:"data"`
+	}
+	_ = json.NewDecoder(wSetup.Body).Decode(&setupResp)
+	token := setupResp.Data.Token
+	if token == "" {
+		t.Fatalf("expected token from setup")
+	}
+
+	// 4. Request with valid token should pass
+	reqAuthed := httptest.NewRequest(http.MethodGet, "/api/agents", nil)
+	reqAuthed.Header.Set("Authorization", "Bearer "+token)
+	wAuthed := httptest.NewRecorder()
+	srv.Router().ServeHTTP(wAuthed, reqAuthed)
+	if wAuthed.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK with token, got %d", wAuthed.Code)
+	}
+
+	// 5. Request with invalid token should be 401
+	reqBadToken := httptest.NewRequest(http.MethodGet, "/api/agents", nil)
+	reqBadToken.Header.Set("Authorization", "Bearer invalid")
+	wBadToken := httptest.NewRecorder()
+	srv.Router().ServeHTTP(wBadToken, reqBadToken)
+	if wBadToken.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 Unauthorized with bad token, got %d", wBadToken.Code)
+	}
+
+	// 6. Login with password
+	loginBody := `{"password":"AdminPassword123!"}`
+	reqLogin := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(loginBody))
+	reqLogin.Header.Set("Content-Type", "application/json")
+	wLogin := httptest.NewRecorder()
+	srv.Router().ServeHTTP(wLogin, reqLogin)
+	if wLogin.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for login, got %d", wLogin.Code)
+	}
+}
+

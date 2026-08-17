@@ -24,6 +24,8 @@ import {
   Sliders,
   Check,
   Sparkles,
+  Brain,
+  RefreshCw,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { AgentManifest, ToolInfo, LLMProviderInfo } from '@/lib/types';
@@ -35,33 +37,51 @@ export interface AgentStudioPageProps {
   onOpenChat: (agentID: string) => void;
 }
 
-type StudioTab = 'prompt' | 'model' | 'tools' | 'channels' | 'governance';
+type StudioTab = 'prompt' | 'soul' | 'memory' | 'model' | 'tools' | 'channels' | 'governance';
+
+const ACTON_STANDARD_SOUL = `# ActonOS Agent Soul (SOUL.md)
+
+## 1. Core Persona & Identity
+You are an autonomous AI companion and domain specialist running on the ActonOS local kernel.
+You possess high IQ, deep technical intuition, and empathetic, natural human communication skills.
+
+## 2. Demeanor & Conversational Standard
+- **Natural & Humanlike**: Communicate with warmth, clarity, and intellectual humility.
+- **Zero Robotic Clichés**: Never output stiff preambles ("As an AI model...", "I hope this helps!"), repetitive disclaimers, or robotic fluff.
+- **Adaptive Dynamics**: Be direct and razor-sharp for urgent bugs; thoughtful, structured, and deep for architecture planning.
+
+## 3. Cognitive Decision Principles
+- Validate prerequisites and critically evaluate tool outputs before drawing conclusions.
+- If a tool or command fails, autonomously reflect, troubleshoot, and explore alternative paths.
+- Deliver production-ready code with complete implementations (never leave unfinished placeholders).
+
+## 4. Safety, Vault & Boundaries
+- Never leak private keys, passwords, or authentication tokens.
+- Request human operator approval when performing destructive actions outside local sandbox bounds.`;
 
 const ACTON_STANDARD_PROMPT = `You are an expert autonomous AI operator for ActonOS, adhering to the Acton Cognitive Architecture standards.
 
 ## 1. Core Identity & Role
-- You operate with high technical rigor, explicit reasoning steps, and absolute reliability.
-- You maintain a professional, objective, and solution-driven demeanor.
+- You are an elite engineering companion and autonomous AI operator with high IQ and high EQ.
+- You communicate naturally, thoughtfully, and empathetically—never sounding like a rigid, robotic script.
 
-## 2. ReAct Cognitive Loop
-- **Thought**: Before invoking tools or modifying files, explicitly analyze the objective and formulate your plan.
-- **Action**: Execute tools adhering strictly to their JSON parameter schemas. Inspect inputs before running destructive commands.
-- **Observation**: Thoroughly evaluate tool execution output. If an error occurs, perform root-cause analysis and self-correct.
-- **Final Answer**: Deliver clear, concise, actionable solutions formatted in GitHub-flavored markdown.
+## 2. ReAct Cognitive Loop & Decision Protocol
+- **Thought**: Formulate a clear, deep rationale before invoking tools or altering configurations.
+- **Action**: Execute authorized sandboxed tools strictly adhering to JSON schemas with precision.
+- **Observation**: Critically evaluate execution output and autonomously self-correct on any errors.
+- **Final Answer**: Deliver clean, insightful, and beautifully formatted markdown with production-grade code.
 
-## 3. Sandboxed Tool & Workspace Directives
-- Always check if a file exists before overwriting.
-- Maintain workspace cleanliness and respect isolated directory permissions.
-- Validate code syntax and ensure unit tests pass whenever modifying software components.
+## 3. Conversational Standard & Demeanor
+- Speak with natural warmth, intellect, and clarity.
+- Avoid robotic clichés ("As an AI...", "I am happy to assist..."), empty filler, or stiff canned phrases.
+- Adapt dynamically: be fast & direct for urgent bugs; deep & creative for architectural discussions.
 
-## 4. Safety Invariants & Confidentiality
-- Never expose API keys, credentials, or private pairing codes.
-- Do not execute unverified commands outside the sandboxed runtime.
-- Request user confirmation for high-risk operations.
+## 4. Safety & Invariants
+- Zero-trust handling of API credentials, authentication tokens, and private secrets.
+- Always respect workspace boundaries and request confirmation for irreversible operations.
 
-## 5. Memory Reflection & Knowledge Sync
-- Identify reusable patterns, architectural rules, and project decisions.
-- Synchronize persistent context into episodic memory and project documentation.`;
+## 5. Memory & Context Reflection
+- Synthesize user preferences, project conventions, and key decisions into persistent memory.`;
 
 const AVAILABLE_CHANNELS = [
   { id: 'telegram', label: 'Telegram', icon: Send, desc: 'Listen to Telegram bot chats and mentions' },
@@ -98,8 +118,10 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
   const [temperature, setTemperature] = useState(0.2);
   const [maxTokens, setMaxTokens] = useState(4096);
 
-  // Prompt
+  // Prompt & Soul & Memory
   const [systemInstructions, setSystemInstructions] = useState(ACTON_STANDARD_PROMPT);
+  const [soul, setSoul] = useState(ACTON_STANDARD_SOUL);
+  const [memoryMD, setMemoryMD] = useState('');
 
   // Tools
   const [authorizedTools, setAuthorizedTools] = useState<string[]>(['*']);
@@ -171,6 +193,20 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             setApprovalLevel(agent.delegation_scope.require_human_approval_level || 'Medium');
             setAllowedPaths(agent.delegation_scope.allowed_workspace_paths?.join(', ') || '*');
           }
+
+          // Load dedicated SOUL.md & MEMORY.md
+          try {
+            const [soulRes, memRes] = await Promise.all([
+              api.getSoul(agentID).catch(() => null),
+              api.getMemoryMD(agentID).catch(() => null),
+            ]);
+            if (soulRes?.soul || soulRes?.content) {
+              setSoul(soulRes.soul || soulRes.content);
+            }
+            if (memRes?.memory_md) {
+              setMemoryMD(memRes.memory_md);
+            }
+          } catch {}
         }
       } catch (err: any) {
         error('Failed to load agent details', err.message);
@@ -214,12 +250,27 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
         },
       };
 
+      const targetID = isNew ? (idSlug.trim() || `agent_${Date.now()}`) : agentID;
+
       if (isNew) {
         await api.createAgent(manifest);
-        success('Agent Created', `Agent "${name}" initialized successfully.`);
       } else {
         await api.updateAgent(agentID, manifest);
-        success('Agent Saved', `Manifest for "${name}" updated in SQLite storage.`);
+      }
+
+      // Save dedicated SOUL.md if present
+      if (soul && soul.trim()) {
+        try {
+          await api.saveSoul(soul, targetID);
+        } catch (sErr: any) {
+          console.warn('Failed to save SOUL.md:', sErr);
+        }
+      }
+
+      if (isNew) {
+        success('Agent Created', `Agent "${name}" & SOUL persona initialized.`);
+      } else {
+        success('Agent Saved', `Manifest & SOUL persona for "${name}" updated.`);
       }
     } catch (err: any) {
       error('Failed to save agent', err.message);
@@ -262,6 +313,11 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
   const loadStandardPreset = () => {
     setSystemInstructions(ACTON_STANDARD_PROMPT);
     info('Standard Preset Loaded', 'System instructions populated with ActonOS ReAct cognitive architecture prompt.');
+  };
+
+  const loadStandardSoulTemplate = () => {
+    setSoul(ACTON_STANDARD_SOUL);
+    info('Standard Soul Loaded', 'Populated SOUL.md with ActonOS persona blueprint.');
   };
 
   // Helper to find provider status for a model ID string
@@ -443,12 +499,28 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             📝 Instructions
           </button>
           <button
+            onClick={() => setActiveTab('soul')}
+            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'soul' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
+            }`}
+          >
+            ✨ Persona & Soul (SOUL.md)
+          </button>
+          <button
+            onClick={() => setActiveTab('memory')}
+            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'memory' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
+            }`}
+          >
+            🧠 Memory (MEMORY.md)
+          </button>
+          <button
             onClick={() => setActiveTab('model')}
             className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'model' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
             }`}
           >
-            🧠 LLM & Model ({primaryIsReady ? '✓ Active' : '⚠️ Key Needed'})
+            ⚡ LLM & Reasoning ({primaryIsReady ? '✓ Active' : '⚠️ Key Needed'})
           </button>
           <button
             onClick={() => setActiveTab('tools')}
@@ -486,7 +558,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                   <span>Cognitive System Instructions</span>
                 </h3>
                 <p className="text-caption text-slate">
-                  Defines the agent's core identity, reasoning loops, and directives.
+                  Defines the agent's core task capabilities, reasoning loops, and procedural directives.
                 </p>
               </div>
 
@@ -511,6 +583,105 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             <div className="flex items-center justify-between text-caption font-mono text-slate">
               <span>Length: {systemInstructions.length} characters</span>
               <span className="text-emerald-700 font-semibold">ActonOS Standard</span>
+            </div>
+          </Card>
+        )}
+
+        {/* TAB: Dedicated Agent SOUL.md Editor */}
+        {activeTab === 'soul' && (
+          <Card className="p-6 border border-onyx/10 bg-canvas/90 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-onyx/5">
+              <div>
+                <h3 className="font-serif text-heading-sm text-deep-ink flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-amber-500" />
+                  <span>Agent Persona & Demeanor Kernel (SOUL.md)</span>
+                </h3>
+                <p className="text-caption text-slate">
+                  Defines this specific agent's conversational tone, philosophy, demeanor, and behavioral boundaries.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<RotateCcw className="w-3.5 h-3.5" />}
+                  onClick={loadStandardSoulTemplate}
+                >
+                  Load Soul Template
+                </Button>
+              </div>
+            </div>
+
+            <textarea
+              rows={18}
+              value={soul}
+              onChange={(e) => setSoul(e.target.value)}
+              className="w-full bg-soft-meadow text-deep-ink p-4 rounded-2xl border border-onyx/10 font-mono text-body-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-deep-ink/20"
+              placeholder="# Agent SOUL.md&#10;Describe the agent's unique voice, demeanor, and philosophical principles..."
+            />
+
+            <div className="flex items-center justify-between text-caption font-mono text-slate">
+              <span>Length: {soul.length} characters</span>
+              <span className="text-amber-700 font-semibold flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5" /> Isolated Agent Soul
+              </span>
+            </div>
+          </Card>
+        )}
+
+        {/* TAB: Persistent Episodic Memory & Reflection (MEMORY.md) */}
+        {activeTab === 'memory' && (
+          <Card className="p-6 border border-onyx/10 bg-canvas/90 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-onyx/5">
+              <div>
+                <h3 className="font-serif text-heading-sm text-deep-ink flex items-center gap-2">
+                  <Brain className="w-5 h-5 text-indigo-600" />
+                  <span>Persistent Episodic Memory Diary (MEMORY.md)</span>
+                </h3>
+                <p className="text-caption text-slate">
+                  Autonomous reflections, user preferences, and synthesized long-term knowledge accumulated by this agent across sessions.
+                </p>
+              </div>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<RefreshCw className="w-3.5 h-3.5" />}
+                onClick={async () => {
+                  if (agentID && !isNew) {
+                    const m = await api.getMemoryMD(agentID).catch(() => null);
+                    if (m?.memory_md) setMemoryMD(m.memory_md);
+                    info('Memory Refreshed', 'Loaded latest MEMORY.md reflections from disk.');
+                  }
+                }}
+              >
+                Refresh Memory
+              </Button>
+            </div>
+
+            {memoryMD ? (
+              <textarea
+                rows={18}
+                value={memoryMD}
+                readOnly
+                className="w-full bg-soft-meadow/80 text-deep-ink p-4 rounded-2xl border border-onyx/10 font-mono text-body-sm leading-relaxed focus:outline-none"
+              />
+            ) : (
+              <div className="p-12 text-center bg-soft-meadow rounded-2xl border border-onyx/5">
+                <Brain className="w-10 h-10 text-slate/50 mx-auto mb-3" />
+                <h4 className="font-serif text-heading-sm text-deep-ink mb-1">No Episodic Memory Recorded Yet</h4>
+                <p className="font-sans text-caption text-slate max-w-md mx-auto">
+                  As you interact with this agent in Chat and background tasks, the ReAct reflection daemon will synthesize key decisions, project conventions, and user preferences into persistent timestamped memory here.
+                </p>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between text-caption font-mono text-slate">
+              <span>Length: {memoryMD.length} characters</span>
+              <span className="text-indigo-700 font-semibold flex items-center gap-1">
+                <Brain className="w-3.5 h-3.5" /> Autonomous Long-Term Memory
+              </span>
             </div>
           </Card>
         )}

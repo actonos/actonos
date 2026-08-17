@@ -36,6 +36,7 @@ type Server struct {
 	tokenDaemon    *auth.TokenRefreshDaemon
 	oauthEngine    *auth.OAuthEngine
 	stateStore     *auth.StateStore
+	sysAuth        *auth.SystemAuthManager
 	bus            *bus.EventBus
 	pairingMgr     *channels.PairingManager
 	tgAdapter      *channels.TelegramAdapter
@@ -60,6 +61,7 @@ type Config struct {
 	TokenRefreshDaemon *auth.TokenRefreshDaemon
 	OAuthEngine        *auth.OAuthEngine
 	StateStore         *auth.StateStore
+	SystemAuth         *auth.SystemAuthManager
 	EventBus           *bus.EventBus
 	PairingManager     *channels.PairingManager
 	TelegramAdapter    *channels.TelegramAdapter
@@ -84,6 +86,7 @@ func NewServer(cfg Config) *Server {
 		tokenDaemon: cfg.TokenRefreshDaemon,
 		oauthEngine: cfg.OAuthEngine,
 		stateStore:  cfg.StateStore,
+		sysAuth:     cfg.SystemAuth,
 		bus:         cfg.EventBus,
 		pairingMgr:  cfg.PairingManager,
 		tgAdapter:   cfg.TelegramAdapter,
@@ -121,89 +124,20 @@ func (s *Server) setupRoutes() {
 
 	// API Routes
 	r.Route("/api", func(r chi.Router) {
+		// Public Endpoints
 		r.Get("/health", s.handleHealth)
-		r.Get("/dashboard/summary", s.handleDashboardSummary)
 
-		// Agent Management, Soul & Cron
-		r.Route("/agents", func(r chi.Router) {
-			r.Get("/", s.handleListAgents)
-			r.Post("/", s.handleCreateAgent)
-			r.Get("/cron", s.handleListCronJobs)
-			r.Post("/cron", s.handleSaveCronJob)
-			r.Post("/cron/{id}/run", s.handleRunCronJob)
-			r.Delete("/cron/{id}", s.handleDeleteCronJob)
-			r.Get("/soul", s.handleGetSoul)
-			r.Put("/soul", s.handleSaveSoul)
-			r.Get("/memory-md", s.handleGetMemoryMD)
-
-			r.Route("/{agentID}", func(r chi.Router) {
-				r.Get("/", s.handleGetAgent)
-				r.Put("/", s.handleUpdateAgent)
-				r.Delete("/", s.handleDeleteAgent)
-				r.Post("/start", s.handleStartAgent)
-				r.Post("/stop", s.handleStopAgent)
-				r.Post("/chat", s.handleChat)
-			})
-		})
-
-		// Standalone Cron Route Alias
-		r.Route("/cron", func(r chi.Router) {
-			r.Get("/", s.handleListCronJobs)
-			r.Post("/", s.handleSaveCronJob)
-			r.Post("/{id}/run", s.handleRunCronJob)
-			r.Delete("/{id}", s.handleDeleteCronJob)
-		})
-
-		// Conversations & History
-		r.Route("/conversations", func(r chi.Router) {
-			r.Get("/", s.handleListConversations)
-			r.Post("/", s.handleCreateConversation)
-			r.Route("/{id}", func(r chi.Router) {
-				r.Get("/", s.handleGetConversation)
-				r.Put("/", s.handleUpdateConversation)
-				r.Delete("/", s.handleDeleteConversation)
-			})
-		})
-
-		// Tool Hub & Skills Marketplace
-		r.Route("/tools", func(r chi.Router) {
-			r.Get("/", s.handleListTools)
-			r.Post("/mcp", s.handleConnectMCP)
-			r.Delete("/mcp/{serverID}", s.handleDisconnectMCP)
-			r.Post("/execute", s.handleExecuteTool)
-			r.Post("/skill", s.handleCreateSkill)
-			r.Post("/wasm", s.handleUploadWASM)
-			r.Get("/hub/catalog", s.handleListHubCatalog)
-			r.Post("/hub/install", s.handleInstallHubSkill)
-			r.Post("/hub/uninstall", s.handleUninstallHubSkill)
-		})
-
-		// Onboarding & Setup
-		r.Route("/setup", func(r chi.Router) {
-			r.Get("/status", s.handleGetSetupStatus)
-			r.Post("/wizard", s.handleSetupWizard)
+		// Authentication Endpoints
+		r.Route("/auth", func(r chi.Router) {
+			r.Get("/status", s.handleGetAuthStatus)
+			r.Post("/setup", s.handleSetupAuth)
+			r.Post("/login", s.handleLogin)
+			r.Post("/logout", s.handleLogout)
+			r.With(s.RequireAuthMiddleware).Put("/password", s.handleChangePassword)
 		})
 
 		// OAuth Callbacks
 		r.Get("/auth/callback", s.handleOAuthCallback)
-
-		// SaaS Integrations & Connectors & Channel Adapters & Pairing
-		r.Route("/integrations", func(r chi.Router) {
-			r.Get("/", s.handleListIntegrations)
-			r.Get("/oauth/callback", s.handleOAuthCallback)
-			r.Post("/{provider}/auth-url", s.handleGetAuthURL)
-			r.Post("/{provider}/token", s.handleSaveDirectToken)
-			r.Post("/{provider}/config", s.handleSaveProviderConfig)
-			r.Post("/{provider}/test", s.handleTestIntegration)
-			r.Post("/{provider}/disconnect", s.handleDisconnectIntegration)
-			r.Post("/{provider}/toggle", s.handleToggleIntegration)
-			r.Get("/channels", s.handleGetChannels)
-			r.Post("/channels", s.handleSaveChannels)
-			r.Post("/pairing/code", s.handleGeneratePairingCode)
-			r.Post("/pairing/verify", s.handleVerifyPairingCode)
-			r.Get("/authorizations", s.handleListAuthorizations)
-			r.Delete("/authorizations", s.handleRevokeAuthorization)
-		})
 
 		// Webhooks (WhatsApp, Generic)
 		r.Route("/webhooks", func(r chi.Router) {
@@ -211,34 +145,122 @@ func (s *Server) setupRoutes() {
 			r.Post("/whatsapp", s.handleWhatsAppInboundWebhook)
 		})
 
-		// Workspace File Manager
-		r.Route("/workspace", func(r chi.Router) {
-			r.Get("/files", s.handleListWorkspaceFiles)
-			r.Get("/file", s.handleGetWorkspaceFile)
-			r.Post("/file", s.handleSaveWorkspaceFile)
-			r.Delete("/file", s.handleDeleteWorkspaceFile)
-			r.Post("/mkdir", s.handleMkdirWorkspace)
-			r.Post("/upload", s.handleUploadWorkspaceFile)
-		})
+		// Protected Subsystems (Require valid token when initialized)
+		r.Group(func(r chi.Router) {
+			r.Use(s.RequireAuthMiddleware)
 
-		// System, HAL, Keys, Identity, Audit & Tailscale
-		r.Route("/system", func(r chi.Router) {
-			r.Get("/metrics", s.handleGetMetrics)
-			r.Get("/identity", s.handleGetIdentity)
-			r.Put("/identity", s.handleSaveIdentity)
-			r.Get("/profile", s.handleGetIdentity)
-			r.Put("/profile", s.handleSaveIdentity)
-			r.Get("/keys", s.handleGetAPIKeys)
-			r.Post("/keys", s.handleSaveAPIKeys)
-			r.Post("/keys/test", s.handleTestAPIKey)
-			r.Get("/audit", s.handleGetAuditLogs)
-			r.Get("/storage", s.handleGetStorageInfo)
-			r.Get("/backup", s.handleGetBackup)
-			r.Post("/ota/check", s.handleCheckOTA)
-			r.Get("/tailscale", s.handleGetTailscale)
-			r.Get("/wifi/scan", s.handleWifiScan)
-			r.Post("/wifi/connect", s.handleWifiConnect)
-			r.Post("/restart", s.handleRestart)
+			r.Get("/dashboard/summary", s.handleDashboardSummary)
+
+			// Agent Management, Soul & Cron
+			r.Route("/agents", func(r chi.Router) {
+				r.Get("/", s.handleListAgents)
+				r.Post("/", s.handleCreateAgent)
+				r.Get("/cron", s.handleListCronJobs)
+				r.Post("/cron", s.handleSaveCronJob)
+				r.Post("/cron/{id}/run", s.handleRunCronJob)
+				r.Delete("/cron/{id}", s.handleDeleteCronJob)
+				r.Get("/soul", s.handleGetSoul)
+				r.Put("/soul", s.handleSaveSoul)
+				r.Get("/memory-md", s.handleGetMemoryMD)
+
+				r.Route("/{agentID}", func(r chi.Router) {
+					r.Get("/", s.handleGetAgent)
+					r.Put("/", s.handleUpdateAgent)
+					r.Delete("/", s.handleDeleteAgent)
+					r.Get("/soul", s.handleGetSoul)
+					r.Put("/soul", s.handleSaveSoul)
+					r.Get("/memory-md", s.handleGetMemoryMD)
+					r.Post("/start", s.handleStartAgent)
+					r.Post("/stop", s.handleStopAgent)
+					r.Post("/chat", s.handleChat)
+				})
+			})
+
+			// Standalone Cron Route Alias
+			r.Route("/cron", func(r chi.Router) {
+				r.Get("/", s.handleListCronJobs)
+				r.Post("/", s.handleSaveCronJob)
+				r.Post("/{id}/run", s.handleRunCronJob)
+				r.Delete("/{id}", s.handleDeleteCronJob)
+			})
+
+			// Conversations & History
+			r.Route("/conversations", func(r chi.Router) {
+				r.Get("/", s.handleListConversations)
+				r.Post("/", s.handleCreateConversation)
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", s.handleGetConversation)
+					r.Put("/", s.handleUpdateConversation)
+					r.Delete("/", s.handleDeleteConversation)
+				})
+			})
+
+			// Tool Hub & Skills Marketplace
+			r.Route("/tools", func(r chi.Router) {
+				r.Get("/", s.handleListTools)
+				r.Post("/mcp", s.handleConnectMCP)
+				r.Delete("/mcp/{serverID}", s.handleDisconnectMCP)
+				r.Post("/execute", s.handleExecuteTool)
+				r.Post("/skill", s.handleCreateSkill)
+				r.Post("/wasm", s.handleUploadWASM)
+				r.Get("/hub/catalog", s.handleListHubCatalog)
+				r.Post("/hub/install", s.handleInstallHubSkill)
+				r.Post("/hub/uninstall", s.handleUninstallHubSkill)
+			})
+
+			// Onboarding & Setup
+			r.Route("/setup", func(r chi.Router) {
+				r.Get("/status", s.handleGetSetupStatus)
+				r.Post("/wizard", s.handleSetupWizard)
+			})
+
+			// SaaS Integrations & Connectors & Channel Adapters & Pairing
+			r.Route("/integrations", func(r chi.Router) {
+				r.Get("/", s.handleListIntegrations)
+				r.Get("/oauth/callback", s.handleOAuthCallback)
+				r.Post("/{provider}/auth-url", s.handleGetAuthURL)
+				r.Post("/{provider}/token", s.handleSaveDirectToken)
+				r.Post("/{provider}/config", s.handleSaveProviderConfig)
+				r.Post("/{provider}/test", s.handleTestIntegration)
+				r.Post("/{provider}/disconnect", s.handleDisconnectIntegration)
+				r.Post("/{provider}/toggle", s.handleToggleIntegration)
+				r.Get("/channels", s.handleGetChannels)
+				r.Post("/channels", s.handleSaveChannels)
+				r.Post("/pairing/code", s.handleGeneratePairingCode)
+				r.Post("/pairing/verify", s.handleVerifyPairingCode)
+				r.Get("/authorizations", s.handleListAuthorizations)
+				r.Delete("/authorizations", s.handleRevokeAuthorization)
+			})
+
+			// Workspace File Manager
+			r.Route("/workspace", func(r chi.Router) {
+				r.Get("/files", s.handleListWorkspaceFiles)
+				r.Get("/file", s.handleGetWorkspaceFile)
+				r.Post("/file", s.handleSaveWorkspaceFile)
+				r.Delete("/file", s.handleDeleteWorkspaceFile)
+				r.Post("/mkdir", s.handleMkdirWorkspace)
+				r.Post("/upload", s.handleUploadWorkspaceFile)
+			})
+
+			// System, HAL, Keys, Identity, Audit & Tailscale
+			r.Route("/system", func(r chi.Router) {
+				r.Get("/metrics", s.handleGetMetrics)
+				r.Get("/identity", s.handleGetIdentity)
+				r.Put("/identity", s.handleSaveIdentity)
+				r.Get("/profile", s.handleGetIdentity)
+				r.Put("/profile", s.handleSaveIdentity)
+				r.Get("/keys", s.handleGetAPIKeys)
+				r.Post("/keys", s.handleSaveAPIKeys)
+				r.Post("/keys/test", s.handleTestAPIKey)
+				r.Get("/audit", s.handleGetAuditLogs)
+				r.Get("/storage", s.handleGetStorageInfo)
+				r.Get("/backup", s.handleGetBackup)
+				r.Post("/ota/check", s.handleCheckOTA)
+				r.Get("/tailscale", s.handleGetTailscale)
+				r.Get("/wifi/scan", s.handleWifiScan)
+				r.Post("/wifi/connect", s.handleWifiConnect)
+				r.Post("/restart", s.handleRestart)
+			})
 		})
 	})
 

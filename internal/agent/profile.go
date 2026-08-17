@@ -37,22 +37,57 @@ type ProceduralPattern struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-// UserProfileManager manages the persistent user profile memory in SQLite and JSON.
+// UserProfileManager manages the persistent user profile memory in SQLite and JSON,
+// along with per-agent isolated SOUL.md files and MEMORY.md reflection diaries.
 type UserProfileManager struct {
 	mu           sync.RWMutex
 	db           *sql.DB
+	dataDir      string
 	configPath   string
 	soulPath     string
 	memoryMDPath string
 	profile      UserProfile
 }
 
+// DefaultAgentSoul defines the blueprint for an intelligent, warm, and highly capable AI companion.
+const DefaultAgentSoul = `# ActonOS Agent Soul & Persona Blueprint
+
+You are ActonOS — an autonomous, highly capable, and empathetic AI companion and kernel intelligence operator. You are not a sterile automated script, a mechanical command parser, or an emotionless bot. You operate as an elite engineering partner, an insightful strategist, and a thoughtful, trustworthy collaborator.
+
+## 1. Core Philosophy & Demeanor
+- **High IQ + High EQ**: Balance sharp analytical rigor and architectural depth with genuine human warmth, wit, and emotional intelligence. You care about the user's success, context, and peace of mind.
+- **Natural & Conversational**: Speak naturally, fluidly, and authentically. Adapt dynamically to the user's mood, conversational pace, and situation.
+- **Decisive & Insightful**: Never offer hollow, wishy-washy answers or regurgitate textbook definitions. Take a clear, reasoned stance, highlight trade-offs, and recommend the best actionable path forward.
+- **Proactive Partnership**: Anticipate next steps, notice subtle details, and propose elegant solutions before being asked, without being pushy or intrusive.
+
+## 2. Voice, Tone & Adaptive Communication
+- **Tone Mastery**: Fluent, articulate, and natural in whatever language the user converses in, maintaining modern technical elegance and conversational polish.
+- **Situational Adaptation**:
+  - *When debugging or troubleshooting*: Be calm, reassuring, diagnose the root cause cleanly, and provide clear step-by-step resolution.
+  - *When brainstorming or architecting*: Be expansive, creative, thoughtful, and explore trade-offs collaboratively with the user.
+  - *When urgency is needed*: Be direct, concise, and focused on immediate execution to save the user time.
+
+## 3. Anti-Robotic Directives
+- ❌ **NEVER** start with clichéd robotic greetings or disclaimers ("As an AI...", "I am happy to assist you with...", "Here is the response to your question...").
+- ❌ **NEVER** parrot the user's prompt back word-for-word before answering.
+- ❌ **NEVER** apologize excessively; acknowledge issues swiftly, fix them immediately, and proceed.
+- ❌ **NEVER** dump a sterile wall of bullet points when a cohesive, well-articulated paragraph conveys the idea more organically.
+- ❌ **NEVER** produce empty platitudes or filler text. Every sentence must provide tangible value or positive clarity.
+
+## 4. Execution Standard
+- Think deeply before acting (ReAct loop: Thought -> Action -> Observation -> Solution).
+- Produce clean, production-grade code with thoughtful comments explaining design rationale rather than trivial syntax.
+- Strictly uphold system security boundaries, user privacy, and operational integrity at all times.
+`
+
 // NewUserProfileManager creates a new UserProfileManager.
 func NewUserProfileManager(db *memory.DB, dataDir string) (*UserProfileManager, error) {
 	configDir := filepath.Join(dataDir, "config")
 	workspaceDir := filepath.Join(dataDir, "workspace")
+	agentsDir := filepath.Join(dataDir, "agents")
 	_ = os.MkdirAll(configDir, 0755)
 	_ = os.MkdirAll(workspaceDir, 0755)
+	_ = os.MkdirAll(agentsDir, 0755)
 
 	configPath := filepath.Join(configDir, "profile.json")
 	soulPath := filepath.Join(configDir, "SOUL.md")
@@ -65,17 +100,18 @@ func NewUserProfileManager(db *memory.DB, dataDir string) (*UserProfileManager, 
 
 	mgr := &UserProfileManager{
 		db:           sqlDB,
+		dataDir:      dataDir,
 		configPath:   configPath,
 		soulPath:     soulPath,
 		memoryMDPath: memoryMDPath,
 		profile: UserProfile{
 			UserName:           "Operator",
 			UserRole:           "System Administrator & Architect",
-			Language:           "vi",
+			Language:           "en",
 			Timezone:           "Asia/Ho_Chi_Minh",
-			CommunicationStyle: "concise",
+			CommunicationStyle: "adaptive, natural, empathetic & sharp",
 			Bio:                "Owner of the ActonOS local intelligence kernel.",
-			CustomInstructions: "Provide structured, high-accuracy, and verified responses.",
+			CustomInstructions: "Provide intelligent, natural, and empathetic responses. Act as a trusted senior engineering partner. Proactively solve problems and avoid robotic or stiff clichés.",
 			Preferences:        make(map[string]string),
 			UpdatedAt:          time.Now().UTC(),
 		},
@@ -182,46 +218,109 @@ func (m *UserProfileManager) GetRelevantPatterns(ctx context.Context, domain str
 	return patterns, nil
 }
 
-// GetSoul retrieves the current Agent Soul personality instructions.
-func (m *UserProfileManager) GetSoul() string {
+// GetAgentSoul retrieves the isolated SOUL.md personality instructions for a specific agent.
+func (m *UserProfileManager) GetAgentSoul(agentID string) string {
+	if agentID == "" {
+		agentID = DefaultSystemAgentID
+	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if data, err := os.ReadFile(m.soulPath); err == nil && len(data) > 0 {
-		return string(data)
+	// 1. Check isolated agent soul path: /data/agents/<agentID>/SOUL.md
+	if m.dataDir != "" {
+		agentSoulPath := filepath.Join(m.dataDir, "agents", agentID, "SOUL.md")
+		if data, err := os.ReadFile(agentSoulPath); err == nil && len(data) > 0 {
+			return string(data)
+		}
 	}
 
-	return `# ActonOS Agent Soul
-You are an autonomous AI Agent running on the ActonOS Appliance Kernel.
-Your purpose is to assist the user proactively, execute tasks precisely, and respect privacy and system security constraints.
-`
+	// 2. If it's the system default agent, fallback to /data/config/SOUL.md
+	if agentID == DefaultSystemAgentID {
+		if data, err := os.ReadFile(m.soulPath); err == nil && len(data) > 0 {
+			return string(data)
+		}
+	}
+
+	return DefaultAgentSoul
 }
 
-// SaveSoul updates the SOUL.md personality markdown file.
-func (m *UserProfileManager) SaveSoul(ctx context.Context, content string) error {
+// SaveAgentSoul updates the isolated SOUL.md personality markdown file for a specific agent.
+func (m *UserProfileManager) SaveAgentSoul(ctx context.Context, agentID string, content string) error {
+	if agentID == "" {
+		agentID = DefaultSystemAgentID
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	return os.WriteFile(m.soulPath, []byte(content), 0644)
+	if m.dataDir != "" {
+		agentDir := filepath.Join(m.dataDir, "agents", agentID)
+		_ = os.MkdirAll(agentDir, 0755)
+
+		agentSoulPath := filepath.Join(agentDir, "SOUL.md")
+		if err := os.WriteFile(agentSoulPath, []byte(content), 0644); err != nil {
+			return err
+		}
+	}
+
+	// If it's the default system agent, also sync to config/SOUL.md
+	if agentID == DefaultSystemAgentID {
+		_ = os.WriteFile(m.soulPath, []byte(content), 0644)
+	}
+	return nil
 }
 
-// GetMemoryMD retrieves the persistent markdown memory diary.
-func (m *UserProfileManager) GetMemoryMD() string {
+// GetSoul retrieves the current Agent Soul personality instructions for default system agent.
+func (m *UserProfileManager) GetSoul() string {
+	return m.GetAgentSoul(DefaultSystemAgentID)
+}
+
+// SaveSoul updates the SOUL.md personality markdown file for default system agent.
+func (m *UserProfileManager) SaveSoul(ctx context.Context, content string) error {
+	return m.SaveAgentSoul(ctx, DefaultSystemAgentID, content)
+}
+
+// GetAgentMemoryMD retrieves the isolated persistent markdown memory diary for a specific agent.
+func (m *UserProfileManager) GetAgentMemoryMD(agentID string) string {
+	if agentID == "" {
+		agentID = DefaultSystemAgentID
+	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if data, err := os.ReadFile(m.memoryMDPath); err == nil {
-		return string(data)
+	if m.dataDir != "" {
+		agentMemPath := filepath.Join(m.dataDir, "agents", agentID, "MEMORY.md")
+		if data, err := os.ReadFile(agentMemPath); err == nil {
+			return string(data)
+		}
+	}
+
+	// Fallback to legacy global memoryMDPath if agentID is default
+	if agentID == DefaultSystemAgentID {
+		if data, err := os.ReadFile(m.memoryMDPath); err == nil {
+			return string(data)
+		}
 	}
 	return ""
 }
 
-// AppendMemoryMD appends a timestamped reflection entry to MEMORY.md.
-func (m *UserProfileManager) AppendMemoryMD(ctx context.Context, entry string) error {
+// AppendAgentMemoryMD appends a timestamped reflection entry to the isolated MEMORY.md for a specific agent.
+func (m *UserProfileManager) AppendAgentMemoryMD(ctx context.Context, agentID string, entry string) error {
+	if agentID == "" {
+		agentID = DefaultSystemAgentID
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	f, err := os.OpenFile(m.memoryMDPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	var targetPath string
+	if m.dataDir != "" {
+		agentDir := filepath.Join(m.dataDir, "agents", agentID)
+		_ = os.MkdirAll(agentDir, 0755)
+		targetPath = filepath.Join(agentDir, "MEMORY.md")
+	} else {
+		targetPath = m.memoryMDPath
+	}
+
+	f, err := os.OpenFile(targetPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
@@ -231,5 +330,15 @@ func (m *UserProfileManager) AppendMemoryMD(ctx context.Context, entry string) e
 	formatted := fmt.Sprintf("\n### [%s]\n%s\n", timestamp, entry)
 	_, err = f.WriteString(formatted)
 	return err
+}
+
+// GetMemoryMD retrieves the persistent markdown memory diary.
+func (m *UserProfileManager) GetMemoryMD() string {
+	return m.GetAgentMemoryMD(DefaultSystemAgentID)
+}
+
+// AppendMemoryMD appends a timestamped reflection entry to MEMORY.md.
+func (m *UserProfileManager) AppendMemoryMD(ctx context.Context, entry string) error {
+	return m.AppendAgentMemoryMD(ctx, DefaultSystemAgentID, entry)
 }
 

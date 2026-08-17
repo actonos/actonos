@@ -56,7 +56,7 @@ export function QuickstartGuide({ onNavigateTab, onOpenChat }: QuickstartGuidePr
     {
       id: 2,
       icon: Bot,
-      title: t('onboarding.step2Title', 'Step 2: Meet Acton Core Assistant'),
+      title: t('onboarding.step2Title', 'Step 2: Meet Nova'),
       desc: t('onboarding.step2Desc', 'The built-in system operator is ready to assist with tool calling and workspace files.'),
       actionLabel: t('onboarding.step2Action', 'Start Instant Chat'),
       action: () => onOpenChat('agent_system_core'),
@@ -147,20 +147,18 @@ export function QuickstartGuide({ onNavigateTab, onOpenChat }: QuickstartGuidePr
             return (
               <div
                 key={step.id}
-                className={`p-4 rounded-[18px] flex flex-col justify-between transition-all border ${
-                  step.completed
-                    ? 'bg-canvas/90 border-emerald-300 shadow-xs'
-                    : 'bg-canvas/60 border-onyx/10 hover:border-onyx/20 hover:bg-canvas'
-                }`}
+                className={`p-4 rounded-[18px] flex flex-col justify-between transition-all border ${step.completed
+                  ? 'bg-canvas/90 border-emerald-300 shadow-xs'
+                  : 'bg-canvas/60 border-onyx/10 hover:border-onyx/20 hover:bg-canvas'
+                  }`}
               >
                 <div>
                   <div className="flex items-center justify-between mb-2.5">
                     <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                        step.completed
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : 'bg-soft-meadow text-deep-ink border border-onyx/10'
-                      }`}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center ${step.completed
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : 'bg-soft-meadow text-deep-ink border border-onyx/10'
+                        }`}
                     >
                       <Icon className="w-4 h-4" />
                     </div>

@@ -40,6 +40,38 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Custom Minimalist Scrollbars according to Sunlit Wildflower DESIGN.md */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(19, 14, 48, 0.16);
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+  transition: background-color 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(19, 14, 48, 0.35);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox slim scrollbar support */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(19, 14, 48, 0.18) transparent;
+}
+
 h1,
 h2,
 h3,

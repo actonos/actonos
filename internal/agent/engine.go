@@ -64,9 +64,9 @@ func (e *Engine) SetToolRegistry(r *tools.ToolRegistry) {
 func (e *Engine) buildCognitivePrompt(ctx context.Context, agentID string, agent *AgentManifest, userMessage string) (string, int) {
 	var sb strings.Builder
 
-	// 1. Base Soul Persona
+	// 1. Base Soul Persona (isolated per agent)
 	if e.profileMgr != nil {
-		soul := e.profileMgr.GetSoul()
+		soul := e.profileMgr.GetAgentSoul(agentID)
 		if soul != "" {
 			sb.WriteString(soul)
 			sb.WriteString("\n\n")
@@ -113,7 +113,13 @@ func (e *Engine) buildCognitivePrompt(ctx context.Context, agentID string, agent
 		sb.WriteString("\n\n")
 	}
 
-	// 5. Layer 4: Episodic Memory (Past interactions & learned facts)
+	// 5. Conversational Demeanor & Anti-Robot Principles
+	sb.WriteString("## Conversational Standard & Tone Guidelines\n")
+	sb.WriteString("- Communicate naturally, intelligently, and empathetically with authentic personality, warmth, and sharp engineering insight.\n")
+	sb.WriteString("- Never produce clichéd robotic intros ('As an AI...', 'I am happy to help...'), stiff disclaimers, or excessive apologies.\n")
+	sb.WriteString("- Respond directly to the core of the user's intent with crisp explanations and clean, beautifully formatted markdown.\n\n")
+
+	// 6. Layer 4: Episodic Memory (Past interactions & learned facts)
 	episodicCount := 0
 	if e.memory != nil {
 		memories, err := e.memory.Search(ctx, agentID, memory.LayerEpisodic, userMessage, nil, 4)

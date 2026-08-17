@@ -8,15 +8,28 @@ import type {
   TailscaleStatus,
 } from './types';
 
-const API_BASE = '/api';
+export const API_BASE = '/api';
+
+export function getAuthHeaders(extra?: Record<string, string>): Record<string, string> {
+  const token = localStorage.getItem('actonos_token');
+  const headers: Record<string, string> = {
+    ...extra,
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
 
 async function fetchJSON<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  const headers = getAuthHeaders({
+    'Content-Type': 'application/json',
+    ...(options?.headers as Record<string, string>),
+  });
+
   const res = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
+    headers,
   });
 
   if (!res.ok) {
@@ -164,6 +177,37 @@ export interface ChannelAuthorizationItem {
 }
 
 export const api = {
+  // Authentication & Initial Setup
+  getAuthStatus: () =>
+    fetchJSON<{ initialized: boolean; authenticated: boolean; user_name?: string }>('/auth/status'),
+  setupInitialAdmin: (data: {
+    password: string;
+    user_name?: string;
+    user_role?: string;
+    language?: string;
+    timezone?: string;
+    communication_style?: string;
+    custom_instructions?: string;
+  }) =>
+    fetchJSON<{ status: string; token: string }>('/auth/setup', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  login: (password: string) =>
+    fetchJSON<{ status: string; token: string }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    }),
+  logout: () =>
+    fetchJSON<{ status: string }>('/auth/logout', {
+      method: 'POST',
+    }),
+  changeAdminPassword: (currentPassword: string, newPassword: string) =>
+    fetchJSON<{ status: string }>('/auth/password', {
+      method: 'PUT',
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    }),
+
   // Health & Dashboard
   getHealth: () => fetchJSON<any>('/health'),
   getDashboardSummary: () => fetchJSON<DashboardSummaryData>('/dashboard/summary'),
@@ -182,23 +226,30 @@ export const api = {
       body: JSON.stringify(manifest),
     }),
   deleteAgent: (id: string) =>
-    fetch(`${API_BASE}/agents/${id}`, { method: 'DELETE' }),
+    fetchJSON<{ status: string }>(`/agents/${id}`, { method: 'DELETE' }),
   startAgent: (id: string) =>
     fetchJSON<{ status: string }>(`/agents/${id}/start`, { method: 'POST' }),
   stopAgent: (id: string) =>
     fetchJSON<{ status: string }>(`/agents/${id}/stop`, { method: 'POST' }),
-  getSoul: () =>
-    fetchJSON<{ content: string; soul: string; path: string }>('/agents/soul').then((r) => ({
+  getSoul: (agentID?: string) => {
+    const url = agentID ? `/agents/${agentID}/soul` : '/agents/soul';
+    return fetchJSON<{ content: string; soul: string; path?: string; agent_id?: string }>(url).then((r) => ({
       ...r,
       soul: r.soul || r.content,
       content: r.content || r.soul,
-    })),
-  saveSoul: (content: string) =>
-    fetchJSON<{ status: string; path: string }>('/agents/soul', {
+    }));
+  },
+  saveSoul: (content: string, agentID?: string) => {
+    const url = agentID ? `/agents/${agentID}/soul` : '/agents/soul';
+    return fetchJSON<{ status: string; path?: string; agent_id?: string }>(url, {
       method: 'PUT',
-      body: JSON.stringify({ content, soul: content }),
-    }),
-  getMemoryMD: () => fetchJSON<{ memory_md: string }>('/agents/memory-md'),
+      body: JSON.stringify({ content, soul: content, agent_id: agentID }),
+    });
+  },
+  getMemoryMD: (agentID?: string) => {
+    const url = agentID ? `/agents/${agentID}/memory-md` : '/agents/memory-md';
+    return fetchJSON<{ memory_md: string; agent_id?: string }>(url);
+  },
   listCronJobs: () => fetchJSON<{ jobs: CronJobItem[]; count: number }>('/cron'),
   saveCronJob: (job: Partial<CronJobItem> & { target_channel?: string; target_recipient?: string }) =>
     fetchJSON<{ status: string; job?: CronJobItem; job_id?: string }>('/cron', {
@@ -224,6 +275,12 @@ export const api = {
     }>(`/agents/${agentID}/chat`, {
       method: 'POST',
       body: JSON.stringify({ message, conversation_id: conversationID }),
+    }),
+  streamChat: (agentID: string, data: { message: string; conversation_id?: string | null }) =>
+    fetch(`${API_BASE}/agents/${agentID}/chat`, {
+      method: 'POST',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ ...data, stream: true }),
     }),
 
   // Conversations
@@ -269,7 +326,11 @@ export const api = {
   uploadWASM: (file: File) => {
     const fd = new FormData();
     fd.append('file', file);
-    return fetch(`${API_BASE}/tools/wasm`, { method: 'POST', body: fd }).then((r) => r.json());
+    return fetch(`${API_BASE}/tools/wasm`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: fd,
+    }).then((r) => r.json());
   },
 
   // Skills Public Community Hub
@@ -449,4 +510,19 @@ export const api = {
       body: JSON.stringify({ ssid, password }),
     }),
   restartDaemon: () => fetchJSON<{ status: string }>('/system/restart', { method: 'POST' }),
+  downloadBackup: async () => {
+    const res = await fetch(`${API_BASE}/system/backup`, {
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error(`Backup failed: ${res.statusText}`);
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `actonos-backup-${new Date().toISOString().slice(0, 10)}.db`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
 };

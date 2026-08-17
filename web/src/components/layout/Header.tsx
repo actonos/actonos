@@ -7,9 +7,10 @@ export interface HeaderProps {
   activeTab: NavTab;
   onOpenMobileSidebar: () => void;
   collapsed?: boolean;
+  onLogout?: () => void;
 }
 
-export function Header({ activeTab, onOpenMobileSidebar }: HeaderProps) {
+export function Header({ activeTab, onOpenMobileSidebar, onLogout }: HeaderProps) {
   const [metrics, setMetrics] = useState<any>(null);
 
   useEffect(() => {
@@ -42,24 +43,30 @@ export function Header({ activeTab, onOpenMobileSidebar }: HeaderProps) {
       <div className="flex items-center gap-3">
         <button
           onClick={onOpenMobileSidebar}
-          className="lg:hidden p-2 rounded-full bg-soft-meadow border border-onyx/10 text-deep-ink hover:bg-white transition-colors"
+          className="lg:hidden p-2 rounded-full bg-soft-meadow border border-onyx/10 text-deep-ink hover:bg-white transition-colors cursor-pointer"
           aria-label="Open sidebar"
         >
           <Menu className="w-5 h-5" />
         </button>
 
-        <div className="flex items-center gap-2">
-          <span className="hidden sm:inline text-caption font-mono uppercase text-slate font-medium">
+        <img
+          src="/actonos_logo.png"
+          alt="ActonOS"
+          className="h-6 w-auto object-contain lg:hidden"
+        />
+
+        <div className="hidden lg:flex items-center gap-2">
+          <span className="text-caption font-mono uppercase text-slate font-medium">
             {current.category}
           </span>
-          <span className="hidden sm:inline text-slate font-mono">/</span>
+          <span className="text-slate font-mono">/</span>
           <h2 className="font-serif font-bold text-deep-ink text-body sm:text-heading-sm tracking-tight">
             {current.title}
           </h2>
         </div>
       </div>
 
-      {/* Right: Telemetry mini badges */}
+      {/* Right: Telemetry mini badges & Lock Action */}
       <div className="flex items-center gap-2.5">
         {metrics && (
           <div className="hidden md:flex items-center gap-3 px-3 py-1 bg-soft-meadow rounded-full border border-onyx/10 text-caption font-mono text-slate">
@@ -73,6 +80,16 @@ export function Header({ activeTab, onOpenMobileSidebar }: HeaderProps) {
           <Sparkles className="w-3.5 h-3.5 text-hi-yellow" />
           <span className="hidden sm:inline">Active</span>
         </div>
+
+        {onLogout && (
+          <button
+            onClick={onLogout}
+            className="flex items-center gap-1.5 px-3 py-1 bg-soft-meadow hover:bg-white text-slate hover:text-deep-ink rounded-full border border-onyx/10 text-caption font-sans font-medium transition-colors cursor-pointer"
+            title="Lock ActonOS Session"
+          >
+            <span>Lock</span>
+          </button>
+        )}
       </div>
     </header>
   );

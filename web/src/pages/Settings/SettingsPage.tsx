@@ -32,7 +32,6 @@ import {
   Server,
   Terminal,
   User,
-  Bot,
 } from 'lucide-react';
 import {
   api,
@@ -64,9 +63,10 @@ const PROVIDER_METAS: ProviderMeta[] = [
     defaultBaseURL: 'https://api.anthropic.com',
     modelPresets: [
       { id: 'claude-3-7-sonnet', label: 'Claude 3.7 Sonnet (Hybrid Reasoning Flagship)' },
-      { id: 'claude-3-5-sonnet', label: 'Claude 3.5 Sonnet (Coding Leader)' },
-      { id: 'claude-3-5-haiku', label: 'Claude 3.5 Haiku (Ultra Fast)' },
-      { id: 'claude-3-opus', label: 'Claude 3 Opus' },
+      { id: 'claude-opus-4-8', label: 'Claude Opus 4.8 (Supreme Intelligence)' },
+      { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (Frontier Coding Specialist)' },
+      { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5 (Ultra Fast Worker)' },
+      { id: 'claude-3-5-sonnet', label: 'Claude 3.5 Sonnet' },
     ],
     accentColor: '#D97706',
     icon: Sparkles,
@@ -78,12 +78,14 @@ const PROVIDER_METAS: ProviderMeta[] = [
     description: 'General intelligence, multimodal reasoning, and structured output.',
     defaultBaseURL: 'https://api.openai.com/v1',
     modelPresets: [
-      { id: 'gpt-4.5-preview', label: 'GPT-4.5 Orion (World Knowledge Preview)' },
-      { id: 'gpt-4o', label: 'GPT-4o (Omni Multimodal Flagship)' },
-      { id: 'gpt-4o-mini', label: 'GPT-4o Mini (Fast & Cheap)' },
+      { id: 'gpt-5.6', label: 'GPT-5.6 (Omni Flagship 2026)' },
+      { id: 'gpt-5.5', label: 'GPT-5.5 (General Multimodal)' },
+      { id: 'gpt-5.4-pro', label: 'GPT-5.4 Pro (Enterprise Reasoning)' },
+      { id: 'gpt-5.4-mini', label: 'GPT-5.4 Mini (Light Fast)' },
+      { id: 'o3', label: 'o3 (Next-Gen Deliberate Reasoning)' },
       { id: 'o3-mini', label: 'o3-mini (High STEM & Coding Reasoning)' },
-      { id: 'o1', label: 'o1 (Deep Deliberate Reasoning)' },
-      { id: 'o1-mini', label: 'o1-mini (Fast Reasoning)' },
+      { id: 'gpt-4o', label: 'GPT-4o (Omni Multimodal Standard)' },
+      { id: 'gpt-4o-mini', label: 'GPT-4o Mini (Fast & Cheap)' },
     ],
     accentColor: '#10B981',
     icon: Zap,
@@ -92,15 +94,13 @@ const PROVIDER_METAS: ProviderMeta[] = [
     id: 'gemini',
     name: 'Google Gemini',
     category: 'Cloud Frontier',
-    description: 'Massive 1M+ token context window, ultra-fast latency, and native tool use.',
+    description: 'Massive 2M+ token context window, ultra-fast latency, and native tool use.',
     defaultBaseURL: 'https://generativelanguage.googleapis.com',
     modelPresets: [
+      { id: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro (2M+ Context Flagship)' },
+      { id: 'gemini-3-flash', label: 'Gemini 3 Flash (1M+ Realtime Streaming)' },
+      { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (Deep Multimodal Code)' },
       { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (1M+ Context Recommended)' },
-      { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash (Next-Gen Multimodal)' },
-      { id: 'gemini-2.0-flash-thinking-exp', label: 'Gemini 2.0 Flash Thinking (Visual & Math Reasoning)' },
-      { id: 'gemini-2.0-pro-exp-02-05', label: 'Gemini 2.0 Pro Experimental' },
-      { id: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro (2M Context)' },
-      { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
     ],
     accentColor: '#3B82F6',
     icon: Sparkles,
@@ -112,8 +112,10 @@ const PROVIDER_METAS: ProviderMeta[] = [
     description: 'Cost-effective high-performance reasoning and code intelligence.',
     defaultBaseURL: 'https://api.deepseek.com/v1',
     modelPresets: [
-      { id: 'deepseek-chat', label: 'DeepSeek-V3 Chat (671B MoE)' },
-      { id: 'deepseek-reasoner', label: 'DeepSeek-R1 (Open Reasoning Benchmark Leader)' },
+      { id: 'deepseek-v4-pro', label: 'DeepSeek-V4 Pro (1M MoE Architecture)' },
+      { id: 'deepseek-v4-flash', label: 'DeepSeek-V4 Flash (High Throughput MoE)' },
+      { id: 'deepseek-r1', label: 'DeepSeek-R1 (Open Reasoning Benchmark Leader)' },
+      { id: 'deepseek-v3.2', label: 'DeepSeek-V3.2 Chat' },
     ],
     accentColor: '#6366F1',
     icon: Cpu,
@@ -127,9 +129,8 @@ const PROVIDER_METAS: ProviderMeta[] = [
     modelPresets: [
       { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B Versatile (Groq LPU)' },
       { id: 'deepseek-r1-distill-llama-70b', label: 'DeepSeek R1 Distill 70B (Groq)' },
-      { id: 'qwen-2.5-32b', label: 'Qwen 2.5 32B (Groq)' },
+      { id: 'qwen3-coder', label: 'Qwen3 Coder (Groq LPU)' },
       { id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B Instant (800+ tok/s)' },
-      { id: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B' },
     ],
     accentColor: '#F97316',
     icon: Zap,
@@ -526,20 +527,16 @@ export function SettingsPage() {
         {/* TAB: Identity & Owner Profile */}
         {activeTab === 'identity' && (
           <div className="space-y-6">
-            <div className="p-4 rounded-2xl bg-canvas/90 border border-onyx/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-deep-ink text-hi-yellow flex items-center justify-center shrink-0">
-                  <User className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="font-serif text-body font-semibold text-deep-ink">
-                    Cognitive Identity & Owner Profile
-                  </h3>
-                  <p className="font-sans text-caption text-slate">
-                    All agents ingest your owner profile and SOUL persona into their 4-layer cognitive architecture (Working, User Profile, Procedural, and Episodic memory).
-                  </p>
-                </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-serif text-heading-sm font-semibold text-deep-ink">
+                  Operator Identity & Profile
+                </h3>
+                <p className="font-sans text-caption text-slate mt-0.5">
+                  Configure your operator identity, working style, and global standing directives for ActonOS.
+                </p>
               </div>
+
               <Button
                 variant="primary"
                 size="sm"
@@ -547,132 +544,104 @@ export function SettingsPage() {
                 disabled={savingIdentity}
                 onClick={handleSaveIdentity}
               >
-                {savingIdentity ? 'Saving...' : 'Save Identity & Soul'}
+                {savingIdentity ? 'Saving...' : 'Save Profile'}
               </Button>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Card 1: Owner Profile */}
-              <Card className="p-6 space-y-4">
-                <div className="flex items-center gap-2 border-b border-onyx/10 pb-3">
-                  <User className="w-4 h-4 text-deep-ink" />
-                  <h4 className="font-serif text-subheading font-semibold text-deep-ink">
-                    Owner Identity Profile
-                  </h4>
-                </div>
+            <Card className="p-8 border border-onyx/15 shadow-sm max-w-3xl">
+              <div className="flex items-center gap-2 border-b border-onyx/10 pb-4 mb-6">
+                <User className="w-5 h-5 text-deep-ink" />
+                <h4 className="font-serif text-subheading font-semibold text-deep-ink">
+                  Owner Identity & Preferences
+                </h4>
+              </div>
 
-                <div className="space-y-3.5 text-body-sm">
+              <div className="space-y-4 text-body-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-caption font-medium text-deep-ink mb-1">
-                      Owner Name / Nickname
+                    <label className="block text-caption uppercase text-slate font-semibold mb-1.5">
+                      Owner Name / Handle
                     </label>
                     <Input
                       value={identityProfile.user_name}
                       onChange={(e) => setIdentityProfile({ ...identityProfile, user_name: e.target.value })}
-                      placeholder="e.g. Bieber Kieu or Operator"
+                      placeholder="e.g. Alex, Operator"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-caption font-medium text-deep-ink mb-1">
+                    <label className="block text-caption uppercase text-slate font-semibold mb-1.5">
                       Professional Role / Title
                     </label>
                     <Input
                       value={identityProfile.user_role || ''}
                       onChange={(e) => setIdentityProfile({ ...identityProfile, user_role: e.target.value })}
-                      placeholder="e.g. AI System Architect & Software Engineer"
+                      placeholder="e.g. System Architect & Lead Developer"
                     />
                   </div>
+                </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-caption font-medium text-deep-ink mb-1">
-                        Preferred Language
-                      </label>
-                      <select
-                        value={identityProfile.language}
-                        onChange={(e) => setIdentityProfile({ ...identityProfile, language: e.target.value })}
-                        className="w-full px-3 py-2 bg-canvas border border-onyx/15 rounded-xl text-body-sm text-deep-ink font-sans focus:outline-hidden focus:ring-1 focus:ring-deep-ink"
-                      >
-                        <option value="vi">Tiếng Việt (Vietnamese)</option>
-                        <option value="en">English (US / Global)</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-caption font-medium text-deep-ink mb-1">
-                        Timezone
-                      </label>
-                      <Input
-                        value={identityProfile.timezone || 'Asia/Ho_Chi_Minh'}
-                        onChange={(e) => setIdentityProfile({ ...identityProfile, timezone: e.target.value })}
-                        placeholder="e.g. Asia/Ho_Chi_Minh, UTC"
-                      />
-                    </div>
-                  </div>
-
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-caption font-medium text-deep-ink mb-1">
-                      Communication Style
+                    <label className="block text-caption uppercase text-slate font-semibold mb-1.5">
+                      Preferred Language
                     </label>
                     <select
-                      value={identityProfile.communication_style || 'concise'}
-                      onChange={(e) => setIdentityProfile({ ...identityProfile, communication_style: e.target.value })}
-                      className="w-full px-3 py-2 bg-canvas border border-onyx/15 rounded-xl text-body-sm text-deep-ink font-sans focus:outline-hidden focus:ring-1 focus:ring-deep-ink"
+                      value={identityProfile.language}
+                      onChange={(e) => setIdentityProfile({ ...identityProfile, language: e.target.value })}
+                      className="w-full px-4 py-2.5 bg-canvas border border-onyx/15 rounded-full text-body-sm text-deep-ink font-sans focus:outline-none focus:ring-2 focus:ring-deep-ink"
                     >
-                      <option value="concise">Concise & Direct (Ngắn gọn, trực diện, không rườm rà)</option>
-                      <option value="technical">Technical & Architectural (Chuyên sâu kỹ thuật, phân tích code)</option>
-                      <option value="detailed">Detailed & Explanatory (Chi tiết, đầy đủ hướng dẫn)</option>
+                      <option value="en">English (US / Global)</option>
+                      <option value="vi">Tiếng Việt (Vietnamese)</option>
                     </select>
                   </div>
 
                   <div>
-                    <label className="block text-caption font-medium text-deep-ink mb-1">
-                      Owner Bio & Background Context
+                    <label className="block text-caption uppercase text-slate font-semibold mb-1.5">
+                      Timezone
                     </label>
-                    <textarea
-                      rows={2}
-                      value={identityProfile.bio || ''}
-                      onChange={(e) => setIdentityProfile({ ...identityProfile, bio: e.target.value })}
-                      placeholder="Brief background about yourself to give agents domain context..."
-                      className="w-full p-2.5 bg-canvas border border-onyx/15 rounded-xl text-body-sm text-deep-ink font-sans focus:outline-hidden focus:ring-1 focus:ring-deep-ink resize-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-caption font-medium text-deep-ink mb-1">
-                      Standing Directives & Instructions
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={identityProfile.custom_instructions || ''}
-                      onChange={(e) => setIdentityProfile({ ...identityProfile, custom_instructions: e.target.value })}
-                      placeholder="Rules agents must always obey (e.g. Write clean TypeScript, use Go interfaces, never leave placeholders)..."
-                      className="w-full p-2.5 bg-canvas border border-onyx/15 rounded-xl text-body-sm text-deep-ink font-sans focus:outline-hidden focus:ring-1 focus:ring-deep-ink resize-none"
+                    <Input
+                      value={identityProfile.timezone || 'Asia/Ho_Chi_Minh'}
+                      onChange={(e) => setIdentityProfile({ ...identityProfile, timezone: e.target.value })}
+                      placeholder="e.g. Asia/Ho_Chi_Minh, UTC"
                     />
                   </div>
                 </div>
-              </Card>
 
-              {/* Card 2: Agent Soul & Personality */}
-              <Card className="p-6 space-y-4 flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center gap-2 border-b border-onyx/10 pb-3">
-                    <Bot className="w-4 h-4 text-deep-ink" />
-                    <h4 className="font-serif text-subheading font-semibold text-deep-ink">
-                      Agent Soul Persona (SOUL.md)
-                    </h4>
-                  </div>
-                  <p className="font-sans text-caption text-slate mt-2 mb-3">
-                    The fundamental philosophical & behavioral kernel for all ActonOS agents running on this hardware appliance.
-                  </p>
+                  <label className="block text-caption uppercase text-slate font-semibold mb-1.5">
+                    Communication & Collaboration Tone
+                  </label>
+                  <Input
+                    value={identityProfile.communication_style || ''}
+                    onChange={(e) => setIdentityProfile({ ...identityProfile, communication_style: e.target.value })}
+                    placeholder="e.g. adaptive, natural, empathetic & sharp"
+                  />
+                </div>
 
+                <div>
+                  <label className="block text-caption uppercase text-slate font-semibold mb-1.5">
+                    Owner Bio & Domain Context
+                  </label>
                   <textarea
-                    rows={12}
-                    value={identityProfile.soul || ''}
-                    onChange={(e) => setIdentityProfile({ ...identityProfile, soul: e.target.value })}
-                    placeholder="# ActonOS Agent Soul&#10;You are an autonomous AI Agent running on the ActonOS local kernel..."
-                    className="w-full p-3.5 bg-soft-meadow/50 border border-onyx/15 rounded-2xl font-mono text-caption text-deep-ink focus:outline-hidden focus:ring-1 focus:ring-deep-ink resize-none leading-relaxed"
+                    rows={2}
+                    value={identityProfile.bio || ''}
+                    onChange={(e) => setIdentityProfile({ ...identityProfile, bio: e.target.value })}
+                    placeholder="Brief background about yourself to give agents domain context..."
+                    className="w-full p-3 bg-canvas border border-onyx/15 rounded-2xl text-body-sm text-deep-ink font-sans focus:outline-none focus:ring-2 focus:ring-deep-ink resize-none leading-relaxed"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-caption uppercase text-slate font-semibold mb-1.5">
+                    Universal Standing Directives & Rules
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={identityProfile.custom_instructions || ''}
+                    onChange={(e) => setIdentityProfile({ ...identityProfile, custom_instructions: e.target.value })}
+                    placeholder="Rules all agents must obey (e.g. Write clean code, explain architectural trade-offs, avoid placeholders)..."
+                    className="w-full p-3 bg-canvas border border-onyx/15 rounded-2xl text-body-sm text-deep-ink font-sans focus:outline-none focus:ring-2 focus:ring-deep-ink resize-none leading-relaxed"
                   />
                 </div>
 
@@ -683,13 +652,13 @@ export function SettingsPage() {
                     icon={savingIdentity ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                     disabled={savingIdentity}
                     onClick={handleSaveIdentity}
-                    className="w-full justify-center py-2.5"
+                    className="px-6 font-semibold"
                   >
-                    {savingIdentity ? 'Saving Identity & Soul...' : 'Save All Identity & Soul Settings'}
+                    {savingIdentity ? 'Saving Profile...' : 'Save Profile Settings'}
                   </Button>
                 </div>
-              </Card>
-            </div>
+              </div>
+            </Card>
           </div>
         )}
 
@@ -1155,70 +1124,105 @@ export function SettingsPage() {
 
         {/* TAB 4: Storage & Maintenance */}
         {activeTab === 'maintenance' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Storage Info */}
-            <Card className="p-6 border border-onyx/10 bg-canvas/90 space-y-4">
-              <h4 className="font-serif text-heading-sm text-deep-ink flex items-center gap-2">
-                <HardDrive className="w-5 h-5 text-deep-ink" />
-                <span>Storage Breakdown & Backup</span>
-              </h4>
-              <p className="font-sans text-caption text-slate">
-                Database storage usage and state snapshot for disaster recovery.
-              </p>
-
-              {storageInfo && (
-                <div className="space-y-2 font-mono text-caption text-slate bg-soft-meadow p-3 rounded-xl border border-onyx/5">
-                  <div>Storage (DB): <strong className="text-deep-ink">{(storageInfo.storage_bytes / (1024 * 1024)).toFixed(2)} MB</strong></div>
-                  <div>Vectors: <strong className="text-deep-ink">{(storageInfo.vectors_bytes / (1024 * 1024)).toFixed(2)} MB</strong></div>
-                  <div>Workspace: <strong className="text-deep-ink">{(storageInfo.workspace_bytes / (1024 * 1024)).toFixed(2)} MB</strong></div>
-                  <div>Total Size: <strong className="text-deep-ink">{(storageInfo.total_bytes / (1024 * 1024)).toFixed(2)} MB</strong></div>
+          <div className="space-y-6">
+            {/* About ActonOS Appliance Banner */}
+            <Card className="p-6 border border-onyx/10 bg-canvas/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+              <div className="flex items-center gap-5">
+                <img
+                  src="/actonos_logo.png"
+                  alt="ActonOS"
+                  className="h-10 w-auto object-contain shrink-0"
+                />
+                <div className="border-l border-onyx/10 pl-5 hidden sm:block">
+                  <div className="font-serif font-bold text-body text-deep-ink">ActonOS Kernel Runtime</div>
+                  <p className="font-sans text-caption text-slate">
+                    Autonomous Extensible AI Agent Operating System • Dual-Runtime (Bare-metal & Docker)
+                  </p>
                 </div>
-              )}
-
-              <Button
-                variant="ghost"
-                size="sm"
-                icon={<Download className="w-3.5 h-3.5" />}
-                onClick={() => success('Backup Exported', 'ActonOS state snapshot downloaded.')}
-                className="w-full justify-center"
-              >
-                Download State Snapshot
-              </Button>
-            </Card>
-
-            {/* OTA Update */}
-            <Card className="p-6 border border-onyx/10 bg-canvas/90 space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="font-serif text-heading-sm text-deep-ink flex items-center gap-2">
-                  <DownloadCloud className="w-5 h-5 text-deep-ink" />
-                  <span>OTA Kernel Updates</span>
-                </h4>
-                <Badge variant="neutral">v0.1.0 (Stable)</Badge>
               </div>
-              <p className="font-sans text-caption text-slate">
-                Check GitHub releases for atomic A/B kernel partition firmware updates.
-              </p>
 
-              {otaStatus && (
-                <div className="space-y-1 font-mono text-caption text-slate bg-soft-meadow p-3 rounded-xl border border-onyx/5">
-                  <div>Current: <strong className="text-deep-ink">v{otaStatus.current_version}</strong></div>
-                  <div>Latest: <strong className="text-deep-ink">v{otaStatus.latest_version}</strong></div>
-                  <div>Update Available: <span className={otaStatus.update_available ? 'text-hi-yellow font-bold' : 'text-emerald-700'}>
-                    {otaStatus.update_available ? 'YES' : 'NO'}
-                  </span></div>
-                </div>
-              )}
-
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleCheckOTA}
-                disabled={checkingOTA}
-                className="w-full justify-center"
-              >
-                {checkingOTA ? 'Checking Releases...' : 'Check for Updates'}
-              </Button>
+              <div className="flex items-center gap-3 shrink-0">
+                <Badge variant="active" className="font-mono text-caption">
+                  v0.1.0-release
+                </Badge>
+                <Badge variant="neutral" className="font-mono text-caption">
+                  CGO_ENABLED=0
+                </Badge>
+              </div>
             </Card>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Storage Info */}
+              <Card className="p-6 border border-onyx/10 bg-canvas/90 space-y-4">
+                <h4 className="font-serif text-heading-sm text-deep-ink flex items-center gap-2">
+                  <HardDrive className="w-5 h-5 text-deep-ink" />
+                  <span>Storage Breakdown & Backup</span>
+                </h4>
+                <p className="font-sans text-caption text-slate">
+                  Database storage usage and state snapshot for disaster recovery.
+                </p>
+
+                {storageInfo && (
+                  <div className="space-y-2 font-mono text-caption text-slate bg-soft-meadow p-3 rounded-xl border border-onyx/5">
+                    <div>Storage (DB): <strong className="text-deep-ink">{(storageInfo.storage_bytes / (1024 * 1024)).toFixed(2)} MB</strong></div>
+                    <div>Vectors: <strong className="text-deep-ink">{(storageInfo.vectors_bytes / (1024 * 1024)).toFixed(2)} MB</strong></div>
+                    <div>Workspace: <strong className="text-deep-ink">{(storageInfo.workspace_bytes / (1024 * 1024)).toFixed(2)} MB</strong></div>
+                    <div>Total Size: <strong className="text-deep-ink">{(storageInfo.total_bytes / (1024 * 1024)).toFixed(2)} MB</strong></div>
+                  </div>
+                )}
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<Download className="w-3.5 h-3.5" />}
+                  onClick={async () => {
+                    try {
+                      await api.downloadBackup();
+                      success('Backup Exported', 'ActonOS state database snapshot downloaded.');
+                    } catch (err: any) {
+                      error('Backup Failed', err.message);
+                    }
+                  }}
+                  className="w-full justify-center"
+                >
+                  Download State Snapshot
+                </Button>
+              </Card>
+
+              {/* OTA Update */}
+              <Card className="p-6 border border-onyx/10 bg-canvas/90 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-serif text-heading-sm text-deep-ink flex items-center gap-2">
+                    <DownloadCloud className="w-5 h-5 text-deep-ink" />
+                    <span>OTA Kernel Updates</span>
+                  </h4>
+                  <Badge variant="neutral">v0.1.0 (Stable)</Badge>
+                </div>
+                <p className="font-sans text-caption text-slate">
+                  Check GitHub releases for atomic A/B kernel partition firmware updates.
+                </p>
+
+                {otaStatus && (
+                  <div className="space-y-1 font-mono text-caption text-slate bg-soft-meadow p-3 rounded-xl border border-onyx/5">
+                    <div>Current: <strong className="text-deep-ink">v{otaStatus.current_version}</strong></div>
+                    <div>Latest: <strong className="text-deep-ink">v{otaStatus.latest_version}</strong></div>
+                    <div>Update Available: <span className={otaStatus.update_available ? 'text-hi-yellow font-bold' : 'text-emerald-700'}>
+                      {otaStatus.update_available ? 'YES' : 'NO'}
+                    </span></div>
+                  </div>
+                )}
+
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleCheckOTA}
+                  disabled={checkingOTA}
+                  className="w-full justify-center"
+                >
+                  {checkingOTA ? 'Checking Releases...' : 'Check for Updates'}
+                </Button>
+              </Card>
+            </div>
           </div>
         )}
       </PageContainer>

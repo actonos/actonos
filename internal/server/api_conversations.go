@@ -11,11 +11,13 @@ import (
 )
 
 type Conversation struct {
-	ID        string    `json:"id"`
-	AgentID   string    `json:"agent_id"`
-	Title     string    `json:"title"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID           string    `json:"id"`
+	AgentID      string    `json:"agent_id"`
+	Title        string    `json:"title"`
+	MessageCount int       `json:"message_count"`
+	LastMessage  string    `json:"last_message,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 type MessageRecord struct {
@@ -30,12 +32,25 @@ type MessageRecord struct {
 func (s *Server) handleListConversations(w http.ResponseWriter, r *http.Request) {
 	agentID := r.URL.Query().Get("agent_id")
 
-	query := `SELECT id, agent_id, title, created_at, updated_at FROM conversations ORDER BY updated_at DESC`
+	query := `
+		SELECT c.id, c.agent_id, c.title, c.created_at, c.updated_at,
+		       (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) as message_count,
+		       COALESCE((SELECT content FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1), '') as last_message
+		FROM conversations c
+		ORDER BY c.updated_at DESC
+	`
 	var rows *sql.Rows
 	var err error
 
 	if agentID != "" {
-		query = `SELECT id, agent_id, title, created_at, updated_at FROM conversations WHERE agent_id = ? ORDER BY updated_at DESC`
+		query = `
+			SELECT c.id, c.agent_id, c.title, c.created_at, c.updated_at,
+			       (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) as message_count,
+			       COALESCE((SELECT content FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1), '') as last_message
+			FROM conversations c
+			WHERE c.agent_id = ?
+			ORDER BY c.updated_at DESC
+		`
 		rows, err = s.memory.DB().SQLDB().QueryContext(r.Context(), query, agentID)
 	} else {
 		rows, err = s.memory.DB().SQLDB().QueryContext(r.Context(), query)
@@ -50,7 +65,7 @@ func (s *Server) handleListConversations(w http.ResponseWriter, r *http.Request)
 	var convs []Conversation
 	for rows.Next() {
 		var c Conversation
-		if err := rows.Scan(&c.ID, &c.AgentID, &c.Title, &c.CreatedAt, &c.UpdatedAt); err == nil {
+		if err := rows.Scan(&c.ID, &c.AgentID, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.MessageCount, &c.LastMessage); err == nil {
 			convs = append(convs, c)
 		}
 	}

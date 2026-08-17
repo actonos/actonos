@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Sparkles, Wifi, Key, Shield, CheckCircle } from 'lucide-react';
 
+import { getAuthHeaders } from '@/lib/api';
+
 export interface SetupWizardPageProps {
   onComplete: () => void;
 }
@@ -31,7 +33,7 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
     try {
       await fetch('/api/setup/wizard', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           wifi_ssid: wifiSSID,
           wifi_password: wifiPassword,

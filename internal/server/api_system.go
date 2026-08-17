@@ -858,11 +858,11 @@ func (s *Server) handleGetIdentity(w http.ResponseWriter, r *http.Request) {
 		s.respondJSON(w, http.StatusOK, map[string]any{
 			"user_name":           "Operator",
 			"user_role":           "System Administrator & Architect",
-			"language":            "vi",
+			"language":            "en",
 			"timezone":            "Asia/Ho_Chi_Minh",
-			"communication_style": "concise",
+			"communication_style": "adaptive, natural, empathetic & sharp",
 			"bio":                 "Owner of the ActonOS local intelligence kernel.",
-			"custom_instructions": "Provide structured, high-accuracy, and verified responses.",
+			"custom_instructions": "Provide intelligent, natural, and empathetic responses. Act as a trusted senior engineering partner. Proactively solve problems and avoid robotic or stiff clichés.",
 			"soul":                "",
 		})
 		return

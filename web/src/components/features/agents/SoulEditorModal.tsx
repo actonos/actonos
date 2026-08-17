@@ -8,9 +8,11 @@ import { useToast } from '@/components/ui/Toast';
 interface SoulEditorModalProps {
   isOpen: boolean;
   onClose: () => void;
+  agentID?: string;
+  agentName?: string;
 }
 
-export function SoulEditorModal({ isOpen, onClose }: SoulEditorModalProps) {
+export function SoulEditorModal({ isOpen, onClose, agentID = 'agent_system_core', agentName }: SoulEditorModalProps) {
   const { success, error } = useToast();
   const [soul, setSoul] = useState('');
   const [loading, setLoading] = useState(false);
@@ -20,18 +22,18 @@ export function SoulEditorModal({ isOpen, onClose }: SoulEditorModalProps) {
     if (isOpen) {
       setLoading(true);
       api
-        .getSoul()
+        .getSoul(agentID)
         .then((res) => setSoul(res.soul || ''))
         .catch((err) => error('Failed to load SOUL.md', err.message))
         .finally(() => setLoading(false));
     }
-  }, [isOpen]);
+  }, [isOpen, agentID]);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await api.saveSoul(soul);
-      success('Agent Soul Updated', 'SOUL.md synchronized to /data/config/SOUL.md.');
+      await api.saveSoul(soul, agentID);
+      success('Agent Soul Updated', `SOUL.md synchronized for agent ${agentName || agentID}.`);
       onClose();
     } catch (err: any) {
       error('Failed to save SOUL.md', err.message);
@@ -40,11 +42,13 @@ export function SoulEditorModal({ isOpen, onClose }: SoulEditorModalProps) {
     }
   };
 
+  const displayName = agentName || (agentID === 'agent_system_core' ? 'Nova (Root System)' : agentID);
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Agent Soul & Personality (SOUL.md)">
+    <Modal isOpen={isOpen} onClose={onClose} title={`Agent Soul & Persona: ${displayName}`}>
       <div className="space-y-4">
         <p className="text-body-sm text-slate font-sans">
-          The <strong>SOUL.md</strong> file defines the core identity, ethical constraints, tone, and behavioral principles shared by all agents on this kernel.
+          The <strong>SOUL.md</strong> defines the isolated personality, core mission, emotional tone, and behavioral standards for <strong>{displayName}</strong>.
         </p>
 
         {loading ? (
