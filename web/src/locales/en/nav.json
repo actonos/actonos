@@ -13,6 +13,7 @@
     "workspace": "Workspace",
     "channels": "Chat Channels",
     "connectors": "Connectors",
+    "notifications": "Notifications",
     "audit-logs": "Audit Logs",
     "settings": "Settings"
   },

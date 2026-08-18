@@ -331,6 +331,11 @@ func (r *ToolRegistry) Execute(ctx context.Context, agentID, name string, inputJ
 			if r.auditLogger != nil {
 				r.auditLogger.LogAudit(traceID, agentID, name, riskLevel, "Blocked", ErrApprovalRequired.Error(), 0)
 			}
+			if r.bus != nil {
+				r.bus.Publish(bus.NewEvent("approval:required", agentID, map[string]any{
+					"approval": *request,
+				}))
+			}
 			return nil, &ApprovalRequiredError{Approval: *request}
 		}
 		if approvalManager == nil {

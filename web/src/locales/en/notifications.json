@@ -1,0 +1,51 @@
+{
+  "title": "Notifications",
+  "subtitle": "Realtime alerts, task approvals, system failures, and autonomous mission updates.",
+  "centerTitle": "Notification Center",
+  "markAllRead": "Mark all as read",
+  "clearAll": "Clear history",
+  "clearAllConfirm": "Are you sure you want to clear all notification history? This action cannot be undone.",
+  "viewAll": "View all notifications",
+  "emptyTitle": "No notifications yet",
+  "emptyDesc": "You are completely caught up! New mission alerts and approval prompts will appear here.",
+  "unreadBadge": "{{count}} unread",
+  "enableDesktop": "Enable Desktop Notifications",
+  "desktopEnabled": "Desktop push notifications active",
+  "desktopBlocked": "Desktop notifications blocked in browser settings",
+  "permissionPrompt": "Allow browser notifications to receive instant alerts when missions require approval or when errors occur in the background.",
+  "filters": {
+    "all": "All Types",
+    "approval": "Approvals",
+    "error": "Errors & Alerts",
+    "warning": "Warnings",
+    "info": "Information",
+    "success": "Success",
+    "unreadOnly": "Unread Only"
+  },
+  "searchPlaceholder": "Search notifications by title or message...",
+  "metrics": {
+    "total": "Total Notifications",
+    "unread": "Unread Alerts",
+    "approvals": "Pending Approvals",
+    "errors": "Critical Issues"
+  },
+  "actions": {
+    "markRead": "Mark as read",
+    "delete": "Delete",
+    "goToLink": "View Target",
+    "refresh": "Refresh",
+    "confirm": "Confirm",
+    "cancel": "Cancel"
+  },
+  "pagination": {
+    "page": "Page {{current}} of {{total}}",
+    "prev": "Previous",
+    "next": "Next",
+    "showing": "Showing {{start}} - {{end}} of {{total}} notifications"
+  },
+  "toast": {
+    "markedAllRead": "All notifications marked as read",
+    "clearedAll": "Notification history cleared",
+    "permissionGranted": "Desktop notifications enabled successfully!"
+  }
+}

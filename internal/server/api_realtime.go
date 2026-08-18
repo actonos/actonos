@@ -11,12 +11,14 @@ import (
 )
 
 type realtimeSnapshot struct {
-	Type      string    `json:"type"`
-	Timestamp time.Time `json:"timestamp"`
-	Metrics   any       `json:"metrics,omitempty"`
-	Runs      any       `json:"runs,omitempty"`
-	Approvals any       `json:"approvals,omitempty"`
-	Tokens    any       `json:"tokens,omitempty"`
+	Type                string    `json:"type"`
+	Timestamp           time.Time `json:"timestamp"`
+	Metrics             any       `json:"metrics,omitempty"`
+	Runs                any       `json:"runs,omitempty"`
+	Approvals           any       `json:"approvals,omitempty"`
+	Tokens              any       `json:"tokens,omitempty"`
+	NotificationsUnread int       `json:"notifications_unread"`
+	LatestNotification  any       `json:"latest_notification,omitempty"`
 }
 
 type realtimeHub struct {
@@ -104,6 +106,10 @@ func (s *Server) collectRealtimeSnapshot(ctx context.Context) realtimeSnapshot {
 	}
 	if s.tokenTracker != nil {
 		snapshot.Tokens, _ = s.tokenTracker.GetSummary(ctx)
+	}
+	if s.notifMgr != nil {
+		snapshot.NotificationsUnread, _ = s.notifMgr.GetUnreadCount(ctx)
+		snapshot.LatestNotification, _ = s.notifMgr.GetLatest(ctx)
 	}
 	return snapshot
 }

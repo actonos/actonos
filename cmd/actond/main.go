@@ -441,38 +441,46 @@ func main() {
 	if err := tailscaleMgr.Start(ctx); err != nil {
 		slog.Warn("tailscale initialization warning", "error", err)
 	}
-	defer tailscaleMgr.Close()
+	// 13b. Initialize Notification Manager
+	notifMgr, err := system.NewNotificationManager(db.SQLDB(), eventBus)
+	if err != nil {
+		slog.Warn("notification manager initialization warning", "error", err)
+	} else if notifMgr != nil {
+		notifMgr.StartBackgroundListener(ctx)
+		defer notifMgr.Stop()
+	}
 
 	// 14. Initialize HTTP REST API & Web UI Server
 	srvConfig := server.Config{
-		AgentManager:       agentMgr,
-		SwarmManager:       swarmMgr,
-		Engine:             engine,
-		CronScheduler:      cronSched,
-		HeartbeatDaemon:    heartbeatDaemon,
-		TaskManager:        taskMgr,
-		TokenTracker:       tokenTracker,
-		ProfileManager:     profileMgr,
-		LLMRouter:          llmRouter,
-		ToolRegistry:       toolReg,
-		MCPHost:            mcpHost,
-		ApprovalManager:    approvalMgr,
-		RunStore:           runStore,
-		HubManager:         hubMgr,
-		Memory:             hybridEngine,
-		HAL:                hal,
-		Tailscale:          tailscaleMgr,
-		TokenRefreshDaemon: tokenDaemon,
-		OAuthEngine:        oauthEngine,
-		StateStore:         stateStore,
-		SystemAuth:         sysAuth,
-		EventBus:           eventBus,
-		AuditLogger:        auditLogger,
-		Vault:              vault,
-		PairingManager:     pairingMgr,
-		ChannelManager:     channelMgr,
-		TelegramAdapter:    nil,
-		WhatsAppAdapter:    nil,
+		AgentManager:        agentMgr,
+		SwarmManager:        swarmMgr,
+		Engine:              engine,
+		CronScheduler:       cronSched,
+		HeartbeatDaemon:     heartbeatDaemon,
+		TaskManager:         taskMgr,
+		TokenTracker:        tokenTracker,
+		ProfileManager:      profileMgr,
+		LLMRouter:           llmRouter,
+		ToolRegistry:        toolReg,
+		MCPHost:             mcpHost,
+		ApprovalManager:     approvalMgr,
+		RunStore:            runStore,
+		HubManager:          hubMgr,
+		Memory:              hybridEngine,
+		HAL:                 hal,
+		Tailscale:           tailscaleMgr,
+		TokenRefreshDaemon:  tokenDaemon,
+		OAuthEngine:         oauthEngine,
+		StateStore:          stateStore,
+		SystemAuth:          sysAuth,
+		NotificationManager: notifMgr,
+		EventBus:            eventBus,
+		AuditLogger:         auditLogger,
+		Vault:               vault,
+		PairingManager:      pairingMgr,
+		ChannelManager:      channelMgr,
+		TelegramAdapter:     nil,
+		WhatsAppAdapter:     nil,
 		WorkspaceDir:       workspaceDir,
 		SkillsDir:          skillsDir,
 		WASMDir:            pluginsDir,

@@ -159,6 +159,15 @@
 | `POST` | `/api/heartbeat/trigger` | `handleTriggerHeartbeatPulse` | `api_tasks.go` |
 | `GET` | `/api/heartbeat/runs` | `handleListHeartbeatRuns` | `api_tasks.go` |
 
+#### Notification Center
+
+| Method | Path | Handler | File |
+|:---|:---|:---|:---|
+| `GET` | `/api/notifications` | `handleListNotifications` | `api_notifications.go` |
+| `GET` | `/api/notifications/unread-count` | `handleGetUnreadNotificationsCount` | `api_notifications.go` |
+| `POST` | `/api/notifications/mark-read` | `handleMarkNotificationRead` | `api_notifications.go` |
+| `DELETE` | `/api/notifications` | `handleDeleteNotifications` | `api_notifications.go` |
+
 #### System, HAL, Keys, Tokens & Identity
 
 | Method | Path | Handler | File |
@@ -218,8 +227,8 @@
 | `Channels/` | `channels` | `ChannelsPage` | Telegram, WhatsApp, Discord multi-account config |
 | `Connectors/` | `connectors` | `ConnectorsPage` | SaaS integrations (OAuth) |
 | `ToolHub/` | `tools` | `ToolHubPage` | MCP servers, WASM plugins |
-| `Skills/` | `skills` | `SkillsPage` | Skill marketplace |
 | `Workspace/` | `workspace` | `WorkspacePage` | File manager |
+| `Notifications/` | `notifications` | `NotificationsPage` | Full notification history, filters, pagination, clear actions |
 | `AuditLogs/` | `audit-logs` | `AuditLogsPage` | Tamper-evident audit log ledger & trace inspector |
 | `Settings/` | `settings` | `SettingsPage` | System settings, keys, backup, token ledger |
 | `Auth/` | — | `SetupWizardPage` | First-run onboarding |
@@ -233,6 +242,7 @@
 
 | File | Component | Purpose |
 |:---|:---|:---|
+| `features/notifications/NotificationBell.tsx` | `NotificationBell` | Header notification trigger button & recent popup dropdown |
 | `modals/TokenLedgerModal.tsx` | `TokenLedgerModal` | Comprehensive token usage analytics & ledger table |
 | `pages/Missions/components/TaskModal.tsx` | `TaskModal` | Mission backlog task create/edit modal |
 | `pages/AuditLogs/components/AuditLogDetailModal.tsx` | `AuditLogDetailModal` | Full audit log trace, cryptographic verification & JSON inspector |
@@ -243,7 +253,7 @@
 
 ## Locale Namespaces (`web/src/locales/`)
 
-Both `en/` and `vi/` contain the following 17 namespace files:
+Both `en/` and `vi/` contain the following 18 namespace files:
 
 | Namespace | File | UI Coverage |
 |:---|:---|:---|
@@ -256,6 +266,7 @@ Both `en/` and `vi/` contain the following 17 namespace files:
 | `tools` | `tools.json` | MCP servers, tool management |
 | `skills` | `skills.json` | Skills marketplace |
 | `settings` | `settings.json` | System settings, API keys, token ledger tab |
+| `notifications` | `notifications.json` | Notification center, browser push, history page |
 | `audit` | `audit.json` | Audit logs ledger, filters, cryptographic hash verification, detail modal |
 | `workspace` | `workspace.json` | File manager |
 | `integrations` | `integrations.json` | OAuth connectors |
@@ -269,11 +280,12 @@ Both `en/` and `vi/` contain the following 17 namespace files:
 
 ## Go Types ↔ TypeScript Types Mapping
 
-| Go Type (`internal/agent/types.go`, `tasks.go`, `memory/tokens.go`) | TS Type (`web/src/lib/types.ts`) | Notes |
+| Go Type (`internal/agent/types.go`, `tasks.go`, `memory/tokens.go`, `system/notifications.go`) | TS Type (`web/src/lib/types.ts`) | Notes |
 |:---|:---|:---|
 | `AutonomousTask` | `AutonomousTask` | Backlog missions, priority, status, progress, execution_log |
 | `HeartbeatConfig` | `HeartbeatConfigData` | Standing directives, interval, zero-noise |
 | `HeartbeatRun` | `HeartbeatRun` | Cognitive pulse execution audit record |
+| `Notification` | `NotificationItem` | Realtime notification alert with pagination & type |
 | `TokenUsageSummary` | `TokenUsageSummary` | Full token usage stats & trend models |
 | `TokenUsageRecord` | `TokenUsageRecord` | Token ledger transaction entry |
 | `CronJob` | `CronJob` | Proactive cron definition |

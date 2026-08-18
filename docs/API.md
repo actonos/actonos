@@ -535,16 +535,43 @@ HttpOnly `actonos_token` session cookie. Every two seconds the server emits a
 The socket is observation-only. Mutations continue through their normal REST
 approval and authorization boundaries.
 
-## MCP Administration
+## Notification Center
 
-### `GET /api/tools/mcp`
+### `GET /api/notifications`
+Returns paginated list of system, mission, error, and approval notifications. Query params: `page` (default 1), `limit` (default 20), `type` (optional filter: approval, error, warning, info, success), `unread_only` (bool).
 
-Lists persisted MCP servers without encrypted environment values.
+**Response:**
+```json
+{
+  "data": {
+    "notifications": [
+      {
+        "id": "notif_1700000000_abc123",
+        "title": "Approval Required: native_exec",
+        "message": "Agent 'agent_system_core' requested execution of high-risk tool 'native_exec'.",
+        "type": "approval",
+        "category": "approval",
+        "link": "/missions",
+        "is_read": false,
+        "created_at": "2026-08-18T14:00:00Z"
+      }
+    ],
+    "total": 1,
+    "page": 1,
+    "limit": 20,
+    "unread_count": 1
+  }
+}
+```
 
-### `PUT /api/tools/mcp/{serverID}`
+### `GET /api/notifications/unread-count`
+Returns `{ "data": { "unread_count": 1 } }`.
 
-Enables or disables a persisted server with `{"enabled": true|false}`. Enabling
-restores the encrypted environment from Vault before connecting.
+### `POST /api/notifications/mark-read`
+Marks notifications as read. Request body: `{ "id": "notif_..." }` or `{ "all": true }`.
+
+### `DELETE /api/notifications`
+Deletes a notification (`?id=notif_...`) or clears entire history (`?all=true`).
 
 ---
 

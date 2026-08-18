@@ -44,6 +44,7 @@ type Server struct {
 	sysAuth      *auth.SystemAuthManager
 	bus          *bus.EventBus
 	auditLogger  *system.AuditLogger
+	notifMgr     *system.NotificationManager
 	vault        *memory.Vault
 	pairingMgr   *channels.PairingManager
 	channelMgr   *channels.ChannelManager
@@ -62,27 +63,28 @@ type Server struct {
 
 // Config holds configuration parameters for the HTTP server.
 type Config struct {
-	AgentManager       *agent.AgentManager
-	SwarmManager       *agent.SwarmManager
-	Engine             *agent.Engine
-	CronScheduler      *agent.CronScheduler
-	HeartbeatDaemon    *agent.HeartbeatDaemon
-	TaskManager        *agent.TaskManager
-	TokenTracker       *memory.TokenTracker
-	ProfileManager     *agent.UserProfileManager
-	LLMRouter          *llm.ModelCascadeRouter
-	ToolRegistry       *tools.ToolRegistry
-	MCPHost            *tools.MCPHostEngine
-	ApprovalManager    *tools.ApprovalManager
-	RunStore           *agent.RunStore
-	HubManager         *tools.HubManager
-	Memory             *memory.HybridEngine
-	HAL                system.HAL
-	Tailscale          *system.TailscaleManager
-	TokenRefreshDaemon *auth.TokenRefreshDaemon
-	OAuthEngine        *auth.OAuthEngine
-	StateStore         *auth.StateStore
-	SystemAuth         *auth.SystemAuthManager
+	AgentManager        *agent.AgentManager
+	SwarmManager        *agent.SwarmManager
+	Engine              *agent.Engine
+	CronScheduler       *agent.CronScheduler
+	HeartbeatDaemon     *agent.HeartbeatDaemon
+	TaskManager         *agent.TaskManager
+	TokenTracker        *memory.TokenTracker
+	ProfileManager      *agent.UserProfileManager
+	LLMRouter           *llm.ModelCascadeRouter
+	ToolRegistry        *tools.ToolRegistry
+	MCPHost             *tools.MCPHostEngine
+	ApprovalManager     *tools.ApprovalManager
+	RunStore            *agent.RunStore
+	HubManager          *tools.HubManager
+	Memory              *memory.HybridEngine
+	HAL                 system.HAL
+	Tailscale           *system.TailscaleManager
+	TokenRefreshDaemon  *auth.TokenRefreshDaemon
+	OAuthEngine         *auth.OAuthEngine
+	StateStore          *auth.StateStore
+	SystemAuth          *auth.SystemAuthManager
+	NotificationManager *system.NotificationManager
 	EventBus           *bus.EventBus
 	AuditLogger        *system.AuditLogger
 	Vault              *memory.Vault
@@ -154,6 +156,7 @@ func NewServer(cfg Config) *Server {
 		sysAuth:      cfg.SystemAuth,
 		bus:          cfg.EventBus,
 		auditLogger:  cfg.AuditLogger,
+		notifMgr:     cfg.NotificationManager,
 		vault:        cfg.Vault,
 		pairingMgr:   cfg.PairingManager,
 		channelMgr:   cfg.ChannelManager,
@@ -372,6 +375,14 @@ func (s *Server) setupRoutes() {
 				r.Put("/config", s.handleSaveHeartbeatConfig)
 				r.Post("/trigger", s.handleTriggerHeartbeatPulse)
 				r.Get("/runs", s.handleListHeartbeatRuns)
+			})
+
+			// Notification Center
+			r.Route("/notifications", func(r chi.Router) {
+				r.Get("/", s.handleListNotifications)
+				r.Get("/unread-count", s.handleGetUnreadNotificationsCount)
+				r.Post("/mark-read", s.handleMarkNotificationRead)
+				r.Delete("/", s.handleDeleteNotifications)
 			})
 
 			// System, HAL, Keys, Identity, Audit & Tailscale

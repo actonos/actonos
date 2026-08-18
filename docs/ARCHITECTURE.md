@@ -200,7 +200,7 @@ Each agent is declared via JSON/YAML or the Web Dashboard:
   "description": "Expert in architecture analysis, code generation, and automated testing",
   "avatar_icon": "code-bracket",
   "model_config": {
-    "primary_model": "anthropic/claude-3-7-sonnet",
+    "primary_model": "anthropic/claude-sonnet-4.5",
     "fallback_model": "google/gemini-2.5-flash",
     "temperature": 0.2
   },

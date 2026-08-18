@@ -1,0 +1,51 @@
+{
+  "title": "Thông báo",
+  "subtitle": "Cảnh báo thời gian thực, yêu cầu phê duyệt, sự cố hệ thống và cập nhật nhiệm vụ tự chủ.",
+  "centerTitle": "Trung tâm thông báo",
+  "markAllRead": "Đánh dấu tất cả đã đọc",
+  "clearAll": "Xóa lịch sử",
+  "clearAllConfirm": "Bạn có chắc chắn muốn xóa toàn bộ lịch sử thông báo không? Thao tác này không thể hoàn tác.",
+  "viewAll": "Xem tất cả thông báo",
+  "emptyTitle": "Chưa có thông báo nào",
+  "emptyDesc": "Bạn đã nắm bắt hết mọi thông tin! Các cảnh báo nhiệm vụ và yêu cầu phê duyệt mới sẽ xuất hiện tại đây.",
+  "unreadBadge": "{{count}} chưa đọc",
+  "enableDesktop": "Bật thông báo trên máy tính",
+  "desktopEnabled": "Thông báo đẩy trên trình duyệt đang hoạt động",
+  "desktopBlocked": "Thông báo đã bị chặn trong cài đặt trình duyệt",
+  "permissionPrompt": "Cho phép thông báo trình duyệt để nhận cảnh báo tức thì khi có nhiệm vụ cần duyệt hoặc sự cố phát sinh dưới nền.",
+  "filters": {
+    "all": "Tất cả loại",
+    "approval": "Cần phê duyệt",
+    "error": "Lỗi & Sự cố",
+    "warning": "Cảnh báo",
+    "info": "Thông tin",
+    "success": "Thành công",
+    "unreadOnly": "Chỉ hiện chưa đọc"
+  },
+  "searchPlaceholder": "Tìm kiếm thông báo theo tiêu đề hoặc nội dung...",
+  "metrics": {
+    "total": "Tổng số thông báo",
+    "unread": "Chưa đọc",
+    "approvals": "Cần phê duyệt",
+    "errors": "Sự cố quan trọng"
+  },
+  "actions": {
+    "markRead": "Đánh dấu đã đọc",
+    "delete": "Xóa",
+    "goToLink": "Đến trang xử lý",
+    "refresh": "Làm mới",
+    "confirm": "Xác nhận",
+    "cancel": "Hủy"
+  },
+  "pagination": {
+    "page": "Trang {{current}} / {{total}}",
+    "prev": "Trước",
+    "next": "Sau",
+    "showing": "Hiển thị {{start}} - {{end}} trên tổng số {{total}} thông báo"
+  },
+  "toast": {
+    "markedAllRead": "Đã đánh dấu tất cả thông báo là đã đọc",
+    "clearedAll": "Đã xóa toàn bộ lịch sử thông báo",
+    "permissionGranted": "Đã kích hoạt thông báo trên trình duyệt thành công!"
+  }
+}

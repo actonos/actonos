@@ -230,7 +230,6 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
           eyebrow={t('page.eyebrow')}
           title={t('title')}
           description={t('subtitle')}
-          badge={<Badge variant="success" className="font-mono">{t('page.activeBacklog', { count: activeCount })}</Badge>}
           actions={(
             <>
               <Button

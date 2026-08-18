@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import { SUPPORTED_LANGUAGES } from '@/components/ui/LanguageSelectModal';
+import { useRealtime } from '@/components/providers/RealtimeProvider';
 import {
   LayoutDashboard,
   Bot,
@@ -22,6 +23,7 @@ import {
   Target,
   Gauge,
   ShieldCheck,
+  Bell,
 } from 'lucide-react';
 
 export type NavTab =
@@ -37,6 +39,7 @@ export type NavTab =
   | 'workspace'
   | 'channels'
   | 'connectors'
+  | 'notifications'
   | 'audit-logs'
   | 'settings';
 
@@ -69,6 +72,8 @@ export function Sidebar({
   onCloseMobile,
 }: SidebarProps) {
   const { t, i18n } = useTranslation('nav');
+  const { snapshot } = useRealtime();
+  const unreadCount = snapshot?.notifications_unread ?? 0;
   const [showLangOverlay, setShowLangOverlay] = useState(false);
   const [langSearch, setLangSearch] = useState('');
 
@@ -109,6 +114,7 @@ export function Sidebar({
     {
       label: t('sections.system', 'System'),
       items: [
+        { id: 'notifications', label: t('links.notifications', 'Notifications'), icon: Bell },
         { id: 'audit-logs', label: t('links.audit-logs', 'Audit Logs'), icon: ShieldCheck },
         { id: 'settings', label: t('links.settings', 'Settings'), icon: Sliders },
       ],
@@ -209,17 +215,26 @@ export function Sidebar({
                         title={collapsed && !showLangOverlay ? item.label : undefined}
                       >
                         <div
-                          className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${isActive
+                          className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors relative ${isActive
                             ? 'bg-white/15 text-hi-yellow'
                             : 'bg-canvas text-deep-ink group-hover:bg-white'
                             }`}
                         >
                           <Icon className="w-4 h-4" />
+                          {collapsed && !showLangOverlay && item.id === 'notifications' && unreadCount > 0 && (
+                            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-crimson ring-2 ring-soft-meadow" />
+                          )}
                         </div>
 
                         {(!collapsed || showLangOverlay) && (
-                          <span className="text-body-sm font-medium leading-snug truncate">
+                          <span className="text-body-sm font-medium leading-snug truncate flex-1 text-left">
                             {item.label}
+                          </span>
+                        )}
+
+                        {(!collapsed || showLangOverlay) && item.id === 'notifications' && unreadCount > 0 && (
+                          <span className="px-1.5 py-0.5 rounded-full bg-crimson text-white text-[10px] font-mono font-bold">
+                            {unreadCount > 99 ? '99+' : unreadCount}
                           </span>
                         )}
                       </button>

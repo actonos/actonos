@@ -2,6 +2,7 @@ import { Menu, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { NavTab } from '@/components/layout/Sidebar';
 import { useRealtime } from '@/components/providers/RealtimeProvider';
+import { NotificationBell } from '@/components/features/notifications/NotificationBell';
 
 export interface HeaderProps {
   activeTab: NavTab;
@@ -9,9 +10,10 @@ export interface HeaderProps {
   collapsed?: boolean;
   onLogout?: () => void;
   onOpenSearch: () => void;
+  onNavigateTab?: (tab: NavTab) => void;
 }
 
-export function Header({ activeTab, onOpenMobileSidebar, onLogout, onOpenSearch }: HeaderProps) {
+export function Header({ activeTab, onOpenMobileSidebar, onLogout, onOpenSearch, onNavigateTab }: HeaderProps) {
   const { t } = useTranslation(['nav', 'common']);
   const { snapshot } = useRealtime();
   const metrics = snapshot?.metrics;
@@ -29,6 +31,7 @@ export function Header({ activeTab, onOpenMobileSidebar, onLogout, onOpenSearch 
     workspace: { title: t('nav:links.workspace'), category: t('nav:categories.files') },
     channels: { title: t('nav:links.channels'), category: t('nav:categories.connections') },
     connectors: { title: t('nav:links.connectors'), category: t('nav:categories.services') },
+    notifications: { title: t('nav:links.notifications', 'Notifications'), category: t('nav:categories.system') },
     'audit-logs': { title: t('nav:links.audit-logs', 'Audit Logs'), category: t('nav:categories.system') },
     settings: { title: t('nav:links.settings'), category: t('nav:categories.system') },
   };
@@ -82,6 +85,8 @@ export function Header({ activeTab, onOpenMobileSidebar, onLogout, onOpenSearch 
             <span>{t('nav:telemetry.ram', { value: metrics.memory?.used_mb || 0 })}</span>
           </div>
         )}
+
+        <NotificationBell onNavigateTab={onNavigateTab} />
 
         {onLogout && (
           <button

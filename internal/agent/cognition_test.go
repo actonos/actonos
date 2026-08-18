@@ -13,8 +13,8 @@ import (
 
 func TestPlanner_DecomposeGoal(t *testing.T) {
 	router := llm.NewModelCascadeRouter()
-	mock := llm.NewMockProvider("anthropic/claude-3-7-sonnet", `[{"id":"task_1","description":"Analyze code","agent_role":"code","dependencies":[]}]`)
-	router.RegisterProvider("anthropic/claude-3-7-sonnet", mock)
+	mock := llm.NewMockProvider("anthropic/claude-sonnet-4.5", `[{"id":"task_1","description":"Analyze code","agent_role":"code","dependencies":[]}]`)
+	router.RegisterProvider("anthropic/claude-sonnet-4.5", mock)
 
 	planner := NewPlanner(router)
 	plan, err := planner.DecomposeGoal(context.Background(), "Build a microservice", nil)

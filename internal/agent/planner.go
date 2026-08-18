@@ -131,7 +131,7 @@ Return ONLY valid JSON in this exact structure:
 		Temperature: &temp,
 	}
 
-	resp, err := p.llmRouter.CompleteWithCascade(ctx, []string{"anthropic/claude-3-7-sonnet", "google/gemini-2.5-flash"}, messages, opts)
+	resp, err := p.llmRouter.CompleteWithCascade(ctx, []string{"anthropic/claude-sonnet-4.5", "google/gemini-2.5-flash"}, messages, opts)
 	if err != nil {
 		slog.Warn("planner fallback to basic decomposition", "error", err)
 		plan.Steps = []PlanStep{

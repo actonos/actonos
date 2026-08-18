@@ -545,4 +545,29 @@ export const api = {
   listHeartbeatRuns: () =>
     fetchJSON<import('./types').HeartbeatRun[]>('/heartbeat/runs'),
 
+  // Notification Center
+  listNotifications: (params?: { page?: number; limit?: number; type?: string; unread_only?: boolean }) => {
+    const query = new URLSearchParams();
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.type && params.type !== 'all') query.set('type', params.type);
+    if (params?.unread_only) query.set('unread_only', 'true');
+    const qStr = query.toString() ? `?${query.toString()}` : '';
+    return fetchJSON<import('./types').NotificationListResponse>(`/notifications${qStr}`);
+  },
+  getUnreadNotificationsCount: () =>
+    fetchJSON<{ unread_count: number }>('/notifications/unread-count'),
+  markNotificationRead: (id?: string, all?: boolean) =>
+    fetchJSON<{ status: string; unread_count: number }>('/notifications/mark-read', {
+      method: 'POST',
+      body: JSON.stringify({ id, all }),
+    }),
+  deleteNotification: (id: string) =>
+    fetchJSON<{ status: string }>(`/notifications?id=${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+  clearAllNotifications: () =>
+    fetchJSON<{ status: string }>('/notifications?all=true', {
+      method: 'DELETE',
+    }),
 };

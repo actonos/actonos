@@ -62,7 +62,7 @@ func (r *ModelCascadeRouter) GetProvider(id string) (LLMProvider, error) {
 		return p, nil
 	}
 
-	// 2. Extract prefix before slash (e.g. "anthropic/claude-3-7-sonnet" -> "anthropic")
+	// 2. Extract prefix before slash (e.g. "anthropic/claude-sonnet-4.5" -> "anthropic")
 	prefix := id
 	if idx := strings.Index(id, "/"); idx != -1 {
 		prefix = id[:idx]

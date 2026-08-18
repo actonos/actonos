@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   Target,
   Wrench,
+  Bell,
   type LucideIcon,
 } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -91,6 +92,7 @@ export function CommandPalette({
       ['automations', Calendar],
       ['workspace', Folder],
       ['tools', Wrench],
+      ['notifications', Bell],
       ['audit-logs', ShieldCheck],
       ['settings', Settings],
     ].map(([tab, icon]) => ({

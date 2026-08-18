@@ -133,6 +133,8 @@ export interface RealtimeSnapshot {
   runs?: AgentRun[];
   approvals?: ApprovalRequest[];
   tokens?: TokenUsageSummary;
+  notifications_unread?: number;
+  latest_notification?: NotificationItem;
 }
 
 export interface TailscaleStatus {
@@ -397,4 +399,25 @@ export interface RunEvent {
   data?: Record<string, unknown>;
   duration_ms?: number;
   created_at: string;
+}
+
+export type NotificationType = 'approval' | 'error' | 'warning' | 'info' | 'success';
+
+export interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  type: NotificationType;
+  category: string;
+  link?: string;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface NotificationListResponse {
+  notifications: NotificationItem[];
+  total: number;
+  page: number;
+  limit: number;
+  unread_count: number;
 }
