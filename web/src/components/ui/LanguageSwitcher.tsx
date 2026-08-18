@@ -36,14 +36,14 @@ export function LanguageSwitcher({ onClick, className = '', compact = false }: L
         title={`${t('language.toggle', 'Change System Language')}: ${currentLang.nativeName}`}
       >
         {compact ? (
-          <span className="text-base select-none leading-none" role="img" aria-label={currentLang.name}>
-            {currentLang.flag}
+          <span className="text-caption font-semibold select-none leading-none" aria-label={currentLang.name}>
+            {currentLang.shortCode}
           </span>
         ) : (
           <>
             <Globe className="w-3.5 h-3.5 text-slate" />
             <span className="text-caption font-semibold uppercase">{currentCode}</span>
-            <span className="text-xs">{currentLang.flag}</span>
+            <span className="text-caption font-semibold">{currentLang.shortCode}</span>
             <ChevronDown className="w-3 h-3 text-slate opacity-60 ml-0.5" />
           </>
         )}

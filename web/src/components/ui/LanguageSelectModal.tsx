@@ -8,7 +8,7 @@ export interface LanguageOption {
   name: string;
   nativeName: string;
   region: string;
-  flag: string;
+  shortCode: string;
   coverage: '100%' | 'Core';
   isDefault?: boolean;
 }
@@ -19,7 +19,7 @@ export const SUPPORTED_LANGUAGES: LanguageOption[] = [
     name: 'English',
     nativeName: 'English (US)',
     region: 'International',
-    flag: '🇺🇸',
+    shortCode: 'EN',
     coverage: '100%',
     isDefault: true,
   },
@@ -28,7 +28,7 @@ export const SUPPORTED_LANGUAGES: LanguageOption[] = [
     name: 'Vietnamese',
     nativeName: 'Tiếng Việt',
     region: 'Vietnam',
-    flag: '🇻🇳',
+    shortCode: 'VI',
     coverage: '100%',
   },
 ];
@@ -95,7 +95,7 @@ export function LanguageSelectModal({ isOpen, onClose }: LanguageSelectModalProp
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <span className="text-xl shrink-0" role="img" aria-label={lang.name}>
-                    {lang.flag}
+                    {lang.shortCode}
                   </span>
                   <div className="min-w-0">
                     <div className="font-sans font-semibold text-body-sm truncate flex items-center gap-1.5">

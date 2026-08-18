@@ -198,6 +198,8 @@ text scan is not sufficient. Playwright includes `@axe-core/playwright` and
 must fail on serious or critical accessibility violations.
 `check:i18n` also rejects mojibake, Unicode replacement characters, repeated
 question marks, and question marks embedded inside Vietnamese words.
+ActonOS UI text is emoji-free. Use Lucide icons for visual meaning and
+`check:emoji` to reject emoji, regional flags, or their common mojibake forms.
 
 Keep the REST facade small by placing shared fetch/session behavior in
 `lib/api/client.ts` and domain clients in `lib/api/`. Reusable feature panels

@@ -374,7 +374,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
               } else if (currentEvent === 'error') {
                 currentAssistantMsg = {
                   ...currentAssistantMsg,
-                  content: currentAssistantMsg.content + `\n\n⚠️ Error: ${parsed.error}`,
+                  content: currentAssistantMsg.content + `\n\nError: ${parsed.error}`,
                   thought: undefined,
                 };
               }
@@ -690,7 +690,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                               {convAgent?.name || conv.agent_id}
                             </span>
                             {conv.message_count !== undefined && conv.message_count > 0 && (
-                              <span>💬 {conv.message_count}</span>
+                              <span>{conv.message_count}</span>
                             )}
                           </div>
                           <span className="font-mono text-[10px] shrink-0">

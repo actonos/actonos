@@ -25,28 +25,28 @@ export function McpServerModal({ isOpen, onClose, onConnect }: McpServerModalPro
 
   const presets = [
     {
-      name: '🌐 Web Fetch',
+      name: t('mcp.presets.webFetch.name'),
       id: 'fetch_mcp',
       command: 'npx',
       args: '-y @modelcontextprotocol/server-fetch',
       desc: 'Allows agents to fetch & extract text content from any public HTTP/HTTPS URL.',
     },
     {
-      name: '🗄️ SQLite DB',
+      name: t('mcp.presets.sqlite.name'),
       id: 'sqlite_mcp',
       command: 'npx',
       args: '-y @modelcontextprotocol/server-sqlite --db ./data/storage/acton.db',
       desc: 'Enables querying schemas and inspecting relational records with read/write safety.',
     },
     {
-      name: '📁 File System',
+      name: t('mcp.presets.filesystem.name'),
       id: 'filesystem_mcp',
       command: 'npx',
       args: '-y @modelcontextprotocol/server-filesystem ./data/workspace',
       desc: 'Provides stdio protocol directory traversal and sandboxed file manipulation.',
     },
     {
-      name: '🔍 Brave Search',
+      name: t('mcp.presets.brave.name'),
       id: 'brave_search_mcp',
       command: 'npx',
       args: '-y @modelcontextprotocol/server-brave-search',

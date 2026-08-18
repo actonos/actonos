@@ -310,7 +310,7 @@ export function Sidebar({
                         }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <span className="text-base shrink-0">{lang.flag}</span>
+                        <span className="text-caption font-semibold shrink-0">{lang.shortCode}</span>
                         <div className="min-w-0">
                           <div className="font-sans font-semibold text-caption truncate leading-snug">
                             {lang.nativeName}

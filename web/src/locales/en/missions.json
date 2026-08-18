@@ -14,7 +14,7 @@
     "account": "Target Account",
     "taskPlaceholder": "e.g. Verify database backups & storage limits",
     "directivePlaceholder": "Detailed instructions for the autonomous agent. The coordinator will execute step-by-step and maintain memory across pulse cycles.",
-    "autoCoordinator": "? Auto Coordinator (Master Agent)",
+    "autoCoordinator": "Auto Coordinator (Master Agent)",
     "allAccounts": "All Accounts of {{channel}}",
     "cancel": "Cancel",
     "saving": "Saving...",
@@ -49,30 +49,30 @@
     "runMetrics": "{{iterations}} iterations · {{tokens}} tokens · {{reason}}"
   },
   "priorities": {
-    "p0": "?? P0 - Critical (Immediate Pulse)",
-    "p1": "?? P1 - High Priority",
-    "p2": "?? P2 - Normal",
-    "p3": "? P3 - Low / Background",
+    "p0": "P0 - Critical (Immediate Pulse)",
+    "p1": "P1 - High Priority",
+    "p2": "P2 - Normal",
+    "p3": "P3 - Low / Background",
     "p0Short": "P0 Critical",
     "p1Short": "P1 High",
     "p2Short": "P2 Normal",
     "p3Short": "P3 Low"
   },
   "statuses": {
-    "pending": "? Pending",
-    "inProgress": "? In Progress",
-    "completed": "? Completed",
-    "blocked": "?? Blocked",
-    "cancelled": "? Cancelled"
+    "pending": "Pending",
+    "inProgress": "In Progress",
+    "completed": "Completed",
+    "blocked": "Blocked",
+    "cancelled": "Cancelled"
   },
   "channels": {
-    "allBroadcast": "?? All Active Channels (Broadcast)",
+    "allBroadcast": "All Active Channels (Broadcast)",
     "telegram": "Telegram",
     "whatsapp": "WhatsApp",
     "discord": "Discord",
-    "noneSilent": "?? None (Silent in Workspace)",
-    "all": "?? All Active Channels",
-    "none": "?? None (Zero External Noise)"
+    "noneSilent": "None (Silent in Workspace)",
+    "all": "All Active Channels",
+    "none": "None (Zero External Noise)"
   },
   "page": {
     "eyebrow": "Autonomous Operations",
@@ -98,13 +98,13 @@
     "last": "Last: {{status}}",
     "nominal": "Nominal",
     "coordinator": "Coordinator Core",
-    "autoDelegate": "? Swarm Auto-Delegation Active",
+    "autoDelegate": "Swarm Auto-Delegation Active",
     "singleAgent": "Single Agent Execution"
   },
   "tabs": {
-    "tasks": "?? Tasks & Backlog ({{count}})",
-    "directives": "?? Standing Directives (HEARTBEAT.md)",
-    "audit": "??? Pulse Audit Ledger ({{count}})"
+    "tasks": "Tasks & Backlog ({{count}})",
+    "directives": "Standing Directives (HEARTBEAT.md)",
+    "audit": "Pulse Audit Ledger ({{count}})"
   },
   "filters": {
     "allStatuses": "All Statuses",

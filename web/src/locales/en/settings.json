@@ -65,7 +65,7 @@
     "close": "Close",
     "currency": "${{value}} USD",
     "tooltip": "{{date}}: {{tokens}} tokens (${{cost}})",
-    "usage": "{{tokens}} tok (${{cost}}) ?"
+    "usage": "{{tokens}} tok (${{cost}})"
   },
   "header": {
     "activeModels": "{{configured}}/{{total}} LLMs Active"
@@ -128,7 +128,7 @@
   "network": {
     "hardwareTitle": "Live Hardware Gauges",
     "cpu": "CPU Utilization",
-    "cores": "{{count}} Cores Active ? {{model}}",
+    "cores": "{{count}} Cores Active • {{model}}",
     "memory": "System Memory",
     "megabytes": "{{value}} MB",
     "memoryDetail": "Total: {{total}} MB (Daemon: {{daemon}} MB)",
@@ -158,11 +158,11 @@
     "empty": "No audit log entries found matching criteria.",
     "risk": "{{level}} Risk",
     "status": "Status: {{status}}",
-    "detail": "Agent: {{agent}} ? Trace: {{trace}} ? Exec: {{duration}} ms"
+    "detail": "Agent: {{agent}} • Trace: {{trace}} • Exec: {{duration}} ms"
   },
   "maintenance": {
     "runtimeTitle": "ActonOS Kernel Runtime",
-    "runtimeDescription": "Autonomous Extensible AI Agent Operating System ? Dual-Runtime (Bare-metal & Docker)",
+    "runtimeDescription": "Autonomous Extensible AI Agent Operating System • Dual-Runtime (Bare-metal & Docker)",
     "storageTitle": "Storage Breakdown & Backup",
     "storageDescription": "Database storage usage and state snapshot for disaster recovery.",
     "database": "Storage (DB):",

@@ -25,6 +25,20 @@
       "stdio": "stdio",
       "http": "Streamable HTTP",
       "sse": "SSE"
+    },
+    "presets": {
+      "webFetch": {
+        "name": "Web Fetch"
+      },
+      "sqlite": {
+        "name": "SQLite Database"
+      },
+      "filesystem": {
+        "name": "File System"
+      },
+      "brave": {
+        "name": "Brave Search"
+      }
     }
   },
   "eyebrow": "Tools",

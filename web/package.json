@@ -12,9 +12,10 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "check:i18n": "node scripts/check-i18n.mjs",
+    "check:emoji": "node scripts/check-no-emoji.mjs",
     "audit:i18n": "node scripts/audit-hardcoded-text.mjs",
     "check:bundle": "node scripts/check-bundle.mjs",
-    "quality": "npm run lint && npm run check:i18n && npm run audit:i18n -- --fail && npm run test && npm run build && npm run check:bundle && npm run test:e2e"
+    "quality": "npm run lint && npm run check:i18n && npm run check:emoji && npm run audit:i18n -- --fail && npm run test && npm run build && npm run check:bundle && npm run test:e2e"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "^5.2.8",

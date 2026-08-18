@@ -733,7 +733,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                       onClick={() => setCustomPrimaryMode(!customPrimaryMode)}
                       className="text-[11px] font-mono text-deep-ink hover:underline cursor-pointer"
                     >
-                      {customPrimaryMode ? '▸ Choose from catalog' : '✏️ Custom model string'}
+                      {customPrimaryMode ? 'Choose from catalog' : 'Custom model string'}
                     </button>
                   </div>
 
@@ -751,7 +751,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                       className="w-full bg-soft-meadow text-deep-ink p-2.5 rounded-full border border-onyx/10 text-body-sm font-sans focus:outline-none"
                     >
                       {readyModels.length > 0 && (
-                        <optgroup label="⚡ Ready to Use (Active Keys in Settings)">
+                        <optgroup label="Ready to Use (Active Keys in Settings)">
                           {readyModels.map((m) => (
                             <option key={m.id} value={m.id}>
                               {m.name} — {m.badge || m.providerName}
@@ -760,7 +760,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                         </optgroup>
                       )}
 
-                      <optgroup label="⚙️ Other Available Models (Requires API Key in Settings)">
+                      <optgroup label="Other Available Models (Requires API Key in Settings)">
                         {otherModels.map((m) => (
                           <option key={m.id} value={m.id}>
                             {m.name} ({m.providerName}) {m.badge ? `• ${m.badge}` : ''}
@@ -809,7 +809,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                       onClick={() => setCustomFallbackMode(!customFallbackMode)}
                       className="text-[11px] font-mono text-deep-ink hover:underline cursor-pointer"
                     >
-                      {customFallbackMode ? '▸ Choose from catalog' : '✏️ Custom model string'}
+                      {customFallbackMode ? 'Choose from catalog' : 'Custom model string'}
                     </button>
                   </div>
 
@@ -827,7 +827,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                       className="w-full bg-soft-meadow text-deep-ink p-2.5 rounded-full border border-onyx/10 text-body-sm font-sans focus:outline-none"
                     >
                       {readyModels.length > 0 && (
-                        <optgroup label="⚡ Ready to Use (Active Keys in Settings)">
+                        <optgroup label="Ready to Use (Active Keys in Settings)">
                           {readyModels.map((m) => (
                             <option key={m.id} value={m.id}>
                               {m.name} — {m.badge || m.providerName}
@@ -836,7 +836,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                         </optgroup>
                       )}
 
-                      <optgroup label="⚙️ Other Available Models (Requires API Key in Settings)">
+                      <optgroup label="Other Available Models (Requires API Key in Settings)">
                         {otherModels.map((m) => (
                           <option key={m.id} value={m.id}>
                             {m.name} ({m.providerName})

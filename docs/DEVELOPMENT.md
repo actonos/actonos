@@ -265,6 +265,9 @@ that fails on serious or critical accessibility violations. New frontend
 behavior should include a colocated `*.test.ts(x)` regression test.
 Locale parity validation also fails on common UTF-8 corruption signatures in
 Vietnamese text, including mojibake and question marks embedded inside words.
+The UI is intentionally emoji-free: use the Lucide component set for icons.
+`npm run check:emoji` scans source and locale resources for emoji and common
+mojibake fragments.
 
 Frontend production TypeScript follows a zero-explicit-`any` policy and treats
 unused variables as lint errors. Shared transport belongs in

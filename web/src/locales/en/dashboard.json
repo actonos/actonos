@@ -88,7 +88,7 @@
     "lifetime": "Lifetime Total",
     "models": "Models:",
     "noUsage": "No active usage recorded",
-    "inspect": "Inspect Ledger & History ?"
+    "inspect": "Inspect Ledger & History"
   },
   "heartbeat": {
     "title": "Heartbeat Pulse",
@@ -102,7 +102,7 @@
     "viewAll": "View All",
     "risk": "{{level}} Risk",
     "statusDuration": "{{status}} ({{duration}} ms)",
-    "detail": "Agent: {{agent}} ? Trace: {{trace}}"
+    "detail": "Agent: {{agent}} • Trace: {{trace}}"
   },
   "actions": {
     "refresh": "Refresh"
@@ -113,7 +113,7 @@
     "usd": "${{value}} USD"
   },
   "storage": {
-    "detail": "SQLite: {{sqlite}} MB ? Vectors: {{vectors}} MB",
+    "detail": "SQLite: {{sqlite}} MB • Vectors: {{vectors}} MB",
     "total": "Storage: {{value}} MB"
   }
 }

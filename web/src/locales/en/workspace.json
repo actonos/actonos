@@ -29,8 +29,8 @@
   "editor": {
     "title": "Editing: {{path}}",
     "placeholder": "File content...",
-    "stats": "Lines: {{lines}} ? Size: {{bytes}} bytes",
-    "shortcut": "UTF-8 ? Ctrl+S to save",
+    "stats": "Lines: {{lines}} • Size: {{bytes}} bytes",
+    "shortcut": "UTF-8 • Ctrl+S to save",
     "noSelection": "No File Selected",
     "noSelectionDescription": "Select a file from the explorer on the left, or create a new file to start editing."
   },
