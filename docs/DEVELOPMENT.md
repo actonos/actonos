@@ -574,3 +574,13 @@ git commit -m "test(auth): add token refresh daemon expiry edge cases"
    structured failure tests as applicable.
 5. If the tool starts a process, require Docker/Bubblewrap and fail closed when
    strong isolation is unavailable.
+
+### Developing Live Operations
+
+1. Start the backend and sign in so the HttpOnly session cookie is present.
+2. Open the `Live Operations` sidebar page.
+3. Verify `/api/realtime` upgrades to WebSocket and reconnects after a daemon
+   restart.
+4. Set `ACTONOS_CANVAS_URL` only to a browser/VNC viewer intentionally exposed
+   by the sandbox runtime.
+5. Run `cd web && npx tsc --noEmit && npm run build`, then the Go server tests.

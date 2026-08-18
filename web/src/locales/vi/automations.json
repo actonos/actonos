@@ -1,4 +1,13 @@
 {
+  "actions": {
+    "pause": "Tạm dừng",
+    "resume": "Tiếp tục"
+  },
+  "toast": {
+    "pausedTitle": "Đã tạm dừng tự động hóa",
+    "resumedTitle": "Đã tiếp tục tự động hóa",
+    "toggleFailed": "Không thể cập nhật tự động hóa"
+  },
   "eyebrow": "Tự động hoá",
   "title": "Tự động hoá",
   "subtitle": "Lên lịch thực hiện tác vụ định kỳ và nhận thông báo tự động.",

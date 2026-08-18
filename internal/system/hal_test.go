@@ -27,6 +27,18 @@ func TestDockerHAL_GetMetrics(t *testing.T) {
 	}
 }
 
+func TestParseDockerTelemetry(t *testing.T) {
+	if got := parseDockerPercent("12.5%"); got != 12.5 {
+		t.Fatalf("parseDockerPercent() = %v, want 12.5", got)
+	}
+	if got := parseDockerMemory("1.5GiB"); got != 1536 {
+		t.Fatalf("parseDockerMemory() = %v, want 1536", got)
+	}
+	if got := parseDockerMemory("512KiB"); got != 0.5 {
+		t.Fatalf("parseDockerMemory() = %v, want 0.5", got)
+	}
+}
+
 func TestDockerHAL_WifiScan(t *testing.T) {
 	hal := NewDockerHAL(t.TempDir())
 	ctx := context.Background()

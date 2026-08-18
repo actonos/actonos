@@ -21,6 +21,7 @@ import {
   ArrowLeft,
   FileCode,
   FileSpreadsheet,
+  Columns2,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 
@@ -39,6 +40,8 @@ export function WorkspacePage() {
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState('');
+  const [originalContent, setOriginalContent] = useState('');
+  const [showDiff, setShowDiff] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
@@ -64,6 +67,8 @@ export function WorkspacePage() {
       setSelectedFile(filePath);
       const res = await api.getWorkspaceFile(filePath);
       setFileContent(res.content || '');
+      setOriginalContent(res.content || '');
+      setShowDiff(false);
     } catch (err: any) {
       error('Failed to read file', err.message);
     }
@@ -74,6 +79,7 @@ export function WorkspacePage() {
     try {
       setSaving(true);
       await api.saveWorkspaceFile(selectedFile, fileContent);
+      setOriginalContent(fileContent);
       success('File Saved', `${selectedFile} saved to workspace.`);
       loadFiles(currentDir);
     } catch (err: any) {
@@ -338,6 +344,14 @@ export function WorkspacePage() {
                     <Button
                       variant="ghost"
                       size="sm"
+                      icon={<Columns2 className="w-3.5 h-3.5" />}
+                      onClick={() => setShowDiff((value) => !value)}
+                    >
+                      {t('diff.toggle', 'Diff')}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       icon={<Download className="w-3.5 h-3.5" />}
                       onClick={() => {
                         const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
@@ -365,8 +379,33 @@ export function WorkspacePage() {
                   </div>
                 </div>
 
-                {/* Editor Textarea */}
-                <div className="flex-1 relative">
+                {/* Editor / Diff Viewer */}
+                <div className="flex-1 relative min-h-0">
+                  {showDiff ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 h-full overflow-hidden">
+                      {[
+                        { key: 'before', content: originalContent },
+                        { key: 'after', content: fileContent },
+                      ].map((pane) => (
+                        <div key={pane.key} className="min-h-0 rounded-[16px] bg-deep-ink text-canvas overflow-auto">
+                          <div className="sticky top-0 bg-deep-ink border-b border-white/10 px-3 py-2 text-caption font-semibold">
+                            {t(`diff.${pane.key}`)}
+                          </div>
+                          <pre className="p-3 text-[11px] leading-5 font-mono">
+                            {pane.content.split('\n').map((line, index) => {
+                              const other = (pane.key === 'before' ? fileContent : originalContent).split('\n')[index];
+                              const changed = line !== other;
+                              return (
+                                <div key={`${pane.key}-${index}`} className={changed ? 'bg-hi-yellow/20 text-hi-yellow' : ''}>
+                                  <span className="inline-block w-8 text-white/35 select-none">{index + 1}</span>{line || ' '}
+                                </div>
+                              );
+                            })}
+                          </pre>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
                   <textarea
                     value={fileContent}
                     onChange={(e) => setFileContent(e.target.value)}
@@ -380,6 +419,7 @@ export function WorkspacePage() {
                     className="w-full h-full p-4 font-mono text-body-sm bg-soft-meadow rounded-[16px] border border-onyx/10 focus:outline-none focus:ring-2 focus:ring-deep-ink resize-none text-deep-ink leading-relaxed selection:bg-hi-yellow selection:text-deep-ink"
                     spellCheck={false}
                   />
+                  )}
                 </div>
 
                 {/* Status Bar */}

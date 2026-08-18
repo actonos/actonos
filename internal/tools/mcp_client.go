@@ -452,6 +452,18 @@ type MCPHostEngine struct {
 	secrets  MCPSecretStore
 }
 
+// MCPServerStatus is the non-secret administrative view of an MCP server.
+type MCPServerStatus struct {
+	ID        string    `json:"id"`
+	Transport string    `json:"transport"`
+	Command   string    `json:"command,omitempty"`
+	Args      []string  `json:"args,omitempty"`
+	URL       string    `json:"url,omitempty"`
+	Enabled   bool      `json:"enabled"`
+	Connected bool      `json:"connected"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 // MCPSecretStore stores MCP environment secrets encrypted at rest.
 type MCPSecretStore interface {
 	SetSecret(ctx context.Context, keyName, secretValue string) error
@@ -483,6 +495,89 @@ func (h *MCPHostEngine) SetPersistence(db *sql.DB, secrets MCPSecretStore) error
 	`)
 	if err != nil {
 		return fmt.Errorf("creating mcp server registry: %w", err)
+	}
+	return nil
+}
+
+// ListServers returns persisted MCP definitions without encrypted environment values.
+func (h *MCPHostEngine) ListServers(ctx context.Context) ([]MCPServerStatus, error) {
+	if h.db == nil {
+		return []MCPServerStatus{}, nil
+	}
+	rows, err := h.db.QueryContext(ctx, "SELECT id, config_json, enabled, updated_at FROM mcp_servers ORDER BY id")
+	if err != nil {
+		return nil, fmt.Errorf("listing mcp servers: %w", err)
+	}
+	defer rows.Close()
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	items := make([]MCPServerStatus, 0)
+	for rows.Next() {
+		var id, raw string
+		var enabled int
+		var updated time.Time
+		if err := rows.Scan(&id, &raw, &enabled, &updated); err != nil {
+			return nil, fmt.Errorf("scanning mcp server: %w", err)
+		}
+		var cfg MCPServerConfig
+		if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+			continue
+		}
+		_, connected := h.clients[id]
+		items = append(items, MCPServerStatus{
+			ID: id, Transport: cfg.Transport, Command: cfg.Command, Args: cfg.Args,
+			URL: cfg.URL, Enabled: enabled == 1, Connected: connected, UpdatedAt: updated,
+		})
+	}
+	return items, rows.Err()
+}
+
+// SetServerEnabled connects or disconnects a persisted MCP definition.
+func (h *MCPHostEngine) SetServerEnabled(ctx context.Context, serverID string, enabled bool) error {
+	if enabled {
+		h.mu.RLock()
+		_, connected := h.clients[serverID]
+		h.mu.RUnlock()
+		if connected {
+			if h.db != nil {
+				_, _ = h.db.ExecContext(ctx, "UPDATE mcp_servers SET enabled = 1, updated_at = ? WHERE id = ?", time.Now().UTC(), serverID)
+			}
+			return nil
+		}
+		if h.db == nil {
+			return errors.New("mcp persistence is not configured")
+		}
+		var raw string
+		if err := h.db.QueryRowContext(ctx, "SELECT config_json FROM mcp_servers WHERE id = ?", serverID).Scan(&raw); err != nil {
+			return fmt.Errorf("loading mcp server: %w", err)
+		}
+		var cfg MCPServerConfig
+		if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+			return fmt.Errorf("decoding mcp server: %w", err)
+		}
+		if h.secrets != nil {
+			if envJSON, err := h.secrets.GetSecret(ctx, "mcp.env."+serverID); err == nil {
+				_ = json.Unmarshal([]byte(envJSON), &cfg.Env)
+			}
+		}
+		return h.ConnectServer(ctx, cfg)
+	}
+	h.mu.RLock()
+	_, connected := h.clients[serverID]
+	h.mu.RUnlock()
+	if connected {
+		return h.DisconnectServer(serverID)
+	}
+	if h.db == nil {
+		return errors.New("mcp persistence is not configured")
+	}
+	result, err := h.db.ExecContext(ctx, "UPDATE mcp_servers SET enabled = 0, updated_at = ? WHERE id = ?", time.Now().UTC(), serverID)
+	if err != nil {
+		return fmt.Errorf("disabling mcp server: %w", err)
+	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return fmt.Errorf("mcp server %s not found", serverID)
 	}
 	return nil
 }

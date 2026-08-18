@@ -265,6 +265,8 @@ Changes touching tools, agents, workspace APIs, MCP, or sandboxing must test:
     run continues from its saved state.
 14. MCP HTTP tests cover JSON and `data:` SSE JSON-RPC responses.
 15. Provider streaming tests cover OpenAI-compatible, Anthropic, and Gemini.
+16. Realtime WebSocket tests cover authenticated upgrade, snapshot shape and disconnect cleanup.
+17. MCP administration tests prove environment secrets never appear in list responses and enable/disable restores persisted configuration.
 
 Security package target: `internal/security/` must maintain at least 90% coverage.
 

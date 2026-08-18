@@ -32,6 +32,7 @@
 | Method | Path | Handler | File |
 |:---|:---|:---|:---|
 | `GET` | `/api/dashboard/summary` | `handleDashboardSummary` | `api_dashboard.go` |
+| `GET` | `/api/realtime` | `handleRealtimeStream` | `api_realtime.go` |
 
 #### Agent Management
 
@@ -82,7 +83,9 @@
 |:---|:---|:---|:---|
 | `GET` | `/api/tools` | `handleListTools` | `api_tools.go` |
 | `POST` | `/api/tools/mcp` | `handleConnectMCP` | `api_tools.go` |
+| `GET` | `/api/tools/mcp` | `handleListMCPServers` | `api_tools.go` |
 | `DELETE` | `/api/tools/mcp/{serverID}` | `handleDisconnectMCP` | `api_tools.go` |
+| `PUT` | `/api/tools/mcp/{serverID}` | `handleToggleMCPServer` | `api_tools.go` |
 | `POST` | `/api/tools/execute` | `handleExecuteTool` | `api_tools.go` |
 | `POST` | `/api/tools/skill` | `handleCreateSkill` | `api_tools.go` |
 | `POST` | `/api/tools/wasm` | `handleUploadWASM` | `api_tools.go` |
@@ -209,6 +212,7 @@
 | `Agents/` | `agents` | `AgentsPage` | Agent list (responsive table) |
 | `Agents/` | `agent-studio` | `AgentStudioPage` | Agent detail editor (config, soul, memory) |
 | `Missions/` | `missions` | `MissionsPage` | Autonomous task matrix, standing directives, pulse audit, approval queue, durable run governance |
+| `Operations/` | `operations` | `OperationsPage` | Live hardware/Docker telemetry, execution feed, canvas, terminal, task controls, approvals, and model cost |
 | `Chat/` | `chat` | `ChatPage` | Conversational interface |
 | `Automations/` | `automations` | `AutomationsPage` | Cron jobs, scheduled tasks |
 | `Channels/` | `channels` | `ChannelsPage` | Telegram, WhatsApp, Discord multi-account config |
@@ -237,7 +241,7 @@
 
 ## Locale Namespaces (`web/src/locales/`)
 
-Both `en/` and `vi/` contain the following 15 namespace files:
+Both `en/` and `vi/` contain the following 16 namespace files:
 
 | Namespace | File | UI Coverage |
 |:---|:---|:---|
@@ -256,6 +260,7 @@ Both `en/` and `vi/` contain the following 15 namespace files:
 | `connectors` | `connectors.json` | SaaS connector details |
 | `dashboard` | `dashboard.json` | Dashboard overview |
 | `automations` | `automations.json` | Cron jobs, scheduled tasks |
+| `operations` | `operations.json` | Live operations, runtime telemetry, approvals and cost |
 
 ---
 

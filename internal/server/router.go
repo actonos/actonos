@@ -214,6 +214,7 @@ func (s *Server) setupRoutes() {
 			r.Use(s.RequireAuthMiddleware)
 
 			r.Get("/dashboard/summary", s.handleDashboardSummary)
+			r.Get("/realtime", s.handleRealtimeStream)
 
 			// Agent Management, Soul & Cron
 			r.Route("/agents", func(r chi.Router) {
@@ -265,8 +266,10 @@ func (s *Server) setupRoutes() {
 			// Tool Hub & Skills Marketplace
 			r.Route("/tools", func(r chi.Router) {
 				r.Get("/", s.handleListTools)
+				r.Get("/mcp", s.handleListMCPServers)
 				r.Post("/mcp", s.handleConnectMCP)
 				r.Delete("/mcp/{serverID}", s.handleDisconnectMCP)
+				r.Put("/mcp/{serverID}", s.handleToggleMCPServer)
 				r.Post("/execute", s.handleExecuteTool)
 				r.Post("/skill", s.handleCreateSkill)
 				r.Post("/wasm", s.handleUploadWASM)

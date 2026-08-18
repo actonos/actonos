@@ -17,7 +17,8 @@ Use this skill when developing the Web UI in the `web/` directory. All frontend 
 | **Tailwind CSS** | v4 | Modern `@theme` CSS configuration with custom design tokens in `index.css` |
 | **Vite** | Latest | Fast build tool, dev server, HMR, proxy to `:8080` |
 | **TypeScript** | 5.x | Strict mode, zero `any`, exhaustive typing for props & i18n |
-| **i18next / react-i18next** | Latest | Mandatory localization for all UI strings across 14 namespaces |
+| **i18next / react-i18next** | Latest | Mandatory localization for all UI strings across 16 namespaces |
+| **xterm.js** | Latest | Read-only observability terminal; never bypass tool authorization with an interactive shell |
 | **Lucide React** | Latest | Minimal line-style iconography (monochrome `#130e30` or `#5f5c6e`) |
 
 ---
@@ -60,7 +61,7 @@ ActonOS uses a **sunlit wildflower compliance atelier** aesthetic:
 **Every user-facing string in JSX/TSX must be loaded via `useTranslation()` or `<Trans>` components.**
 Hardcoded strings in components violate build verification.
 
-### Active 15 Locale Namespaces (`web/src/locales/{en,vi}/`)
+### Active 16 Locale Namespaces (`web/src/locales/{en,vi}/`)
 
 | Namespace | Usage |
 |:---|:---|
@@ -79,6 +80,7 @@ Hardcoded strings in components violate build verification.
 | `integrations.json` | Integration settings, API keys, pairing verification |
 | `workspace.json` | File manager, file preview, workspace browser |
 | `settings.json` | System configuration, token ledger, backup snapshots, OTA updates, Tailscale |
+| `operations.json` | Live telemetry, Docker, execution feed, canvas, terminal, queue, approvals, costs |
 
 ### Usage in Components
 
@@ -195,3 +197,11 @@ Mission Control owns the human approval queue and durable run ledger. Approval
 cards must preview exact arguments, show risk and agent identity, and expose
 explicit approve/reject actions. All labels belong to the `missions` namespace
 in both English and Vietnamese.
+
+### Live Operations UI
+
+- Consume `/api/realtime` with a same-origin authenticated WebSocket and reconnect with bounded backoff.
+- Keep xterm.js read-only. Shell execution must continue through the authorized Tool Registry and sandbox.
+- Render run events as collapsible Thought/Action/Observation cards and fetch ordered detail from `/api/runs/{id}/events`.
+- Live Canvas embeds only `SystemMetrics.canvas_url`; show a waiting state when unavailable.
+- Never invent telemetry fallback values when sensors or Docker access are unavailable.

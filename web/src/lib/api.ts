@@ -7,6 +7,7 @@ import type {
   ToolInfo,
   SystemMetrics,
   TailscaleStatus,
+  MCPServerStatus,
 } from './types';
 
 export const API_BASE = '/api';
@@ -311,13 +312,20 @@ export const api = {
   // Tools Registry & MCP Host
   listTools: (category?: string) =>
     fetchJSON<{ tools: ToolInfo[]; count: number }>(`/tools${category ? `?category=${category}` : ''}`),
-  connectMCP: (cfg: { id: string; command: string; args?: string[]; env?: Record<string, string> }) =>
+  connectMCP: (cfg: { id: string; transport?: string; command?: string; args?: string[]; env?: Record<string, string>; url?: string }) =>
     fetchJSON<{ status: string; server_id: string; tools_discovered: number }>('/tools/mcp', {
       method: 'POST',
-      body: JSON.stringify({ transport: 'stdio', ...cfg }),
+      body: JSON.stringify({ transport: cfg.transport || 'stdio', ...cfg }),
     }),
   disconnectMCP: (id: string) =>
     fetchJSON<{ status: string }>(`/tools/mcp/${id}`, { method: 'DELETE' }),
+  listMCPServers: () =>
+    fetchJSON<{ servers: MCPServerStatus[] }>('/tools/mcp'),
+  toggleMCPServer: (id: string, enabled: boolean) =>
+    fetchJSON<{ status: string; enabled: boolean }>(`/tools/mcp/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ enabled }),
+    }),
   executeTool: (name: string, input: any) =>
     fetchJSON<any>('/tools/execute', {
       method: 'POST',
@@ -608,3 +616,8 @@ export const api = {
     document.body.removeChild(a);
   },
 };
+
+export function createRealtimeSocket(): WebSocket {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return new WebSocket(`${protocol}//${window.location.host}${API_BASE}/realtime`);
+}

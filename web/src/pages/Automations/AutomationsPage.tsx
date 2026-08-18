@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/Toast';
 import {
   Calendar,
   Play,
+  Pause,
   Trash2,
   Edit2,
   Plus,
@@ -142,6 +143,19 @@ export function AutomationsPage() {
       error('Failed to trigger execution', err.message);
     } finally {
       setRunningJobId(null);
+    }
+  };
+
+  const handleToggleEnabled = async (job: CronJobItem) => {
+    try {
+      await api.saveCronJob({ ...job, enabled: !job.enabled });
+      success(
+        t(job.enabled ? 'toast.pausedTitle' : 'toast.resumedTitle'),
+        job.name
+      );
+      await loadData();
+    } catch (err: unknown) {
+      error(t('toast.toggleFailed'), err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -410,6 +424,14 @@ export function AutomationsPage() {
                             {/* Action Buttons */}
                             <td className="py-4 px-4 align-top text-right whitespace-nowrap">
                               <div className="flex items-center justify-end gap-1.5">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  icon={job.enabled ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                                  onClick={() => handleToggleEnabled(job)}
+                                >
+                                  {t(job.enabled ? 'actions.pause' : 'actions.resume')}
+                                </Button>
                                 <Button
                                   variant="ghost"
                                   size="sm"

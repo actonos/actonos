@@ -1,4 +1,15 @@
 {
+  "mcp": {
+    "connectTitle": "Kết nối MCP server",
+    "transport": "Giao thức",
+    "command": "Lệnh thực thi",
+    "url": "URL máy chủ",
+    "environment": "Biến môi trường",
+    "environmentHelp": "Bí mật được mã hóa trong ActonOS Vault và không được ghi vào tệp metadata MCP.",
+    "servers": "Điều khiển MCP server",
+    "updated": "Đã cập nhật MCP server",
+    "updateFailed": "Không thể cập nhật MCP server"
+  },
   "eyebrow": "Công cụ",
   "title": "Công cụ",
   "subtitle": "Các công cụ hệ thống, MCP server và WASM plugin cho agent sử dụng.",

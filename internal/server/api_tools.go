@@ -84,6 +84,38 @@ func (s *Server) handleConnectMCP(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleListMCPServers(w http.ResponseWriter, r *http.Request) {
+	if s.mcpHost == nil {
+		s.respondJSON(w, http.StatusOK, map[string]any{"servers": []any{}})
+		return
+	}
+	items, err := s.mcpHost.ListServers(r.Context())
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "MCP_LIST_FAILED", err.Error())
+		return
+	}
+	s.respondJSON(w, http.StatusOK, map[string]any{"servers": items})
+}
+
+func (s *Server) handleToggleMCPServer(w http.ResponseWriter, r *http.Request) {
+	if s.mcpHost == nil {
+		s.respondError(w, http.StatusNotImplemented, "MCP_NOT_ENABLED", "mcp host is not configured")
+		return
+	}
+	var req struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := s.decodeJSON(r, &req); err != nil {
+		s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
+	if err := s.mcpHost.SetServerEnabled(r.Context(), chi.URLParam(r, "serverID"), req.Enabled); err != nil {
+		s.respondError(w, http.StatusBadRequest, "MCP_TOGGLE_FAILED", err.Error())
+		return
+	}
+	s.respondJSON(w, http.StatusOK, map[string]any{"status": "updated", "enabled": req.Enabled})
+}
+
 func (s *Server) handleDisconnectMCP(w http.ResponseWriter, r *http.Request) {
 	if s.mcpHost == nil {
 		s.respondError(w, http.StatusNotImplemented, "MCP_NOT_ENABLED", "mcp host is not configured")

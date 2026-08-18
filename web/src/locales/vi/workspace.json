@@ -1,4 +1,9 @@
 {
+  "diff": {
+    "toggle": "So sánh",
+    "before": "Trước thay đổi",
+    "after": "Bản đang chỉnh sửa"
+  },
   "eyebrow": "Tệp tin",
   "title": "Quản lý tệp",
   "subtitle": "Xem và quản lý các tệp được tạo và sử dụng bởi agent.",

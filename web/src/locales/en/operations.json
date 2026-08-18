@@ -1,0 +1,62 @@
+{
+  "eyebrow": "Real-time command center",
+  "title": "Live Operations",
+  "subtitle": "Hardware, Docker, autonomous reasoning, safe approvals, execution canvas, task queue, and model spend in one responsive workspace.",
+  "refresh": "Refresh",
+  "connection": {
+    "connecting": "Connecting",
+    "online": "Live",
+    "offline": "Reconnecting"
+  },
+  "hardware": {
+    "cpu": "CPU usage",
+    "ram": "Memory",
+    "temperature": "Chip temperature",
+    "disk": "Disk usage",
+    "cores": "cores"
+  },
+  "feed": {
+    "title": "Thought → Action → Observation",
+    "empty": "Select an execution to inspect its live trace."
+  },
+  "containers": {
+    "title": "Docker health",
+    "subtitle": "Liveness and resource usage from the local Docker daemon.",
+    "empty": "No Docker containers are visible to ActonOS."
+  },
+  "canvas": {
+    "title": "Live canvas",
+    "subtitle": "Browser or VNC stream published by the sandbox runtime.",
+    "waiting": "Waiting for a browser or VNC session. Configure ACTONOS_CANVAS_URL on the runtime.",
+    "frameTitle": "Agent live execution canvas"
+  },
+  "terminal": {
+    "title": "Observation terminal",
+    "ready": "ActonOS terminal connected. This terminal is read-only by design.",
+    "noRun": "no run selected"
+  },
+  "queue": {
+    "title": "Background task queue",
+    "subtitle": "Pause, resume, retry, or cancel autonomous work.",
+    "updated": "Task status updated",
+    "updateFailed": "Could not update task"
+  },
+  "cost": {
+    "title": "Token & cost tracker",
+    "today": "Today",
+    "month": "This month"
+  },
+  "approval": {
+    "title": "Sensitive action requires approval",
+    "description": "{{agent}} is requesting permission to execute {{tool}}. Review the exact arguments before deciding.",
+    "approve": "Approve & execute",
+    "reject": "Reject with feedback",
+    "feedbackLabel": "Feedback for the agent",
+    "feedbackPlaceholder": "Explain why this action is unsafe or what the agent should do instead…",
+    "approved": "Action approved",
+    "rejected": "Action rejected",
+    "failed": "Approval decision failed",
+    "approvedFeedback": "Reviewed and approved from Live Operations",
+    "defaultFeedback": "Rejected by the operator from Live Operations"
+  }
+}

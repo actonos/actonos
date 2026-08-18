@@ -492,6 +492,22 @@ registration. Only provider metadata is stored on disk. Backup generation uses
 SQLite `VACUUM INTO`, producing a consistent snapshot that includes committed
 WAL transactions.
 
+## 12. Realtime Frontend Operations
+
+`api_realtime.go` is the read-only realtime aggregation boundary. It upgrades a
+same-origin authenticated request to WebSocket and publishes periodic snapshots
+of HAL telemetry, Docker state, durable runs, pending approvals, and token
+usage. Detailed ordered run events remain sourced from the durable
+`run_events` table.
+
+The Operations UI deliberately separates observation from execution:
+
+- xterm.js renders run events as a read-only terminal.
+- sensitive decisions call the durable approval REST endpoints.
+- Live Canvas embeds only the URL explicitly published by the sandbox runtime
+  through `ACTONOS_CANVAS_URL`.
+- interactive commands never bypass `ToolRegistry.Execute` or the sandbox.
+
 ## References
 
 1. [Model Context Protocol — GitHub](https://github.com/modelcontextprotocol)

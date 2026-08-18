@@ -162,6 +162,15 @@ identical observations, context cancellation, budget exhaustion, approval wait,
 or final verification failure. Run and event records are available through
 `/api/runs` for incident analysis.
 
+### Realtime UI Boundary
+
+The realtime WebSocket authenticates with a Strict SameSite, HttpOnly session
+cookie. Tokens are not placed in WebSocket URLs. The channel is read-only and
+contains operational metadata only; secrets and MCP environment values are
+excluded. The xterm.js UI is an observation terminal, not an interactive host
+shell. Live Canvas is disabled until the operator explicitly configures
+`ACTONOS_CANVAS_URL`.
+
 ---
 
 ## Best Practices for Deployers

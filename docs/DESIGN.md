@@ -314,6 +314,19 @@ The off-white tones are not neutral white — #f9fbf2 has a faint warm-green cas
 }
 ```
 
+## Modern Multilingual Typography
+
+The application UI uses self-hosted variable fonts:
+
+- **Manrope Variable** for headings and display titles.
+- **Noto Sans Variable** for controls, body text, and broad Unicode coverage.
+
+Both ship in the frontend bundle, so MiniPC deployments do not depend on a
+remote font CDN. The existing `font-serif` token is retained as the semantic
+heading token for compatibility, but now resolves to Manrope/Noto Sans rather
+than a serif face. Monospace telemetry and terminal content continue to use the
+platform coding-font stack.
+
 ### Tailwind v4
 
 ```css

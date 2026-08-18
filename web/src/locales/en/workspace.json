@@ -1,4 +1,9 @@
 {
+  "diff": {
+    "toggle": "Diff",
+    "before": "Before",
+    "after": "Working copy"
+  },
   "eyebrow": "Files",
   "title": "Workspace Files",
   "subtitle": "View and manage files created and read by agents.",

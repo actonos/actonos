@@ -518,6 +518,36 @@ Upload file to workspace.
 
 ---
 
+## Realtime Operations
+
+### `GET /api/realtime`
+
+Upgrades to a protected, same-origin WebSocket. Authentication uses the
+HttpOnly `actonos_token` session cookie. Every two seconds the server emits a
+`snapshot` containing:
+
+- `metrics`: CPU, RAM, chip temperature, disk, runtime mode, Docker containers,
+  and optional `canvas_url`.
+- `runs`: recent durable agent runs.
+- `approvals`: pending exact-action approvals.
+- `tokens`: current daily/monthly/model token and cost summary.
+
+The socket is observation-only. Mutations continue through their normal REST
+approval and authorization boundaries.
+
+## MCP Administration
+
+### `GET /api/tools/mcp`
+
+Lists persisted MCP servers without encrypted environment values.
+
+### `PUT /api/tools/mcp/{serverID}`
+
+Enables or disables a persisted server with `{"enabled": true|false}`. Enabling
+restores the encrypted environment from Vault before connecting.
+
+---
+
 ## Error Format
 
 All error responses adhere to the standard envelope:

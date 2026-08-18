@@ -42,6 +42,8 @@ func (h *BaremetalHAL) GetMetrics(ctx context.Context) (*SystemMetrics, error) {
 	metrics := &SystemMetrics{
 		UptimeSeconds: uint64(time.Since(h.startTime).Seconds()),
 		Timestamp:     time.Now().UTC(),
+		RuntimeMode:   h.RuntimeMode(),
+		CanvasURL:     os.Getenv("ACTONOS_CANVAS_URL"),
 	}
 
 	metrics.CPU.Model = "MiniPC Generic"
@@ -85,6 +87,7 @@ func (h *BaremetalHAL) GetMetrics(ctx context.Context) (*SystemMetrics, error) {
 	metrics.Disk.TotalGB = 64.0
 	metrics.Disk.UsedGB = 8.5
 	metrics.Disk.DataDirGB = 1.2
+	metrics.Containers = dockerContainerStatuses(ctx)
 
 	return metrics, nil
 }

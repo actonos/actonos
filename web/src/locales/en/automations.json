@@ -1,4 +1,13 @@
 {
+  "actions": {
+    "pause": "Pause",
+    "resume": "Resume"
+  },
+  "toast": {
+    "pausedTitle": "Automation paused",
+    "resumedTitle": "Automation resumed",
+    "toggleFailed": "Could not update automation"
+  },
   "eyebrow": "Automations",
   "title": "Automations",
   "subtitle": "Schedule recurring AI tasks and receive automatic push notifications.",

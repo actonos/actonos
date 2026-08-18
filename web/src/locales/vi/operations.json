@@ -1,0 +1,62 @@
+{
+  "eyebrow": "Trung tâm điều hành thời gian thực",
+  "title": "Vận hành trực tiếp",
+  "subtitle": "Theo dõi phần cứng, Docker, chuỗi suy luận, phê duyệt an toàn, môi trường thực thi, hàng đợi tác vụ và chi phí mô hình trên một giao diện thích ứng.",
+  "refresh": "Làm mới",
+  "connection": {
+    "connecting": "Đang kết nối",
+    "online": "Trực tiếp",
+    "offline": "Đang kết nối lại"
+  },
+  "hardware": {
+    "cpu": "Mức dùng CPU",
+    "ram": "Bộ nhớ",
+    "temperature": "Nhiệt độ chip",
+    "disk": "Dung lượng đĩa",
+    "cores": "nhân"
+  },
+  "feed": {
+    "title": "Suy luận → Hành động → Quan sát",
+    "empty": "Chọn một lượt chạy để xem dấu vết trực tiếp."
+  },
+  "containers": {
+    "title": "Sức khỏe Docker",
+    "subtitle": "Trạng thái sống và tài nguyên từ Docker daemon cục bộ.",
+    "empty": "ActonOS không nhìn thấy Docker container nào."
+  },
+  "canvas": {
+    "title": "Màn hình thực thi",
+    "subtitle": "Luồng trình duyệt hoặc VNC do sandbox runtime cung cấp.",
+    "waiting": "Đang chờ phiên trình duyệt hoặc VNC. Hãy cấu hình ACTONOS_CANVAS_URL trên runtime.",
+    "frameTitle": "Màn hình thực thi trực tiếp của Agent"
+  },
+  "terminal": {
+    "title": "Terminal quan sát",
+    "ready": "Terminal ActonOS đã kết nối. Terminal này chỉ đọc để đảm bảo an toàn.",
+    "noRun": "chưa chọn lượt chạy"
+  },
+  "queue": {
+    "title": "Hàng đợi tác vụ nền",
+    "subtitle": "Tạm dừng, tiếp tục, chạy lại hoặc hủy công việc tự hành.",
+    "updated": "Đã cập nhật trạng thái tác vụ",
+    "updateFailed": "Không thể cập nhật tác vụ"
+  },
+  "cost": {
+    "title": "Theo dõi token & chi phí",
+    "today": "Hôm nay",
+    "month": "Tháng này"
+  },
+  "approval": {
+    "title": "Thao tác nhạy cảm cần phê duyệt",
+    "description": "{{agent}} đang xin phép thực thi {{tool}}. Hãy kiểm tra chính xác tham số trước khi quyết định.",
+    "approve": "Chấp thuận & thực thi",
+    "reject": "Từ chối kèm phản hồi",
+    "feedbackLabel": "Phản hồi cho Agent",
+    "feedbackPlaceholder": "Giải thích lý do thao tác chưa an toàn hoặc hướng xử lý thay thế…",
+    "approved": "Đã chấp thuận thao tác",
+    "rejected": "Đã từ chối thao tác",
+    "failed": "Không thể xử lý phê duyệt",
+    "approvedFeedback": "Đã kiểm tra và chấp thuận từ Vận hành trực tiếp",
+    "defaultFeedback": "Người vận hành đã từ chối từ Vận hành trực tiếp"
+  }
+}

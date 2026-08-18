@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -7,13 +8,17 @@ import { Sparkles, Terminal } from 'lucide-react';
 export interface McpServerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConnect: (cfg: { id: string; command: string; args?: string[] }) => Promise<void>;
+  onConnect: (cfg: { id: string; transport: string; command?: string; args?: string[]; url?: string; env?: Record<string, string> }) => Promise<void>;
 }
 
 export function McpServerModal({ isOpen, onClose, onConnect }: McpServerModalProps) {
+  const { t } = useTranslation('tools');
   const [id, setId] = useState('fetch_server');
+  const [transport, setTransport] = useState('stdio');
   const [command, setCommand] = useState('npx');
   const [argsStr, setArgsStr] = useState('-y @modelcontextprotocol/server-fetch');
+  const [url, setURL] = useState('');
+  const [envText, setEnvText] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -62,7 +67,13 @@ export function McpServerModal({ isOpen, onClose, onConnect }: McpServerModalPro
 
     try {
       const args = argsStr.trim() ? argsStr.split(' ') : [];
-      await onConnect({ id, command, args });
+      const env = Object.fromEntries(
+        envText.split('\n').map((line) => line.trim()).filter(Boolean).map((line) => {
+          const separator = line.indexOf('=');
+          return separator < 0 ? [line, ''] : [line.slice(0, separator), line.slice(separator + 1)];
+        })
+      );
+      await onConnect({ id, transport, command: transport === 'stdio' ? command : undefined, args, url: transport === 'stdio' ? undefined : url, env });
       onClose();
     } catch (err: any) {
       setError(err.message || 'Failed to connect MCP server');
@@ -72,7 +83,7 @@ export function McpServerModal({ isOpen, onClose, onConnect }: McpServerModalPro
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Connect Model Context Protocol (MCP) Server">
+    <Modal isOpen={isOpen} onClose={onClose} title={t('mcp.connectTitle')}>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {error && (
           <div className="p-3 bg-red-100 text-red-700 rounded-[14px] text-body-sm font-medium">
@@ -114,13 +125,20 @@ export function McpServerModal({ isOpen, onClose, onConnect }: McpServerModalPro
           required
         />
 
-        <Input
-          label="Executable Binary / Command (stdio)"
-          placeholder="e.g., npx, uvx, python"
-          value={command}
-          onChange={(e) => setCommand(e.target.value)}
-          required
-        />
+        <div>
+          <label className="text-caption uppercase text-slate font-semibold block mb-1">{t('mcp.transport')}</label>
+          <select value={transport} onChange={(event) => setTransport(event.target.value)} className="w-full bg-canvas text-deep-ink px-4 py-2.5 rounded-full border border-onyx/15 text-body-sm">
+            <option value="stdio">stdio</option>
+            <option value="http">Streamable HTTP</option>
+            <option value="sse">SSE</option>
+          </select>
+        </div>
+
+        {transport === 'stdio' ? (
+          <Input label={t('mcp.command')} placeholder="npx" value={command} onChange={(e) => setCommand(e.target.value)} required />
+        ) : (
+          <Input label={t('mcp.url')} placeholder="https://mcp.example.com" value={url} onChange={(e) => setURL(e.target.value)} required />
+        )}
 
         <div>
           <label className="text-caption uppercase text-slate font-semibold block mb-1">
@@ -133,6 +151,18 @@ export function McpServerModal({ isOpen, onClose, onConnect }: McpServerModalPro
             onChange={(e) => setArgsStr(e.target.value)}
             className="w-full bg-canvas text-deep-ink font-mono text-body-sm px-4 py-2.5 rounded-full border border-onyx/15 focus:outline-none focus:ring-2 focus:ring-deep-ink"
           />
+        </div>
+
+        <div>
+          <label className="text-caption uppercase text-slate font-semibold block mb-1">{t('mcp.environment')}</label>
+          <textarea
+            value={envText}
+            onChange={(event) => setEnvText(event.target.value)}
+            placeholder="API_KEY=••••••"
+            rows={3}
+            className="w-full bg-canvas text-deep-ink font-mono text-body-sm px-4 py-3 rounded-[18px] border border-onyx/15 focus:outline-none focus:ring-2 focus:ring-deep-ink"
+          />
+          <p className="text-[11px] text-slate mt-1">{t('mcp.environmentHelp')}</p>
         </div>
 
         <div className="p-3 bg-canvas rounded-[14px] border border-onyx/5 text-caption text-slate space-y-1">

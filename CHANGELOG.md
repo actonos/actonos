@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Realtime Frontend Operations Center**:
+  - Responsive hardware and Docker telemetry, collapsible Thought → Action → Observation feed, Live Canvas, and read-only xterm.js observation terminal.
+  - Background task pause/resume/retry/cancel controls and cron pause/resume actions.
+  - Global sensitive-action approval interruption with approve or reject-with-feedback workflows.
+  - MCP server list/toggles, stdio/HTTP/SSE configuration, and encrypted environment entry from the UI.
+  - Daily/monthly/per-model token and cost tracking in the realtime command center.
+  - Workspace side-by-side file diff viewer and remote-alert integration through existing Telegram, Discord, WhatsApp, and Slack configuration surfaces.
+  - Self-hosted Manrope and Noto Sans variable fonts for modern multilingual rendering.
+  - Protected `/api/realtime` WebSocket, Docker container telemetry, and MCP administration endpoints.
 - **Secure Autonomous Execution Kernel**:
   - Durable `agent_runs`, `run_events`, and exact-action `approvals` ledgers with correlated trace IDs and termination reasons.
   - Execution-time tool authorization, workspace path scopes, monthly agent budget enforcement, bounded retries, no-progress detection, and deterministic completion verification.

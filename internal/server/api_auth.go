@@ -45,6 +45,18 @@ func (s *Server) extractToken(r *http.Request) string {
 	return ""
 }
 
+func setSessionCookie(w http.ResponseWriter, r *http.Request, token string, maxAge int) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "actonos_token",
+		Value:    token,
+		Path:     "/",
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
 func (s *Server) handleGetAuthStatus(w http.ResponseWriter, r *http.Request) {
 	if s.sysAuth == nil {
 		s.respondJSON(w, http.StatusOK, AuthStatusResponse{
@@ -127,6 +139,7 @@ func (s *Server) handleSetupAuth(w http.ResponseWriter, r *http.Request) {
 		_ = s.profileMgr.UpdateProfile(r.Context(), profile)
 	}
 
+	setSessionCookie(w, r, token, int((24 * time.Hour).Seconds()))
 	s.respondJSON(w, http.StatusOK, map[string]any{
 		"status":  "initialized",
 		"token":   token,
@@ -160,6 +173,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	setSessionCookie(w, r, token, int((24 * time.Hour).Seconds()))
 	s.respondJSON(w, http.StatusOK, map[string]any{
 		"status":  "authenticated",
 		"token":   token,
@@ -172,6 +186,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		token := s.extractToken(r)
 		s.sysAuth.Logout(token)
 	}
+	setSessionCookie(w, r, "", -1)
 
 	s.respondJSON(w, http.StatusOK, map[string]string{
 		"status": "logged_out",

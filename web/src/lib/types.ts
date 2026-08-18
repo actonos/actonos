@@ -77,7 +77,18 @@ export interface ToolInfo {
   name: string;
   description: string;
   category: 'native' | 'mcp' | 'wasm' | 'skill';
-  schema: Record<string, any>;
+  schema: Record<string, unknown>;
+}
+
+export interface ContainerStatus {
+  id: string;
+  name: string;
+  image: string;
+  state: string;
+  status: string;
+  cpu_percent: number;
+  memory_usage_mb: number;
+  memory_limit_mb: number;
 }
 
 export interface SystemMetrics {
@@ -97,8 +108,31 @@ export interface SystemMetrics {
     used_gb: number;
     data_dir_gb: number;
   };
+  containers: ContainerStatus[];
+  runtime_mode: string;
+  canvas_url?: string;
   uptime_seconds: number;
   timestamp: string;
+}
+
+export interface MCPServerStatus {
+  id: string;
+  transport: string;
+  command?: string;
+  args?: string[];
+  url?: string;
+  enabled: boolean;
+  connected: boolean;
+  updated_at: string;
+}
+
+export interface RealtimeSnapshot {
+  type: 'snapshot';
+  timestamp: string;
+  metrics?: SystemMetrics;
+  runs?: AgentRun[];
+  approvals?: ApprovalRequest[];
+  tokens?: TokenUsageSummary;
 }
 
 export interface TailscaleStatus {

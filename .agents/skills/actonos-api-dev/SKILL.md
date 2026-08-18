@@ -195,6 +195,13 @@ The stream endpoint must flush live `thought`, `token`, `tool_call`,
 non-streaming JSON handler. Conversation messages are persisted before and
 after the stream.
 
+### Realtime Operations WebSocket
+
+- `GET /api/realtime` is a protected, same-origin WebSocket.
+- Browser authentication uses the HttpOnly `actonos_token` cookie set by setup/login; never put bearer tokens in WebSocket query strings.
+- Snapshots include hardware/Docker metrics, durable runs, pending approvals and token summaries.
+- The stream is observation-only and must not expose an interactive shell or mutation channel.
+
 ---
 
 ## 6. Verification Checklist for API Changes

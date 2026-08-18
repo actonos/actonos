@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { lazy, Suspense, useState, useEffect } from 'react';
 import { ToastProvider } from '@/components/ui/Toast';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { Sidebar, type NavTab } from '@/components/layout/Sidebar';
@@ -18,6 +18,11 @@ import { SettingsPage } from '@/pages/Settings/SettingsPage';
 import { SetupWizardPage } from '@/pages/Auth/SetupWizardPage';
 import { LoginPage } from '@/pages/Auth/LoginPage';
 import { api } from '@/lib/api';
+import { ApprovalInterruption } from '@/components/features/governance/ApprovalInterruption';
+
+const OperationsPage = lazy(() =>
+  import('@/pages/Operations/OperationsPage').then((module) => ({ default: module.OperationsPage }))
+);
 
 export function App() {
   const [authStatus, setAuthStatus] = useState<{
@@ -119,6 +124,7 @@ export function App() {
   return (
     <ToastProvider>
       <div className="min-h-screen bg-canvas text-deep-ink selection:bg-hi-yellow selection:text-deep-ink font-sans flex">
+        <ApprovalInterruption />
         {/* Sleek Collapsible Left Sidebar */}
         <Sidebar
           activeTab={activeTab}
@@ -179,6 +185,11 @@ export function App() {
                   onOpenChat={handleOpenChatWithAgent}
                 />
               )}
+              {activeTab === 'operations' && (
+                <Suspense fallback={<div className="m-8 h-8 w-8 animate-spin rounded-full border-2 border-deep-ink border-t-transparent" />}>
+                  <OperationsPage />
+                </Suspense>
+              )}
               {activeTab === 'automations' && <AutomationsPage />}
               {activeTab === 'channels' && <ChannelsPage />}
               {activeTab === 'connectors' && <ConnectorsPage />}
@@ -195,4 +206,3 @@ export function App() {
 }
 
 export default App;
-

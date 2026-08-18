@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { ToolInfo } from '@/lib/types';
+import type { MCPServerStatus } from '@/lib/types';
+import { Card } from '@/components/ui/Card';
 
 export function ToolHubPage() {
   const { t } = useTranslation('tools');
@@ -26,16 +28,21 @@ export function ToolHubPage() {
   const [isMcpModalOpen, setIsMcpModalOpen] = useState(false);
   const [testingTool, setTestingTool] = useState<ToolInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [servers, setServers] = useState<MCPServerStatus[]>([]);
 
   const wasmInputRef = useRef<HTMLInputElement>(null);
 
   const loadTools = async () => {
     try {
       setLoading(true);
-      const res = await api.listTools(activeCategory === 'all' ? undefined : activeCategory);
+      const [res, mcp] = await Promise.all([
+        api.listTools(activeCategory === 'all' ? undefined : activeCategory),
+        api.listMCPServers().catch(() => ({ servers: [] })),
+      ]);
       // Filter out skill category since skills have their own dedicated page
       const nonSkillTools = (res.tools || []).filter((tl) => tl.category !== 'skill');
       setTools(nonSkillTools);
+      setServers(mcp.servers);
     } catch (err: any) {
       error('Failed to load tools', err.message);
     } finally {
@@ -47,13 +54,23 @@ export function ToolHubPage() {
     loadTools();
   }, [activeCategory]);
 
-  const handleConnectMCP = async (cfg: { id: string; command: string; args?: string[] }) => {
+  const handleConnectMCP = async (cfg: { id: string; transport: string; command?: string; args?: string[]; url?: string; env?: Record<string, string> }) => {
     try {
       await api.connectMCP(cfg);
       success('MCP Connected', `Server ${cfg.id} registered.`);
       loadTools();
     } catch (err: any) {
       error('MCP Connection Failed', err.message);
+    }
+  };
+
+  const handleToggleMCP = async (server: MCPServerStatus) => {
+    try {
+      await api.toggleMCPServer(server.id, !server.enabled);
+      success(t('mcp.updated'), server.id);
+      loadTools();
+    } catch (cause) {
+      error(t('mcp.updateFailed'), cause instanceof Error ? cause.message : String(cause));
     }
   };
 
@@ -175,6 +192,32 @@ export function ToolHubPage() {
         </div>
 
         {/* Tools Grid */}
+        {servers.length > 0 && (
+          <div className="mb-8">
+            <h2 className="font-serif text-heading-sm font-bold mb-3">{t('mcp.servers')}</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              {servers.map((server) => (
+                <Card key={server.id} className="p-4 border border-onyx/10 flex items-center gap-3">
+                  <span className={`w-2.5 h-2.5 rounded-full ${server.connected ? 'bg-deep-ink' : 'bg-slate/30'}`} />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold truncate">{server.id}</p>
+                    <p className="text-caption text-slate truncate">{server.transport || 'stdio'} · {server.command || server.url}</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={server.enabled}
+                    onClick={() => handleToggleMCP(server)}
+                    className={`w-11 h-6 rounded-full p-0.5 transition-colors ${server.enabled ? 'bg-deep-ink' : 'bg-slate/30'}`}
+                  >
+                    <span className={`block w-5 h-5 rounded-full bg-canvas transition-transform ${server.enabled ? 'translate-x-5' : ''}`} />
+                  </button>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="py-20 text-center text-slate font-sans">Loading tools...</div>
         ) : filteredTools.length === 0 ? (

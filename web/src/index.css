@@ -1,3 +1,5 @@
+@import "@fontsource-variable/manrope";
+@import "@fontsource-variable/noto-sans";
 @import "tailwindcss";
 
 @theme {
@@ -13,8 +15,8 @@
   --color-onyx: #000000;
 
   /* Typography */
-  --font-serif: "Hedvig Letters Serif", ui-serif, Georgia, serif;
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-serif: "Manrope Variable", "Noto Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Noto Sans Variable", "Manrope Variable", ui-sans-serif, system-ui, sans-serif;
 
   /* Type Scale */
   --text-caption: 12px;

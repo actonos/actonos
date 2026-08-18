@@ -20,6 +20,7 @@ import {
   Search,
   Check,
   Target,
+  Gauge,
 } from 'lucide-react';
 
 export type NavTab =
@@ -28,6 +29,7 @@ export type NavTab =
   | 'agent-studio'
   | 'chat'
   | 'missions'
+  | 'operations'
   | 'automations'
   | 'tools'
   | 'skills'
@@ -76,6 +78,7 @@ export function Sidebar({
         { id: 'dashboard', label: t('links.dashboard', 'Dashboard'), icon: LayoutDashboard },
         { id: 'agents', label: t('links.agents', 'Agents'), icon: Bot },
         { id: 'missions', label: t('links.missions', 'Missions'), icon: Target },
+        { id: 'operations', label: t('links.operations', 'Live Operations'), icon: Gauge },
         { id: 'chat', label: t('links.chat', 'Chat'), icon: MessageSquare },
         { id: 'automations', label: t('links.automations', 'Automations'), icon: Calendar },
       ],

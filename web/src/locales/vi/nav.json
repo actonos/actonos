@@ -1,6 +1,7 @@
 {
   "brand": "ActonOS",
   "links": {
+    "operations": "Vận hành trực tiếp",
     "dashboard": "Tổng quan",
     "agents": "Agents",
     "missions": "Nhiệm vụ",

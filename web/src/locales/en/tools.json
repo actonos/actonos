@@ -1,4 +1,15 @@
 {
+  "mcp": {
+    "connectTitle": "Connect MCP server",
+    "transport": "Transport",
+    "command": "Executable command",
+    "url": "Server URL",
+    "environment": "Environment variables",
+    "environmentHelp": "Secrets are encrypted in the ActonOS Vault and are never written to the MCP metadata file.",
+    "servers": "MCP server control",
+    "updated": "MCP server updated",
+    "updateFailed": "Could not update MCP server"
+  },
   "eyebrow": "Tools",
   "title": "Tools",
   "subtitle": "System tools, MCP servers, and WASM plugins available for agents.",

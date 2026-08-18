@@ -2,8 +2,12 @@ package system
 
 import (
 	"context"
+	"encoding/json"
 	"os"
+	"os/exec"
 	"runtime"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -32,6 +36,8 @@ func (h *DockerHAL) GetMetrics(ctx context.Context) (*SystemMetrics, error) {
 	metrics := &SystemMetrics{
 		UptimeSeconds: uint64(time.Since(h.startTime).Seconds()),
 		Timestamp:     time.Now().UTC(),
+		RuntimeMode:   h.RuntimeMode(),
+		CanvasURL:     os.Getenv("ACTONOS_CANVAS_URL"),
 	}
 
 	metrics.CPU.Model = runtime.GOARCH + " (" + runtime.GOOS + ")"
@@ -46,8 +52,100 @@ func (h *DockerHAL) GetMetrics(ctx context.Context) (*SystemMetrics, error) {
 	metrics.Disk.TotalGB = 64.0
 	metrics.Disk.UsedGB = 12.0
 	metrics.Disk.DataDirGB = 0.8
+	metrics.Containers = dockerContainerStatuses(ctx)
 
 	return metrics, nil
+}
+
+func dockerContainerStatuses(ctx context.Context) []ContainerStatus {
+	if _, err := exec.LookPath("docker"); err != nil {
+		return []ContainerStatus{}
+	}
+	listCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	output, err := exec.CommandContext(
+		listCtx,
+		"docker", "ps", "-a", "--no-trunc",
+		"--format", `{"id":"{{.ID}}","name":"{{.Names}}","image":"{{.Image}}","state":"{{.State}}","status":"{{.Status}}"}`,
+	).Output()
+	if err != nil {
+		return []ContainerStatus{}
+	}
+	items := make([]ContainerStatus, 0)
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		var item ContainerStatus
+		if json.Unmarshal([]byte(line), &item) == nil {
+			items = append(items, item)
+		}
+	}
+	if len(items) == 0 {
+		return items
+	}
+	statsCtx, statsCancel := context.WithTimeout(ctx, 3*time.Second)
+	defer statsCancel()
+	stats, err := exec.CommandContext(
+		statsCtx,
+		"docker", "stats", "--no-stream",
+		"--format", `{"name":"{{.Name}}","cpu":"{{.CPUPerc}}","mem":"{{.MemUsage}}"}`,
+	).Output()
+	if err != nil {
+		return items
+	}
+	byName := make(map[string]int, len(items))
+	for index := range items {
+		byName[items[index].Name] = index
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(stats)), "\n") {
+		var raw struct {
+			Name string `json:"name"`
+			CPU  string `json:"cpu"`
+			Mem  string `json:"mem"`
+		}
+		if json.Unmarshal([]byte(line), &raw) != nil {
+			continue
+		}
+		index, ok := byName[raw.Name]
+		if !ok {
+			continue
+		}
+		items[index].CPUPercent = parseDockerPercent(raw.CPU)
+		parts := strings.Split(raw.Mem, "/")
+		items[index].MemoryUsageMB = parseDockerMemory(parts[0])
+		if len(parts) > 1 {
+			items[index].MemoryLimitMB = parseDockerMemory(parts[1])
+		}
+	}
+	return items
+}
+
+func parseDockerPercent(value string) float64 {
+	result, _ := strconv.ParseFloat(strings.TrimSpace(strings.TrimSuffix(value, "%")), 64)
+	return result
+}
+
+func parseDockerMemory(value string) float64 {
+	value = strings.TrimSpace(value)
+	multiplier := 1.0
+	switch {
+	case strings.HasSuffix(value, "GiB"):
+		multiplier = 1024
+		value = strings.TrimSuffix(value, "GiB")
+	case strings.HasSuffix(value, "MiB"):
+		value = strings.TrimSuffix(value, "MiB")
+	case strings.HasSuffix(value, "KiB"):
+		multiplier = 1.0 / 1024
+		value = strings.TrimSuffix(value, "KiB")
+	case strings.HasSuffix(value, "GB"):
+		multiplier = 1000
+		value = strings.TrimSuffix(value, "GB")
+	case strings.HasSuffix(value, "MB"):
+		value = strings.TrimSuffix(value, "MB")
+	}
+	result, _ := strconv.ParseFloat(strings.TrimSpace(value), 64)
+	return result * multiplier
 }
 
 func (h *DockerHAL) ScanWifi(ctx context.Context) ([]WifiNetwork, error) {
