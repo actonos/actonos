@@ -184,12 +184,14 @@ export function OperationsPage() {
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
         <Card className={`${view === 'overview' || view === 'feed' ? 'block' : 'hidden'} xl:col-span-7 p-5 border border-onyx/10`}>
-          <div className="flex items-center justify-between mb-4">
-            <div>
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div className="min-w-0 flex-1">
               <h2 className="font-serif text-heading-sm font-bold">{t('feed.title')}</h2>
-              <p className="text-caption text-slate">{selected?.goal || t('feed.empty')}</p>
+              <p className="text-caption text-slate line-clamp-2 break-words" title={selected?.goal || undefined}>
+                {selected?.goal || t('feed.empty')}
+              </p>
             </div>
-            <select value={selectedRun} onChange={(event) => setSelectedRun(event.target.value)} className="rounded-full bg-canvas border border-onyx/10 px-3 py-2 text-caption max-w-[240px]">
+            <select value={selectedRun} onChange={(event) => setSelectedRun(event.target.value)} className="shrink-0 rounded-full bg-canvas border border-onyx/10 px-3 py-2 text-caption max-w-[240px]">
               {runs.map((run) => <option key={run.id} value={run.id}>{run.agent_id} · {run.status}</option>)}
             </select>
           </div>

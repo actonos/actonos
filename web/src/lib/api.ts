@@ -75,6 +75,8 @@ export interface AuditLogItem {
   execution_time_ms: number;
   status: string;
   error?: string;
+  previous_hash?: string;
+  entry_hash?: string;
 }
 
 export interface StorageInfoData {
@@ -352,16 +354,18 @@ export const api = {
       count: r.count || (r.files ? r.files.length : 0),
     })),
   getWorkspaceFile: (path: string) =>
-    fetchJSON<{ path: string; content: string; size?: number }>(`/workspace/file?path=${encodeURIComponent(path)}`),
+    fetchJSON<{ path: string; content?: string; size: number; kind: string; mime: string }>(`/workspace/file?path=${encodeURIComponent(path)}`),
+  workspaceRawUrl: (path: string) =>
+    `${API_BASE}/workspace/raw?path=${encodeURIComponent(path)}`,
   saveWorkspaceFile: (path: string, content: string) =>
-    fetchJSON<MutationResult<{ path: string; written: number }>>('/workspace/file', {
+    fetchJSON<{ status: string; path: string; written: number }>('/workspace/file', {
       method: 'POST',
       body: JSON.stringify({ path, content }),
     }),
   deleteWorkspaceFile: (path: string) =>
-    fetchJSON<MutationResult<{ status: string }>>(`/workspace/file?path=${encodeURIComponent(path)}`, { method: 'DELETE' }),
+    fetchJSON<{ status: string; path: string }>(`/workspace/file?path=${encodeURIComponent(path)}`, { method: 'DELETE' }),
   mkdirWorkspace: (path: string) =>
-    fetchJSON<MutationResult<{ status: string; path: string }>>('/workspace/mkdir', {
+    fetchJSON<{ status: string; path: string }>('/workspace/mkdir', {
       method: 'POST',
       body: JSON.stringify({ path }),
     }),
@@ -405,6 +409,7 @@ export const api = {
       body: JSON.stringify({ provider, key, url, model }),
     }),
   getAuditLogs: () => fetchJSON<{ entries: AuditLogItem[]; count: number }>('/system/audit'),
+  verifyAuditChain: () => fetchJSON<{ status: string; message: string }>('/system/audit/verify'),
   getStorageInfo: () => fetchJSON<StorageInfoData>('/system/storage'),
   getModelsCatalog: () => fetchJSON<CatalogResponse>('/models'),
   getIdentity: () => fetchJSON<UserIdentityProfile>('/system/identity'),
@@ -534,7 +539,7 @@ export const api = {
       body: JSON.stringify(data),
     }),
   triggerHeartbeatPulse: () =>
-    fetchJSON<import('./types').HeartbeatRun>('/heartbeat/trigger', {
+    fetchJSON<{ status: string; message?: string }>('/heartbeat/trigger', {
       method: 'POST',
     }),
   listHeartbeatRuns: () =>

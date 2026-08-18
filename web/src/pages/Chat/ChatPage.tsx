@@ -146,15 +146,15 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                       ? tc.function as Record<string, unknown>
                       : {};
                     return {
-                    tool: typeof fn.name === 'string'
-                      ? fn.name
-                      : typeof tc.name === 'string' ? tc.name : 'native_tool',
-                    args: fn.arguments,
-                    status: 'success',
+                      tool: typeof fn.name === 'string'
+                        ? fn.name
+                        : typeof tc.name === 'string' ? tc.name : 'native_tool',
+                      args: fn.arguments,
+                      status: 'success',
                     };
                   });
                 }
-              } catch {}
+              } catch { }
             }
             return {
               id: m.id,
@@ -230,8 +230,36 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
     }
   }, [selectedAgentID]);
 
+  const scrollToBottom = (behavior: ScrollBehavior = 'auto') => {
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior, block: 'end' });
+    });
+  };
+
+  // Scroll to bottom when conversation is selected or messages are loaded
+  const activeConvRef = useRef<string | null>(null);
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (activeConvID !== activeConvRef.current || messages.length > 0) {
+      activeConvRef.current = activeConvID;
+      scrollToBottom('auto');
+      const timer = setTimeout(() => scrollToBottom('auto'), 60);
+      const timer2 = setTimeout(() => scrollToBottom('auto'), 200);
+      return () => {
+        clearTimeout(timer);
+        clearTimeout(timer2);
+      };
+    }
+  }, [activeConvID, messages.length]);
+
+  const wasLoadingRef = useRef(false);
+  useEffect(() => {
+    const lastMsg = messages[messages.length - 1];
+    const justSent = lastMsg?.role === 'user';
+    const justFinished = wasLoadingRef.current && !loading;
+    wasLoadingRef.current = loading;
+    if (justSent || justFinished || loading) {
+      scrollToBottom(justFinished ? 'smooth' : 'auto');
+    }
   }, [messages, loading]);
 
   const handleSend = async (e?: FormEvent) => {
@@ -447,10 +475,10 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
   ];
 
   return (
-    <div className="relative min-h-[calc(100vh-64px)] flex flex-col">
+    <div className="relative flex flex-col" style={{ height: 'calc(100dvh - 64px)', overflow: 'hidden' }}>
       <BlobBackdrop />
 
-      <PageContainer className="flex-1 flex flex-col py-4">
+      <PageContainer className="flex-1 flex flex-col py-4 min-h-0 overflow-hidden">
         <ChatHeader agent={activeAgent} onOpenSessions={() => setSessionsOpen(true)} />
         {/* Main 2-Column Chat Area */}
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 lg:grid-cols-12">
@@ -529,16 +557,14 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                             onSelectAgentID?.(ag.agent_id);
                             setAgentDropdownOpen(false);
                           }}
-                          className={`w-full flex items-center justify-between p-2.5 rounded-[14px] text-left transition-colors cursor-pointer ${
-                            isSelected
-                              ? 'bg-deep-ink text-white font-medium shadow-xs'
-                              : 'text-deep-ink hover:bg-soft-meadow'
-                          }`}
+                          className={`w-full flex items-center justify-between p-2.5 rounded-[14px] text-left transition-colors cursor-pointer ${isSelected
+                            ? 'bg-deep-ink text-white font-medium shadow-xs'
+                            : 'text-deep-ink hover:bg-soft-meadow'
+                            }`}
                         >
                           <div className="flex items-center gap-2.5 truncate">
-                            <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
-                              isSelected ? 'bg-hi-yellow text-deep-ink' : 'bg-canvas text-deep-ink border border-onyx/10'
-                            }`}>
+                            <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${isSelected ? 'bg-hi-yellow text-deep-ink' : 'bg-canvas text-deep-ink border border-onyx/10'
+                              }`}>
                               {ag.avatar_icon === 'sparkles' || ag.is_system ? (
                                 <Sparkles className="w-3.5 h-3.5" />
                               ) : (
@@ -555,9 +581,8 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                             </div>
                           </div>
                           {ag.is_system && (
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
-                              isSelected ? 'bg-white/20 text-hi-yellow' : 'bg-soft-meadow text-slate'
-                            }`}>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${isSelected ? 'bg-white/20 text-hi-yellow' : 'bg-soft-meadow text-slate'
+                              }`}>
                               {t('root')}
                             </span>
                           )}
@@ -603,21 +628,19 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                 <div className="flex items-center gap-1 bg-soft-meadow p-1 rounded-full border border-onyx/10 text-[11px] font-sans">
                   <button
                     onClick={() => setSessionFilterScope('all')}
-                    className={`flex-1 py-1 rounded-full transition-all text-center font-medium cursor-pointer ${
-                      sessionFilterScope === 'all'
-                        ? 'bg-deep-ink text-white shadow-xs font-semibold'
-                        : 'text-slate hover:text-deep-ink'
-                    }`}
+                    className={`flex-1 py-1 rounded-full transition-all text-center font-medium cursor-pointer ${sessionFilterScope === 'all'
+                      ? 'bg-deep-ink text-white shadow-xs font-semibold'
+                      : 'text-slate hover:text-deep-ink'
+                      }`}
                   >
                     {t('allAgents', 'All Sessions')} ({conversations.length})
                   </button>
                   <button
                     onClick={() => setSessionFilterScope('agent')}
-                    className={`flex-1 py-1 rounded-full transition-all text-center font-medium cursor-pointer ${
-                      sessionFilterScope === 'agent'
-                        ? 'bg-deep-ink text-white shadow-xs font-semibold'
-                        : 'text-slate hover:text-deep-ink'
-                    }`}
+                    className={`flex-1 py-1 rounded-full transition-all text-center font-medium cursor-pointer ${sessionFilterScope === 'agent'
+                      ? 'bg-deep-ink text-white shadow-xs font-semibold'
+                      : 'text-slate hover:text-deep-ink'
+                      }`}
                   >
                     {activeAgent?.name || 'Current'} (
                     {conversations.filter((c) => c.agent_id === activeAgentID).length}
@@ -648,11 +671,10 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                       <div
                         key={conv.id}
                         onClick={() => !isEditing && selectConversation(conv.id)}
-                        className={`p-2.5 px-3 rounded-[16px] transition-all cursor-pointer border group relative ${
-                          isActive
-                            ? 'bg-deep-ink text-white border-deep-ink shadow-xs'
-                            : 'bg-soft-meadow/70 text-deep-ink hover:bg-soft-meadow border-onyx/5 hover:border-onyx/15'
-                        }`}
+                        className={`p-2.5 px-3 rounded-[16px] transition-all cursor-pointer border group relative ${isActive
+                          ? 'bg-deep-ink text-white border-deep-ink shadow-xs'
+                          : 'bg-soft-meadow/70 text-deep-ink hover:bg-soft-meadow border-onyx/5 hover:border-onyx/15'
+                          }`}
                       >
                         {/* Row 1: Title or Inline Edit Input */}
                         <div className="flex items-center justify-between gap-1.5 mb-1">
@@ -711,9 +733,8 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                         {/* Row 2: Metadata (Agent badge, Msg count, Timestamp) */}
                         <div className={`flex items-center justify-between text-[10px] font-sans ${isActive ? 'text-white/70' : 'text-slate'}`}>
                           <div className="flex items-center gap-1.5 truncate max-w-[140px]">
-                            <span className={`px-1.5 py-0.2 rounded font-semibold truncate ${
-                              isActive ? 'bg-white/20 text-hi-yellow' : 'bg-canvas text-deep-ink border border-onyx/5'
-                            }`}>
+                            <span className={`px-1.5 py-0.2 rounded font-semibold truncate ${isActive ? 'bg-white/20 text-hi-yellow' : 'bg-canvas text-deep-ink border border-onyx/5'
+                              }`}>
                               {convAgent?.name || conv.agent_id}
                             </span>
                             {conv.message_count !== undefined && conv.message_count > 0 && (
@@ -766,7 +787,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
           </Card>
 
           {/* Right Column: Chat History & Input Canvas (8 Cols) */}
-          <Card className="lg:col-span-8 flex flex-col justify-between p-4 sm:p-6 border border-onyx/10 h-full bg-canvas/80 min-h-[580px] shadow-xs overflow-hidden">
+          <Card className="lg:col-span-8 flex flex-col justify-between p-4 sm:p-6 border border-onyx/10 h-full bg-canvas/80 min-h-0 shadow-xs overflow-hidden">
             {/* Top Bar inside Chat Feed */}
             <div className="flex items-center justify-between pb-3 border-b border-soft-meadow">
               <div className="flex items-center gap-3 truncate">
@@ -868,11 +889,10 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                       className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
                     >
                       <div
-                        className={`max-w-[90%] sm:max-w-[80%] p-4 rounded-[20px] transition-all shadow-xs relative group ${
-                          msg.role === 'user'
-                            ? 'bg-deep-ink text-white rounded-br-none'
-                            : 'bg-soft-meadow text-deep-ink border border-onyx/10 rounded-bl-none'
-                        }`}
+                        className={`max-w-[90%] sm:max-w-[80%] p-4 rounded-[20px] transition-all shadow-xs relative group ${msg.role === 'user'
+                          ? 'bg-deep-ink text-white rounded-br-none'
+                          : 'bg-soft-meadow text-deep-ink border border-onyx/10 rounded-bl-none'
+                          }`}
                       >
                         {/* Live Thought Banner */}
                         {msg.thought && (
@@ -924,21 +944,19 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                                 <div className="flex items-center gap-1 bg-canvas p-0.5 rounded-lg border border-onyx/5">
                                   <button
                                     onClick={() => setActiveTab((prev) => ({ ...prev, [msg.id]: 'traces' }))}
-                                    className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer transition-colors ${
-                                      currentMsgTab === 'traces'
-                                        ? 'bg-deep-ink text-white'
-                                        : 'text-slate hover:text-deep-ink'
-                                    }`}
+                                    className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer transition-colors ${currentMsgTab === 'traces'
+                                      ? 'bg-deep-ink text-white'
+                                      : 'text-slate hover:text-deep-ink'
+                                      }`}
                                   >
                                     {t('traces')}
                                   </button>
                                   <button
                                     onClick={() => setActiveTab((prev) => ({ ...prev, [msg.id]: 'audit' }))}
-                                    className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer transition-colors ${
-                                      currentMsgTab === 'audit'
-                                        ? 'bg-deep-ink text-white'
-                                        : 'text-slate hover:text-deep-ink'
-                                    }`}
+                                    className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer transition-colors ${currentMsgTab === 'audit'
+                                      ? 'bg-deep-ink text-white'
+                                      : 'text-slate hover:text-deep-ink'
+                                      }`}
                                   >
                                     {t('auditLogs')}
                                   </button>

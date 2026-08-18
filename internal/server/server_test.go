@@ -239,50 +239,20 @@ func TestServer_ToolsAndSystem(t *testing.T) {
 	}
 }
 
-func TestServer_WorkspaceMutationRequiresAndExecutesExactApproval(t *testing.T) {
+func TestServer_WorkspaceDirectMutationAndFileOperations(t *testing.T) {
 	srv := newTestServer(t)
 	body := `{"path":"notes/result.txt","content":"approved content"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/workspace/file", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	srv.Router().ServeHTTP(w, req)
-	if w.Code != http.StatusAccepted {
-		t.Fatalf("expected 202 approval request, got %d: %s", w.Code, w.Body.String())
-	}
-	var pending struct {
-		Data struct {
-			Status   string                `json:"status"`
-			Approval tools.ApprovalRequest `json:"approval"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(w.Body).Decode(&pending); err != nil {
-		t.Fatal(err)
-	}
-	if pending.Data.Status != "approval_required" ||
-		pending.Data.Approval.ToolName != "admin_workspace_write" ||
-		pending.Data.Approval.ID == "" {
-		t.Fatalf("unexpected approval response: %+v", pending)
-	}
-	if _, err := os.Stat(filepath.Join(srv.workspaceDir, "notes", "result.txt")); !os.IsNotExist(err) {
-		t.Fatalf("file must not exist before approval, stat err=%v", err)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 direct write success, got %d: %s", w.Code, w.Body.String())
 	}
 
-	approve := httptest.NewRequest(http.MethodPost, "/api/approvals/"+pending.Data.Approval.ID+"/approve", nil)
-	approved := httptest.NewRecorder()
-	srv.Router().ServeHTTP(approved, approve)
-	if approved.Code != http.StatusOK {
-		t.Fatalf("expected approval execution success, got %d: %s", approved.Code, approved.Body.String())
-	}
 	data, err := os.ReadFile(filepath.Join(srv.workspaceDir, "notes", "result.txt"))
 	if err != nil || string(data) != "approved content" {
-		t.Fatalf("approved mutation not executed exactly: content=%q err=%v", data, err)
-	}
-
-	reuse := httptest.NewRequest(http.MethodPost, "/api/approvals/"+pending.Data.Approval.ID+"/approve", nil)
-	reused := httptest.NewRecorder()
-	srv.Router().ServeHTTP(reused, reuse)
-	if reused.Code != http.StatusConflict {
-		t.Fatalf("approved action must be single-decision, got %d: %s", reused.Code, reused.Body.String())
+		t.Fatalf("workspace direct mutation not executed: content=%q err=%v", data, err)
 	}
 
 	read := httptest.NewRequest(http.MethodGet, "/api/workspace/file?path=notes/result.txt", nil)
@@ -290,6 +260,13 @@ func TestServer_WorkspaceMutationRequiresAndExecutesExactApproval(t *testing.T) 
 	srv.Router().ServeHTTP(readResult, read)
 	if readResult.Code != http.StatusOK || !strings.Contains(readResult.Body.String(), "approved content") {
 		t.Fatalf("workspace read failed: %d %s", readResult.Code, readResult.Body.String())
+	}
+
+	rawReq := httptest.NewRequest(http.MethodGet, "/api/workspace/raw?path=notes/result.txt", nil)
+	rawResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(rawResult, rawReq)
+	if rawResult.Code != http.StatusOK || rawResult.Body.String() != "approved content" {
+		t.Fatalf("workspace raw read failed: %d %s", rawResult.Code, rawResult.Body.String())
 	}
 }
 
@@ -432,39 +409,16 @@ func TestServer_ConversationIdentityMetricsAndCatalogLifecycle(t *testing.T) {
 	}
 }
 
-func TestServer_WorkspaceDirectoryUploadDeleteApprovalLifecycle(t *testing.T) {
+func TestServer_WorkspaceDirectoryUploadDeleteLifecycle(t *testing.T) {
 	srv := newTestServer(t)
-	requestApproval := func(method, target, body string) tools.ApprovalRequest {
-		t.Helper()
-		req := httptest.NewRequest(method, target, strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		srv.Router().ServeHTTP(w, req)
-		if w.Code != http.StatusAccepted {
-			t.Fatalf("%s %s expected 202, got %d: %s", method, target, w.Code, w.Body.String())
-		}
-		var response struct {
-			Data struct {
-				Approval tools.ApprovalRequest `json:"approval"`
-			} `json:"data"`
-		}
-		if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
-			t.Fatal(err)
-		}
-		return response.Data.Approval
-	}
-	approve := func(item tools.ApprovalRequest) {
-		t.Helper()
-		req := httptest.NewRequest(http.MethodPost, "/api/approvals/"+item.ID+"/approve", nil)
-		w := httptest.NewRecorder()
-		srv.Router().ServeHTTP(w, req)
-		if w.Code != http.StatusOK {
-			t.Fatalf("approval failed: %d %s", w.Code, w.Body.String())
-		}
+	mkdirReq := httptest.NewRequest(http.MethodPost, "/api/workspace/mkdir", strings.NewReader(`{"path":"uploads"}`))
+	mkdirReq.Header.Set("Content-Type", "application/json")
+	mkdirRes := httptest.NewRecorder()
+	srv.Router().ServeHTTP(mkdirRes, mkdirReq)
+	if mkdirRes.Code != http.StatusOK {
+		t.Fatalf("mkdir failed: %d %s", mkdirRes.Code, mkdirRes.Body.String())
 	}
 
-	dirApproval := requestApproval(http.MethodPost, "/api/workspace/mkdir", `{"path":"uploads"}`)
-	approve(dirApproval)
 	fileBody := &bytes.Buffer{}
 	writer := multipart.NewWriter(fileBody)
 	part, err := writer.CreateFormFile("file", "sample.txt")
@@ -478,16 +432,9 @@ func TestServer_WorkspaceDirectoryUploadDeleteApprovalLifecycle(t *testing.T) {
 	uploadReq.Header.Set("Content-Type", writer.FormDataContentType())
 	uploadResult := httptest.NewRecorder()
 	srv.Router().ServeHTTP(uploadResult, uploadReq)
-	if uploadResult.Code != http.StatusAccepted {
-		t.Fatalf("upload approval failed: %d %s", uploadResult.Code, uploadResult.Body.String())
+	if uploadResult.Code != http.StatusOK {
+		t.Fatalf("upload failed: %d %s", uploadResult.Code, uploadResult.Body.String())
 	}
-	var uploadResponse struct {
-		Data struct {
-			Approval tools.ApprovalRequest `json:"approval"`
-		} `json:"data"`
-	}
-	_ = json.NewDecoder(uploadResult.Body).Decode(&uploadResponse)
-	approve(uploadResponse.Data.Approval)
 
 	list := httptest.NewRequest(http.MethodGet, "/api/workspace/files?dir=uploads", nil)
 	listed := httptest.NewRecorder()
@@ -495,10 +442,15 @@ func TestServer_WorkspaceDirectoryUploadDeleteApprovalLifecycle(t *testing.T) {
 	if listed.Code != http.StatusOK || !strings.Contains(listed.Body.String(), "sample.txt") {
 		t.Fatalf("workspace list failed: %d %s", listed.Code, listed.Body.String())
 	}
-	deleteApproval := requestApproval(http.MethodDelete, "/api/workspace/file?path=uploads/sample.txt", "")
-	approve(deleteApproval)
+
+	delReq := httptest.NewRequest(http.MethodDelete, "/api/workspace/file?path=uploads/sample.txt", nil)
+	delRes := httptest.NewRecorder()
+	srv.Router().ServeHTTP(delRes, delReq)
+	if delRes.Code != http.StatusOK {
+		t.Fatalf("delete failed: %d %s", delRes.Code, delRes.Body.String())
+	}
 	if _, err := os.Stat(filepath.Join(srv.workspaceDir, "uploads", "sample.txt")); !os.IsNotExist(err) {
-		t.Fatalf("approved delete did not remove file: %v", err)
+		t.Fatalf("delete did not remove file: %v", err)
 	}
 	rootDelete := httptest.NewRequest(http.MethodDelete, "/api/workspace/file?path=.", nil)
 	rootResult := httptest.NewRecorder()

@@ -147,11 +147,10 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
   const handleTriggerPulse = async () => {
     setTriggeringPulse(true);
     try {
-      info(t('pulse.triggering', 'Heartbeat Triggered'), 'Master agent is evaluating backlog and system state...');
-      const run = await api.triggerHeartbeatPulse();
+      await api.triggerHeartbeatPulse();
       success(
-        t('pulse.triggeredSuccess', 'Pulse Completed'),
-        run.status === 'ok' ? 'System Nominal (Zero Noise)' : `Action executed: ${run.summary}`
+        t('pulse.triggeredSuccess', 'Pulse Initiated'),
+        t('pulse.triggeredDescription', 'Autonomous pulse cycle launched in background.')
       );
       loadData();
     } catch (err) {
@@ -234,23 +233,23 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
           badge={<Badge variant="success" className="font-mono">{t('page.activeBacklog', { count: activeCount })}</Badge>}
           actions={(
             <>
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />}
-              onClick={loadData}
-            >
-              {t('actions.refresh')}
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              icon={<Play className={`w-3.5 h-3.5 ${triggeringPulse ? 'animate-spin' : ''}`} />}
-              onClick={handleTriggerPulse}
-              disabled={triggeringPulse}
-            >
-              {triggeringPulse ? t('actions.pulsing') : t('actions.triggerPulse')}
-            </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />}
+                onClick={loadData}
+              >
+                {t('actions.refresh')}
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<Play className={`w-3.5 h-3.5 ${triggeringPulse ? 'animate-spin' : ''}`} />}
+                onClick={handleTriggerPulse}
+                disabled={triggeringPulse}
+              >
+                {triggeringPulse ? t('actions.pulsing') : t('actions.triggerPulse')}
+              </Button>
             </>
           )}
         />
@@ -455,13 +454,12 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                       </div>
                       <div className="w-full bg-onyx/10 h-1.5 rounded-full overflow-hidden">
                         <div
-                          className={`h-full rounded-full transition-all duration-500 ${
-                            tItem.status === 'completed'
-                              ? 'bg-emerald-600'
-                              : tItem.status === 'blocked'
+                          className={`h-full rounded-full transition-all duration-500 ${tItem.status === 'completed'
+                            ? 'bg-emerald-600'
+                            : tItem.status === 'blocked'
                               ? 'bg-rose-500'
                               : 'bg-deep-ink'
-                          }`}
+                            }`}
                           style={{ width: `${tItem.progress}%` }}
                         />
                       </div>
@@ -616,13 +614,12 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                             {r.agent_id}
                           </td>
                           <td className="py-2.5 px-3">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold ${
-                              r.status === 'ok'
-                                ? 'bg-emerald-500/10 text-emerald-700'
-                                : r.status === 'action_taken'
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold ${r.status === 'ok'
+                              ? 'bg-emerald-500/10 text-emerald-700'
+                              : r.status === 'action_taken'
                                 ? 'bg-hi-yellow/20 text-deep-ink'
                                 : 'bg-red-500/10 text-red-700'
-                            }`}>
+                              }`}>
                               {r.status === 'ok' ? t('audit.zeroNoise') : r.status}
                             </span>
                           </td>

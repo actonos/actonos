@@ -113,13 +113,12 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
               <div
                 key={s}
                 aria-current={step === s ? 'step' : undefined}
-                className={`h-2 rounded-full transition-all duration-300 ${
-                  step === s
-                    ? 'w-8 bg-deep-ink'
-                    : step > s
-                      ? 'w-4 bg-hi-yellow border border-deep-ink'
-                      : 'w-2 bg-onyx/20'
-                }`}
+                className={`h-2 rounded-full transition-all duration-300 ${step === s
+                  ? 'w-8 bg-deep-ink'
+                  : step > s
+                    ? 'w-4 bg-hi-yellow border border-deep-ink'
+                    : 'w-2 bg-onyx/20'
+                  }`}
               />
             ))}
           </div>

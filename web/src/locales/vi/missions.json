@@ -29,7 +29,8 @@
   },
   "pulse": {
     "triggering": "Đang kích hoạt nhịp",
-    "triggeredSuccess": "Nhịp đã hoàn tất"
+    "triggeredSuccess": "Đã kích hoạt xung nhịp",
+    "triggeredDescription": "Chu kỳ xung tự chủ đã được khởi chạy ngầm."
   },
   "governance": {
     "tab": "Phê duyệt & Luồng chạy ({{count}})",

@@ -54,5 +54,11 @@
     "label": "Folder Name",
     "placeholder": "e.g. scripts, models, datasets",
     "confirm": "Create Folder"
+  },
+  "preview": {
+    "image": "Image preview",
+    "pdf": "PDF preview",
+    "binary": "Binary file — cannot be displayed as text.",
+    "downloadBinary": "Download file"
   }
 }

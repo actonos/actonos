@@ -220,6 +220,7 @@
 | `ToolHub/` | `tools` | `ToolHubPage` | MCP servers, WASM plugins |
 | `Skills/` | `skills` | `SkillsPage` | Skill marketplace |
 | `Workspace/` | `workspace` | `WorkspacePage` | File manager |
+| `AuditLogs/` | `audit-logs` | `AuditLogsPage` | Tamper-evident audit log ledger & trace inspector |
 | `Settings/` | `settings` | `SettingsPage` | System settings, keys, backup, token ledger |
 | `Auth/` | — | `SetupWizardPage` | First-run onboarding |
 | `Auth/` | — | `LoginPage` | Password login |
@@ -234,6 +235,7 @@
 |:---|:---|:---|
 | `modals/TokenLedgerModal.tsx` | `TokenLedgerModal` | Comprehensive token usage analytics & ledger table |
 | `pages/Missions/components/TaskModal.tsx` | `TaskModal` | Mission backlog task create/edit modal |
+| `pages/AuditLogs/components/AuditLogDetailModal.tsx` | `AuditLogDetailModal` | Full audit log trace, cryptographic verification & JSON inspector |
 | `ui/Modal.tsx` | `Modal` | Accessible dialog container |
 | `ui/ConfirmModal.tsx` | `ConfirmModal` | Confirmation dialog with actions |
 
@@ -241,7 +243,7 @@
 
 ## Locale Namespaces (`web/src/locales/`)
 
-Both `en/` and `vi/` contain the following 16 namespace files:
+Both `en/` and `vi/` contain the following 17 namespace files:
 
 | Namespace | File | UI Coverage |
 |:---|:---|:---|
@@ -254,6 +256,7 @@ Both `en/` and `vi/` contain the following 16 namespace files:
 | `tools` | `tools.json` | MCP servers, tool management |
 | `skills` | `skills.json` | Skills marketplace |
 | `settings` | `settings.json` | System settings, API keys, token ledger tab |
+| `audit` | `audit.json` | Audit logs ledger, filters, cryptographic hash verification, detail modal |
 | `workspace` | `workspace.json` | File manager |
 | `integrations` | `integrations.json` | OAuth connectors |
 | `channels` | `channels.json` | Messaging channels config |

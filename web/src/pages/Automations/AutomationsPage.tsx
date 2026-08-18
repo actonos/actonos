@@ -190,38 +190,9 @@ export function AutomationsPage() {
       <BlobBackdrop />
 
       <PageContainer>
-        <PageHeader eyebrow={t('eyebrow')} title={t('title')} description={t('subtitle')} actions={(
-          <Button variant="ghost" size="sm" icon={<RefreshCw />} onClick={loadData}>{t('actions.refresh')}</Button>
-        )} />
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-          <div className="flex-1">
-            <span className="text-caption uppercase tracking-wider text-slate font-semibold block mb-1">
-              {t('eyebrow', 'Proactive Autonomous Scheduling')}
-            </span>
-            <h1 className="hidden font-serif text-heading-lg text-deep-ink tracking-tight flex items-center gap-3" aria-hidden="true">
-              <span>{t('title', 'Cron Automations')}</span>
-              <Badge variant="neutral" className="text-caption font-mono">
-                {jobs.length} {t('scheduled')}
-              </Badge>
-            </h1>
-            <p className="font-sans text-body text-slate mt-1 max-w-2xl">
-              {t(
-                'subtitle',
-                'Schedule recurring AI tasks with automatic ReAct reasoning, sandboxed tool execution, and multi-channel push alerts.'
-              )}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-center">
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />}
-              onClick={loadData}
-            >
-              {t('actions.refresh')}
-            </Button>
+        <PageHeader eyebrow={t('eyebrow')} title={t('title')} description={t('eyebrow', 'Proactive Autonomous Scheduling')} actions={(
+          <>
+            <Button variant="ghost" size="sm" icon={<RefreshCw />} onClick={loadData}>{t('actions.refresh')}</Button>
             <Button
               variant="primary"
               size="sm"
@@ -230,29 +201,27 @@ export function AutomationsPage() {
             >
               {t('actions.newTask', 'Schedule New Task')}
             </Button>
-          </div>
-        </div>
+          </>
+        )} />
 
         {/* Sub-Tabs: Scheduled Tasks vs Execution History */}
         <div className="flex gap-2 mb-6 border-b border-onyx/10 pb-3">
           <button
             onClick={() => selectSubTab('jobs')}
-            className={`px-4 py-2 rounded-xl text-body-sm font-semibold transition-all cursor-pointer flex items-center gap-2 ${
-              activeSubTab === 'jobs'
-                ? 'bg-deep-ink text-canvas shadow-xs'
-                : 'bg-soft-meadow text-slate hover:text-deep-ink'
-            }`}
+            className={`px-4 py-2 rounded-xl text-body-sm font-semibold transition-all cursor-pointer flex items-center gap-2 ${activeSubTab === 'jobs'
+              ? 'bg-deep-ink text-canvas shadow-xs'
+              : 'bg-soft-meadow text-slate hover:text-deep-ink'
+              }`}
           >
             <Calendar className="w-4 h-4" />
             <span>{t('tabs.tasks', { count: jobs.length })}</span>
           </button>
           <button
             onClick={() => selectSubTab('history')}
-            className={`px-4 py-2 rounded-xl text-body-sm font-semibold transition-all cursor-pointer flex items-center gap-2 ${
-              activeSubTab === 'history'
-                ? 'bg-deep-ink text-canvas shadow-xs'
-                : 'bg-soft-meadow text-slate hover:text-deep-ink'
-            }`}
+            className={`px-4 py-2 rounded-xl text-body-sm font-semibold transition-all cursor-pointer flex items-center gap-2 ${activeSubTab === 'history'
+              ? 'bg-deep-ink text-canvas shadow-xs'
+              : 'bg-soft-meadow text-slate hover:text-deep-ink'
+              }`}
           >
             <History className="w-4 h-4" />
             <span>{t('tabs.history', { count: historyRecords.length })}</span>
@@ -542,11 +511,10 @@ export function AutomationsPage() {
                     key={preset.expr}
                     type="button"
                     onClick={() => setCronExpr(preset.expr)}
-                    className={`px-3 py-1 rounded-full text-caption font-sans transition-all cursor-pointer ${
-                      cronExpr === preset.expr
-                        ? 'bg-deep-ink text-white font-semibold shadow-xs'
-                        : 'bg-soft-meadow text-deep-ink hover:bg-black/5 border border-onyx/5'
-                    }`}
+                    className={`px-3 py-1 rounded-full text-caption font-sans transition-all cursor-pointer ${cronExpr === preset.expr
+                      ? 'bg-deep-ink text-white font-semibold shadow-xs'
+                      : 'bg-soft-meadow text-deep-ink hover:bg-black/5 border border-onyx/5'
+                      }`}
                   >
                     {preset.label}
                   </button>

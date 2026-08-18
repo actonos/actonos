@@ -835,10 +835,14 @@ func (s *Server) handleGetStorageInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCheckOTA(w http.ResponseWriter, r *http.Request) {
+	// No update channel is wired yet, so the running build is also the latest
+	// known build. Both fields track the daemon version rather than a literal.
 	s.respondJSON(w, http.StatusOK, map[string]any{
-		"current_version":  "v0.1.0",
+		"current_version":  s.version,
 		"update_available": false,
-		"latest_version":   "v0.1.0",
+		"latest_version":   s.version,
+		"git_commit":       s.gitCommit,
+		"build_time":       s.buildTime,
 		"last_checked":     time.Now().UTC().Format(time.RFC3339),
 	})
 }

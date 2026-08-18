@@ -240,7 +240,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             if (memRes?.memory_md) {
               setMemoryMD(memRes.memory_md);
             }
-          } catch {}
+          } catch { }
         }
       } catch (err) {
         error('Failed to load agent details', getErrorMessage(err));
@@ -521,22 +521,20 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                   <button
                     type="button"
                     onClick={() => setStatus('active')}
-                    className={`px-3 py-1.5 rounded-full text-caption font-sans transition-all cursor-pointer ${
-                      status === 'active'
-                        ? 'bg-emerald-600 text-white font-semibold shadow-xs'
-                        : 'bg-canvas text-deep-ink hover:bg-black/5'
-                    }`}
+                    className={`px-3 py-1.5 rounded-full text-caption font-sans transition-all cursor-pointer ${status === 'active'
+                      ? 'bg-emerald-600 text-white font-semibold shadow-xs'
+                      : 'bg-canvas text-deep-ink hover:bg-black/5'
+                      }`}
                   >
                     {t('studio.active')}
                   </button>
                   <button
                     type="button"
                     onClick={() => setStatus('stopped')}
-                    className={`px-3 py-1.5 rounded-full text-caption font-sans transition-all cursor-pointer ${
-                      status === 'stopped'
-                        ? 'bg-red-600 text-white font-semibold shadow-xs'
-                        : 'bg-canvas text-deep-ink hover:bg-black/5'
-                    }`}
+                    className={`px-3 py-1.5 rounded-full text-caption font-sans transition-all cursor-pointer ${status === 'stopped'
+                      ? 'bg-red-600 text-white font-semibold shadow-xs'
+                      : 'bg-canvas text-deep-ink hover:bg-black/5'
+                      }`}
                   >
                     {t('studio.stopped')}
                   </button>
@@ -569,9 +567,8 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             role="tab"
             aria-selected={activeTab === 'prompt'}
             onClick={() => setActiveTab('prompt')}
-            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'prompt' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
-            }`}
+            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${activeTab === 'prompt' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
+              }`}
           >
             {t('studio.tabs.instructions')}
           </button>
@@ -579,9 +576,8 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             role="tab"
             aria-selected={activeTab === 'soul'}
             onClick={() => setActiveTab('soul')}
-            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'soul' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
-            }`}
+            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${activeTab === 'soul' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
+              }`}
           >
             {t('studio.tabs.soul')}
           </button>
@@ -589,9 +585,8 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             role="tab"
             aria-selected={activeTab === 'memory'}
             onClick={() => setActiveTab('memory')}
-            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'memory' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
-            }`}
+            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${activeTab === 'memory' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
+              }`}
           >
             {t('studio.tabs.memory')}
           </button>
@@ -599,9 +594,8 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             role="tab"
             aria-selected={activeTab === 'model'}
             onClick={() => setActiveTab('model')}
-            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'model' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
-            }`}
+            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${activeTab === 'model' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
+              }`}
           >
             {t('studio.tabs.model', { status: primaryIsReady ? t('studio.ready') : t('studio.keyNeeded') })}
           </button>
@@ -609,9 +603,8 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             role="tab"
             aria-selected={activeTab === 'tools'}
             onClick={() => setActiveTab('tools')}
-            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'tools' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
-            }`}
+            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${activeTab === 'tools' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
+              }`}
           >
             {t('studio.tabs.tools', { value: isAllToolsSelected ? t('studio.allTools') : authorizedTools.length })}
           </button>
@@ -619,9 +612,8 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             role="tab"
             aria-selected={activeTab === 'channels'}
             onClick={() => setActiveTab('channels')}
-            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'channels' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
-            }`}
+            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${activeTab === 'channels' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
+              }`}
           >
             {t('studio.tabs.channels', { value: listenAllChannels ? t('studio.all') : selectedChannels.length })}
           </button>
@@ -629,9 +621,8 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             role="tab"
             aria-selected={activeTab === 'governance'}
             onClick={() => setActiveTab('governance')}
-            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'governance' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
-            }`}
+            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${activeTab === 'governance' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
+              }`}
           >
             {t('studio.tabs.governance')}
           </button>
@@ -903,11 +894,10 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
 
                   {/* Primary Model Provider Diagnostics */}
                   <div
-                    className={`p-3 rounded-xl border text-caption font-sans flex items-start gap-2 ${
-                      primaryIsReady
-                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-900'
-                        : 'bg-amber-500/10 border-amber-500/20 text-amber-900'
-                    }`}
+                    className={`p-3 rounded-xl border text-caption font-sans flex items-start gap-2 ${primaryIsReady
+                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-900'
+                      : 'bg-amber-500/10 border-amber-500/20 text-amber-900'
+                      }`}
                   >
                     {primaryIsReady ? (
                       <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
@@ -979,11 +969,10 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
 
                   {/* Fallback Model Diagnostics */}
                   <div
-                    className={`p-3 rounded-xl border text-caption font-sans flex items-start gap-2 ${
-                      fallbackIsReady
-                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-900'
-                        : 'bg-amber-500/10 border-amber-500/20 text-amber-900'
-                    }`}
+                    className={`p-3 rounded-xl border text-caption font-sans flex items-start gap-2 ${fallbackIsReady
+                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-900'
+                      : 'bg-amber-500/10 border-amber-500/20 text-amber-900'
+                      }`}
                   >
                     {fallbackIsReady ? (
                       <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
@@ -1014,8 +1003,8 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                     {temperature <= 0.2
                       ? 'Deterministic & Precise Coding'
                       : temperature <= 0.7
-                      ? 'Balanced Reasoning'
-                      : 'Creative'}
+                        ? 'Balanced Reasoning'
+                        : 'Creative'}
                   </span>
                 </div>
                 <input
@@ -1103,11 +1092,10 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                   <div
                     key={tool.name}
                     onClick={() => handleToggleTool(tool.name)}
-                    className={`p-4 rounded-2xl border transition-all cursor-pointer select-none flex flex-col justify-between ${
-                      isSelected
-                        ? 'bg-soft-meadow border-deep-ink/30 shadow-xs'
-                        : 'bg-canvas border-onyx/10 hover:border-onyx/20 opacity-70'
-                    }`}
+                    className={`p-4 rounded-2xl border transition-all cursor-pointer select-none flex flex-col justify-between ${isSelected
+                      ? 'bg-soft-meadow border-deep-ink/30 shadow-xs'
+                      : 'bg-canvas border-onyx/10 hover:border-onyx/20 opacity-70'
+                      }`}
                   >
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
@@ -1163,11 +1151,10 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div
                 onClick={() => setListenAllChannels(true)}
-                className={`p-5 rounded-2xl border transition-all cursor-pointer ${
-                  listenAllChannels
-                    ? 'bg-soft-meadow border-deep-ink shadow-xs ring-1 ring-deep-ink'
-                    : 'bg-canvas border-onyx/10 hover:border-onyx/20'
-                }`}
+                className={`p-5 rounded-2xl border transition-all cursor-pointer ${listenAllChannels
+                  ? 'bg-soft-meadow border-deep-ink shadow-xs ring-1 ring-deep-ink'
+                  : 'bg-canvas border-onyx/10 hover:border-onyx/20'
+                  }`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-semibold text-body-sm text-deep-ink">
@@ -1184,11 +1171,10 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
 
               <div
                 onClick={() => setListenAllChannels(false)}
-                className={`p-5 rounded-2xl border transition-all cursor-pointer ${
-                  !listenAllChannels
-                    ? 'bg-soft-meadow border-deep-ink shadow-xs ring-1 ring-deep-ink'
-                    : 'bg-canvas border-onyx/10 hover:border-onyx/20'
-                }`}
+                className={`p-5 rounded-2xl border transition-all cursor-pointer ${!listenAllChannels
+                  ? 'bg-soft-meadow border-deep-ink shadow-xs ring-1 ring-deep-ink'
+                  : 'bg-canvas border-onyx/10 hover:border-onyx/20'
+                  }`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-semibold text-body-sm text-deep-ink">
@@ -1219,11 +1205,10 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                       <div
                         key={ch.id}
                         onClick={() => handleToggleChannel(ch.id)}
-                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
-                          isChecked
-                            ? 'bg-soft-meadow border-onyx/20 shadow-xs'
-                            : 'bg-canvas border-onyx/10 opacity-60'
-                        }`}
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${isChecked
+                          ? 'bg-soft-meadow border-onyx/20 shadow-xs'
+                          : 'bg-canvas border-onyx/10 opacity-60'
+                          }`}
                       >
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-deep-ink text-hi-yellow flex items-center justify-center shrink-0">

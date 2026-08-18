@@ -24,9 +24,8 @@ export function Input({
       <div className="relative flex items-center">
         <input
           id={id}
-          className={`density-control w-full bg-canvas text-deep-ink placeholder-slate font-sans text-body-sm px-5 rounded-full border border-onyx/25 focus:outline-none focus:ring-2 focus:ring-focus-ring transition-all ${
-            actionButton ? 'pr-32' : ''
-          } ${error ? 'border-red-500' : ''} ${className}`}
+          className={`density-control w-full bg-canvas text-deep-ink placeholder-slate font-sans text-body-sm px-5 rounded-full border border-onyx/25 focus:outline-none focus:ring-2 focus:ring-focus-ring transition-all ${actionButton ? 'pr-32' : ''
+            } ${error ? 'border-red-500' : ''} ${className}`}
           {...props}
         />
         {actionButton && (

@@ -228,6 +228,9 @@ func (m *UserProfileManager) GetRelevantPatterns(ctx context.Context, domain str
 			patterns = append(patterns, p)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return patterns, nil
 }
 

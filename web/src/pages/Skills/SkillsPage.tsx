@@ -166,26 +166,8 @@ export function SkillsPage() {
 
       <PageContainer>
         <PageHeader eyebrow={t('eyebrow')} title={t('title')} description={t('subtitle')} actions={(
-          <Button variant="ghost" size="sm" icon={<RefreshCw />} onClick={loadData}>{t('actions.refresh')}</Button>
-        )} />
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div className="flex-1">
-            <span className="text-caption uppercase tracking-wider text-slate font-semibold block mb-1">
-              {t('eyebrow', 'Skills')}
-            </span>
-            <h1 className="hidden font-serif text-heading-lg text-deep-ink tracking-tight" aria-hidden="true">
-              {t('title', 'Agent Skills')}
-            </h1>
-            <p className="font-sans text-body text-slate mt-1 max-w-2xl">
-              {t('subtitle', 'Install and manage skills for agents. Explore community skills.')}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-center">
-            <Button variant="ghost" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={loadData}>
-              {t('actions.refresh', 'Refresh')}
-            </Button>
+          <>
+            <Button variant="ghost" size="sm" icon={<RefreshCw />} onClick={loadData}>{t('actions.refresh')}</Button>
             <Button
               variant="primary"
               size="sm"
@@ -194,29 +176,27 @@ export function SkillsPage() {
             >
               {t('actions.newSkill', 'Create Skill')}
             </Button>
-          </div>
-        </div>
+          </>
+        )} />
 
         {/* Tabs & Search */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8">
           <div className="flex items-center gap-1.5 bg-canvas/80 backdrop-blur-sm p-1 rounded-full border border-onyx/10 shadow-xs self-start sm:self-auto">
             <button
               onClick={() => selectTab('installed')}
-              className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer ${
-                activeTab === 'installed'
-                  ? 'bg-deep-ink text-white font-semibold shadow-xs'
-                  : 'text-deep-ink hover:text-slate'
-              }`}
+              className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer ${activeTab === 'installed'
+                ? 'bg-deep-ink text-white font-semibold shadow-xs'
+                : 'text-deep-ink hover:text-slate'
+                }`}
             >
               {t('tabs.installed', { count: installedSkills.length })}
             </button>
             <button
               onClick={() => selectTab('hub')}
-              className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer ${
-                activeTab === 'hub'
-                  ? 'bg-deep-ink text-white font-semibold shadow-xs'
-                  : 'text-deep-ink hover:text-slate'
-              }`}
+              className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer ${activeTab === 'hub'
+                ? 'bg-deep-ink text-white font-semibold shadow-xs'
+                : 'text-deep-ink hover:text-slate'
+                }`}
             >
               {t('tabs.hub', { count: hubCatalog.length })}
             </button>

@@ -205,6 +205,132 @@ func TestSkillWatcher_LoadSkill(t *testing.T) {
 	}
 }
 
+// TestActionHashSurvivesJSONRoundTrip guards the approval bug where a pending
+// action was hashed from raw bytes. Persisting the run checkpoint marshals the
+// arguments, which compacts whitespace and HTML-escapes <, > and &, so the
+// resume-time hash no longer matched and every approve/reject failed.
+func TestActionHashSurvivesJSONRoundTrip(t *testing.T) {
+	cases := []struct {
+		name string
+		a, b json.RawMessage
+	}{
+		{
+			name: "whitespace is insignificant",
+			a:    json.RawMessage(`{"command": "echo hello"}`),
+			b:    json.RawMessage(`{"command":"echo hello"}`),
+		},
+		{
+			name: "key order is insignificant",
+			a:    json.RawMessage(`{"command":"ls","cwd":"/tmp"}`),
+			b:    json.RawMessage(`{"cwd":"/tmp","command":"ls"}`),
+		},
+		{
+			name: "html escaping is insignificant",
+			a:    json.RawMessage(`{"command":"echo a > b && cat <c"}`),
+			b:    json.RawMessage(`{"command":"echo a > b && cat <c"}`),
+		},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			if ActionHash("agent", "native_exec", test.a) != ActionHash("agent", "native_exec", test.b) {
+				t.Fatalf("hash changed for equivalent input:\n a=%s\n b=%s", test.a, test.b)
+			}
+		})
+	}
+
+	// A genuinely different action must still produce a different hash.
+	if ActionHash("agent", "native_exec", json.RawMessage(`{"command":"ls"}`)) ==
+		ActionHash("agent", "native_exec", json.RawMessage(`{"command":"rm -rf x"}`)) {
+		t.Fatal("distinct commands collided")
+	}
+	if ActionHash("agent-a", "native_exec", json.RawMessage(`{"command":"ls"}`)) ==
+		ActionHash("agent-b", "native_exec", json.RawMessage(`{"command":"ls"}`)) {
+		t.Fatal("distinct agents collided")
+	}
+	if ActionHash("agent", "native_exec", json.RawMessage(`{"command":"ls"}`)) ==
+		ActionHash("agent", "native_file_write", json.RawMessage(`{"command":"ls"}`)) {
+		t.Fatal("distinct tools collided")
+	}
+}
+
+// TestApprovalValidatesAfterMarshalRoundTrip reproduces the exact failing path:
+// request an approval, round-trip the pending arguments the way the run
+// checkpoint does, then validate the approved action.
+func TestApprovalValidatesAfterMarshalRoundTrip(t *testing.T) {
+	db, err := memory.Open(filepath.Join(t.TempDir(), "approvals-roundtrip.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	manager := NewApprovalManager(db.SQLDB())
+	ctx := context.Background()
+
+	// Formatted the way an LLM emits tool arguments, including a shell redirect.
+	original := json.RawMessage(`{"command": "df -h > /tmp/disk.txt && echo <done>"}`)
+	item, err := manager.Request(ctx, "trace-rt", "agent_system_core", "native_exec", "High", original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Decide(ctx, item.ID, "approved", "operator", "ok"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Emulate SaveCheckpoint -> LoadCheckpointByTrace.
+	type checkpoint struct {
+		Arguments json.RawMessage `json:"arguments"`
+	}
+	encoded, err := json.Marshal(checkpoint{Arguments: original})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var restored checkpoint
+	if err := json.Unmarshal(encoded, &restored); err != nil {
+		t.Fatal(err)
+	}
+	if string(restored.Arguments) == string(original) {
+		t.Fatal("expected the round trip to alter the bytes; test no longer covers the regression")
+	}
+	if err := manager.ValidateApproved(ctx, item.ID, "agent_system_core", "native_exec", restored.Arguments); err != nil {
+		t.Fatalf("approved action rejected after checkpoint round trip: %v", err)
+	}
+}
+
+// TestApprovalReopenAfterFailedExecution covers recovery when an approved
+// action fails to execute: the record must return to pending so the operator
+// can retry or reject instead of being stranded.
+func TestApprovalReopenAfterFailedExecution(t *testing.T) {
+	db, err := memory.Open(filepath.Join(t.TempDir(), "approvals-reopen.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	manager := NewApprovalManager(db.SQLDB())
+	ctx := context.Background()
+
+	item, err := manager.Request(ctx, "trace-reopen", "agent-a", "native_exec", "High", json.RawMessage(`{"command":"pwd"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Decide(ctx, item.ID, "approved", "operator", "ok"); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.Reopen(ctx, item.ID); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := manager.Get(ctx, item.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reopened.Status != "pending" || reopened.DecidedAt != nil {
+		t.Fatalf("approval was not reopened: %+v", reopened)
+	}
+	// A reopened approval must be decidable again, including rejection.
+	rejected, err := manager.Decide(ctx, item.ID, "rejected", "operator", "changed my mind")
+	if err != nil || rejected.Status != "rejected" {
+		t.Fatalf("reopened approval could not be rejected: %+v err=%v", rejected, err)
+	}
+}
+
 func TestApprovalManagerLifecycleAndExactHash(t *testing.T) {
 	db, err := memory.Open(filepath.Join(t.TempDir(), "approvals.db"))
 	if err != nil {
@@ -235,7 +361,7 @@ func TestApprovalManagerLifecycleAndExactHash(t *testing.T) {
 	if err := manager.ValidateApproved(ctx, item.ID, item.AgentID, item.ToolName, json.RawMessage(`{"path":"other.txt"}`)); !errors.Is(err, ErrApprovalInvalid) {
 		t.Fatalf("tampered action was accepted: %v", err)
 	}
-	if _, err := manager.Decide(ctx, item.ID, "approved", "tester", "again"); !errors.Is(err, ErrApprovalInvalid) {
+	if _, err := manager.Decide(ctx, item.ID, "approved", "tester", "again"); !errors.Is(err, ErrApprovalNotPending) {
 		t.Fatalf("second decision should fail: %v", err)
 	}
 	if _, err := manager.Decide(ctx, item.ID, "invalid", "tester", ""); err == nil {

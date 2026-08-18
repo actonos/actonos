@@ -1,0 +1,60 @@
+{
+  "eyebrow": "Quản trị & Bảo mật",
+  "title": "Nhật ký kiểm toán",
+  "subtitle": "Sổ cái bất biến, liên kết chuỗi băm mật mã học ghi lại mọi lượt thực thi công cụ, cổng phê duyệt và hoạt động hệ thống.",
+  "verifyChain": "Xác minh chuỗi băm",
+  "verifying": "Đang xác minh chuỗi...",
+  "verifiedSuccess": "Chuỗi băm mật mã học hợp lệ",
+  "verifiedSuccessDesc": "Tất cả các hàm băm khối SHA-256 và liên kết theo thời gian đều nguyên vẹn, không bị can thiệp.",
+  "verifyFailed": "Xác minh chuỗi băm thất bại",
+  "exportLogs": "Xuất file JSON",
+  "refresh": "Làm mới",
+  "stats": {
+    "totalEvents": "Tổng số sự kiện",
+    "highRisk": "Hành động rủi ro cao",
+    "blockedPolicies": "Hành động bị chặn / Lỗi",
+    "avgDuration": "Độ trễ thực thi TB"
+  },
+  "filters": {
+    "riskLevel": "Mức độ rủi ro",
+    "status": "Trạng thái thực thi",
+    "all": "Tất cả",
+    "high": "Cao",
+    "medium": "Vừa",
+    "low": "Thấp",
+    "success": "Thành công",
+    "blocked": "Bị chặn",
+    "failed": "Thất bại",
+    "searchPlaceholder": "Tìm kiếm theo công cụ, Agent ID, Trace ID hoặc lỗi..."
+  },
+  "columns": {
+    "tool": "Tên công cụ / Hành động",
+    "agent": "Agent ID",
+    "risk": "Mức rủi ro",
+    "status": "Trạng thái",
+    "trace": "Trace ID",
+    "duration": "Thời lượng",
+    "timestamp": "Thời gian"
+  },
+  "empty": "Không tìm thấy bản ghi nhật ký kiểm toán nào phù hợp với bộ lọc.",
+  "detail": {
+    "title": "Chi tiết bản ghi kiểm toán",
+    "subtitle": "Dấu vết thực thi chống giả mạo và chữ ký chuỗi băm mật mã học đầy đủ.",
+    "traceId": "Trace ID (Chuẩn W3C)",
+    "copyTrace": "Sao chép Trace ID",
+    "copied": "Đã sao chép!",
+    "agentId": "Agent ID",
+    "toolName": "Tên công cụ",
+    "riskLevel": "Đánh giá rủi ro",
+    "status": "Trạng thái thực thi",
+    "duration": "Thời lượng thực thi",
+    "timestamp": "Thời gian (UTC / Giờ địa phương)",
+    "errorCallout": "Chi tiết lỗi thực thi / Lý do chặn chính sách",
+    "cryptoSection": "Chuỗi băm mật mã học (Chống giả mạo)",
+    "entryHash": "Mã băm SHA-256 bản ghi",
+    "prevHash": "Mã băm SHA-256 khối liền trước",
+    "rawJson": "Dữ liệu JSON gốc",
+    "copyJson": "Sao chép JSON gốc",
+    "close": "Đóng"
+  }
+}

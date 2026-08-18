@@ -9,6 +9,7 @@ import {
   MessageSquare,
   Search,
   Settings,
+  ShieldCheck,
   Target,
   Wrench,
   type LucideIcon,
@@ -90,6 +91,7 @@ export function CommandPalette({
       ['automations', Calendar],
       ['workspace', Folder],
       ['tools', Wrench],
+      ['audit-logs', ShieldCheck],
       ['settings', Settings],
     ].map(([tab, icon]) => ({
       id: `nav:${tab}`,
@@ -217,7 +219,7 @@ export function CommandPalette({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={t('nav:search.placeholder')}
-            className="density-control min-w-0 flex-1 bg-transparent text-body text-deep-ink outline-none placeholder:text-slate"
+            className="density-control min-w-0 flex-1 bg-transparent text-body text-deep-ink outline-none placeholder:text-slate hover:outline-none focus:outline-none"
           />
           <kbd className="rounded-full border border-onyx/10 bg-soft-meadow px-2 py-1 text-caption text-slate">{t('nav:search.escapeKey')}</kbd>
         </div>

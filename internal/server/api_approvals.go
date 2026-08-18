@@ -1,8 +1,10 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -23,27 +25,39 @@ func (s *Server) handleListApprovals(w http.ResponseWriter, r *http.Request) {
 	s.respondJSON(w, http.StatusOK, map[string]any{"approvals": items})
 }
 
+// failApproval reports an execution failure and returns the approval to the
+// pending state so the operator can retry or reject instead of being stranded
+// with a consumed record.
+func (s *Server) failApproval(w http.ResponseWriter, r *http.Request, id, code, message string) {
+	if s.approvalMgr != nil {
+		if reopenErr := s.approvalMgr.Reopen(r.Context(), id); reopenErr != nil {
+			message = fmt.Sprintf("%s (could not reopen approval: %v)", message, reopenErr)
+		}
+	}
+	s.respondError(w, http.StatusBadRequest, code, message)
+}
+
 func (s *Server) handleApproveAction(w http.ResponseWriter, r *http.Request) {
 	item, ok := s.decideApproval(w, r, "approved")
 	if !ok {
 		return
 	}
 	if s.toolReg == nil {
-		s.respondError(w, http.StatusNotImplemented, "TOOLS_NOT_ENABLED", "tool registry is not configured")
+		s.failApproval(w, r, item.ID, "TOOLS_NOT_ENABLED", "tool registry is not configured")
 		return
 	}
 	if item.ToolName == "system_mcp_connect" {
 		if s.mcpHost == nil {
-			s.respondError(w, http.StatusNotImplemented, "MCP_NOT_ENABLED", "mcp host is not configured")
+			s.failApproval(w, r, item.ID, "MCP_NOT_ENABLED", "mcp host is not configured")
 			return
 		}
 		var cfg tools.MCPServerConfig
 		if err := json.Unmarshal(item.Input, &cfg); err != nil {
-			s.respondError(w, http.StatusBadRequest, "INVALID_MCP_APPROVAL", err.Error())
+			s.failApproval(w, r, item.ID, "INVALID_MCP_APPROVAL", err.Error())
 			return
 		}
 		if err := s.mcpHost.ConnectServer(r.Context(), cfg); err != nil {
-			s.respondError(w, http.StatusBadRequest, "MCP_CONNECT_FAILED", err.Error())
+			s.failApproval(w, r, item.ID, "MCP_CONNECT_FAILED", err.Error())
 			return
 		}
 		s.respondJSON(w, http.StatusOK, map[string]any{
@@ -58,7 +72,7 @@ func (s *Server) handleApproveAction(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(item.ToolName, "admin_") {
 		result, execErr := s.executeAdminAction(r.Context(), strings.TrimPrefix(item.ToolName, "admin_"), item.Input)
 		if execErr != nil {
-			s.respondError(w, http.StatusBadRequest, "ADMIN_ACTION_FAILED", execErr.Error())
+			s.failApproval(w, r, item.ID, "ADMIN_ACTION_FAILED", execErr.Error())
 			return
 		}
 		s.respondJSON(w, http.StatusOK, map[string]any{"approval": item, "result": result})
@@ -66,14 +80,14 @@ func (s *Server) handleApproveAction(w http.ResponseWriter, r *http.Request) {
 	}
 	if s.runStore != nil && s.engine != nil {
 		if _, _, checkpointErr := s.runStore.LoadCheckpointByTrace(r.Context(), item.TraceID); checkpointErr == nil {
-			response, resumeErr := s.engine.ResumeApproved(r.Context(), *item)
-			if resumeErr != nil {
-				s.respondError(w, http.StatusBadRequest, "APPROVED_RESUME_FAILED", resumeErr.Error())
-				return
-			}
+			// Resume the agent run in a background goroutine so the operator's HTTP request returns immediately (< 50ms)
+			go func() {
+				_, _ = s.engine.ResumeApproved(context.Background(), *item)
+			}()
 			s.respondJSON(w, http.StatusOK, map[string]any{
 				"approval": item,
-				"response": response,
+				"status":   "resumed",
+				"message":  "Approval recorded and agent run resumed in background",
 			})
 			return
 		}
@@ -82,7 +96,7 @@ func (s *Server) handleApproveAction(w http.ResponseWriter, r *http.Request) {
 	ctx = tools.WithApprovalID(ctx, item.ID)
 	result, err := s.toolReg.Execute(ctx, item.AgentID, item.ToolName, item.Input)
 	if err != nil {
-		s.respondError(w, http.StatusBadRequest, "APPROVED_EXECUTION_FAILED", err.Error())
+		s.failApproval(w, r, item.ID, "APPROVED_EXECUTION_FAILED", err.Error())
 		return
 	}
 	s.respondJSON(w, http.StatusOK, map[string]any{
@@ -115,7 +129,7 @@ func (s *Server) decideApproval(w http.ResponseWriter, r *http.Request, decision
 	item, err := s.approvalMgr.Decide(r.Context(), chi.URLParam(r, "id"), decision, "system_admin", req.Reason)
 	if err != nil {
 		status := http.StatusBadRequest
-		if errors.Is(err, tools.ErrApprovalInvalid) {
+		if errors.Is(err, tools.ErrApprovalInvalid) || errors.Is(err, tools.ErrApprovalNotPending) {
 			status = http.StatusConflict
 		}
 		s.respondError(w, status, "APPROVAL_DECISION_FAILED", err.Error())

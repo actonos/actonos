@@ -34,7 +34,7 @@ export function MessageTimeline({
 }) {
   const { t } = useTranslation('chat');
   return (
-    <div className="my-4 flex-1 space-y-4 overflow-y-auto pr-2" aria-live="polite">
+    <div className="my-4 flex-1 space-y-4 overflow-y-auto pr-2 min-h-0" aria-live="polite">
       {messages.length === 0 ? (
         <ChatEmptyState agentName={agentName} prompts={prompts} onPrompt={onPrompt} />
       ) : messages.map((message, index) => (

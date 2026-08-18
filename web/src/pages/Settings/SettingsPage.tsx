@@ -17,7 +17,6 @@ import {
   Cpu,
   HardDrive,
   Key,
-  FileText,
   DownloadCloud,
   Download,
   CheckCircle2,
@@ -33,7 +32,6 @@ import {
 } from 'lucide-react';
 import {
   api,
-  type AuditLogItem,
   type StorageInfoData,
   type UserIdentityProfile,
   type WifiNetwork,
@@ -44,7 +42,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { readHashParams, setHashParam } from '@/lib/url-state';
 
-type SettingsTab = 'identity' | 'keys' | 'tokens' | 'network' | 'audit' | 'maintenance';
+type SettingsTab = 'identity' | 'keys' | 'tokens' | 'network' | 'maintenance';
 
 import { PROVIDER_METAS, type ProviderMeta } from '@/lib/models';
 
@@ -53,7 +51,7 @@ export function SettingsPage() {
   const { success, error, info } = useToast();
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
     const value = readHashParams().get('view');
-    return ['identity', 'keys', 'tokens', 'network', 'audit', 'maintenance'].includes(value || '')
+    return ['identity', 'keys', 'tokens', 'network', 'maintenance'].includes(value || '')
       ? value as SettingsTab
       : 'keys';
   });
@@ -83,10 +81,7 @@ export function SettingsPage() {
   const [testResults, setTestResults] = useState<Record<string, { success: boolean; latency: number; msg: string }>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
 
-  // Audit logs, Storage & Identity
-  const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
-  const [auditFilter, setAuditFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all');
-  const [auditSearch, setAuditSearch] = useState('');
+  // Storage & Identity
   const [storageInfo, setStorageInfo] = useState<StorageInfoData | null>(null);
   const [otaStatus, setOtaStatus] = useState<OTAStatus | null>(null);
   const [checkingOTA, setCheckingOTA] = useState(false);
@@ -104,23 +99,26 @@ export function SettingsPage() {
     soul: '',
   });
   const [savingIdentity, setSavingIdentity] = useState(false);
+  const [daemonVersion, setDaemonVersion] = useState<string>(__APP_VERSION__);
 
   const loadStatus = async () => {
     try {
-      const [m, ts, k, logs, stor, ident] = await Promise.all([
+      const [m, ts, k, stor, ident, health] = await Promise.all([
         api.getMetrics().catch(() => null),
         api.getTailscale().catch(() => null),
         api.getAPIKeys().catch(() => null),
-        api.getAuditLogs().catch(() => ({ entries: [], count: 0 })),
         api.getStorageInfo().catch(() => null),
         api.getIdentity().catch(() => null),
+        api.getHealth().catch(() => null),
       ]);
       setMetrics(m);
       setTailscale(ts);
-      setAuditLogs(logs.entries || []);
       setStorageInfo(stor);
       if (ident) {
         setIdentityProfile((prev) => ({ ...prev, ...ident }));
+      }
+      if ((health as { version?: string } | null)?.version) {
+        setDaemonVersion((health as { version: string }).version);
       }
 
       if (k) {
@@ -280,22 +278,6 @@ export function SettingsPage() {
 
   const configuredCount = PROVIDER_METAS.filter((m) => providersData[m.id]?.configured).length;
 
-  const filteredAuditLogs = auditLogs.filter((entry) => {
-    if (auditFilter === 'high' && entry.risk_level?.toLowerCase() !== 'high') return false;
-    if (auditFilter === 'medium' && entry.risk_level?.toLowerCase() !== 'medium') return false;
-    if (auditFilter === 'low' && entry.risk_level?.toLowerCase() !== 'low') return false;
-
-    if (auditSearch) {
-      const q = auditSearch.toLowerCase();
-      return (
-        entry.tool_name?.toLowerCase().includes(q) ||
-        entry.agent_id?.toLowerCase().includes(q) ||
-        entry.trace_id?.toLowerCase().includes(q)
-      );
-    }
-    return true;
-  });
-
   return (
     <div className="relative min-h-[calc(100vh-64px)]">
       <BlobBackdrop />
@@ -308,22 +290,22 @@ export function SettingsPage() {
           badge={<Badge variant="neutral" className="font-mono">{t('header.activeModels', { configured: configuredCount, total: PROVIDER_METAS.length })}</Badge>}
           actions={(
             <>
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<RefreshCw className="w-3.5 h-3.5" />}
-              onClick={loadStatus}
-            >
-              {t('actions.refresh')}
-            </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              icon={<RotateCcw className="w-3.5 h-3.5" />}
-              onClick={() => setIsRestartModalOpen(true)}
-            >
-              {t('actions.restart')}
-            </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<RefreshCw className="w-3.5 h-3.5" />}
+                onClick={loadStatus}
+              >
+                {t('actions.refresh')}
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                icon={<RotateCcw className="w-3.5 h-3.5" />}
+                onClick={() => setIsRestartModalOpen(true)}
+              >
+                {t('actions.restart')}
+              </Button>
             </>
           )}
         />
@@ -338,7 +320,6 @@ export function SettingsPage() {
             { value: 'keys', label: t('tabs.providers', { count: configuredCount }) },
             { value: 'tokens', label: t('tabs.tokens') },
             { value: 'network', label: t('tabs.network') },
-            { value: 'audit', label: t('tabs.audit', { count: auditLogs.length }) },
             { value: 'maintenance', label: t('tabs.maintenance') },
           ]}
         />
@@ -523,11 +504,10 @@ export function SettingsPage() {
                 return (
                   <Card
                     key={meta.id}
-                    className={`p-6 border transition-all flex flex-col justify-between ${
-                      isConfigured
+                    className={`p-6 border transition-all flex flex-col justify-between ${isConfigured
                         ? 'border-emerald-500/30 bg-canvas/95 shadow-sm'
                         : 'border-onyx/10 bg-canvas/80'
-                    }`}
+                      }`}
                   >
                     <div>
                       {/* Provider Header */}
@@ -553,11 +533,10 @@ export function SettingsPage() {
                             onClick={() =>
                               setInputEnabled((prev) => ({ ...prev, [meta.id]: !isEnabled }))
                             }
-                            className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer ${
-                              isEnabled
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer ${isEnabled
                                 ? 'bg-emerald-500/10 text-emerald-700 border border-emerald-500/20'
                                 : 'bg-onyx/5 text-slate border border-onyx/10'
-                            }`}
+                              }`}
                           >
                             {isEnabled ? t('providers.active') : t('providers.disabled')}
                           </button>
@@ -648,9 +627,8 @@ export function SettingsPage() {
                         {/* Test Status Banner */}
                         {testInfo && (
                           <div
-                            className={`flex items-center gap-1.5 pt-1 text-[11px] font-mono ${
-                              testInfo.success ? 'text-emerald-700 font-semibold' : 'text-red-600'
-                            }`}
+                            className={`flex items-center gap-1.5 pt-1 text-[11px] font-mono ${testInfo.success ? 'text-emerald-700 font-semibold' : 'text-red-600'
+                              }`}
                           >
                             {testInfo.success ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
                             <span>{testInfo.msg}</span>
@@ -861,90 +839,6 @@ export function SettingsPage() {
           </div>
         )}
 
-        {/* TAB 3: Audit Logs */}
-        {activeTab === 'audit' && (
-          <Card className="p-6 border border-onyx/10 bg-canvas/90">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-              <div>
-                <h3 className="font-serif text-heading-sm text-deep-ink flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-deep-ink" />
-                  <span>{t('audit.title')}</span>
-                </h3>
-                <p className="font-sans text-caption text-slate mt-0.5">
-                  {t('audit.subtitle')}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {/* Risk Filter */}
-                <div className="flex items-center gap-1 bg-soft-meadow p-1 rounded-full border border-onyx/10">
-                  {(['all', 'high', 'medium', 'low'] as const).map((r) => (
-                    <button
-                      key={r}
-                      onClick={() => setAuditFilter(r)}
-                      className={`px-3 py-1 rounded-full text-caption font-medium capitalize cursor-pointer ${
-                        auditFilter === r ? 'bg-deep-ink text-white font-semibold' : 'text-deep-ink hover:text-slate'
-                      }`}
-                    >
-                      {r}
-                    </button>
-                  ))}
-                </div>
-
-                <Input
-                  placeholder={t('audit.search')}
-                  value={auditSearch}
-                  onChange={(e) => setAuditSearch(e.target.value)}
-                  className="max-w-[180px] py-1 text-caption"
-                />
-              </div>
-            </div>
-
-            {filteredAuditLogs.length === 0 ? (
-              <div className="py-16 text-center text-slate font-sans text-body-sm">
-                {t('audit.empty')}
-              </div>
-            ) : (
-              <div className="divide-y divide-onyx/5 max-h-[500px] overflow-y-auto">
-                {filteredAuditLogs.map((log, idx) => (
-                  <div key={log.trace_id || idx} className="py-3 flex items-start justify-between gap-4 text-body-sm">
-                    <div className="space-y-0.5 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-deep-ink font-mono text-caption">{log.tool_name}</span>
-                        <Badge
-                          variant={
-                            log.risk_level === 'High'
-                              ? 'accent'
-                              : log.risk_level === 'Medium'
-                              ? 'stopped'
-                              : 'neutral'
-                          }
-                          className="text-[10px]"
-                        >
-                          {t('audit.risk', { level: log.risk_level })}
-                        </Badge>
-                        <span className="text-caption font-mono text-slate">{t('audit.status', { status: log.status })}</span>
-                      </div>
-                      <div className="text-caption font-mono text-slate">
-                        {t('audit.detail', { agent: log.agent_id, trace: log.trace_id, duration: log.execution_time_ms })}
-                      </div>
-                      {log.error && (
-                        <div className="text-[11px] font-mono text-red-600 bg-red-500/10 p-1.5 rounded-md mt-1 inline-block">
-                          {log.error}
-                        </div>
-                      )}
-                    </div>
-
-                    <span className="text-caption font-mono text-slate shrink-0">
-                      {new Date(log.timestamp).toLocaleTimeString()}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-        )}
-
         {/* TAB 4: Storage & Maintenance */}
         {activeTab === 'maintenance' && (
           <div className="space-y-6">
@@ -966,7 +860,7 @@ export function SettingsPage() {
 
               <div className="flex items-center gap-3 shrink-0">
                 <Badge variant="active" className="font-mono text-caption">
-                  v0.1.0-release
+                  v{daemonVersion}
                 </Badge>
                 <Badge variant="neutral" className="font-mono text-caption">
                   CGO_ENABLED=0
@@ -1019,7 +913,7 @@ export function SettingsPage() {
                     <DownloadCloud className="w-5 h-5 text-deep-ink" />
                     <span>{t('maintenance.otaTitle')}</span>
                   </h4>
-                  <Badge variant="neutral">v0.1.0 (Stable)</Badge>
+                  <Badge variant="neutral">v{daemonVersion}</Badge>
                 </div>
                 <p className="font-sans text-caption text-slate">
                   {t('maintenance.otaDescription')}

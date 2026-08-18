@@ -25,10 +25,13 @@ import (
 	"github.com/actonos/actonos/internal/tools"
 )
 
+// Build metadata injected via linker flags from the VERSION file; see LDFLAGS
+// in the Makefile. These defaults deliberately do not restate the released
+// version: a plain `go build` produces an unstamped binary, and reporting a
+// real version number for it would let the API drift from VERSION.
 var (
-	// Version metadata set via linker flags (-ldflags).
-	Version   = "0.1.0"
-	GitCommit = "dev"
+	Version   = "0.0.0-dev"
+	GitCommit = "unknown"
 	BuildTime = "unspecified"
 )
 
@@ -467,6 +470,9 @@ func main() {
 		SkillsDir:          skillsDir,
 		WASMDir:            pluginsDir,
 		DataDir:            *dataDir,
+		Version:            Version,
+		GitCommit:          GitCommit,
+		BuildTime:          BuildTime,
 	}
 
 	apiServer := server.NewServer(srvConfig)

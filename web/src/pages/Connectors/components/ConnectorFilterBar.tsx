@@ -47,17 +47,15 @@ export function ConnectorFilterBar({
                 key={cat.id}
                 type="button"
                 onClick={() => onSelectCategory(cat.id)}
-                className={`px-3.5 py-1.5 rounded-full text-caption font-sans font-medium whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
-                  isSelected
-                    ? 'bg-deep-ink text-white shadow-xs'
-                    : 'bg-canvas text-deep-ink border border-onyx/10 hover:border-onyx/30 hover:bg-soft-meadow'
-                }`}
+                className={`px-3.5 py-1.5 rounded-full text-caption font-sans font-medium whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${isSelected
+                  ? 'bg-deep-ink text-white shadow-xs'
+                  : 'bg-canvas text-deep-ink border border-onyx/10 hover:border-onyx/30 hover:bg-soft-meadow'
+                  }`}
               >
                 <span>{t(cat.labelKey, cat.fallback)}</span>
                 <span
-                  className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
-                    isSelected ? 'bg-white/20 text-white' : 'bg-onyx/5 text-slate'
-                  }`}
+                  className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${isSelected ? 'bg-white/20 text-white' : 'bg-onyx/5 text-slate'
+                    }`}
                 >
                   {count}
                 </span>
@@ -72,33 +70,30 @@ export function ConnectorFilterBar({
             <button
               type="button"
               onClick={() => onSelectStatusFilter('all')}
-              className={`px-3 py-1 rounded-full text-[11px] font-medium transition-colors cursor-pointer ${
-                statusFilter === 'all'
-                  ? 'bg-deep-ink text-white shadow-xs'
-                  : 'text-deep-ink hover:text-slate'
-              }`}
+              className={`px-3 py-1 rounded-full text-[11px] font-medium transition-colors cursor-pointer ${statusFilter === 'all'
+                ? 'bg-deep-ink text-white shadow-xs'
+                : 'text-deep-ink hover:text-slate'
+                }`}
             >
               {t('filter.all', 'All')}
             </button>
             <button
               type="button"
               onClick={() => onSelectStatusFilter('connected')}
-              className={`px-3 py-1 rounded-full text-[11px] font-medium transition-colors cursor-pointer ${
-                statusFilter === 'connected'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'text-deep-ink hover:text-slate'
-              }`}
+              className={`px-3 py-1 rounded-full text-[11px] font-medium transition-colors cursor-pointer ${statusFilter === 'connected'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'text-deep-ink hover:text-slate'
+                }`}
             >
               {t('status.connected', 'Connected')}
             </button>
             <button
               type="button"
               onClick={() => onSelectStatusFilter('disconnected')}
-              className={`px-3 py-1 rounded-full text-[11px] font-medium transition-colors cursor-pointer ${
-                statusFilter === 'disconnected'
-                  ? 'bg-deep-ink text-white shadow-xs'
-                  : 'text-deep-ink hover:text-slate'
-              }`}
+              className={`px-3 py-1 rounded-full text-[11px] font-medium transition-colors cursor-pointer ${statusFilter === 'disconnected'
+                ? 'bg-deep-ink text-white shadow-xs'
+                : 'text-deep-ink hover:text-slate'
+                }`}
             >
               {t('status.available', 'Available')}
             </button>

@@ -32,8 +32,7 @@
     "successTitle": "Đã mở khóa Kernel",
     "successDescription": "Chào mừng trở lại, {{name}}.",
     "deniedTitle": "Truy cập bị từ chối",
-    "invalidPassword": "Mật khẩu quản trị không hợp lệ.",
-    "securityNote": "Kho bảo mật phần cứng • AES-256-GCM + cookie phiên HttpOnly"
+    "invalidPassword": "Mật khẩu quản trị không hợp lệ."
   },
   "wizard": {
     "progress": "Tiến độ thiết lập",

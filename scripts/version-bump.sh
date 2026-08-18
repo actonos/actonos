@@ -131,6 +131,18 @@ update_version_file() {
   fi
   echo "${new_version}" > "${VERSION_FILE}"
   log_success "Updated VERSION file: ${new_version}"
+  # Keep web/package.json in sync so Vite's __APP_VERSION__ fallback matches
+  if command -v node >/dev/null 2>&1; then
+    node -e "
+const fs = require('fs');
+const p = '${ROOT_DIR}/web/package.json';
+const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
+pkg.version = '${new_version}';
+fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n');
+" && log_success "Updated web/package.json to ${new_version}"
+  else
+    log_warn "node not found — web/package.json version not updated"
+  fi
 }
 
 update_changelog() {
@@ -188,7 +200,7 @@ git_commit_and_tag() {
   # Check for uncommitted changes (besides our modifications)
   cd "${ROOT_DIR}"
 
-  git add VERSION CHANGELOG.md
+  git add VERSION CHANGELOG.md web/package.json
   git commit -m "chore(release): v${new_version}"
   git tag -a "v${new_version}" -m "Release v${new_version}"
 

@@ -347,6 +347,9 @@ func (tm *TaskManager) ListTasks(ctx context.Context, status, priority string) (
 			list = append(list, t)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	if list == nil {
 		list = []AutonomousTask{}
 	}
@@ -396,9 +399,10 @@ func (tm *TaskManager) syncToMarkdownLocked() error {
 			} else {
 				hasActive = true
 				statusEmoji := "⏳"
-				if status == "in_progress" {
+				switch status {
+				case "in_progress":
 					statusEmoji = "⚡"
-				} else if status == "blocked" {
+				case "blocked":
 					statusEmoji = "🚫"
 				}
 				sb.WriteString(fmt.Sprintf("### %s [%s] %s\n", statusEmoji, strings.ToUpper(priority), title))
@@ -414,6 +418,9 @@ func (tm *TaskManager) syncToMarkdownLocked() error {
 				sb.WriteString("\n")
 			}
 		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
 	}
 
 	if !hasActive {

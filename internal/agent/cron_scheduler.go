@@ -161,6 +161,9 @@ func (cs *CronScheduler) loadJobsFromDB() {
 			cs.jobs[job.ID] = &job
 		}
 	}
+	if err := rows.Err(); err != nil {
+		slog.Error("error iterating cron jobs from database", "error", err)
+	}
 }
 
 // Start begins the cron scheduler.
@@ -406,6 +409,9 @@ func (cs *CronScheduler) GetExecutionHistory(jobID string, limit int) ([]CronExe
 			records = append(records, r)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return records, nil
 }
 
@@ -437,6 +443,9 @@ func (cs *CronScheduler) ListAllExecutionHistory(limit int) ([]CronExecutionReco
 			r.Error = errStr.String
 			records = append(records, r)
 		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return records, nil
 }

@@ -54,5 +54,11 @@
     "label": "Tên thư mục",
     "placeholder": "ví dụ. tập lệnh, mô hình, tập dữ liệu",
     "confirm": "Tạo thư mục"
+  },
+  "preview": {
+    "image": "Xem trước hình ảnh",
+    "pdf": "Xem trước PDF",
+    "binary": "Tệp nhị phân — không thể hiển thị dưới dạng văn bản.",
+    "downloadBinary": "Tải tệp xuống"
   }
 }

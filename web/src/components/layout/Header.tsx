@@ -1,9 +1,7 @@
-import { Menu, Rows3, Search, Sparkles } from 'lucide-react';
+import { Menu, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { NavTab } from '@/components/layout/Sidebar';
 import { useRealtime } from '@/components/providers/RealtimeProvider';
-import { useDensity } from '@/components/providers/DensityProvider';
-import { IconButton } from '@/components/ui/IconButton';
 
 export interface HeaderProps {
   activeTab: NavTab;
@@ -17,7 +15,6 @@ export function Header({ activeTab, onOpenMobileSidebar, onLogout, onOpenSearch 
   const { t } = useTranslation(['nav', 'common']);
   const { snapshot } = useRealtime();
   const metrics = snapshot?.metrics;
-  const { density, toggleDensity } = useDensity();
 
   const tabTitles: Record<NavTab, { title: string; category: string }> = {
     dashboard: { title: t('nav:links.dashboard'), category: t('nav:categories.overview') },
@@ -32,6 +29,7 @@ export function Header({ activeTab, onOpenMobileSidebar, onLogout, onOpenSearch 
     workspace: { title: t('nav:links.workspace'), category: t('nav:categories.files') },
     channels: { title: t('nav:links.channels'), category: t('nav:categories.connections') },
     connectors: { title: t('nav:links.connectors'), category: t('nav:categories.services') },
+    'audit-logs': { title: t('nav:links.audit-logs', 'Audit Logs'), category: t('nav:categories.system') },
     settings: { title: t('nav:links.settings'), category: t('nav:categories.system') },
   };
 
@@ -77,29 +75,18 @@ export function Header({ activeTab, onOpenMobileSidebar, onLogout, onOpenSearch 
           <span>{t('nav:search.trigger')}</span>
           <kbd className="rounded-full border border-onyx/10 bg-canvas px-1.5 py-0.5 font-mono text-[10px]">{t('nav:search.shortcut')}</kbd>
         </button>
-        <IconButton
-          label={density === 'compact' ? t('nav:density.comfortable') : t('nav:density.compact')}
-          icon={<Rows3 className="h-4 w-4" />}
-          size="sm"
-          onClick={toggleDensity}
-        />
         {metrics && (
-          <div className="hidden md:flex items-center gap-3 px-3 py-1 bg-soft-meadow rounded-full border border-onyx/10 text-caption font-mono text-slate">
+          <div className="hidden md:flex items-center gap-3 px-3 py-2 bg-soft-meadow rounded-full border border-onyx/10 text-caption font-mono text-slate">
             <span>{t('nav:telemetry.cpu', { value: metrics.cpu?.usage_percent?.toFixed(0) || 0 })}</span>
             <span>•</span>
             <span>{t('nav:telemetry.ram', { value: metrics.memory?.used_mb || 0 })}</span>
           </div>
         )}
 
-        <div className="flex items-center gap-1.5 px-3 py-1 bg-soft-meadow rounded-full border border-onyx/10 text-caption font-mono text-deep-ink font-medium">
-          <Sparkles className="w-3.5 h-3.5 text-hi-yellow" />
-          <span className="hidden sm:inline">{t('common:status.active')}</span>
-        </div>
-
         {onLogout && (
           <button
             onClick={onLogout}
-            className="flex items-center gap-1.5 px-3 py-1 bg-soft-meadow hover:bg-white text-slate hover:text-deep-ink rounded-full border border-onyx/10 text-caption font-sans font-medium transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 bg-soft-meadow hover:bg-white text-slate hover:text-deep-ink rounded-full border border-onyx/10 text-caption font-sans font-medium transition-colors cursor-pointer"
             title={t('nav:session.lockTitle')}
           >
             <span>{t('nav:session.lock')}</span>

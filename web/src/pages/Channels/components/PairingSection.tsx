@@ -114,11 +114,10 @@ export function PairingSection({
                 <button
                   type="button"
                   onClick={() => setSelectedChannel('telegram')}
-                  className={`p-1.5 rounded-full transition-colors cursor-pointer ${
-                    selectedChannel === 'telegram'
-                      ? 'bg-deep-ink text-hi-yellow shadow-xs'
-                      : 'text-slate hover:text-deep-ink'
-                  }`}
+                  className={`p-1.5 rounded-full transition-colors cursor-pointer ${selectedChannel === 'telegram'
+                    ? 'bg-deep-ink text-hi-yellow shadow-xs'
+                    : 'text-slate hover:text-deep-ink'
+                    }`}
                   title={t('telegram.name')}
                 >
                   <Send className="w-3.5 h-3.5" />
@@ -126,11 +125,10 @@ export function PairingSection({
                 <button
                   type="button"
                   onClick={() => setSelectedChannel('whatsapp')}
-                  className={`p-1.5 rounded-full transition-colors cursor-pointer ${
-                    selectedChannel === 'whatsapp'
-                      ? 'bg-deep-ink text-hi-yellow shadow-xs'
-                      : 'text-slate hover:text-deep-ink'
-                  }`}
+                  className={`p-1.5 rounded-full transition-colors cursor-pointer ${selectedChannel === 'whatsapp'
+                    ? 'bg-deep-ink text-hi-yellow shadow-xs'
+                    : 'text-slate hover:text-deep-ink'
+                    }`}
                   title={t('whatsapp.name')}
                 >
                   <Phone className="w-3.5 h-3.5" />

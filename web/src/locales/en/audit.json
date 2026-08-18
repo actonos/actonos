@@ -1,0 +1,60 @@
+{
+  "eyebrow": "Governance & Security",
+  "title": "Audit Logs",
+  "subtitle": "Immutable, cryptographically-chained ledger of tool executions, permission gates, and system operations.",
+  "verifyChain": "Verify Hash Chain",
+  "verifying": "Verifying Chain...",
+  "verifiedSuccess": "Cryptographic Hash Chain Valid",
+  "verifiedSuccessDesc": "All SHA-256 block hashes and chronological links are mathematically intact.",
+  "verifyFailed": "Hash Chain Verification Failed",
+  "exportLogs": "Export JSON",
+  "refresh": "Refresh",
+  "stats": {
+    "totalEvents": "Total Recorded Events",
+    "highRisk": "High-Risk Actions",
+    "blockedPolicies": "Blocked / Failed Actions",
+    "avgDuration": "Avg Execution Latency"
+  },
+  "filters": {
+    "riskLevel": "Risk Level",
+    "status": "Execution Status",
+    "all": "All",
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low",
+    "success": "Success",
+    "blocked": "Blocked",
+    "failed": "Failed",
+    "searchPlaceholder": "Search by tool, agent ID, trace ID, or error..."
+  },
+  "columns": {
+    "tool": "Tool Name / Action",
+    "agent": "Agent ID",
+    "risk": "Risk Level",
+    "status": "Status",
+    "trace": "Trace ID",
+    "duration": "Latency",
+    "timestamp": "Timestamp"
+  },
+  "empty": "No audit log records found matching the selected filter criteria.",
+  "detail": {
+    "title": "Audit Log Record Details",
+    "subtitle": "Full tamper-evident execution trace and cryptographic signature.",
+    "traceId": "Trace ID (W3C Context)",
+    "copyTrace": "Copy Trace ID",
+    "copied": "Copied!",
+    "agentId": "Agent ID",
+    "toolName": "Tool Name",
+    "riskLevel": "Risk Assessment",
+    "status": "Execution Status",
+    "duration": "Execution Latency",
+    "timestamp": "Timestamp (UTC / Local)",
+    "errorCallout": "Execution Error / Policy Block Reason",
+    "cryptoSection": "Cryptographic Hash Chain (Tamper-Evidence)",
+    "entryHash": "Entry SHA-256 Hash",
+    "prevHash": "Previous Block SHA-256 Hash",
+    "rawJson": "Raw JSON Payload",
+    "copyJson": "Copy JSON Payload",
+    "close": "Close"
+  }
+}

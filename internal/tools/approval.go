@@ -18,6 +18,8 @@ var (
 	ErrApprovalRequired = errors.New("human approval required")
 	// ErrApprovalInvalid indicates an expired, rejected, or mismatched approval.
 	ErrApprovalInvalid = errors.New("approval is invalid for this action")
+	// ErrApprovalNotPending indicates the record was already decided or has expired.
+	ErrApprovalNotPending = errors.New("approval is no longer pending")
 )
 
 // ApprovalRequest is a durable human-in-the-loop decision record.
@@ -59,9 +61,29 @@ func NewApprovalManager(db *sql.DB) *ApprovalManager {
 	return &ApprovalManager{db: db, ttl: 30 * time.Minute}
 }
 
+// canonicalizeInput produces a byte-stable representation of a JSON payload.
+//
+// Approval records survive a json.Marshal/Unmarshal round trip through the run
+// checkpoint, which compacts whitespace, applies HTML escaping, and reorders
+// object keys. Hashing the raw bytes therefore produces a different digest for
+// semantically identical input, which would reject a legitimate approval. This
+// decodes and re-encodes so only the JSON *value* contributes to the hash.
+func canonicalizeInput(input json.RawMessage) []byte {
+	var decoded any
+	if err := json.Unmarshal(input, &decoded); err != nil {
+		// Not valid JSON: fall back to the raw bytes so hashing stays total.
+		return input
+	}
+	canonical, err := json.Marshal(decoded)
+	if err != nil {
+		return input
+	}
+	return canonical
+}
+
 // ActionHash binds an approval to the exact agent, tool, and normalized input.
 func ActionHash(agentID, toolName string, input json.RawMessage) string {
-	sum := sha256.Sum256(append([]byte(agentID+"\x00"+toolName+"\x00"), input...))
+	sum := sha256.Sum256(append([]byte(agentID+"\x00"+toolName+"\x00"), canonicalizeInput(input)...))
 	return hex.EncodeToString(sum[:])
 }
 
@@ -192,9 +214,41 @@ func (m *ApprovalManager) Decide(ctx context.Context, id, decision, actor, reaso
 		return nil, fmt.Errorf("checking approval update: %w", err)
 	}
 	if affected != 1 {
-		return nil, ErrApprovalInvalid
+		return nil, m.explainNotPending(ctx, id)
 	}
 	return m.Get(ctx, id)
+}
+
+// explainNotPending turns a failed decision into an actionable reason.
+func (m *ApprovalManager) explainNotPending(ctx context.Context, id string) error {
+	current, err := m.Get(ctx, id)
+	if err != nil {
+		return fmt.Errorf("%w: no approval found with id %s", ErrApprovalNotPending, id)
+	}
+	if current.Status != "pending" {
+		return fmt.Errorf("%w: id=%s was already %s", ErrApprovalNotPending, id, current.Status)
+	}
+	return fmt.Errorf("%w: id=%s expired at %s", ErrApprovalNotPending, id, current.ExpiresAt.Format(time.RFC3339))
+}
+
+// Reopen returns a decided approval to the pending state.
+//
+// An approved action whose execution then fails would otherwise be stranded:
+// the record is consumed, so the operator can neither retry nor reject it. This
+// restores the pending state (extending the TTL) so the decision stays live.
+func (m *ApprovalManager) Reopen(ctx context.Context, id string) error {
+	if m == nil || m.db == nil {
+		return errors.New("approval store is unavailable")
+	}
+	_, err := m.db.ExecContext(ctx, `
+		UPDATE approvals SET status = 'pending', reason = NULL, decided_at = NULL,
+		       decided_by = NULL, expires_at = ?
+		WHERE id = ? AND status IN ('approved', 'rejected')
+	`, time.Now().UTC().Add(m.ttl), id)
+	if err != nil {
+		return fmt.Errorf("reopening approval: %w", err)
+	}
+	return nil
 }
 
 // Get loads a single approval.
@@ -227,9 +281,17 @@ func (m *ApprovalManager) ValidateApproved(ctx context.Context, id, agentID, too
 	if err != nil {
 		return err
 	}
-	if item.Status != "approved" || time.Now().UTC().After(item.ExpiresAt) ||
-		item.ActionHash != ActionHash(agentID, toolName, input) {
-		return ErrApprovalInvalid
+	if item.Status != "approved" {
+		return fmt.Errorf("%w: id=%s has status %q, expected approved", ErrApprovalInvalid, id, item.Status)
+	}
+	if time.Now().UTC().After(item.ExpiresAt) {
+		return fmt.Errorf("%w: id=%s expired at %s", ErrApprovalInvalid, id, item.ExpiresAt.Format(time.RFC3339))
+	}
+	if item.ActionHash != ActionHash(agentID, toolName, input) {
+		return fmt.Errorf(
+			"%w: id=%s was approved for a different action (approved tool=%s agent=%s, attempted tool=%s agent=%s)",
+			ErrApprovalInvalid, id, item.ToolName, item.AgentID, toolName, agentID,
+		)
 	}
 	return nil
 }

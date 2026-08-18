@@ -32,8 +32,7 @@
     "successTitle": "Kernel Unlocked",
     "successDescription": "Welcome back, {{name}}.",
     "deniedTitle": "Access Denied",
-    "invalidPassword": "Invalid administrator password.",
-    "securityNote": "Hardware Security Vault • AES-256-GCM + HttpOnly session cookie"
+    "invalidPassword": "Invalid administrator password."
   },
   "wizard": {
     "progress": "Setup progress",

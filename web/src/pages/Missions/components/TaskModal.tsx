@@ -58,11 +58,11 @@ export function TaskModal({ isOpen, onClose, onSave, task }: TaskModalProps) {
       // Load agents and channels
       api.listAgents().then((res) => {
         if (res && res.agents) setAvailableAgents(res.agents);
-      }).catch(() => {});
+      }).catch(() => { });
 
       api.listAllChannelAccounts().then((res) => {
         if (res && res.accounts) setChannelAccounts(res.accounts);
-      }).catch(() => {});
+      }).catch(() => { });
     }
   }, [isOpen, task]);
 

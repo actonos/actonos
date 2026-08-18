@@ -24,9 +24,11 @@ import {
   FileCode,
   FileSpreadsheet,
   Columns2,
+  Image as ImageIcon,
+  FileArchive,
+  AlertCircle,
 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { isApprovalRequired } from '@/lib/types';
 
 interface WorkspaceFile {
   name: string;
@@ -38,15 +40,17 @@ interface WorkspaceFile {
 
 export function WorkspacePage() {
   const { t } = useTranslation('workspace');
-  const { success, error, info } = useToast();
+  const { success, error } = useToast();
   const [currentDir, setCurrentDir] = useState<string>('');
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState('');
   const [originalContent, setOriginalContent] = useState('');
   const [showDiff, setShowDiff] = useState(false);
+  const [fileKind, setFileKind] = useState<string>('text');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
   const [isNewFileModalOpen, setIsNewFileModalOpen] = useState(false);
   const [isNewFolderModalOpen, setIsNewFolderModalOpen] = useState(false);
@@ -68,9 +72,11 @@ export function WorkspacePage() {
   const openFile = async (filePath: string) => {
     try {
       setSelectedFile(filePath);
+      setImgError(false);
       const res = await api.getWorkspaceFile(filePath);
-      setFileContent(res.content || '');
-      setOriginalContent(res.content || '');
+      setFileKind(res.kind ?? 'text');
+      setFileContent(res.content ?? '');
+      setOriginalContent(res.content ?? '');
       setShowDiff(false);
     } catch (err) {
       error('Failed to read file', getErrorMessage(err));
@@ -81,14 +87,10 @@ export function WorkspacePage() {
     if (!selectedFile) return;
     try {
       setSaving(true);
-      const result = await api.saveWorkspaceFile(selectedFile, fileContent);
-      if (isApprovalRequired(result)) {
-        info(t('common:approval.queuedTitle'), t('common:approval.queuedDescription'));
-        return;
-      }
+      await api.saveWorkspaceFile(selectedFile, fileContent);
       setOriginalContent(fileContent);
       success('File Saved', `${selectedFile} saved to workspace.`);
-      loadFiles(currentDir);
+      await loadFiles(currentDir);
     } catch (err) {
       error('Failed to save file', getErrorMessage(err));
     } finally {
@@ -99,47 +101,46 @@ export function WorkspacePage() {
   const handleConfirmDelete = async () => {
     if (!deletingPath) return;
     try {
-      const result = await api.deleteWorkspaceFile(deletingPath);
-      if (isApprovalRequired(result)) {
-        info(t('common:approval.queuedTitle'), t('common:approval.queuedDescription'));
-        setDeletingPath(null);
-        return;
-      }
+      await api.deleteWorkspaceFile(deletingPath);
       success('File Deleted', `${deletingPath} removed from sandbox.`);
       if (selectedFile === deletingPath) {
         setSelectedFile(null);
         setFileContent('');
+        setOriginalContent('');
       }
       setDeletingPath(null);
-      loadFiles(currentDir);
+      await loadFiles(currentDir);
     } catch (err) {
       error('Failed to delete file', getErrorMessage(err));
     }
   };
 
-  const handleCreateFile = (filename: string) => {
-    const fullPath = currentDir ? `${currentDir}/${filename}` : filename;
-    setSelectedFile(fullPath);
-    setFileContent('');
-    success('New File Created', `Editing "${fullPath}". Click Save to persist.`);
+  const handleCreateFile = async (filename: string) => {
+    const cleanName = filename.trim();
+    if (!cleanName) return;
+    const fullPath = currentDir ? `${currentDir}/${cleanName}` : cleanName;
+    try {
+      await api.saveWorkspaceFile(fullPath, '');
+      success('New File Created', `Created "${fullPath}".`);
+      await loadFiles(currentDir);
+      await openFile(fullPath);
+    } catch (err) {
+      error('Failed to create file', getErrorMessage(err));
+    }
   };
 
   const handleCreateFolder = async (folderName: string) => {
-    const fullPath = currentDir ? `${currentDir}/${folderName}` : folderName;
+    const cleanName = folderName.trim();
+    if (!cleanName) return;
+    const fullPath = currentDir ? `${currentDir}/${cleanName}` : cleanName;
     try {
-      const result = await api.mkdirWorkspace(fullPath);
-      if (isApprovalRequired(result)) {
-        info(t('common:approval.queuedTitle'), t('common:approval.queuedDescription'));
-        return;
-      }
+      await api.mkdirWorkspace(fullPath);
       success('Folder Created', `Directory "${fullPath}" created.`);
-      loadFiles(currentDir);
+      await loadFiles(currentDir);
     } catch (err) {
       error('Failed to create folder', getErrorMessage(err));
     }
   };
-
-
 
   const handleUploadFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
@@ -150,16 +151,16 @@ export function WorkspacePage() {
         const file = fileList[i];
         const content = await file.text();
         const fullPath = currentDir ? `${currentDir}/${file.name}` : file.name;
-        const result = await api.saveWorkspaceFile(fullPath, content);
-        if (isApprovalRequired(result)) {
-          info(t('common:approval.queuedTitle'), t('common:approval.queuedDescription'));
-          return;
-        }
+        await api.saveWorkspaceFile(fullPath, content);
       }
       success('Files Uploaded', `Uploaded ${fileList.length} file(s) into workspace.`);
-      loadFiles(currentDir);
+      await loadFiles(currentDir);
     } catch (err) {
       error('Upload failed', getErrorMessage(err));
+    } finally {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -177,11 +178,18 @@ export function WorkspacePage() {
 
   const getFileIcon = (fileName: string, isDir: boolean) => {
     if (isDir) return <Folder className="w-4 h-4 text-hi-yellow" />;
-    if (fileName.endsWith('.py') || fileName.endsWith('.js') || fileName.endsWith('.go') || fileName.endsWith('.ts')) {
+    const lower = fileName.toLowerCase();
+    if (lower.endsWith('.py') || lower.endsWith('.js') || lower.endsWith('.go') || lower.endsWith('.ts') || lower.endsWith('.tsx') || lower.endsWith('.jsx')) {
       return <FileCode className="w-4 h-4 text-emerald-600" />;
     }
-    if (fileName.endsWith('.json') || fileName.endsWith('.yaml') || fileName.endsWith('.yml')) {
+    if (lower.endsWith('.json') || lower.endsWith('.yaml') || lower.endsWith('.yml') || lower.endsWith('.csv')) {
       return <FileSpreadsheet className="w-4 h-4 text-amber-600" />;
+    }
+    if (lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.gif') || lower.endsWith('.webp') || lower.endsWith('.avif') || lower.endsWith('.svg') || lower.endsWith('.bmp') || lower.endsWith('.ico')) {
+      return <ImageIcon className="w-4 h-4 text-blue-500" />;
+    }
+    if (lower.endsWith('.pdf') || lower.endsWith('.zip') || lower.endsWith('.tar') || lower.endsWith('.gz')) {
+      return <FileArchive className="w-4 h-4 text-purple-500" />;
     }
     return <FileText className="w-4 h-4 text-slate" />;
   };
@@ -194,68 +202,57 @@ export function WorkspacePage() {
       <BlobBackdrop />
 
       <PageContainer>
-        <PageHeader eyebrow={t('eyebrow')} title={t('title')} description={t('subtitle')} actions={(
-          <Button variant="ghost" size="sm" icon={<RefreshCw />} onClick={() => loadFiles()}>{t('actions.refresh')}</Button>
-        )} />
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div className="flex-1">
-            <span className="text-caption uppercase tracking-wider text-slate font-semibold block mb-1">
-              {t('eyebrow', 'Sandboxed Filesystem')}
-            </span>
-            <h1 className="hidden font-serif text-heading-lg text-deep-ink tracking-tight" aria-hidden="true">
-              {t('title', 'Workspace Explorer')}
-            </h1>
-            <p className="font-sans text-body text-slate mt-1 max-w-2xl">
-              {t(
-                'subtitle',
-                'Sandboxed environment for code execution, dataset storage, and autonomous file manipulation.'
-              )}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0 self-start sm:self-center">
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<RefreshCw className="w-3.5 h-3.5" />}
-              onClick={() => loadFiles(currentDir)}
-            >
-              {t('actions.refresh')}
-            </Button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleUploadFiles}
-              multiple
-              className="hidden"
-            />
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<Upload className="w-3.5 h-3.5" />}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              {t('actions.upload')}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<FolderPlus className="w-3.5 h-3.5" />}
-              onClick={() => setIsNewFolderModalOpen(true)}
-            >
-              {t('actions.newFolder')}
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              icon={<Plus className="w-3.5 h-3.5" />}
-              onClick={() => setIsNewFileModalOpen(true)}
-            >
-              {t('actions.newFile')}
-            </Button>
-          </div>
-        </div>
+        <PageHeader
+          eyebrow={t('eyebrow', 'Sandboxed Filesystem')}
+          title={t('title', 'Workspace Explorer')}
+          description={t(
+            'subtitle',
+            'Sandboxed environment for code execution, dataset storage, and autonomous file manipulation.'
+          )}
+          actions={(
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />}
+                onClick={() => loadFiles(currentDir)}
+              >
+                {t('actions.refresh')}
+              </Button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleUploadFiles}
+                multiple
+                className="hidden"
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<Upload className="w-3.5 h-3.5" />}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {t('actions.upload')}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<FolderPlus className="w-3.5 h-3.5" />}
+                onClick={() => setIsNewFolderModalOpen(true)}
+              >
+                {t('actions.newFolder')}
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<Plus className="w-3.5 h-3.5" />}
+                onClick={() => setIsNewFileModalOpen(true)}
+              >
+                {t('actions.newFile')}
+              </Button>
+            </div>
+          )}
+        />
 
         {/* Main Explorer Workspace */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -265,8 +262,9 @@ export function WorkspacePage() {
             <div className="flex items-center justify-between pb-3 mb-3 border-b border-soft-meadow">
               <div className="flex items-center gap-1.5 font-mono text-caption text-deep-ink overflow-x-auto">
                 <button
+                  type="button"
                   onClick={() => loadFiles('')}
-                  className="hover:underline font-bold text-deep-ink"
+                  className="hover:underline font-bold text-deep-ink cursor-pointer"
                 >
                   {t('navigation.root')}
                 </button>
@@ -277,8 +275,9 @@ export function WorkspacePage() {
                       <span key={subPath} className="flex items-center gap-1.5">
                         <ChevronRight className="w-3 h-3 text-slate" />
                         <button
+                          type="button"
                           onClick={() => loadFiles(subPath)}
-                          className="hover:underline text-deep-ink"
+                          className="hover:underline text-deep-ink cursor-pointer"
                         >
                           {seg}
                         </button>
@@ -315,11 +314,10 @@ export function WorkspacePage() {
                     <div
                       key={file.path}
                       onClick={() => (file.is_dir ? loadFiles(file.path) : openFile(file.path))}
-                      className={`py-2.5 px-3 flex items-center justify-between rounded-xl cursor-pointer transition-all ${
-                        isSelected
+                      className={`py-2.5 px-3 flex items-center justify-between rounded-xl cursor-pointer transition-all ${isSelected
                           ? 'bg-deep-ink text-white font-semibold'
                           : 'hover:bg-soft-meadow text-deep-ink'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center gap-2.5 truncate">
                         {getFileIcon(file.name, file.is_dir)}
@@ -333,13 +331,13 @@ export function WorkspacePage() {
                           </span>
                         )}
                         <button
+                          type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             setDeletingPath(file.path);
                           }}
-                          className={`p-1 rounded-full hover:bg-black/10 transition-colors ${
-                            isSelected ? 'text-white/80 hover:text-white' : 'text-slate hover:text-red-600'
-                          }`}
+                          className={`p-1 rounded-full hover:bg-black/10 transition-colors cursor-pointer ${isSelected ? 'text-white/80 hover:text-white' : 'text-slate hover:text-red-600'
+                            }`}
                           title={t('actions.delete')}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -364,47 +362,105 @@ export function WorkspacePage() {
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon={<Columns2 className="w-3.5 h-3.5" />}
-                      onClick={() => setShowDiff((value) => !value)}
-                    >
-                      {t('diff.toggle', 'Diff')}
-                    </Button>
+                    {fileKind === 'text' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon={<Columns2 className="w-3.5 h-3.5" />}
+                        onClick={() => setShowDiff((value) => !value)}
+                      >
+                        {t('diff.toggle', 'Diff')}
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
                       icon={<Download className="w-3.5 h-3.5" />}
                       onClick={() => {
-                        const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = selectedFile.split('/').pop() || 'file.txt';
-                        a.click();
-                        URL.revokeObjectURL(url);
-                        success('File Downloaded', `Downloaded ${a.download}`);
+                        if (fileKind !== 'text') {
+                          const a = document.createElement('a');
+                          a.href = api.workspaceRawUrl(selectedFile);
+                          a.download = selectedFile.split('/').pop() || 'file';
+                          a.click();
+                          success('File Downloaded', `Downloaded ${a.download}`);
+                        } else {
+                          const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = selectedFile.split('/').pop() || 'file.txt';
+                          a.click();
+                          URL.revokeObjectURL(url);
+                          success('File Downloaded', `Downloaded ${a.download}`);
+                        }
                       }}
                       title={t('actions.downloadTitle')}
                     >
                       {t('actions.download')}
                     </Button>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      icon={<Save className="w-3.5 h-3.5" />}
-                      onClick={saveFile}
-                      disabled={saving}
-                    >
-                      {saving ? t('actions.saving') : t('actions.save')}
-                    </Button>
+                    {fileKind === 'text' && (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        icon={<Save className="w-3.5 h-3.5" />}
+                        onClick={saveFile}
+                        disabled={saving}
+                      >
+                        {saving ? t('actions.saving') : t('actions.save')}
+                      </Button>
+                    )}
                   </div>
                 </div>
 
                 {/* Editor / Diff Viewer */}
                 <div className="flex-1 relative min-h-0">
-                  {showDiff ? (
+                  {fileKind === 'image' && selectedFile ? (
+                    <div className="flex flex-col items-center justify-center h-full bg-soft-meadow rounded-[16px] p-4 overflow-hidden">
+                      {imgError ? (
+                        <div className="text-center p-6 space-y-2">
+                          <AlertCircle className="w-10 h-10 text-amber-600 mx-auto" />
+                          <p className="font-mono text-body-sm text-deep-ink font-semibold">Unable to preview image</p>
+                          <a
+                            href={api.workspaceRawUrl(selectedFile)}
+                            download
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-deep-ink text-white text-caption font-medium"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            Download Image
+                          </a>
+                        </div>
+                      ) : (
+                        <img
+                          src={api.workspaceRawUrl(selectedFile)}
+                          alt={selectedFile}
+                          onError={() => setImgError(true)}
+                          className="max-w-full max-h-[520px] object-contain mx-auto rounded-xl shadow-xs"
+                        />
+                      )}
+                    </div>
+                  ) : fileKind === 'pdf' && selectedFile ? (
+                    <iframe
+                      src={api.workspaceRawUrl(selectedFile)}
+                      title={selectedFile}
+                      className="w-full h-full border-0 rounded-xl min-h-[500px]"
+                    />
+                  ) : fileKind === 'binary' && selectedFile ? (
+                    <div className="flex flex-col items-center justify-center h-full text-center p-8 gap-4">
+                      <FileArchive className="w-12 h-12 text-purple-400 opacity-70" />
+                      <div className="space-y-1">
+                        <p className="font-mono text-body-sm text-deep-ink font-semibold">{selectedFile.split('/').pop()}</p>
+                        <p className="font-sans text-caption text-slate">{t('preview.binary')}</p>
+                      </div>
+                      <a
+                        href={api.workspaceRawUrl(selectedFile)}
+                        download
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-deep-ink text-canvas text-body-sm font-semibold hover:bg-deep-ink/90 transition-colors"
+                      >
+                        <Download className="w-4 h-4" />
+                        {t('preview.downloadBinary')}
+                      </a>
+                    </div>
+                  ) : showDiff ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2 h-full overflow-hidden">
                       {[
                         { key: 'before', content: originalContent },
@@ -429,26 +485,32 @@ export function WorkspacePage() {
                       ))}
                     </div>
                   ) : (
-                  <textarea
-                    value={fileContent}
-                    onChange={(e) => setFileContent(e.target.value)}
-                    onKeyDown={(e) => {
-                      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-                        e.preventDefault();
-                        saveFile();
-                      }
-                    }}
-                    placeholder={t('editor.placeholder')}
-                    className="w-full h-full p-4 font-mono text-body-sm bg-soft-meadow rounded-[16px] border border-onyx/10 focus:outline-none focus:ring-2 focus:ring-deep-ink resize-none text-deep-ink leading-relaxed selection:bg-hi-yellow selection:text-deep-ink"
-                    spellCheck={false}
-                  />
+                    <textarea
+                      value={fileContent}
+                      onChange={(e) => setFileContent(e.target.value)}
+                      onKeyDown={(e) => {
+                        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                          e.preventDefault();
+                          saveFile();
+                        }
+                      }}
+                      placeholder={t('editor.placeholder')}
+                      className="w-full h-full p-4 font-mono text-body-sm bg-soft-meadow rounded-[16px] border border-onyx/10 focus:outline-none focus:ring-2 focus:ring-deep-ink resize-none text-deep-ink leading-relaxed selection:bg-hi-yellow selection:text-deep-ink"
+                      spellCheck={false}
+                    />
                   )}
                 </div>
 
                 {/* Status Bar */}
                 <div className="pt-3 mt-2 border-t border-soft-meadow flex items-center justify-between text-caption font-mono text-slate">
-                  <span>{t('editor.stats', { lines: lineCount, bytes: byteSize })}</span>
-                  <span>{t('editor.shortcut')}</span>
+                  {fileKind === 'text' ? (
+                    <>
+                      <span>{t('editor.stats', { lines: lineCount, bytes: byteSize })}</span>
+                      <span>{t('editor.shortcut')}</span>
+                    </>
+                  ) : (
+                    <span className="text-slate">{fileKind.toUpperCase()}</span>
+                  )}
                 </div>
               </div>
             ) : (

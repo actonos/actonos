@@ -186,11 +186,10 @@ export function ToolHubPage() {
               <button
                 key={c.id}
                 onClick={() => setActiveCategory(c.id)}
-                className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer ${
-                  activeCategory === c.id
-                    ? 'bg-deep-ink text-white font-semibold shadow-xs'
-                    : 'text-deep-ink hover:text-slate'
-                }`}
+                className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer ${activeCategory === c.id
+                  ? 'bg-deep-ink text-white font-semibold shadow-xs'
+                  : 'text-deep-ink hover:text-slate'
+                  }`}
               >
                 {c.label}
               </button>

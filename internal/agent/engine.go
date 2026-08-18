@@ -130,22 +130,22 @@ func (e *Engine) buildCognitivePrompt(ctx context.Context, agentID string, agent
 		profile := e.profileMgr.GetProfile()
 		sb.WriteString("## Owner Identity & Interaction Preferences\n")
 		if profile.UserName != "" {
-			sb.WriteString(fmt.Sprintf("- **Owner Name**: %s\n", profile.UserName))
+			fmt.Fprintf(&sb, "- **Owner Name**: %s\n", profile.UserName)
 		}
 		if profile.UserRole != "" {
-			sb.WriteString(fmt.Sprintf("- **Owner Role**: %s\n", profile.UserRole))
+			fmt.Fprintf(&sb, "- **Owner Role**: %s\n", profile.UserRole)
 		}
 		if profile.Language != "" {
-			sb.WriteString(fmt.Sprintf("- **Preferred Language**: %s\n", profile.Language))
+			fmt.Fprintf(&sb, "- **Preferred Language**: %s\n", profile.Language)
 		}
 		if profile.Timezone != "" {
-			sb.WriteString(fmt.Sprintf("- **Timezone**: %s (Current Time: %s)\n", profile.Timezone, time.Now().UTC().Format(time.RFC3339)))
+			fmt.Fprintf(&sb, "- **Timezone**: %s (Current Time: %s)\n", profile.Timezone, time.Now().UTC().Format(time.RFC3339))
 		}
 		if profile.CommunicationStyle != "" {
-			sb.WriteString(fmt.Sprintf("- **Communication Style**: %s\n", profile.CommunicationStyle))
+			fmt.Fprintf(&sb, "- **Communication Style**: %s\n", profile.CommunicationStyle)
 		}
 		if profile.CustomInstructions != "" {
-			sb.WriteString(fmt.Sprintf("- **Owner Directives**: %s\n", profile.CustomInstructions))
+			fmt.Fprintf(&sb, "- **Owner Directives**: %s\n", profile.CustomInstructions)
 		}
 		sb.WriteString("\n")
 
@@ -154,7 +154,7 @@ func (e *Engine) buildCognitivePrompt(ctx context.Context, agentID string, agent
 		if len(patterns) > 0 {
 			sb.WriteString("## Procedural Memory & Verified Workflows\n")
 			for _, pat := range patterns {
-				sb.WriteString(fmt.Sprintf("- **%s** (%s): %s\n", pat.PatternName, pat.Domain, pat.Workflow))
+				fmt.Fprintf(&sb, "- **%s** (%s): %s\n", pat.PatternName, pat.Domain, pat.Workflow)
 			}
 			sb.WriteString("\n")
 		}
@@ -181,7 +181,7 @@ func (e *Engine) buildCognitivePrompt(ctx context.Context, agentID string, agent
 			episodicCount = len(memories)
 			sb.WriteString("## Relevant Past Episodic Memories\n")
 			for _, m := range memories {
-				sb.WriteString(fmt.Sprintf("- %s\n", m.Content))
+				fmt.Fprintf(&sb, "- %s\n", m.Content)
 			}
 			sb.WriteString("\n")
 		}
@@ -323,7 +323,7 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 	converged := false
 	iterationsCompleted := 0
 
-	for iter := 0; iter < maxIterations; iter++ {
+	for iter := range maxIterations {
 		iterationsCompleted = iter + 1
 		if e.contextManager != nil {
 			runID := ""
@@ -844,20 +844,28 @@ func (e *Engine) ResumeApproved(ctx context.Context, approval tools.ApprovalRequ
 	if err != nil {
 		return nil, err
 	}
-	if checkpoint.AgentID != approval.AgentID ||
-		checkpoint.PendingTool.Function.Name != approval.ToolName ||
-		tools.ActionHash(approval.AgentID, approval.ToolName, checkpoint.PendingTool.Function.Arguments) != approval.ActionHash {
-		return nil, tools.ErrApprovalInvalid
+	if checkpoint.AgentID != approval.AgentID {
+		return nil, fmt.Errorf("%w: checkpoint agent %s does not match approval agent %s",
+			tools.ErrApprovalInvalid, checkpoint.AgentID, approval.AgentID)
+	}
+	if checkpoint.PendingTool.Function.Name != approval.ToolName {
+		return nil, fmt.Errorf("%w: checkpoint tool %s does not match approval tool %s",
+			tools.ErrApprovalInvalid, checkpoint.PendingTool.Function.Name, approval.ToolName)
+	}
+	pendingInput := tools.NormalizeToolInput(checkpoint.PendingTool.Function.Arguments)
+	if tools.ActionHash(approval.AgentID, approval.ToolName, pendingInput) != approval.ActionHash {
+		return nil, fmt.Errorf("%w: the paused action no longer matches what was approved",
+			tools.ErrApprovalInvalid)
 	}
 	manifest, err := e.agentMgr.Get(ctx, checkpoint.AgentID)
 	if err != nil {
 		return nil, fmt.Errorf("loading resumed agent: %w", err)
 	}
-	ctx = tools.WithTraceID(ctx, checkpoint.TraceID)
-	ctx = tools.WithApprovalID(ctx, approval.ID)
+	// Execute the exact bytes the operator reviewed, bound strictly to this approval ID.
+	approvedCtx := tools.WithTraceID(ctx, checkpoint.TraceID)
+	approvedCtx = tools.WithApprovalID(approvedCtx, approval.ID)
 	result, err := e.tools.Execute(
-		ctx, checkpoint.AgentID, checkpoint.PendingTool.Function.Name,
-		checkpoint.PendingTool.Function.Arguments,
+		approvedCtx, checkpoint.AgentID, checkpoint.PendingTool.Function.Name, approval.Input,
 	)
 	if err != nil {
 		e.finishRun(ctx, run, RunFailed, "approved_execution_failed", checkpoint.Iteration, checkpoint.Usage)
@@ -867,10 +875,48 @@ func (e *Engine) ResumeApproved(ctx context.Context, approval tools.ApprovalRequ
 	if result != nil {
 		observation = result.Content
 	}
-	messages := append(checkpoint.Messages, llm.Message{
+	// The approved tool result must be appended in the correct position.
+	// If the preceding assistant message contains multiple tool calls, every
+	// call that appears after the approved one must also have a result message
+	// (even if it is an error) so providers that enforce strict tool-call
+	// pairing do not reject the request.
+	resumeMessages := make([]llm.Message, len(checkpoint.Messages))
+	copy(resumeMessages, checkpoint.Messages)
+	resumeMessages = append(resumeMessages, llm.Message{
 		Role: llm.RoleTool, Name: checkpoint.PendingTool.Function.Name,
 		ToolCallID: checkpoint.PendingTool.ID, Content: observation,
 	})
+	// Ensure every other tool_call in the last assistant message has a
+	// corresponding result message. Tool calls that were executed before the
+	// paused one already have their results in checkpoint.Messages; only the
+	// ones that follow the paused call are missing.
+	var lastAssistant *llm.Message
+	for i := len(resumeMessages) - 1; i >= 0; i-- {
+		if resumeMessages[i].Role == llm.RoleAssistant {
+			lastAssistant = &resumeMessages[i]
+			break
+		}
+	}
+	if lastAssistant != nil && len(lastAssistant.ToolCalls) > 1 {
+		// Collect IDs that already have a result in the slice.
+		resultIDs := make(map[string]bool)
+		for _, m := range resumeMessages {
+			if m.Role == llm.RoleTool && m.ToolCallID != "" {
+				resultIDs[m.ToolCallID] = true
+			}
+		}
+		for _, tc := range lastAssistant.ToolCalls {
+			if !resultIDs[tc.ID] {
+				resumeMessages = append(resumeMessages, llm.Message{
+					Role:       llm.RoleTool,
+					Name:       tc.Function.Name,
+					ToolCallID: tc.ID,
+					Content:    "tool call was deferred pending approval of a concurrent action",
+				})
+			}
+		}
+	}
+	messages := resumeMessages
 	_ = e.runStore.AppendEvent(ctx, RunEvent{
 		RunID: run.ID, TraceID: run.TraceID, Step: checkpoint.Iteration,
 		Type: "approval_execution", Status: "success",
@@ -891,51 +937,89 @@ func (e *Engine) ResumeApproved(ctx context.Context, approval tools.ApprovalRequ
 	opts.Tools = e.tools.ToLLMToolDefinitions(manifest.AuthorizedTools)
 	usage := checkpoint.Usage
 
+	// Subsequent tool calls must not inherit the consumed approval ID, ensuring
+	// new high-risk actions can request their own approvals cleanly.
+	execCtx := tools.WithTraceID(ctx, checkpoint.TraceID)
+	execCtx = tools.WithApprovalID(execCtx, "")
+
+	consecutiveFailures := 0
+	lastObservation := ""
+	repeatedObservations := 0
+
 	for iteration := checkpoint.Iteration; iteration < 8; iteration++ {
 		if e.contextManager != nil {
-			messages = e.contextManager.PruneAndSnapshot(ctx, run.ID, messages, e.contextBudget(manifest))
+			messages = e.contextManager.PruneAndSnapshot(execCtx, run.ID, messages, e.contextBudget(manifest))
 		}
-		response, callErr := e.llm.CompleteWithCascade(ctx, cascade, messages, opts)
+		response, callErr := e.llm.CompleteWithCascade(execCtx, cascade, messages, opts)
 		if callErr != nil {
-			e.finishRun(ctx, run, RunFailed, "infrastructure_failure", iteration+1, usage)
+			e.finishRun(execCtx, run, RunFailed, "infrastructure_failure", iteration+1, usage)
 			return nil, callErr
 		}
 		usage = addUsage(usage, response.Usage)
 		if len(response.ToolCalls) == 0 {
-			if !e.verifier.VerifySemanticConsistency(ctx, checkpoint.Goal, response.Content) {
-				e.finishRun(ctx, run, RunFailed, "verification_failed", iteration+1, usage)
+			if !e.verifier.VerifySemanticConsistency(execCtx, checkpoint.Goal, response.Content) {
+				e.finishRun(execCtx, run, RunFailed, "verification_failed", iteration+1, usage)
 				return nil, errors.New("resumed response failed verification")
 			}
 			response.Usage = usage
-			e.finishRun(ctx, run, RunCompleted, "goal_completed", iteration+1, usage)
-			e.RecordTokenUsage(ctx, checkpoint.AgentID, response.Model, response.Model, checkpoint.Source, "", usage)
+			e.finishRun(execCtx, run, RunCompleted, "goal_completed", iteration+1, usage)
+			if e.bus != nil {
+				e.bus.Publish(bus.NewEvent(bus.EventAgentActionDone, checkpoint.AgentID, map[string]any{
+					"tokens": response.Usage.TotalTokens,
+				}))
+			}
+			if response.Content != "" {
+				if e.reflectionEngine != nil {
+					e.reflectionEngine.ReflectOnConversation(context.Background(), checkpoint.AgentID, checkpoint.Goal, response.Content)
+				}
+			}
+			e.RecordTokenUsage(execCtx, checkpoint.AgentID, response.Model, response.Model, checkpoint.Source, "", usage)
 			return response, nil
 		}
 		messages = append(messages, llm.Message{
 			Role: llm.RoleAssistant, Content: response.Content, ToolCalls: response.ToolCalls,
 		})
 		for _, call := range response.ToolCalls {
-			toolResult, toolErr := e.tools.Execute(ctx, checkpoint.AgentID, call.Function.Name, call.Function.Arguments)
+			toolResult, toolErr := e.tools.Execute(execCtx, checkpoint.AgentID, call.Function.Name, call.Function.Arguments)
 			if toolErr != nil {
 				var approvalErr *tools.ApprovalRequiredError
 				if errors.As(toolErr, &approvalErr) {
-					e.saveApprovalCheckpoint(ctx, run, checkpoint.AgentID, checkpoint.Goal, checkpoint.Source, messages, iteration+1, usage, call)
-					e.finishRun(ctx, run, RunApprovalPending, "approval_required", iteration+1, usage)
+					e.saveApprovalCheckpoint(execCtx, run, checkpoint.AgentID, checkpoint.Goal, checkpoint.Source, messages, iteration+1, usage, call)
+					e.finishRun(execCtx, run, RunApprovalPending, "approval_required", iteration+1, usage)
 					return nil, toolErr
 				}
 			}
 			content := ""
+			statusStr := "success"
 			if toolErr != nil {
+				statusStr = "error"
 				content = toolErr.Error()
+				consecutiveFailures++
 			} else if toolResult != nil {
 				content = toolResult.Content
+				consecutiveFailures = 0
 			}
+			if content == lastObservation {
+				repeatedObservations++
+			} else {
+				repeatedObservations = 0
+				lastObservation = content
+			}
+			_ = e.runStore.AppendEvent(execCtx, RunEvent{
+				RunID: run.ID, TraceID: run.TraceID, Step: iteration + 1, Type: "tool",
+				Status: statusStr, ToolName: call.Function.Name,
+				Data: map[string]any{"tool_call_id": call.ID, "observation": truncateRunData(content, 4096)},
+			})
 			messages = append(messages, llm.Message{
 				Role: llm.RoleTool, Name: call.Function.Name, ToolCallID: call.ID, Content: content,
 			})
+			if consecutiveFailures >= 3 || repeatedObservations >= 2 {
+				e.finishRun(execCtx, run, RunBlocked, "no_progress", iteration+1, usage)
+				return nil, fmt.Errorf("resumed agent %s stopped after repeated tool failures or observations", checkpoint.AgentID)
+			}
 		}
 	}
-	e.finishRun(ctx, run, RunBlocked, "iteration_budget_exhausted", 8, usage)
+	e.finishRun(execCtx, run, RunBlocked, "iteration_budget_exhausted", 8, usage)
 	return nil, errors.New("resumed run exhausted iteration budget")
 }
 
@@ -983,6 +1067,9 @@ func (e *Engine) saveApprovalCheckpoint(
 	if run == nil || e.runStore == nil {
 		return
 	}
+	// The approval was hashed over the normalized input, so the checkpoint must
+	// persist the same form or the resume-time hash comparison will not match.
+	pending.Function.Arguments = tools.NormalizeToolInput(pending.Function.Arguments)
 	_ = e.runStore.SaveCheckpoint(ctx, RunCheckpoint{
 		RunID: run.ID, TraceID: run.TraceID, AgentID: agentID, Goal: goal,
 		Source: source, Messages: messages, Iteration: iteration,

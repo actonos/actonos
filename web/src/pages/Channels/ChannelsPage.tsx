@@ -393,44 +393,40 @@ export function ChannelsPage() {
             <button
               type="button"
               onClick={() => selectTab('all')}
-              className={`px-4 py-1.5 rounded-full text-caption font-sans font-semibold transition-all cursor-pointer ${
-                activeTab === 'all'
-                  ? 'bg-deep-ink text-white shadow-xs'
-                  : 'text-deep-ink hover:text-slate'
-              }`}
+              className={`px-4 py-1.5 rounded-full text-caption font-sans font-semibold transition-all cursor-pointer ${activeTab === 'all'
+                ? 'bg-deep-ink text-white shadow-xs'
+                : 'text-deep-ink hover:text-slate'
+                }`}
             >
               {t('tabs.all', 'All Channels')} ({CHANNEL_DEFINITIONS.length})
             </button>
             <button
               type="button"
               onClick={() => selectTab('active')}
-              className={`px-4 py-1.5 rounded-full text-caption font-sans font-semibold transition-all cursor-pointer ${
-                activeTab === 'active'
-                  ? 'bg-deep-ink text-white shadow-xs'
-                  : 'text-deep-ink hover:text-slate'
-              }`}
+              className={`px-4 py-1.5 rounded-full text-caption font-sans font-semibold transition-all cursor-pointer ${activeTab === 'active'
+                ? 'bg-deep-ink text-white shadow-xs'
+                : 'text-deep-ink hover:text-slate'
+                }`}
             >
               {t('tabs.active', 'Active')} ({activeChannelsCount})
             </button>
             <button
               type="button"
               onClick={() => selectTab('pairing')}
-              className={`px-4 py-1.5 rounded-full text-caption font-sans font-semibold transition-all cursor-pointer ${
-                activeTab === 'pairing'
-                  ? 'bg-deep-ink text-white shadow-xs'
-                  : 'text-deep-ink hover:text-slate'
-              }`}
+              className={`px-4 py-1.5 rounded-full text-caption font-sans font-semibold transition-all cursor-pointer ${activeTab === 'pairing'
+                ? 'bg-deep-ink text-white shadow-xs'
+                : 'text-deep-ink hover:text-slate'
+                }`}
             >
               {t('tabs.pairing', 'Pairing & Whitelist')} ({authorizations.length})
             </button>
             <button
               type="button"
               onClick={() => selectTab('webhook')}
-              className={`px-4 py-1.5 rounded-full text-caption font-sans font-semibold transition-all cursor-pointer ${
-                activeTab === 'webhook'
-                  ? 'bg-deep-ink text-white shadow-xs'
-                  : 'text-deep-ink hover:text-slate'
-              }`}
+              className={`px-4 py-1.5 rounded-full text-caption font-sans font-semibold transition-all cursor-pointer ${activeTab === 'webhook'
+                ? 'bg-deep-ink text-white shadow-xs'
+                : 'text-deep-ink hover:text-slate'
+                }`}
             >
               {t('tabs.webhook', 'Webhook Gateway')}
             </button>
@@ -527,9 +523,8 @@ export function ChannelsPage() {
           onClose={() => setRevokingUser(null)}
           onConfirm={handleConfirmRevoke}
           title={t('pairing.revoke', 'Revoke Access')}
-          description={`Revoke chat authorization for user ${
-            revokingUser?.sender_name || revokingUser?.sender_id
-          } on ${revokingUser?.channel_id}?`}
+          description={`Revoke chat authorization for user ${revokingUser?.sender_name || revokingUser?.sender_id
+            } on ${revokingUser?.channel_id}?`}
           confirmLabel={t('pairing.revoke', 'Revoke Access')}
           variant="danger"
         />

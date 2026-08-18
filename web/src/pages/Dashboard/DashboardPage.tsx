@@ -380,15 +380,6 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
                   <Badge variant="neutral" className="font-mono">
                     {t('units.usd', { value: (tokenStats?.total_cost_usd || 0).toFixed(4) })}
                   </Badge>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setIsTokenLedgerOpen(true)}
-                    className="text-[12px] font-sans"
-                    icon={<ArrowUpRight className="w-3.5 h-3.5" />}
-                  >
-                    {t('tokens.viewLedger')}
-                  </Button>
                 </div>
               </div>
 
@@ -605,8 +596,8 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
                               entry.risk_level === 'High'
                                 ? 'accent'
                                 : entry.risk_level === 'Medium'
-                                ? 'stopped'
-                                : 'neutral'
+                                  ? 'stopped'
+                                  : 'neutral'
                             }
                             className="text-[10px]"
                           >

@@ -54,6 +54,9 @@ type Server struct {
 	workspaceDir string
 	skillsDir    string
 	wasmDir      string
+	version      string
+	gitCommit    string
+	buildTime    string
 	realtime     *realtimeHub
 }
 
@@ -91,6 +94,10 @@ type Config struct {
 	SkillsDir          string
 	WASMDir            string
 	DataDir            string
+	// Build metadata injected via -ldflags; see the Makefile LDFLAGS target.
+	Version   string
+	GitCommit string
+	BuildTime string
 }
 
 // NewServer initializes the HTTP API Server with all endpoints and middlewares.
@@ -110,6 +117,18 @@ func NewServer(cfg Config) *Server {
 	wasmDir := cfg.WASMDir
 	if wasmDir == "" {
 		wasmDir = "./data/tools/wasm"
+	}
+	version := cfg.Version
+	if version == "" {
+		version = "0.0.0-dev"
+	}
+	gitCommit := cfg.GitCommit
+	if gitCommit == "" {
+		gitCommit = "unknown"
+	}
+	buildTime := cfg.BuildTime
+	if buildTime == "" {
+		buildTime = "unspecified"
 	}
 	s := &Server{
 		agentMgr:     cfg.AgentManager,
@@ -145,6 +164,9 @@ func NewServer(cfg Config) *Server {
 		workspaceDir: workspaceDir,
 		skillsDir:    skillsDir,
 		wasmDir:      wasmDir,
+		version:      version,
+		gitCommit:    gitCommit,
+		buildTime:    buildTime,
 	}
 	s.realtime = newRealtimeHub(s)
 
@@ -326,6 +348,7 @@ func (s *Server) setupRoutes() {
 				r.Delete("/file", s.handleDeleteWorkspaceFile)
 				r.Post("/mkdir", s.handleMkdirWorkspace)
 				r.Post("/upload", s.handleUploadWorkspaceFile)
+				r.Get("/raw", s.handleRawWorkspaceFile)
 			})
 
 			// Autonomous Tasks & Operations Backlog
@@ -430,7 +453,9 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 	s.respondJSON(w, http.StatusOK, map[string]any{
 		"status":              "healthy",
-		"version":             "0.1.0",
+		"version":             s.version,
+		"git_commit":          s.gitCommit,
+		"build_time":          s.buildTime,
 		"uptime_seconds":      uint64(time.Since(s.startTime).Seconds()),
 		"runtime_mode":        runtimeMode,
 		"agents_active":       activeAgents,

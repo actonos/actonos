@@ -25,10 +25,11 @@ const ToolHubPage = lazy(() => import('@/pages/ToolHub/ToolHubPage').then((m) =>
 const SkillsPage = lazy(() => import('@/pages/Skills/SkillsPage').then((m) => ({ default: m.SkillsPage })));
 const WorkspacePage = lazy(() => import('@/pages/Workspace/WorkspacePage').then((m) => ({ default: m.WorkspacePage })));
 const SettingsPage = lazy(() => import('@/pages/Settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const AuditLogsPage = lazy(() => import('@/pages/AuditLogs/AuditLogsPage').then((m) => ({ default: m.AuditLogsPage })));
 
 export const navTabs: NavTab[] = [
   'dashboard', 'agents', 'agent-studio', 'chat', 'missions', 'operations',
-  'automations', 'tools', 'skills', 'workspace', 'channels', 'connectors', 'settings',
+  'automations', 'tools', 'skills', 'workspace', 'channels', 'connectors', 'audit-logs', 'settings',
 ];
 
 export function tabFromLocation(): NavTab {
@@ -247,6 +248,7 @@ export function App() {
               {activeTab === 'tools' && <ToolHubPage />}
               {activeTab === 'skills' && <SkillsPage />}
               {activeTab === 'workspace' && <WorkspacePage />}
+              {activeTab === 'audit-logs' && <AuditLogsPage />}
               {activeTab === 'settings' && <SettingsPage />}
               </Suspense>
             </ErrorBoundary>

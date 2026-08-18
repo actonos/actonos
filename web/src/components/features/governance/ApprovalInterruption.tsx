@@ -61,7 +61,7 @@ export function ApprovalInterruption() {
     setDeciding(true);
     try {
       if (approved) {
-        await api.approveAction(approval.id, t('approval.approvedFeedback'));
+        await api.approveAction(approval.id, feedback.trim() || t('approval.approvedFeedback'));
         success(t('approval.approved'), approval.tool_name);
       } else {
         await api.rejectAction(approval.id, feedback.trim() || t('approval.defaultFeedback'));
@@ -71,6 +71,15 @@ export function ApprovalInterruption() {
       setFeedback('');
     } catch (cause) {
       error(t('approval.failed'), cause instanceof Error ? cause.message : String(cause));
+      // A failed decision may have left this record decided, expired, or
+      // reopened server-side. Re-read the queue so the dialog reflects reality
+      // instead of pinning a stale approval the operator cannot resolve.
+      const refreshed = await api
+        .listApprovals('pending')
+        .then((result) => result.approvals?.[0] || null)
+        .catch(() => null);
+      setApproval(refreshed);
+      setFeedback('');
     } finally {
       setDeciding(false);
     }
@@ -103,7 +112,7 @@ export function ApprovalInterruption() {
           className="w-full mb-4 rounded-[18px] border border-onyx/15 bg-soft-meadow px-4 py-3 text-body-sm"
         />
         <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
-          <Button variant="ghost" disabled={deciding || !feedback.trim()} onClick={() => decide(false)}>{t('approval.reject')}</Button>
+          <Button variant="ghost" disabled={deciding} onClick={() => decide(false)}>{t('approval.reject')}</Button>
           <Button variant="primary" disabled={deciding} onClick={() => decide(true)}>{t('approval.approve')}</Button>
         </div>
       </Card>

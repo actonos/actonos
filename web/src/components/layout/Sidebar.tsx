@@ -21,6 +21,7 @@ import {
   Check,
   Target,
   Gauge,
+  ShieldCheck,
 } from 'lucide-react';
 
 export type NavTab =
@@ -36,6 +37,7 @@ export type NavTab =
   | 'workspace'
   | 'channels'
   | 'connectors'
+  | 'audit-logs'
   | 'settings';
 
 interface NavItem {
@@ -107,6 +109,7 @@ export function Sidebar({
     {
       label: t('sections.system', 'System'),
       items: [
+        { id: 'audit-logs', label: t('links.audit-logs', 'Audit Logs'), icon: ShieldCheck },
         { id: 'settings', label: t('links.settings', 'Settings'), icon: Sliders },
       ],
     },
@@ -200,15 +203,15 @@ export function Sidebar({
                         key={item.id}
                         onClick={() => handleSelect(item.id)}
                         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl transition-all duration-150 group cursor-pointer ${isActive
-                            ? 'bg-deep-ink text-white font-semibold shadow-xs'
-                            : 'text-slate hover:text-deep-ink hover:bg-black/5'
+                          ? 'bg-deep-ink text-white font-semibold shadow-xs'
+                          : 'text-slate hover:text-deep-ink hover:bg-black/5'
                           } ${collapsed && !showLangOverlay ? 'justify-center' : ''}`}
                         title={collapsed && !showLangOverlay ? item.label : undefined}
                       >
                         <div
                           className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${isActive
-                              ? 'bg-white/15 text-hi-yellow'
-                              : 'bg-canvas text-deep-ink group-hover:bg-white'
+                            ? 'bg-white/15 text-hi-yellow'
+                            : 'bg-canvas text-deep-ink group-hover:bg-white'
                             }`}
                         >
                           <Icon className="w-4 h-4" />
@@ -313,8 +316,8 @@ export function Sidebar({
                         setShowLangOverlay(false);
                       }}
                       className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left transition-all cursor-pointer select-none ${isSelected
-                          ? 'bg-deep-ink text-white border-deep-ink shadow-2xs'
-                          : 'bg-canvas hover:bg-white border-onyx/5 text-deep-ink'
+                        ? 'bg-deep-ink text-white border-deep-ink shadow-2xs'
+                        : 'bg-canvas hover:bg-white border-onyx/5 text-deep-ink'
                         }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -336,8 +339,8 @@ export function Sidebar({
                         {lang.coverage === '100%' && (
                           <span
                             className={`text-[9px] font-mono px-1.5 py-0.5 rounded-full font-semibold ${isSelected
-                                ? 'bg-hi-yellow text-deep-ink'
-                                : 'bg-emerald-100 text-emerald-800'
+                              ? 'bg-hi-yellow text-deep-ink'
+                              : 'bg-emerald-100 text-emerald-800'
                               }`}
                           >
                             {t('language.full')}

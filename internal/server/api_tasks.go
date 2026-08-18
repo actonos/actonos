@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/actonos/actonos/internal/agent"
@@ -168,13 +169,14 @@ func (s *Server) handleTriggerHeartbeatPulse(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	run, err := s.heartbeat.TriggerManualPulse(r.Context())
-	if err != nil {
-		s.respondError(w, http.StatusInternalServerError, "PULSE_TRIGGER_FAILED", err.Error())
-		return
-	}
+	go func() {
+		_, _ = s.heartbeat.TriggerManualPulse(context.Background())
+	}()
 
-	s.respondJSON(w, http.StatusOK, run)
+	s.respondJSON(w, http.StatusOK, map[string]any{
+		"status":  "triggered",
+		"message": "Heartbeat pulse cycle initiated in background",
+	})
 }
 
 // GET /api/heartbeat/runs

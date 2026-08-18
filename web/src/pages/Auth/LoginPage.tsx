@@ -79,11 +79,10 @@ export function LoginPage({ userName, onAuthenticated }: LoginPageProps) {
                     if (loginError) setLoginError(null);
                   }}
                   placeholder={t('login.passwordPlaceholder')}
-                  className={`w-full bg-canvas text-deep-ink px-4 py-3 pr-11 rounded-full border font-sans text-body-sm focus:outline-none focus:ring-2 ${
-                    loginError
-                      ? 'border-red-500 focus:ring-red-400'
-                      : 'border-onyx/15 focus:ring-deep-ink'
-                  }`}
+                  className={`w-full bg-canvas text-deep-ink px-4 py-3 pr-11 rounded-full border font-sans text-body-sm focus:outline-none focus:ring-2 ${loginError
+                    ? 'border-red-500 focus:ring-red-400'
+                    : 'border-onyx/15 focus:ring-deep-ink'
+                    }`}
                 />
                 <button
                   type="button"
@@ -117,11 +116,6 @@ export function LoginPage({ userName, onAuthenticated }: LoginPageProps) {
             </div>
           </form>
         </Card>
-
-        {/* Footer Note */}
-        <p className="text-center text-caption text-slate mt-6 font-mono">
-          {t('login.securityNote')}
-        </p>
       </div>
     </div>
   );

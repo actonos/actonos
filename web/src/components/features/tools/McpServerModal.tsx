@@ -103,11 +103,10 @@ export function McpServerModal({ isOpen, onClose, onConnect }: McpServerModalPro
                 key={p.id}
                 type="button"
                 onClick={() => handleApplyPreset(p)}
-                className={`p-2.5 rounded-[14px] text-left border transition-all cursor-pointer ${
-                  id === p.id
-                    ? 'bg-deep-ink text-white border-deep-ink font-semibold'
-                    : 'bg-canvas text-deep-ink border-onyx/10 hover:bg-soft-meadow'
-                }`}
+                className={`p-2.5 rounded-[14px] text-left border transition-all cursor-pointer ${id === p.id
+                  ? 'bg-deep-ink text-white border-deep-ink font-semibold'
+                  : 'bg-canvas text-deep-ink border-onyx/10 hover:bg-soft-meadow'
+                  }`}
               >
                 <div className="text-body-sm font-medium leading-none mb-1">{p.name}</div>
                 <div className={`text-[11px] line-clamp-1 ${id === p.id ? 'text-white/70' : 'text-slate'}`}>

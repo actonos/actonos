@@ -13,6 +13,7 @@
     "workspace": "Tệp",
     "channels": "Kênh chat",
     "connectors": "Kết nối",
+    "audit-logs": "Nhật ký kiểm toán",
     "settings": "Cài đặt"
   },
   "sections": {

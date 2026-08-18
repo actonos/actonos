@@ -29,7 +29,8 @@
   },
   "pulse": {
     "triggering": "Heartbeat Triggered",
-    "triggeredSuccess": "Pulse Completed"
+    "triggeredSuccess": "Pulse Initiated",
+    "triggeredDescription": "Autonomous pulse cycle launched in background."
   },
   "governance": {
     "tab": "Approvals & Runs ({{count}})",

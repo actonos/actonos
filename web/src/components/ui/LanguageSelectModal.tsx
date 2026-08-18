@@ -87,11 +87,10 @@ export function LanguageSelectModal({ isOpen, onClose }: LanguageSelectModalProp
               <button
                 key={lang.code}
                 onClick={() => handleSelectLanguage(lang.code)}
-                className={`flex items-center justify-between p-3.5 rounded-2xl border text-left transition-all cursor-pointer select-none ${
-                  isSelected
-                    ? 'bg-deep-ink text-white border-deep-ink shadow-xs'
-                    : 'bg-soft-meadow hover:bg-canvas hover:border-onyx/20 border-onyx/5 text-deep-ink'
-                }`}
+                className={`flex items-center justify-between p-3.5 rounded-2xl border text-left transition-all cursor-pointer select-none ${isSelected
+                  ? 'bg-deep-ink text-white border-deep-ink shadow-xs'
+                  : 'bg-soft-meadow hover:bg-canvas hover:border-onyx/20 border-onyx/5 text-deep-ink'
+                  }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <span className="text-xl shrink-0" role="img" aria-label={lang.name}>
@@ -102,9 +101,8 @@ export function LanguageSelectModal({ isOpen, onClose }: LanguageSelectModalProp
                       <span>{lang.nativeName}</span>
                     </div>
                     <div
-                      className={`text-caption font-sans truncate ${
-                        isSelected ? 'text-white/70' : 'text-slate'
-                      }`}
+                      className={`text-caption font-sans truncate ${isSelected ? 'text-white/70' : 'text-slate'
+                        }`}
                     >
                       {lang.name} • {lang.region}
                     </div>
@@ -114,11 +112,10 @@ export function LanguageSelectModal({ isOpen, onClose }: LanguageSelectModalProp
                 <div className="flex items-center gap-2 shrink-0 ml-2">
                   {lang.coverage === '100%' && (
                     <span
-                      className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-semibold ${
-                        isSelected
-                          ? 'bg-hi-yellow text-deep-ink'
-                          : 'bg-emerald-100 text-emerald-800'
-                      }`}
+                      className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-semibold ${isSelected
+                        ? 'bg-hi-yellow text-deep-ink'
+                        : 'bg-emerald-100 text-emerald-800'
+                        }`}
                     >
                       {t('language.fullUI')}
                     </span>

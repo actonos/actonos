@@ -431,6 +431,9 @@ func (h *HeartbeatDaemon) GetRecentRuns(ctx context.Context, limit int) ([]Heart
 			runs = append(runs, r)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	if runs == nil {
 		runs = []HeartbeatRun{}
 	}
