@@ -4,7 +4,9 @@
   "scheduled": "Đã lập lịch",
   "actions": {
     "refresh": "Làm mới",
-    "newTask": "Lập lịch tác vụ mới"
+    "newTask": "Lập lịch tác vụ mới",
+    "pause": "Tạm dừng",
+    "resume": "Mở lại"
   },
   "tabs": {
     "tasks": "Tác vụ đã lập lịch ({{count}})",

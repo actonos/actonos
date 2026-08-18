@@ -4,7 +4,9 @@
   "scheduled": "Scheduled",
   "actions": {
     "refresh": "Refresh",
-    "newTask": "Schedule New Task"
+    "newTask": "Schedule New Task",
+    "pause": "Pause",
+    "resume": "Resume"
   },
   "tabs": {
     "tasks": "Scheduled Tasks ({{count}})",
