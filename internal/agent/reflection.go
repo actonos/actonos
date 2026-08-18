@@ -107,8 +107,12 @@ func (r *ReflectionEngine) ReflectOnConversation(ctx context.Context, agentID, u
 		asstResp = asstResp[:12000]
 	}
 
-	// Skip trivial zero-noise pulses
-	if strings.Contains(asstResp, "HEARTBEAT_OK") || strings.HasPrefix(asstResp, "⏰ [") {
+	// Skip automated heartbeat, cron, or directive runs
+	if strings.Contains(userMsg, "[AUTONOMOUS") ||
+		strings.Contains(userMsg, "[Heartbeat") ||
+		strings.Contains(userMsg, "Standing Directives") ||
+		strings.Contains(asstResp, "HEARTBEAT_OK") ||
+		strings.HasPrefix(asstResp, "⏰ [") {
 		return
 	}
 
@@ -119,7 +123,7 @@ func (r *ReflectionEngine) ReflectOnConversation(ctx context.Context, agentID, u
 		prompt := fmt.Sprintf(`You are the ActonOS Memory & Reflection Daemon.
 Analyze the following user-assistant exchange.
 Synthesize:
-1. "preference_key" & "preference_value": Any user habit, coding style preference, communication preference, or workflow directive (if none, leave empty "").
+1. "preference_key" & "preference_value": Genuine user preferences, coding styles, language habits (NEVER system directives, heartbeat rules, or bot standing tasks). If none, leave empty "".
 2. "episodic_memory": A concise 1-2 sentence summary of key decisions, facts, solutions, or project context learned in this exchange that should be remembered for future interactions (if trivial greeting/chit-chat with zero lasting value, leave empty "").
 
 Exchange:
@@ -168,8 +172,15 @@ Respond STRICTLY with valid JSON:
 			return
 		}
 
-		// 1. Update user preferences if found
-		if result.PrefKey != "" && result.PrefVal != "" && r.profileMgr != nil {
+		// 1. Update user preferences if found and not a system directive
+		isSystemDirectiveKey := strings.Contains(result.PrefKey, "heartbeat") ||
+			strings.Contains(result.PrefKey, "autonomous") ||
+			strings.Contains(result.PrefKey, "standing") ||
+			strings.Contains(result.PrefKey, "directive") ||
+			strings.Contains(result.PrefKey, "task") ||
+			strings.Contains(result.PrefKey, "mythology")
+
+		if result.PrefKey != "" && result.PrefVal != "" && !isSystemDirectiveKey && r.profileMgr != nil {
 			profile := r.profileMgr.GetProfile()
 			if profile.Preferences == nil {
 				profile.Preferences = make(map[string]string)
