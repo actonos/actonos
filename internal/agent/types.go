@@ -19,9 +19,9 @@ const (
 type ApprovalLevel string
 
 const (
-	ApprovalLow    ApprovalLevel = "Low"    // Require approval for every tool action.
-	ApprovalMedium ApprovalLevel = "Medium" // Auto-run read-only actions; approve network/write/destructive actions.
-	ApprovalHigh   ApprovalLevel = "High"   // Auto-run Low/Medium actions; approve only destructive or privileged actions.
+	ApprovalLow    ApprovalLevel = "Low"    // Auto-execute all authorized tools without human approval.
+	ApprovalMedium ApprovalLevel = "Medium" // Auto-execute workspace writes/reads and web tools; require human approval for High-risk/dangerous actions (exec, delete, cron, extensions).
+	ApprovalHigh   ApprovalLevel = "High"   // Require human approval for all state-modifying actions (workspace writes, delete, exec, etc.).
 )
 
 // DelegationScope restricts sub-agents and tool execution.

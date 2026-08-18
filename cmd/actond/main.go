@@ -260,6 +260,10 @@ func main() {
 		engine.SetTaskManager(taskMgr)
 	}
 
+	// Multi-Channel Cognitive Session Manager
+	sessionMgr := channels.NewChannelSessionManager(db.SQLDB())
+	engine.SetSessionManager(sessionMgr)
+
 	// Initialize Autonomous Heartbeat Daemon
 	heartbeatDaemon := agent.NewHeartbeatDaemon(agentMgr, engine, eventBus, db.SQLDB(), workspaceDir, 5*time.Minute)
 	if taskMgr != nil {
@@ -268,6 +272,7 @@ func main() {
 	if approvalMgr != nil {
 		heartbeatDaemon.SetApprovalManager(approvalMgr)
 	}
+	heartbeatDaemon.SetSessionManager(sessionMgr)
 	heartbeatDaemon.Start(ctx)
 	defer heartbeatDaemon.Stop()
 
@@ -304,11 +309,6 @@ func main() {
 	_ = channelMgr.SyncAccounts(ctx, initialAccounts)
 	_ = channelMgr.Start(ctx)
 	defer channelMgr.Stop()
-
-	// Multi-Channel Cognitive Session Manager
-	sessionMgr := channels.NewChannelSessionManager(db.SQLDB())
-	heartbeatDaemon.SetSessionManager(sessionMgr)
-	engine.SetSessionManager(sessionMgr)
 
 	// Set Default Recipient Resolver for Proactive Schedulers
 	cronSched.SetDefaultRecipientGetter(func(channel string) string {

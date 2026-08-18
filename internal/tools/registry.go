@@ -394,9 +394,9 @@ func (r *ToolRegistry) Execute(ctx context.Context, agentID, name string, inputJ
 // ToolRiskLevel returns the deterministic risk class for a tool.
 func ToolRiskLevel(name string) string {
 	switch name {
-	case "native_exec", "native_file_delete", "native_file_write", "native_cron_schedule":
+	case "native_exec", "native_file_delete", "native_cron_schedule":
 		return "High"
-	case "native_browser_navigate", "native_browser_screenshot", "native_http_fetch", "native_channel_notify":
+	case "native_file_write", "native_browser_navigate", "native_browser_screenshot", "native_http_fetch", "native_channel_notify":
 		return "Medium"
 	}
 	if strings.HasPrefix(name, "mcp_") || strings.HasPrefix(name, "wasm_") {
@@ -415,12 +415,19 @@ func toolAllowed(authorized []string, name string) bool {
 }
 
 func approvalRequired(threshold, risk string) bool {
-	order := map[string]int{"Low": 1, "Medium": 2, "High": 3}
-	requiredAt, ok := order[threshold]
-	if !ok {
-		requiredAt = order["Medium"]
+	switch strings.ToLower(threshold) {
+	case "low", "none", "auto":
+		// Low approval friction: all authorized tools auto-execute without requiring approval
+		return false
+	case "medium":
+		// Medium approval: workspace writes and safe tools auto-execute; only High risk tools (exec, delete, cron, extensions) require human approval
+		return risk == "High"
+	case "high", "strict", "always":
+		// High approval: all state-modifying / sensitive tools (Medium and High risk) require approval. Only read-only Low risk tools auto-execute.
+		return risk == "High" || risk == "Medium"
+	default:
+		return risk == "High"
 	}
-	return order[risk] >= requiredAt
 }
 
 func validateAllowedPath(allowedPaths []string, input json.RawMessage) error {

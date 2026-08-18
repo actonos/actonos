@@ -381,17 +381,28 @@ CRITICAL INSTRUCTIONS:
 	}
 
 	// CASE B: Routine System Health & Zero-Noise Evaluation
+	routineCtx := context.WithValue(ctx, "suppress_episodic_memory", true)
+	backlogSummary := "All previous backlog missions are COMPLETED. There are ZERO pending or in-progress tasks."
+	if h.taskMgr != nil {
+		completedList, _ := h.taskMgr.ListTasks(ctx, "completed", "")
+		if len(completedList) > 0 {
+			backlogSummary = fmt.Sprintf("All %d previous backlog missions have been COMPLETED. There are 0 active or pending tasks in backlog.", len(completedList))
+		}
+	}
+
 	prompt := fmt.Sprintf(
-		"[AUTONOMOUS HEARTBEAT BRAIN CYCLE]\nCurrent UTC Time: %s\nStanding Directives: %s\n\n"+
-			"Evaluate system health and background status. "+
-			"Instructions:\n"+
-			"1. If everything is nominal and no proactive action or user notification is needed, reply exactly 'HEARTBEAT_OK'.\n"+
-			"2. If an action or alert is necessary, execute it and provide a concise summary. DO NOT call 'native_channel_notify' tool as the system will route your response automatically.",
+		"[AUTONOMOUS HEARTBEAT BRAIN CYCLE]\nCurrent UTC Time: %s\nBacklog Status: %s\nStanding Directives:\n%s\n\n"+
+			"ROUTINE EVALUATION INSTRUCTIONS:\n"+
+			"1. ALL past missions are finished. DO NOT restart, continue, or execute any old completed missions or past tasks.\n"+
+			"2. Only evaluate current system health and the standing directives above.\n"+
+			"3. If everything is nominal and no proactive action or user notification is needed, reply exactly 'HEARTBEAT_OK'.\n"+
+			"4. If an action or alert is necessary, execute it and provide a concise summary. DO NOT call 'native_channel_notify' tool as the system will route your response automatically.",
 		time.Now().UTC().Format(time.RFC3339),
+		backlogSummary,
 		standingDirectives,
 	)
 
-	resp, execErr := h.engine.ExecuteStepWithHistory(ctx, primaryAgentID, prompt, nil)
+	resp, execErr := h.engine.ExecuteStepWithHistory(routineCtx, primaryAgentID, prompt, nil)
 	if execErr != nil {
 		var approvalErr *tools.ApprovalRequiredError
 		if errors.As(execErr, &approvalErr) {
@@ -406,6 +417,13 @@ CRITICAL INSTRUCTIONS:
 	} else if resp != nil {
 		run.TokensUsed = resp.Usage.TotalTokens
 		trimmed := strings.TrimSpace(resp.Content)
+
+		// Persist heartbeat pulse in session history
+		if h.sessionMgr != nil {
+			hbConvID, _ := h.sessionMgr.GetOrCreateSession(ctx, "system", "heartbeat", "Heartbeat Pulse", "Routine Heartbeat Pulse", primaryAgentID)
+			_ = h.sessionMgr.SaveMessage(ctx, hbConvID, primaryAgentID, "user", fmt.Sprintf("[Heartbeat Pulse]\nStanding Directives: %s", standingDirectives), nil)
+			_ = h.sessionMgr.SaveMessage(ctx, hbConvID, primaryAgentID, "assistant", resp.Content, resp.ToolCalls)
+		}
 
 		if strings.Contains(trimmed, "HEARTBEAT_OK") || trimmed == "" {
 			run.Status = "ok"

@@ -40,6 +40,10 @@ func (sm *ChannelSessionManager) GetOrCreateSession(ctx context.Context, channel
 			channelIcon = "💬"
 		} else if channelID == "discord" {
 			channelIcon = "🎮"
+		} else if channelID == "mission" {
+			channelIcon = "🎯"
+		} else if channelID == "system" {
+			channelIcon = "⚡"
 		}
 
 		dispName := senderName
@@ -47,7 +51,11 @@ func (sm *ChannelSessionManager) GetOrCreateSession(ctx context.Context, channel
 			dispName = senderID
 		}
 		title := fmt.Sprintf("%s %s: %s", channelIcon, strings.ToUpper(channelID[:1])+channelID[1:], dispName)
-		if len(firstMessage) > 0 && len(firstMessage) <= 30 {
+		if channelID == "mission" {
+			title = fmt.Sprintf("🎯 Mission: %s", dispName)
+		} else if channelID == "system" {
+			title = fmt.Sprintf("⚡ System: %s", dispName)
+		} else if len(firstMessage) > 0 && len(firstMessage) <= 30 {
 			title = fmt.Sprintf("%s %s: %s", channelIcon, strings.ToUpper(channelID[:1])+channelID[1:], firstMessage)
 		}
 
@@ -59,8 +67,8 @@ func (sm *ChannelSessionManager) GetOrCreateSession(ctx context.Context, channel
 			return convID, err
 		}
 	} else if err == nil {
-		// Update touch time
-		_, _ = sm.db.ExecContext(ctx, "UPDATE conversations SET updated_at = ? WHERE id = ?", now, convID)
+		// Update touch time and active agent
+		_, _ = sm.db.ExecContext(ctx, "UPDATE conversations SET updated_at = ?, agent_id = ? WHERE id = ?", now, agentID, convID)
 	}
 
 	return convID, nil

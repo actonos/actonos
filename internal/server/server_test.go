@@ -1064,11 +1064,12 @@ func TestServer_ProductionEndpoints(t *testing.T) {
 
 func TestServer_ApprovalAndRunEndpoints(t *testing.T) {
 	srv := newTestServer(t)
+	_ = os.WriteFile(filepath.Join(srv.workspaceDir, "approval.txt"), []byte("data"), 0644)
 
 	body := bytes.NewBufferString(`{
-		"name":"native_file_write",
+		"name":"native_file_delete",
 		"agent_id":"agent_system_core",
-		"input":{"path":"approval.txt","content":"approved"}
+		"input":{"path":"approval.txt"}
 	}`)
 	request := httptest.NewRequest(http.MethodPost, "/api/tools/execute", body)
 	request.Header.Set("Content-Type", "application/json")

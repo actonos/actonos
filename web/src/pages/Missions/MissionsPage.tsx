@@ -21,7 +21,9 @@ import {
   Sparkles,
   Save,
   MessageSquare,
+  Eye,
 } from 'lucide-react';
+import { Modal } from '@/components/ui/Modal';
 import { api } from '@/lib/api';
 import type { AgentRun, ApprovalRequest, AutonomousTask, HeartbeatConfigData, HeartbeatRun, TaskPriority, TaskStatus } from '@/lib/types';
 import { TaskModal } from './components/TaskModal';
@@ -65,6 +67,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<AutonomousTask | null>(null);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
+  const [selectedRunDetail, setSelectedRunDetail] = useState<AgentRun | null>(null);
   const changeTab = (tab: 'tasks' | 'directives' | 'audit' | 'governance') => {
     setActiveTab(tab);
     setHashParam('view', tab === 'tasks' ? undefined : tab);
@@ -678,15 +681,26 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
               <h3 className="font-serif text-heading-sm text-deep-ink">{t('governance.runsTitle')}</h3>
               <p className="text-caption text-slate">{t('governance.runsDescription')}</p>
               {agentRuns.map((run) => (
-                <div key={run.id} className="p-3 rounded-2xl border border-onyx/10 bg-soft-meadow">
-                  <div className="flex justify-between gap-3">
-                    <span className="font-mono text-[11px] text-deep-ink truncate">{run.id}</span>
-                    <Badge variant={run.status === 'completed' ? 'active' : run.status === 'failed' ? 'stopped' : 'neutral'}>
-                      {run.status}
-                    </Badge>
+                <div key={run.id} className="p-3 rounded-2xl border border-onyx/10 bg-soft-meadow space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-mono text-[11px] text-deep-ink font-semibold truncate">{run.id}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge variant={run.status === 'completed' ? 'active' : run.status === 'failed' ? 'stopped' : 'neutral'}>
+                        {run.status}
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedRunDetail(run)}
+                        className="text-[11px] px-2 py-0.5 h-6.5"
+                        icon={<Eye className="w-3.5 h-3.5" />}
+                      >
+                        {t('governance.viewDetail', 'Detail')}
+                      </Button>
+                    </div>
                   </div>
-                  <p className="mt-1 text-caption text-slate line-clamp-2">{run.goal}</p>
-                  <p className="mt-1 font-mono text-[10px] text-slate">
+                  <p className="text-caption text-slate line-clamp-2">{run.goal}</p>
+                  <p className="font-mono text-[10px] text-slate/80">
                     {t('governance.runMetrics', {
                       iterations: run.iterations,
                       tokens: run.total_tokens,
@@ -698,6 +712,112 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
             </Card>
           </div>
         )}
+
+        {/* Run Detail Modal */}
+        <Modal
+          isOpen={selectedRunDetail !== null}
+          onClose={() => setSelectedRunDetail(null)}
+          title={t('governance.runDetailTitle', 'Durable Agent Run Details')}
+          maxWidth="max-w-2xl"
+        >
+          {selectedRunDetail && (
+            <div className="space-y-4 font-sans text-body-sm text-deep-ink">
+              {/* Header stats bar */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-2xl bg-soft-meadow border border-onyx/10">
+                <div>
+                  <span className="text-[10px] uppercase font-mono text-slate block">{t('governance.status')}</span>
+                  <Badge variant={selectedRunDetail.status === 'completed' ? 'active' : selectedRunDetail.status === 'failed' ? 'stopped' : 'neutral'}>
+                    {selectedRunDetail.status}
+                  </Badge>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-mono text-slate block">{t('governance.iterations')}</span>
+                  <span className="font-mono font-bold text-deep-ink">{selectedRunDetail.iterations}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-mono text-slate block">{t('governance.tokens')}</span>
+                  <span className="font-mono font-bold text-deep-ink">{selectedRunDetail.total_tokens.toLocaleString()}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-mono text-slate block">{t('governance.source')}</span>
+                  <span className="font-mono font-bold text-deep-ink uppercase text-[11px]">{selectedRunDetail.source || 'heartbeat'}</span>
+                </div>
+              </div>
+
+              {/* IDs and Agent */}
+              <div className="space-y-2 p-3.5 rounded-2xl bg-canvas border border-onyx/10">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-caption">
+                  <span className="text-slate font-medium">{t('governance.runId')}:</span>
+                  <span className="font-mono text-deep-ink select-all">{selectedRunDetail.id}</span>
+                </div>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-caption">
+                  <span className="text-slate font-medium">{t('governance.traceId')}:</span>
+                  <span className="font-mono text-deep-ink select-all">{selectedRunDetail.trace_id}</span>
+                </div>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-caption">
+                  <span className="text-slate font-medium">{t('governance.agentId')}:</span>
+                  <span className="font-mono text-deep-ink font-semibold">{selectedRunDetail.agent_id}</span>
+                </div>
+              </div>
+
+              {/* Goal */}
+              <div className="space-y-1.5">
+                <label className="text-caption font-semibold text-slate uppercase tracking-wide block">
+                  {t('governance.goal')}
+                </label>
+                <div className="p-3.5 rounded-2xl bg-soft-meadow border border-onyx/10 text-body-sm font-sans whitespace-pre-wrap max-h-48 overflow-y-auto leading-relaxed">
+                  {selectedRunDetail.goal}
+                </div>
+              </div>
+
+              {/* Termination Reason */}
+              {selectedRunDetail.termination_reason && (
+                <div className="space-y-1.5">
+                  <label className="text-caption font-semibold text-slate uppercase tracking-wide block">
+                    {t('governance.terminationReason')}
+                  </label>
+                  <div className="p-3 rounded-2xl bg-hi-yellow/15 border border-onyx/10 text-caption font-mono text-deep-ink">
+                    {selectedRunDetail.termination_reason}
+                  </div>
+                </div>
+              )}
+
+              {/* Detailed Token Usage */}
+              <div className="space-y-1.5">
+                <label className="text-caption font-semibold text-slate uppercase tracking-wide block">
+                  {t('governance.tokens')}
+                </label>
+                <div className="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-soft-meadow border border-onyx/10 text-caption font-mono text-center">
+                  <div>
+                    <span className="text-slate block text-[10px]">{t('governance.promptTokens')}</span>
+                    <strong className="text-deep-ink">{selectedRunDetail.prompt_tokens?.toLocaleString() || 0}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate block text-[10px]">{t('governance.completionTokens')}</span>
+                    <strong className="text-deep-ink">{selectedRunDetail.completion_tokens?.toLocaleString() || 0}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate block text-[10px]">{t('governance.totalTokens')}</span>
+                    <strong className="text-deep-ink">{selectedRunDetail.total_tokens?.toLocaleString() || 0}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Timestamps */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono text-slate/90 pt-1">
+                <div>{t('governance.startedAt')}: {new Date(selectedRunDetail.started_at).toLocaleString()}</div>
+                <div>{t('governance.updatedAt')}: {new Date(selectedRunDetail.updated_at).toLocaleString()}</div>
+              </div>
+
+              {/* Close Action */}
+              <div className="flex justify-end pt-2">
+                <Button variant="secondary" size="sm" onClick={() => setSelectedRunDetail(null)}>
+                  {t('governance.close')}
+                </Button>
+              </div>
+            </div>
+          )}
+        </Modal>
 
         {/* Task Modal */}
         <TaskModal
