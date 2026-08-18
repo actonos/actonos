@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
@@ -7,6 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { TokenLedgerPanel } from '@/components/modals/TokenLedgerModal';
 import { useToast } from '@/components/ui/Toast';
 import {
   Shield,
@@ -28,18 +30,16 @@ import {
   EyeOff,
   Save,
   User,
-  Coins,
-  TrendingUp,
-  Bot,
-  Database,
 } from 'lucide-react';
 import {
   api,
   type AuditLogItem,
   type StorageInfoData,
   type UserIdentityProfile,
+  type WifiNetwork,
+  type OTAStatus,
 } from '@/lib/api';
-import type { SystemMetrics, TailscaleStatus, LLMProviderInfo, TokenUsageSummary, TokenUsageRecord } from '@/lib/types';
+import { isApprovalRequired, type SystemMetrics, type TailscaleStatus, type LLMProviderInfo } from '@/lib/types';
 
 type SettingsTab = 'identity' | 'keys' | 'tokens' | 'network' | 'audit' | 'maintenance';
 
@@ -53,7 +53,7 @@ export function SettingsPage() {
   // Metrics & Tailscale
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
   const [tailscale, setTailscale] = useState<TailscaleStatus | null>(null);
-  const [wifiNetworks, setWifiNetworks] = useState<any[]>([]);
+  const [wifiNetworks, setWifiNetworks] = useState<WifiNetwork[]>([]);
   const [wifiPassword, setWifiPassword] = useState('');
   const [selectedSSID, setSelectedSSID] = useState('');
   const [loadingWifi, setLoadingWifi] = useState(false);
@@ -76,16 +76,9 @@ export function SettingsPage() {
   const [auditFilter, setAuditFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all');
   const [auditSearch, setAuditSearch] = useState('');
   const [storageInfo, setStorageInfo] = useState<StorageInfoData | null>(null);
-  const [otaStatus, setOtaStatus] = useState<any | null>(null);
+  const [otaStatus, setOtaStatus] = useState<OTAStatus | null>(null);
   const [checkingOTA, setCheckingOTA] = useState(false);
   const [isRestartModalOpen, setIsRestartModalOpen] = useState(false);
-
-  // Token Analytics & Ledger state
-  const [tokenStats, setTokenStats] = useState<TokenUsageSummary | null>(null);
-  const [tokenHistory, setTokenHistory] = useState<TokenUsageRecord[]>([]);
-  const [tokenAgentFilter, setTokenAgentFilter] = useState<string>('all');
-  const [tokenSourceFilter, setTokenSourceFilter] = useState<string>('all');
-  const [agentsList, setAgentsList] = useState<any[]>([]);
 
   // Identity & Persona state
   const [identityProfile, setIdentityProfile] = useState<UserIdentityProfile>({
@@ -102,27 +95,18 @@ export function SettingsPage() {
 
   const loadStatus = async () => {
     try {
-      const [m, ts, k, logs, stor, ident, tokSum, tokHist, ags] = await Promise.all([
+      const [m, ts, k, logs, stor, ident] = await Promise.all([
         api.getMetrics().catch(() => null),
         api.getTailscale().catch(() => null),
         api.getAPIKeys().catch(() => null),
         api.getAuditLogs().catch(() => ({ entries: [], count: 0 })),
         api.getStorageInfo().catch(() => null),
         api.getIdentity().catch(() => null),
-        api.getTokenUsage().catch(() => null),
-        api.getTokenHistory({
-          agent_id: tokenAgentFilter !== 'all' ? tokenAgentFilter : undefined,
-          source: tokenSourceFilter !== 'all' ? tokenSourceFilter : undefined,
-        }).catch(() => []),
-        api.listAgents().catch(() => ({ agents: [], count: 0 })),
       ]);
       setMetrics(m);
       setTailscale(ts);
       setAuditLogs(logs.entries || []);
       setStorageInfo(stor);
-      if (tokSum) setTokenStats(tokSum);
-      setTokenHistory(tokHist || []);
-      if (ags && ags.agents) setAgentsList(ags.agents);
       if (ident) {
         setIdentityProfile((prev) => ({ ...prev, ...ident }));
       }
@@ -146,8 +130,8 @@ export function SettingsPage() {
         setInputModels((prev) => ({ ...modelMap, ...prev }));
         setInputEnabled((prev) => ({ ...enMap, ...prev }));
       }
-    } catch (err: any) {
-      error('Failed to load system info', err.message);
+    } catch (err) {
+      error('Failed to load system info', getErrorMessage(err));
     }
   };
 
@@ -176,8 +160,8 @@ export function SettingsPage() {
       success('Provider Saved', `${meta.name} configuration stored in hardware vault.`);
       setInputKeys((prev) => ({ ...prev, [meta.id]: '' }));
       loadStatus();
-    } catch (err: any) {
-      error('Save Failed', err.message);
+    } catch (err) {
+      error('Save Failed', getErrorMessage(err));
     } finally {
       setSavingId(null);
     }
@@ -201,16 +185,16 @@ export function SettingsPage() {
       }));
       success('Provider Validated', `${meta.name} connection confirmed (${res.latency_ms}ms).`);
       loadStatus();
-    } catch (err: any) {
+    } catch (err) {
       setTestResults((prev) => ({
         ...prev,
         [meta.id]: {
           success: false,
           latency: 0,
-          msg: `Failed: ${err.message}`,
+          msg: `Failed: ${getErrorMessage(err)}`,
         },
       }));
-      error('Connection Test Failed', err.message);
+      error('Connection Test Failed', getErrorMessage(err));
     } finally {
       setTestingId(null);
     }
@@ -222,8 +206,8 @@ export function SettingsPage() {
       await api.saveIdentity(identityProfile);
       success('Identity Saved', 'Owner profile and Soul persona updated across all cognitive layers.');
       loadStatus();
-    } catch (err: any) {
-      error('Failed to save identity', err.message);
+    } catch (err) {
+      error('Failed to save identity', getErrorMessage(err));
     } finally {
       setSavingIdentity(false);
     }
@@ -235,8 +219,8 @@ export function SettingsPage() {
       const res = await api.scanWifi();
       setWifiNetworks(res.networks || []);
       info('Wi-Fi Scan Complete', `Found ${res.networks?.length || 0} wireless network(s).`);
-    } catch (err: any) {
-      error('Wi-Fi scan failed', err.message);
+    } catch (err) {
+      error('Wi-Fi scan failed', getErrorMessage(err));
     } finally {
       setLoadingWifi(false);
     }
@@ -247,8 +231,8 @@ export function SettingsPage() {
     try {
       await api.connectWifi(selectedSSID, wifiPassword);
       success('Wi-Fi Connected', `Joined wireless network "${selectedSSID}".`);
-    } catch (err: any) {
-      error('Wi-Fi connection error', err.message);
+    } catch (err) {
+      error('Wi-Fi connection error', getErrorMessage(err));
     }
   };
 
@@ -262,8 +246,8 @@ export function SettingsPage() {
       } else {
         success('System Up-to-Date', `Running latest version v${res.current_version}.`);
       }
-    } catch (err: any) {
-      error('OTA check failed', err.message);
+    } catch (err) {
+      error('OTA check failed', getErrorMessage(err));
     } finally {
       setCheckingOTA(false);
     }
@@ -271,10 +255,14 @@ export function SettingsPage() {
 
   const handleRestartDaemon = async () => {
     try {
-      await api.restartDaemon();
+      const result = await api.restartDaemon();
+      if (isApprovalRequired(result)) {
+        info(t('common:approval.queuedTitle'), t('common:approval.queuedDescription'));
+        return;
+      }
       success('Daemon Restart Initiated', 'ActonOS kernel is rebooting. Web UI will reconnect shortly.');
-    } catch (err: any) {
-      error('Restart failed', err.message);
+    } catch (err) {
+      error('Restart failed', getErrorMessage(err));
     }
   };
 
@@ -310,7 +298,7 @@ export function SettingsPage() {
             <h1 className="font-serif text-heading-lg text-deep-ink tracking-tight flex items-center gap-3">
               <span>{t('title', 'Settings')}</span>
               <Badge variant="neutral" className="text-caption font-mono">
-                {configuredCount}/{PROVIDER_METAS.length} LLMs Active
+                {t('header.activeModels', { configured: configuredCount, total: PROVIDER_METAS.length })}
               </Badge>
             </h1>
             <p className="font-sans text-body text-slate mt-1 max-w-2xl">
@@ -328,7 +316,7 @@ export function SettingsPage() {
               icon={<RefreshCw className="w-3.5 h-3.5" />}
               onClick={loadStatus}
             >
-              Refresh
+              {t('actions.refresh')}
             </Button>
             <Button
               variant="danger"
@@ -336,7 +324,7 @@ export function SettingsPage() {
               icon={<RotateCcw className="w-3.5 h-3.5" />}
               onClick={() => setIsRestartModalOpen(true)}
             >
-              Restart Kernel
+              {t('actions.restart')}
             </Button>
           </div>
         </div>
@@ -349,7 +337,7 @@ export function SettingsPage() {
               activeTab === 'identity' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
             }`}
           >
-            👤 Identity & Soul
+            {t('tabs.identity')}
           </button>
           <button
             onClick={() => setActiveTab('keys')}
@@ -357,7 +345,7 @@ export function SettingsPage() {
               activeTab === 'keys' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
             }`}
           >
-            🔑 LLM Providers ({configuredCount})
+            {t('tabs.providers', { count: configuredCount })}
           </button>
           <button
             onClick={() => setActiveTab('tokens')}
@@ -365,7 +353,7 @@ export function SettingsPage() {
               activeTab === 'tokens' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
             }`}
           >
-            🪙 Token Ledger & Cost
+            {t('tabs.tokens')}
           </button>
           <button
             onClick={() => setActiveTab('network')}
@@ -373,7 +361,7 @@ export function SettingsPage() {
               activeTab === 'network' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
             }`}
           >
-            📶 Hardware & Tailscale
+            {t('tabs.network')}
           </button>
           <button
             onClick={() => setActiveTab('audit')}
@@ -381,7 +369,7 @@ export function SettingsPage() {
               activeTab === 'audit' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
             }`}
           >
-            🛡️ Audit Logs ({auditLogs.length})
+            {t('tabs.audit', { count: auditLogs.length })}
           </button>
           <button
             onClick={() => setActiveTab('maintenance')}
@@ -389,7 +377,7 @@ export function SettingsPage() {
               activeTab === 'maintenance' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
             }`}
           >
-            ⚙️ Storage & OTA
+            {t('tabs.maintenance')}
           </button>
         </div>
 
@@ -399,10 +387,10 @@ export function SettingsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="font-serif text-heading-sm font-semibold text-deep-ink">
-                  Operator Identity & Profile
+                  {t('identity.title')}
                 </h3>
                 <p className="font-sans text-caption text-slate mt-0.5">
-                  Configure your operator identity, working style, and global standing directives for ActonOS.
+                  {t('identity.subtitle')}
                 </p>
               </div>
 
@@ -413,7 +401,7 @@ export function SettingsPage() {
                 disabled={savingIdentity}
                 onClick={handleSaveIdentity}
               >
-                {savingIdentity ? 'Saving...' : 'Save Profile'}
+                {savingIdentity ? t('identity.saving') : t('identity.save')}
               </Button>
             </div>
 
@@ -421,7 +409,7 @@ export function SettingsPage() {
               <div className="flex items-center gap-2 border-b border-onyx/10 pb-4 mb-6">
                 <User className="w-5 h-5 text-deep-ink" />
                 <h4 className="font-serif text-subheading font-semibold text-deep-ink">
-                  Owner Identity & Preferences
+                  {t('identity.preferences')}
                 </h4>
               </div>
 
@@ -429,23 +417,23 @@ export function SettingsPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-caption uppercase text-slate font-semibold mb-1.5">
-                      Owner Name / Handle
+                      {t('identity.name')}
                     </label>
                     <Input
                       value={identityProfile.user_name}
                       onChange={(e) => setIdentityProfile({ ...identityProfile, user_name: e.target.value })}
-                      placeholder="e.g. Alex, Operator"
+                      placeholder={t('identity.namePlaceholder')}
                     />
                   </div>
 
                   <div>
                     <label className="block text-caption uppercase text-slate font-semibold mb-1.5">
-                      Professional Role / Title
+                      {t('identity.role')}
                     </label>
                     <Input
                       value={identityProfile.user_role || ''}
                       onChange={(e) => setIdentityProfile({ ...identityProfile, user_role: e.target.value })}
-                      placeholder="e.g. System Architect & Lead Developer"
+                      placeholder={t('identity.rolePlaceholder')}
                     />
                   </div>
                 </div>
@@ -453,63 +441,63 @@ export function SettingsPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-caption uppercase text-slate font-semibold mb-1.5">
-                      Preferred Language
+                      {t('identity.language')}
                     </label>
                     <select
                       value={identityProfile.language}
                       onChange={(e) => setIdentityProfile({ ...identityProfile, language: e.target.value })}
                       className="w-full px-4 py-2.5 bg-canvas border border-onyx/15 rounded-full text-body-sm text-deep-ink font-sans focus:outline-none focus:ring-2 focus:ring-deep-ink"
                     >
-                      <option value="en">English (US / Global)</option>
-                      <option value="vi">Tiếng Việt (Vietnamese)</option>
+                      <option value="en">{t('identity.english')}</option>
+                      <option value="vi">{t('identity.vietnamese')}</option>
                     </select>
                   </div>
 
                   <div>
                     <label className="block text-caption uppercase text-slate font-semibold mb-1.5">
-                      Timezone
+                      {t('identity.timezone')}
                     </label>
                     <Input
                       value={identityProfile.timezone || 'Asia/Ho_Chi_Minh'}
                       onChange={(e) => setIdentityProfile({ ...identityProfile, timezone: e.target.value })}
-                      placeholder="e.g. Asia/Ho_Chi_Minh, UTC"
+                      placeholder={t('identity.timezonePlaceholder')}
                     />
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-caption uppercase text-slate font-semibold mb-1.5">
-                    Communication & Collaboration Tone
+                    {t('identity.tone')}
                   </label>
                   <Input
                     value={identityProfile.communication_style || ''}
                     onChange={(e) => setIdentityProfile({ ...identityProfile, communication_style: e.target.value })}
-                    placeholder="e.g. adaptive, natural, empathetic & sharp"
+                    placeholder={t('identity.tonePlaceholder')}
                   />
                 </div>
 
                 <div>
                   <label className="block text-caption uppercase text-slate font-semibold mb-1.5">
-                    Owner Bio & Domain Context
+                    {t('identity.bio')}
                   </label>
                   <textarea
                     rows={2}
                     value={identityProfile.bio || ''}
                     onChange={(e) => setIdentityProfile({ ...identityProfile, bio: e.target.value })}
-                    placeholder="Brief background about yourself to give agents domain context..."
+                    placeholder={t('identity.bioPlaceholder')}
                     className="w-full p-3 bg-canvas border border-onyx/15 rounded-2xl text-body-sm text-deep-ink font-sans focus:outline-none focus:ring-2 focus:ring-deep-ink resize-none leading-relaxed"
                   />
                 </div>
 
                 <div>
                   <label className="block text-caption uppercase text-slate font-semibold mb-1.5">
-                    Universal Standing Directives & Rules
+                    {t('identity.directives')}
                   </label>
                   <textarea
                     rows={4}
                     value={identityProfile.custom_instructions || ''}
                     onChange={(e) => setIdentityProfile({ ...identityProfile, custom_instructions: e.target.value })}
-                    placeholder="Rules all agents must obey (e.g. Write clean code, explain architectural trade-offs, avoid placeholders)..."
+                    placeholder={t('identity.directivesPlaceholder')}
                     className="w-full p-3 bg-canvas border border-onyx/15 rounded-2xl text-body-sm text-deep-ink font-sans focus:outline-none focus:ring-2 focus:ring-deep-ink resize-none leading-relaxed"
                   />
                 </div>
@@ -523,7 +511,7 @@ export function SettingsPage() {
                     onClick={handleSaveIdentity}
                     className="px-6 font-semibold"
                   >
-                    {savingIdentity ? 'Saving Profile...' : 'Save Profile Settings'}
+                    {savingIdentity ? t('identity.saving') : t('identity.saveSettings')}
                   </Button>
                 </div>
               </div>
@@ -542,16 +530,16 @@ export function SettingsPage() {
                 </div>
                 <div>
                   <h3 className="font-serif text-body font-semibold text-deep-ink">
-                    Hardware-Bound LLM Vault
+                    {t('providers.vaultTitle')}
                   </h3>
                   <p className="font-sans text-caption text-slate">
-                    Keys are encrypted at rest using AES-256-GCM with hardware fingerprint derivation. Changes apply immediately to all active agent swarms.
+                    {t('providers.vaultDescription')}
                   </p>
                 </div>
               </div>
 
               <Badge variant="active" className="text-[11px] font-mono shrink-0 self-start sm:self-center">
-                AES-256-GCM Active
+                {t('providers.encryptionActive')}
               </Badge>
             </div>
 
@@ -609,10 +597,10 @@ export function SettingsPage() {
                                 : 'bg-onyx/5 text-slate border border-onyx/10'
                             }`}
                           >
-                            {isEnabled ? 'Active' : 'Disabled'}
+                            {isEnabled ? t('providers.active') : t('providers.disabled')}
                           </button>
                           <Badge variant={isConfigured ? 'active' : 'stopped'}>
-                            {isConfigured ? 'Configured' : 'Not Set'}
+                            {isConfigured ? t('providers.configured') : t('providers.notSet')}
                           </Badge>
                         </div>
                       </div>
@@ -628,18 +616,18 @@ export function SettingsPage() {
                           <div>
                             <div className="flex items-center justify-between mb-1">
                               <label className="text-caption font-semibold text-deep-ink">
-                                API Key
+                                {t('providers.apiKey')}
                               </label>
                               {isConfigured && pData?.masked_key && (
                                 <span className="text-[11px] font-mono text-slate">
-                                  Current: {pData.masked_key}
+                                  {t('providers.current', { value: pData.masked_key })}
                                 </span>
                               )}
                             </div>
                             <div className="relative">
                               <Input
                                 type={showKey ? 'text' : 'password'}
-                                placeholder={isConfigured ? 'Enter new key to update...' : 'sk-...'}
+                                placeholder={isConfigured ? t('providers.updateKeyPlaceholder') : 'sk-...'}
                                 value={inputKeys[meta.id] || ''}
                                 onChange={(e) =>
                                   setInputKeys((prev) => ({ ...prev, [meta.id]: e.target.value }))
@@ -652,6 +640,7 @@ export function SettingsPage() {
                                   setShowKeyMap((prev) => ({ ...prev, [meta.id]: !prev[meta.id] }))
                                 }
                                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate hover:text-deep-ink transition-colors cursor-pointer"
+                                aria-label={showKey ? t('providers.hideKey') : t('providers.showKey')}
                               >
                                 {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                               </button>
@@ -662,7 +651,7 @@ export function SettingsPage() {
                         {/* Base URL Input */}
                         <div>
                           <label className="text-caption font-semibold text-deep-ink block mb-1">
-                            Endpoint / Base URL
+                            {t('providers.endpoint')}
                           </label>
                           <Input
                             placeholder={meta.defaultBaseURL}
@@ -677,7 +666,7 @@ export function SettingsPage() {
                         {/* Default Model Selector */}
                         <div>
                           <label className="text-caption font-semibold text-deep-ink block mb-1">
-                            Default Model
+                            {t('providers.defaultModel')}
                           </label>
                           <select
                             value={currentModel}
@@ -717,7 +706,7 @@ export function SettingsPage() {
                         onClick={() => handleTestProvider(meta)}
                         disabled={isTesting || (!inputKeys[meta.id] && !isConfigured && meta.id !== 'ollama')}
                       >
-                        {isTesting ? 'Testing...' : 'Test Connection'}
+                        {isTesting ? t('providers.testing') : t('providers.test')}
                       </Button>
 
                       <Button
@@ -727,7 +716,7 @@ export function SettingsPage() {
                         onClick={() => handleSaveSingleProvider(meta)}
                         disabled={isSaving}
                       >
-                        {isSaving ? 'Saving...' : 'Save Settings'}
+                        {isSaving ? t('providers.saving') : t('providers.save')}
                       </Button>
                     </div>
                   </Card>
@@ -738,287 +727,7 @@ export function SettingsPage() {
         )}
 
         {/* TAB: Token Consumption & Cost Ledger */}
-        {activeTab === 'tokens' && (
-          <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h3 className="font-serif text-heading-sm font-semibold text-deep-ink flex items-center gap-2">
-                  <Coins className="w-5 h-5 text-emerald-600" />
-                  <span>Token Consumption & Cost Ledger</span>
-                </h3>
-                <p className="font-sans text-caption text-slate mt-0.5">
-                  Audited live token traffic, cost estimation per model, and comprehensive execution transaction ledger.
-                </p>
-              </div>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                icon={<RefreshCw className="w-3.5 h-3.5" />}
-                onClick={loadStatus}
-              >
-                Refresh Ledger
-              </Button>
-            </div>
-
-            {/* 4 Summary Metric Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <Card className="p-4 bg-canvas border border-onyx/10 space-y-1">
-                <span className="text-[11px] font-semibold uppercase text-slate block">Today Tokens</span>
-                <div className="text-heading-sm font-serif font-bold text-deep-ink">
-                  {(tokenStats?.today_tokens || 0).toLocaleString()}
-                </div>
-                <span className="text-[11px] font-mono text-emerald-700 font-semibold block">
-                  ${(tokenStats?.today_cost_usd || 0).toFixed(4)} USD
-                </span>
-              </Card>
-
-              <Card className="p-4 bg-canvas border border-onyx/10 space-y-1">
-                <span className="text-[11px] font-semibold uppercase text-slate block">This Month</span>
-                <div className="text-heading-sm font-serif font-bold text-deep-ink">
-                  {(tokenStats?.month_tokens || 0).toLocaleString()}
-                </div>
-                <span className="text-[11px] font-mono text-emerald-700 font-semibold block">
-                  ${(tokenStats?.month_cost_usd || 0).toFixed(4)} USD
-                </span>
-              </Card>
-
-              <Card className="p-4 bg-canvas border border-onyx/10 space-y-1">
-                <span className="text-[11px] font-semibold uppercase text-slate block">Lifetime Total</span>
-                <div className="text-heading-sm font-serif font-bold text-deep-ink">
-                  {(tokenStats?.total_tokens || 0).toLocaleString()}
-                </div>
-                <span className="text-[11px] font-mono text-slate block">
-                  {(tokenStats?.total_prompt_tokens || 0).toLocaleString()} in / {(tokenStats?.total_completion_tokens || 0).toLocaleString()} out
-                </span>
-              </Card>
-
-              <Card className="p-4 bg-canvas border border-onyx/10 space-y-1">
-                <span className="text-[11px] font-semibold uppercase text-slate block">Estimated Cost Burn</span>
-                <div className="text-heading-sm font-serif font-bold text-emerald-700">
-                  ${(tokenStats?.total_cost_usd || 0).toFixed(4)} USD
-                </div>
-                <span className="text-[11px] font-mono text-slate block">
-                  Official Pricing Catalog
-                </span>
-              </Card>
-            </div>
-
-            {/* 14-Day Trend Chart */}
-            <Card className="p-6 border border-onyx/10 bg-canvas/90 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4 text-deep-ink" />
-                  <h4 className="font-serif text-body-sm font-semibold text-deep-ink">
-                    14-Day Token Traffic & Cost Trend
-                  </h4>
-                </div>
-                <span className="text-[11px] text-slate font-mono">Daily Volume</span>
-              </div>
-
-              {tokenStats?.daily_trend && tokenStats.daily_trend.length > 0 ? (
-                <div className="space-y-2 pt-2">
-                  <div className="flex items-end gap-1.5 h-36 pt-4 px-2 bg-soft-meadow/50 rounded-xl border border-onyx/5">
-                    {tokenStats.daily_trend.map((d) => {
-                      const maxDaily = Math.max(...tokenStats.daily_trend.map((x) => x.total_tokens), 1);
-                      const heightPercent = Math.max(8, (d.total_tokens / maxDaily) * 100);
-                      return (
-                        <div key={d.date} className="flex-1 flex flex-col items-center gap-1 group relative h-full justify-end">
-                          <div className="absolute -top-10 bg-deep-ink text-white text-[10px] py-1 px-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 font-mono shadow-md">
-                            {d.date}: {d.total_tokens.toLocaleString()} tokens (${d.cost_usd.toFixed(4)})
-                          </div>
-                          <div
-                            className="w-full bg-deep-ink rounded-t-md hover:bg-emerald-600 transition-all duration-300 min-h-[4px]"
-                            style={{ height: `${heightPercent}%` }}
-                          />
-                          <span className="text-[9px] text-slate font-mono truncate w-full text-center">
-                            {d.date.slice(5)}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : (
-                <div className="p-8 text-center text-caption text-slate bg-soft-meadow rounded-xl">
-                  No token consumption recorded yet.
-                </div>
-              )}
-            </Card>
-
-            {/* Model & Agent Breakdown Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Model Breakdown */}
-              <Card className="p-6 border border-onyx/10 bg-canvas space-y-4">
-                <div className="flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-deep-ink" />
-                  <h4 className="font-serif text-body-sm font-semibold text-deep-ink">
-                    Consumption by Model
-                  </h4>
-                </div>
-
-                {tokenStats?.by_model && tokenStats.by_model.length > 0 ? (
-                  <div className="space-y-3">
-                    {tokenStats.by_model.map((m) => (
-                      <div key={m.model} className="space-y-1">
-                        <div className="flex items-center justify-between text-caption">
-                          <span className="font-mono font-semibold text-deep-ink truncate">{m.model}</span>
-                          <span className="font-mono text-slate text-[11px]">
-                            {m.total_tokens.toLocaleString()} tok (${m.cost_usd.toFixed(4)}) • <strong className="text-emerald-700">{m.percentage.toFixed(1)}%</strong>
-                          </span>
-                        </div>
-                        <div className="w-full bg-onyx/10 h-1.5 rounded-full overflow-hidden">
-                          <div
-                            className="bg-deep-ink h-full rounded-full transition-all duration-500"
-                            style={{ width: `${m.percentage}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-caption text-slate">No model metrics available yet.</p>
-                )}
-              </Card>
-
-              {/* Agent Breakdown */}
-              <Card className="p-6 border border-onyx/10 bg-canvas space-y-4">
-                <div className="flex items-center gap-2">
-                  <Bot className="w-4 h-4 text-deep-ink" />
-                  <h4 className="font-serif text-body-sm font-semibold text-deep-ink">
-                    Consumption by Agent
-                  </h4>
-                </div>
-
-                {tokenStats?.by_agent && tokenStats.by_agent.length > 0 ? (
-                  <div className="space-y-3">
-                    {tokenStats.by_agent.map((a) => (
-                      <div key={a.agent_id} className="space-y-1">
-                        <div className="flex items-center justify-between text-caption">
-                          <span className="font-mono font-semibold text-deep-ink truncate">{a.agent_id}</span>
-                          <span className="font-mono text-slate text-[11px]">
-                            {a.total_tokens.toLocaleString()} tok (${a.cost_usd.toFixed(4)}) • <strong className="text-emerald-700">{a.percentage.toFixed(1)}%</strong>
-                          </span>
-                        </div>
-                        <div className="w-full bg-onyx/10 h-1.5 rounded-full overflow-hidden">
-                          <div
-                            className="bg-emerald-600 h-full rounded-full transition-all duration-500"
-                            style={{ width: `${a.percentage}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-caption text-slate">No agent metrics available yet.</p>
-                )}
-              </Card>
-            </div>
-
-            {/* Live Transaction Ledger Table */}
-            <Card className="p-6 border border-onyx/10 bg-canvas space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h4 className="font-serif text-heading-sm font-semibold text-deep-ink flex items-center gap-2">
-                    <Database className="w-4 h-4 text-deep-ink" />
-                    <span>Transaction Ledger & Audit Trail</span>
-                  </h4>
-                  <p className="text-caption text-slate mt-0.5">
-                    Individual inference events recorded per cognitive cycle.
-                  </p>
-                </div>
-
-                {/* Filters */}
-                <div className="flex items-center gap-2">
-                  <select
-                    value={tokenAgentFilter}
-                    onChange={(e) => setTokenAgentFilter(e.target.value)}
-                    className="bg-soft-meadow text-deep-ink text-[12px] font-sans px-3 py-1.5 rounded-full border border-onyx/10 focus:outline-none"
-                  >
-                    <option value="all">All Agents</option>
-                    {agentsList.map((ag: any) => (
-                      <option key={ag.agent_id} value={ag.agent_id}>
-                        {ag.name || ag.agent_id}
-                      </option>
-                    ))}
-                  </select>
-
-                  <select
-                    value={tokenSourceFilter}
-                    onChange={(e) => setTokenSourceFilter(e.target.value)}
-                    className="bg-soft-meadow text-deep-ink text-[12px] font-sans px-3 py-1.5 rounded-full border border-onyx/10 focus:outline-none"
-                  >
-                    <option value="all">All Sources</option>
-                    <option value="chat">Chat</option>
-                    <option value="stream">Chat Stream</option>
-                    <option value="cron">Cron Automation</option>
-                    <option value="heartbeat">Heartbeat Loop</option>
-                    <option value="channel">External Channel</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="border border-onyx/10 rounded-2xl overflow-hidden">
-                <div className="max-h-96 overflow-y-auto">
-                  <table className="w-full text-left border-collapse text-body-sm font-sans">
-                    <thead>
-                      <tr className="border-b border-onyx/10 bg-soft-meadow/60 text-[11px] font-semibold uppercase tracking-wider text-slate sticky top-0 bg-soft-meadow z-10">
-                        <th className="py-2.5 px-3">Time</th>
-                        <th className="py-2.5 px-3">Agent</th>
-                        <th className="py-2.5 px-3">Model</th>
-                        <th className="py-2.5 px-3">Source</th>
-                        <th className="py-2.5 px-3 text-right">Prompt</th>
-                        <th className="py-2.5 px-3 text-right">Completion</th>
-                        <th className="py-2.5 px-3 text-right">Total</th>
-                        <th className="py-2.5 px-3 text-right">Cost (USD)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-onyx/5 font-mono text-[12px]">
-                      {tokenHistory.length > 0 ? (
-                        tokenHistory.map((rec) => (
-                          <tr key={rec.id} className="hover:bg-soft-meadow/30 transition-colors">
-                            <td className="py-2.5 px-3 whitespace-nowrap text-slate text-[11px]">
-                              {new Date(rec.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                            </td>
-                            <td className="py-2.5 px-3 font-semibold text-deep-ink max-w-[120px] truncate">
-                              {rec.agent_id}
-                            </td>
-                            <td className="py-2.5 px-3 text-deep-ink max-w-[130px] truncate">
-                              {rec.model}
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-onyx/5 border border-onyx/10 text-deep-ink">
-                                {rec.source}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3 text-right text-slate">
-                              {rec.prompt_tokens.toLocaleString()}
-                            </td>
-                            <td className="py-2.5 px-3 text-right text-slate">
-                              {rec.completion_tokens.toLocaleString()}
-                            </td>
-                            <td className="py-2.5 px-3 text-right font-semibold text-deep-ink">
-                              {rec.total_tokens.toLocaleString()}
-                            </td>
-                            <td className="py-2.5 px-3 text-right text-emerald-700 font-semibold">
-                              ${rec.estimated_cost_usd.toFixed(5)}
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={8} className="py-8 text-center text-caption text-slate font-sans">
-                            No token ledger events recorded yet. Start interacting with agents to generate live usage statistics.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </Card>
-          </div>
-        )}
+        {activeTab === 'tokens' && <TokenLedgerPanel />}
 
         {/* TAB: Hardware & Network */}
         {activeTab === 'network' && (
@@ -1027,14 +736,14 @@ export function SettingsPage() {
             <Card className="p-6 border border-onyx/10 bg-canvas/90">
               <h3 className="font-serif text-heading-sm text-deep-ink mb-4 flex items-center gap-2">
                 <Activity className="w-5 h-5 text-deep-ink" />
-                <span>Live Hardware Gauges</span>
+                <span>{t('network.hardwareTitle')}</span>
               </h3>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* CPU Gauge */}
                 <div className="p-4 bg-soft-meadow rounded-[20px] border border-onyx/5">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-caption font-semibold uppercase text-slate">CPU Utilization</span>
+                    <span className="text-caption font-semibold uppercase text-slate">{t('network.cpu')}</span>
                     <Cpu className="w-4 h-4 text-deep-ink" />
                   </div>
                   <div className="text-heading font-serif text-deep-ink">
@@ -1047,18 +756,18 @@ export function SettingsPage() {
                     />
                   </div>
                   <div className="text-[11px] font-mono text-slate mt-2">
-                    {metrics?.cpu?.cores || 1} Cores Active • {metrics?.cpu?.model || 'Hardware HAL'}
+                    {t('network.cores', { count: metrics?.cpu?.cores || 1, model: metrics?.cpu?.model || 'Hardware HAL' })}
                   </div>
                 </div>
 
                 {/* RAM Gauge */}
                 <div className="p-4 bg-soft-meadow rounded-[20px] border border-onyx/5">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-caption font-semibold uppercase text-slate">System Memory</span>
+                    <span className="text-caption font-semibold uppercase text-slate">{t('network.memory')}</span>
                     <HardDrive className="w-4 h-4 text-deep-ink" />
                   </div>
                   <div className="text-heading font-serif text-deep-ink">
-                    {metrics?.memory?.used_mb || 0} MB
+                    {t('network.megabytes', { value: metrics?.memory?.used_mb || 0 })}
                   </div>
                   <div className="w-full bg-onyx/10 h-2 rounded-full mt-3 overflow-hidden">
                     <div
@@ -1067,18 +776,18 @@ export function SettingsPage() {
                     />
                   </div>
                   <div className="text-[11px] font-mono text-slate mt-2">
-                    Total: {metrics?.memory?.total_mb || 0} MB (Daemon: {metrics?.memory?.actond_mb || 0} MB)
+                    {t('network.memoryDetail', { total: metrics?.memory?.total_mb || 0, daemon: metrics?.memory?.actond_mb || 0 })}
                   </div>
                 </div>
 
                 {/* Storage Gauge */}
                 <div className="p-4 bg-soft-meadow rounded-[20px] border border-onyx/5">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-caption font-semibold uppercase text-slate">Disk Storage</span>
+                    <span className="text-caption font-semibold uppercase text-slate">{t('network.disk')}</span>
                     <Layers className="w-4 h-4 text-deep-ink" />
                   </div>
                   <div className="text-heading font-serif text-deep-ink">
-                    {((metrics?.disk?.used_gb || 0)).toFixed(1)} GB
+                    {t('network.gigabytes', { value: (metrics?.disk?.used_gb || 0).toFixed(1) })}
                   </div>
                   <div className="w-full bg-onyx/10 h-2 rounded-full mt-3 overflow-hidden">
                     <div
@@ -1087,14 +796,14 @@ export function SettingsPage() {
                     />
                   </div>
                   <div className="text-[11px] font-mono text-slate mt-2">
-                    Total: {metrics?.disk?.total_gb || 0} GB (Data Dir: {metrics?.disk?.data_dir_gb || 0} GB)
+                    {t('network.diskDetail', { total: metrics?.disk?.total_gb || 0, data: metrics?.disk?.data_dir_gb || 0 })}
                   </div>
                 </div>
 
                 {/* Uptime & Thermal */}
                 <div className="p-4 bg-soft-meadow rounded-[20px] border border-onyx/5">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-caption font-semibold uppercase text-slate">Uptime & Health</span>
+                    <span className="text-caption font-semibold uppercase text-slate">{t('network.uptime')}</span>
                     <Clock className="w-4 h-4 text-deep-ink" />
                   </div>
                   <div className="text-heading font-serif text-deep-ink">
@@ -1102,10 +811,10 @@ export function SettingsPage() {
                   </div>
                   <div className="flex items-center gap-1.5 text-caption font-mono text-emerald-700 mt-3">
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Kernel Normal</span>
+                    <span>{t('network.healthy')}</span>
                   </div>
                   <div className="text-[11px] font-mono text-slate mt-2">
-                    Temp: {metrics?.cpu?.temperature_celsius || 42}°C
+                    {t('network.temperature', { value: metrics?.cpu?.temperature_celsius || 42 })}
                   </div>
                 </div>
               </div>
@@ -1118,21 +827,21 @@ export function SettingsPage() {
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2.5">
                     <Shield className="w-5 h-5 text-deep-ink" />
-                    <h4 className="font-serif text-heading-sm text-deep-ink">Tailscale Mesh VPN (tsnet)</h4>
+                    <h4 className="font-serif text-heading-sm text-deep-ink">{t('network.tailscaleTitle')}</h4>
                   </div>
                   <Badge variant={tailscale?.connected ? 'active' : 'stopped'}>
-                    {tailscale?.connected ? 'Mesh Active' : 'Disabled'}
+                    {tailscale?.connected ? t('network.meshActive') : t('providers.disabled')}
                   </Badge>
                 </div>
                 <p className="font-sans text-caption text-slate mb-4">
-                  End-to-end WireGuard mesh tunnel for secure remote access without port forwarding.
+                  {t('network.tailscaleDescription')}
                 </p>
 
                 {tailscale?.connected && (
                   <div className="space-y-1.5 font-mono text-caption text-slate bg-soft-meadow p-3 rounded-xl border border-onyx/5">
-                    <div>Node IP: <strong className="text-deep-ink">{tailscale.ip}</strong></div>
-                    <div>Hostname: <strong className="text-deep-ink">{tailscale.hostname}</strong></div>
-                    <div>Peers Count: <strong className="text-deep-ink">{tailscale.peers_count}</strong></div>
+                    <div>{t('network.nodeIP')} <strong className="text-deep-ink">{tailscale.ip}</strong></div>
+                    <div>{t('network.hostname')} <strong className="text-deep-ink">{tailscale.hostname}</strong></div>
+                    <div>{t('network.peers')} <strong className="text-deep-ink">{tailscale.peers_count}</strong></div>
                   </div>
                 )}
               </Card>
@@ -1142,7 +851,7 @@ export function SettingsPage() {
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2.5">
                     <Wifi className="w-5 h-5 text-deep-ink" />
-                    <h4 className="font-serif text-heading-sm text-deep-ink">Wireless Network (Wi-Fi)</h4>
+                    <h4 className="font-serif text-heading-sm text-deep-ink">{t('network.wifiTitle')}</h4>
                   </div>
                   <Button
                     variant="ghost"
@@ -1150,7 +859,7 @@ export function SettingsPage() {
                     onClick={handleScanWifi}
                     disabled={loadingWifi}
                   >
-                    {loadingWifi ? 'Scanning...' : 'Scan Wi-Fi'}
+                    {loadingWifi ? t('network.scanning') : t('network.scan')}
                   </Button>
                 </div>
 
@@ -1160,7 +869,7 @@ export function SettingsPage() {
                     onChange={(e) => setSelectedSSID(e.target.value)}
                     className="w-full bg-soft-meadow text-deep-ink p-2.5 rounded-full border border-onyx/10 text-body-sm font-sans focus:outline-none"
                   >
-                    <option value="">Select Wi-Fi Network ({wifiNetworks.length} found)</option>
+                    <option value="">{t('network.selectWifi', { count: wifiNetworks.length })}</option>
                     {wifiNetworks.map((net) => (
                       <option key={net.ssid} value={net.ssid}>
                         {net.ssid} ({net.signal_strength || 80}%)
@@ -1170,7 +879,7 @@ export function SettingsPage() {
 
                   <Input
                     type="password"
-                    placeholder="Wi-Fi Password..."
+                    placeholder={t('network.wifiPassword')}
                     value={wifiPassword}
                     onChange={(e) => setWifiPassword(e.target.value)}
                   />
@@ -1182,7 +891,7 @@ export function SettingsPage() {
                     disabled={!selectedSSID}
                     className="w-full justify-center"
                   >
-                    Join Network
+                    {t('network.join')}
                   </Button>
                 </div>
               </Card>
@@ -1197,10 +906,10 @@ export function SettingsPage() {
               <div>
                 <h3 className="font-serif text-heading-sm text-deep-ink flex items-center gap-2">
                   <FileText className="w-5 h-5 text-deep-ink" />
-                  <span>Security & Action Audit Logs</span>
+                  <span>{t('audit.title')}</span>
                 </h3>
                 <p className="font-sans text-caption text-slate mt-0.5">
-                  Immutable log of all tool executions, API access, and agent operations.
+                  {t('audit.subtitle')}
                 </p>
               </div>
 
@@ -1221,7 +930,7 @@ export function SettingsPage() {
                 </div>
 
                 <Input
-                  placeholder="Search logs..."
+                  placeholder={t('audit.search')}
                   value={auditSearch}
                   onChange={(e) => setAuditSearch(e.target.value)}
                   className="max-w-[180px] py-1 text-caption"
@@ -1231,7 +940,7 @@ export function SettingsPage() {
 
             {filteredAuditLogs.length === 0 ? (
               <div className="py-16 text-center text-slate font-sans text-body-sm">
-                No audit log entries found matching criteria.
+                {t('audit.empty')}
               </div>
             ) : (
               <div className="divide-y divide-onyx/5 max-h-[500px] overflow-y-auto">
@@ -1250,12 +959,12 @@ export function SettingsPage() {
                           }
                           className="text-[10px]"
                         >
-                          {log.risk_level} Risk
+                          {t('audit.risk', { level: log.risk_level })}
                         </Badge>
-                        <span className="text-caption font-mono text-slate">Status: {log.status}</span>
+                        <span className="text-caption font-mono text-slate">{t('audit.status', { status: log.status })}</span>
                       </div>
                       <div className="text-caption font-mono text-slate">
-                        Agent: {log.agent_id} • Trace: {log.trace_id} • Exec: {log.execution_time_ms}ms
+                        {t('audit.detail', { agent: log.agent_id, trace: log.trace_id, duration: log.execution_time_ms })}
                       </div>
                       {log.error && (
                         <div className="text-[11px] font-mono text-red-600 bg-red-500/10 p-1.5 rounded-md mt-1 inline-block">
@@ -1286,9 +995,9 @@ export function SettingsPage() {
                   className="h-10 w-auto object-contain shrink-0"
                 />
                 <div className="border-l border-onyx/10 pl-5 hidden sm:block">
-                  <div className="font-serif font-bold text-body text-deep-ink">ActonOS Kernel Runtime</div>
+                  <div className="font-serif font-bold text-body text-deep-ink">{t('maintenance.runtimeTitle')}</div>
                   <p className="font-sans text-caption text-slate">
-                    Autonomous Extensible AI Agent Operating System • Dual-Runtime (Bare-metal & Docker)
+                    {t('maintenance.runtimeDescription')}
                   </p>
                 </div>
               </div>
@@ -1308,18 +1017,18 @@ export function SettingsPage() {
               <Card className="p-6 border border-onyx/10 bg-canvas/90 space-y-4">
                 <h4 className="font-serif text-heading-sm text-deep-ink flex items-center gap-2">
                   <HardDrive className="w-5 h-5 text-deep-ink" />
-                  <span>Storage Breakdown & Backup</span>
+                  <span>{t('maintenance.storageTitle')}</span>
                 </h4>
                 <p className="font-sans text-caption text-slate">
-                  Database storage usage and state snapshot for disaster recovery.
+                  {t('maintenance.storageDescription')}
                 </p>
 
                 {storageInfo && (
                   <div className="space-y-2 font-mono text-caption text-slate bg-soft-meadow p-3 rounded-xl border border-onyx/5">
-                    <div>Storage (DB): <strong className="text-deep-ink">{(storageInfo.storage_bytes / (1024 * 1024)).toFixed(2)} MB</strong></div>
-                    <div>Vectors: <strong className="text-deep-ink">{(storageInfo.vectors_bytes / (1024 * 1024)).toFixed(2)} MB</strong></div>
-                    <div>Workspace: <strong className="text-deep-ink">{(storageInfo.workspace_bytes / (1024 * 1024)).toFixed(2)} MB</strong></div>
-                    <div>Total Size: <strong className="text-deep-ink">{(storageInfo.total_bytes / (1024 * 1024)).toFixed(2)} MB</strong></div>
+                    <div>{t('maintenance.database')} <strong className="text-deep-ink">{t('maintenance.megabytes', { value: (storageInfo.storage_bytes / (1024 * 1024)).toFixed(2) })}</strong></div>
+                    <div>{t('maintenance.vectors')} <strong className="text-deep-ink">{t('maintenance.megabytes', { value: (storageInfo.vectors_bytes / (1024 * 1024)).toFixed(2) })}</strong></div>
+                    <div>{t('maintenance.workspace')} <strong className="text-deep-ink">{t('maintenance.megabytes', { value: (storageInfo.workspace_bytes / (1024 * 1024)).toFixed(2) })}</strong></div>
+                    <div>{t('maintenance.total')} <strong className="text-deep-ink">{t('maintenance.megabytes', { value: (storageInfo.total_bytes / (1024 * 1024)).toFixed(2) })}</strong></div>
                   </div>
                 )}
 
@@ -1331,13 +1040,13 @@ export function SettingsPage() {
                     try {
                       await api.downloadBackup();
                       success('Backup Exported', 'ActonOS state database snapshot downloaded.');
-                    } catch (err: any) {
-                      error('Backup Failed', err.message);
+                    } catch (err) {
+                      error('Backup Failed', getErrorMessage(err));
                     }
                   }}
                   className="w-full justify-center"
                 >
-                  Download State Snapshot
+                  {t('maintenance.download')}
                 </Button>
               </Card>
 
@@ -1346,20 +1055,20 @@ export function SettingsPage() {
                 <div className="flex items-center justify-between">
                   <h4 className="font-serif text-heading-sm text-deep-ink flex items-center gap-2">
                     <DownloadCloud className="w-5 h-5 text-deep-ink" />
-                    <span>OTA Kernel Updates</span>
+                    <span>{t('maintenance.otaTitle')}</span>
                   </h4>
                   <Badge variant="neutral">v0.1.0 (Stable)</Badge>
                 </div>
                 <p className="font-sans text-caption text-slate">
-                  Check GitHub releases for atomic A/B kernel partition firmware updates.
+                  {t('maintenance.otaDescription')}
                 </p>
 
                 {otaStatus && (
                   <div className="space-y-1 font-mono text-caption text-slate bg-soft-meadow p-3 rounded-xl border border-onyx/5">
-                    <div>Current: <strong className="text-deep-ink">v{otaStatus.current_version}</strong></div>
-                    <div>Latest: <strong className="text-deep-ink">v{otaStatus.latest_version}</strong></div>
-                    <div>Update Available: <span className={otaStatus.update_available ? 'text-hi-yellow font-bold' : 'text-emerald-700'}>
-                      {otaStatus.update_available ? 'YES' : 'NO'}
+                    <div>{t('maintenance.current')} <strong className="text-deep-ink">v{otaStatus.current_version}</strong></div>
+                    <div>{t('maintenance.latest')} <strong className="text-deep-ink">v{otaStatus.latest_version}</strong></div>
+                    <div>{t('maintenance.updateAvailable')} <span className={otaStatus.update_available ? 'text-hi-yellow font-bold' : 'text-emerald-700'}>
+                      {otaStatus.update_available ? t('maintenance.yes') : t('maintenance.no')}
                     </span></div>
                   </div>
                 )}
@@ -1371,7 +1080,7 @@ export function SettingsPage() {
                   disabled={checkingOTA}
                   className="w-full justify-center"
                 >
-                  {checkingOTA ? 'Checking Releases...' : 'Check for Updates'}
+                  {checkingOTA ? t('maintenance.checking') : t('maintenance.check')}
                 </Button>
               </Card>
             </div>
@@ -1384,9 +1093,9 @@ export function SettingsPage() {
         isOpen={isRestartModalOpen}
         onClose={() => setIsRestartModalOpen(false)}
         onConfirm={handleRestartDaemon}
-        title="Restart ActonOS Kernel"
-        description="Are you sure you want to restart the ActonOS daemon? All active background ReAct tasks will be cleanly re-initialized."
-        confirmLabel="Restart Daemon"
+        title={t('restart.title')}
+        description={t('restart.description')}
+        confirmLabel={t('restart.confirm')}
         variant="warning"
       />
     </div>

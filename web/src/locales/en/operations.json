@@ -58,5 +58,11 @@
     "failed": "Approval decision failed",
     "approvedFeedback": "Reviewed and approved from Live Operations",
     "defaultFeedback": "Rejected by the operator from Live Operations"
+  },
+  "units": {
+    "milliseconds": "{{value}} ms",
+    "cpuPercent": "{{value}}% CPU",
+    "megabytes": "{{value}} MB",
+    "tokens": "{{value}} tokens"
   }
 }

@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { getErrorMessage } from '@/lib/errors';
+import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
 import { Card } from '@/components/ui/Card';
@@ -28,7 +30,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { api } from '@/lib/api';
-import type { AgentManifest, ToolInfo, LLMProviderInfo } from '@/lib/types';
+import type { AgentManifest, ApprovalLevel, ToolInfo, LLMProviderInfo } from '@/lib/types';
 import { LATEST_MODEL_CATALOG, getCategorizedModels } from '@/lib/models';
 
 export interface AgentStudioPageProps {
@@ -91,6 +93,7 @@ const AVAILABLE_CHANNELS = [
 ];
 
 export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPageProps) {
+  const { t } = useTranslation('agents');
   const { success, error, info } = useToast();
   const isNew = agentID === 'new';
 
@@ -208,8 +211,8 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             }
           } catch {}
         }
-      } catch (err: any) {
-        error('Failed to load agent details', err.message);
+      } catch (err) {
+        error('Failed to load agent details', getErrorMessage(err));
       } finally {
         setLoading(false);
       }
@@ -262,7 +265,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
       if (soul && soul.trim()) {
         try {
           await api.saveSoul(soul, targetID);
-        } catch (sErr: any) {
+        } catch (sErr) {
           console.warn('Failed to save SOUL.md:', sErr);
         }
       }
@@ -272,8 +275,8 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
       } else {
         success('Agent Saved', `Manifest & SOUL persona for "${name}" updated.`);
       }
-    } catch (err: any) {
-      error('Failed to save agent', err.message);
+    } catch (err) {
+      error('Failed to save agent', getErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -338,7 +341,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
   if (loading) {
     return (
       <div className="py-24 text-center text-slate font-sans text-body">
-        Loading Agent Studio...
+        {t('studio.loading')}
       </div>
     );
   }
@@ -361,23 +364,23 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             <button
               onClick={onBack}
               className="p-2 rounded-full bg-soft-meadow hover:bg-black/5 text-deep-ink border border-onyx/10 transition-all cursor-pointer"
-              title="Back to agents list"
+              title={t('studio.back')}
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-caption uppercase tracking-wider text-slate font-semibold">
-                  {isNew ? 'New Agent Studio' : 'Agent Studio Manifest'}
+                  {isNew ? t('studio.newEyebrow') : t('studio.eyebrow')}
                 </span>
                 {isSystem && (
                   <Badge variant="active" className="text-[10px]">
-                    ⭐ Root System Agent
+                    {t('studio.rootBadge')}
                   </Badge>
                 )}
               </div>
               <h1 className="font-serif text-heading-lg text-deep-ink tracking-tight flex items-center gap-2">
-                <span>{name || 'Untitled Agent'}</span>
+                <span>{name || t('studio.untitled')}</span>
               </h1>
             </div>
           </div>
@@ -390,7 +393,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                 icon={<MessageSquare className="w-3.5 h-3.5" />}
                 onClick={() => onOpenChat(agentID)}
               >
-                Launch Session
+                {t('studio.launch')}
               </Button>
             )}
             <Button
@@ -400,7 +403,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               onClick={handleSave}
               disabled={saving}
             >
-              {saving ? 'Saving...' : 'Save Agent'}
+              {saving ? t('studio.saving') : t('studio.save')}
             </Button>
           </div>
         </div>
@@ -412,23 +415,23 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-caption font-semibold text-deep-ink mb-1">
-                    Agent Name
+                    {t('studio.name')}
                   </label>
                   <Input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g., Senior Full-Stack Architect"
+                    placeholder={t('studio.namePlaceholder')}
                   />
                 </div>
 
                 <div>
                   <label className="block text-caption font-semibold text-deep-ink mb-1">
-                    Identifier (Slug)
+                    {t('studio.identifier')}
                   </label>
                   <Input
                     value={idSlug}
                     onChange={(e) => setIdSlug(e.target.value)}
-                    placeholder="e.g., agent_fullstack_lead"
+                    placeholder={t('studio.identifierPlaceholder')}
                     disabled={!isNew || isSystem}
                   />
                 </div>
@@ -436,12 +439,12 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
 
               <div>
                 <label className="block text-caption font-semibold text-deep-ink mb-1">
-                  Description & Role
+                  {t('studio.description')}
                 </label>
                 <Input
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe the agent's responsibilities, expertise, and operational boundaries..."
+                  placeholder={t('studio.descriptionPlaceholder')}
                 />
               </div>
             </div>
@@ -450,7 +453,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             <div className="p-4 bg-soft-meadow rounded-2xl border border-onyx/5 flex flex-col justify-between">
               <div>
                 <span className="block text-caption font-semibold text-deep-ink mb-2">
-                  Lifecycle Status
+                  {t('studio.lifecycle')}
                 </span>
                 <div className="flex items-center gap-2">
                   <button
@@ -462,7 +465,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                         : 'bg-canvas text-deep-ink hover:bg-black/5'
                     }`}
                   >
-                    Active
+                    {t('studio.active')}
                   </button>
                   <button
                     type="button"
@@ -473,13 +476,13 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                         : 'bg-canvas text-deep-ink hover:bg-black/5'
                     }`}
                   >
-                    Stopped
+                    {t('studio.stopped')}
                   </button>
                 </div>
               </div>
 
               <div className="pt-3 border-t border-onyx/10 flex items-center justify-between text-caption text-slate font-mono">
-                <span>Avatar: {avatarIcon}</span>
+                <span>{t('studio.avatar', { icon: avatarIcon })}</span>
                 <div className="w-8 h-8 rounded-full bg-deep-ink text-hi-yellow flex items-center justify-center">
                   <Bot className="w-4 h-4" />
                 </div>
@@ -496,7 +499,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               activeTab === 'prompt' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
             }`}
           >
-            📝 Instructions
+            {t('studio.tabs.instructions')}
           </button>
           <button
             onClick={() => setActiveTab('soul')}
@@ -504,7 +507,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               activeTab === 'soul' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
             }`}
           >
-            ✨ Persona & Soul (SOUL.md)
+            {t('studio.tabs.soul')}
           </button>
           <button
             onClick={() => setActiveTab('memory')}
@@ -512,7 +515,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               activeTab === 'memory' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
             }`}
           >
-            🧠 Memory (MEMORY.md)
+            {t('studio.tabs.memory')}
           </button>
           <button
             onClick={() => setActiveTab('model')}
@@ -520,7 +523,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               activeTab === 'model' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
             }`}
           >
-            ⚡ LLM & Reasoning ({primaryIsReady ? '✓ Active' : '⚠️ Key Needed'})
+            {t('studio.tabs.model', { status: primaryIsReady ? t('studio.ready') : t('studio.keyNeeded') })}
           </button>
           <button
             onClick={() => setActiveTab('tools')}
@@ -528,7 +531,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               activeTab === 'tools' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
             }`}
           >
-            🧰 Tools ({isAllToolsSelected ? 'All (*)' : authorizedTools.length})
+            {t('studio.tabs.tools', { value: isAllToolsSelected ? t('studio.allTools') : authorizedTools.length })}
           </button>
           <button
             onClick={() => setActiveTab('channels')}
@@ -536,7 +539,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               activeTab === 'channels' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
             }`}
           >
-            📡 Channels ({listenAllChannels ? 'All' : selectedChannels.length})
+            {t('studio.tabs.channels', { value: listenAllChannels ? t('studio.all') : selectedChannels.length })}
           </button>
           <button
             onClick={() => setActiveTab('governance')}
@@ -544,7 +547,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               activeTab === 'governance' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
             }`}
           >
-            🛡️ Governance
+            {t('studio.tabs.governance')}
           </button>
         </div>
 
@@ -555,10 +558,10 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               <div>
                 <h3 className="font-serif text-heading-sm text-deep-ink flex items-center gap-2">
                   <FileCode className="w-5 h-5 text-deep-ink" />
-                  <span>Cognitive System Instructions</span>
+                  <span>{t('studio.prompt.title')}</span>
                 </h3>
                 <p className="text-caption text-slate">
-                  Defines the agent's core task capabilities, reasoning loops, and procedural directives.
+                  {t('studio.prompt.description')}
                 </p>
               </div>
 
@@ -568,7 +571,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                 icon={<RotateCcw className="w-3.5 h-3.5" />}
                 onClick={loadStandardPreset}
               >
-                Load Standard Preset
+                {t('studio.prompt.loadPreset')}
               </Button>
             </div>
 
@@ -577,12 +580,12 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               value={systemInstructions}
               onChange={(e) => setSystemInstructions(e.target.value)}
               className="w-full bg-soft-meadow text-deep-ink p-4 rounded-2xl border border-onyx/10 font-mono text-body-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-deep-ink/20"
-              placeholder="Enter system instructions..."
+              placeholder={t('studio.prompt.placeholder')}
             />
 
             <div className="flex items-center justify-between text-caption font-mono text-slate">
-              <span>Length: {systemInstructions.length} characters</span>
-              <span className="text-emerald-700 font-semibold">ActonOS Standard</span>
+              <span>{t('studio.length', { count: systemInstructions.length })}</span>
+              <span className="text-emerald-700 font-semibold">{t('studio.prompt.standard')}</span>
             </div>
           </Card>
         )}
@@ -594,10 +597,10 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               <div>
                 <h3 className="font-serif text-heading-sm text-deep-ink flex items-center gap-2">
                   <Sparkles className="w-5 h-5 text-amber-500" />
-                  <span>Agent Persona & Demeanor Kernel (SOUL.md)</span>
+                  <span>{t('studio.soul.title')}</span>
                 </h3>
                 <p className="text-caption text-slate">
-                  Defines this specific agent's conversational tone, philosophy, demeanor, and behavioral boundaries.
+                  {t('studio.soul.description')}
                 </p>
               </div>
 
@@ -608,7 +611,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                   icon={<RotateCcw className="w-3.5 h-3.5" />}
                   onClick={loadStandardSoulTemplate}
                 >
-                  Load Soul Template
+                  {t('studio.soul.loadTemplate')}
                 </Button>
               </div>
             </div>
@@ -618,13 +621,13 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               value={soul}
               onChange={(e) => setSoul(e.target.value)}
               className="w-full bg-soft-meadow text-deep-ink p-4 rounded-2xl border border-onyx/10 font-mono text-body-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-deep-ink/20"
-              placeholder="# Agent SOUL.md&#10;Describe the agent's unique voice, demeanor, and philosophical principles..."
+              placeholder={t('studio.soul.placeholder')}
             />
 
             <div className="flex items-center justify-between text-caption font-mono text-slate">
-              <span>Length: {soul.length} characters</span>
+              <span>{t('studio.length', { count: soul.length })}</span>
               <span className="text-amber-700 font-semibold flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5" /> Isolated Agent Soul
+                <Sparkles className="w-3.5 h-3.5" /> {t('studio.soul.isolated')}
               </span>
             </div>
           </Card>
@@ -637,10 +640,10 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               <div>
                 <h3 className="font-serif text-heading-sm text-deep-ink flex items-center gap-2">
                   <Brain className="w-5 h-5 text-indigo-600" />
-                  <span>Persistent Episodic Memory Diary (MEMORY.md)</span>
+                  <span>{t('studio.memory.title')}</span>
                 </h3>
                 <p className="text-caption text-slate">
-                  Autonomous reflections, user preferences, and synthesized long-term knowledge accumulated by this agent across sessions.
+                  {t('studio.memory.description')}
                 </p>
               </div>
 
@@ -656,7 +659,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                   }
                 }}
               >
-                Refresh Memory
+                {t('studio.memory.refresh')}
               </Button>
             </div>
 
@@ -670,17 +673,17 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             ) : (
               <div className="p-12 text-center bg-soft-meadow rounded-2xl border border-onyx/5">
                 <Brain className="w-10 h-10 text-slate/50 mx-auto mb-3" />
-                <h4 className="font-serif text-heading-sm text-deep-ink mb-1">No Episodic Memory Recorded Yet</h4>
+                <h4 className="font-serif text-heading-sm text-deep-ink mb-1">{t('studio.memory.empty')}</h4>
                 <p className="font-sans text-caption text-slate max-w-md mx-auto">
-                  As you interact with this agent in Chat and background tasks, the ReAct reflection daemon will synthesize key decisions, project conventions, and user preferences into persistent timestamped memory here.
+                  {t('studio.memory.emptyDescription')}
                 </p>
               </div>
             )}
 
             <div className="flex items-center justify-between text-caption font-mono text-slate">
-              <span>Length: {memoryMD.length} characters</span>
+              <span>{t('studio.length', { count: memoryMD.length })}</span>
               <span className="text-indigo-700 font-semibold flex items-center gap-1">
-                <Brain className="w-3.5 h-3.5" /> Autonomous Long-Term Memory
+                <Brain className="w-3.5 h-3.5" /> {t('studio.memory.longTerm')}
               </span>
             </div>
           </Card>
@@ -697,17 +700,17 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                 </div>
                 <div>
                   <h4 className="font-serif text-body font-semibold text-deep-ink">
-                    Dynamic LLM Provider Synchronization
+                    {t('studio.model.syncTitle')}
                   </h4>
                   <p className="font-sans text-caption text-slate">
-                    Agent automatically routes requests through providers configured in your hardware vault.
+                    {t('studio.model.syncDescription')}
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
                 <span className="text-caption font-mono text-slate">
-                  {configuredProviders.filter((p) => p.configured && p.enabled).length} Provider(s) Active
+                  {t('studio.model.providersActive', { count: configuredProviders.filter((p) => p.configured && p.enabled).length })}
                 </span>
               </div>
             </div>
@@ -715,7 +718,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             <Card className="p-6 border border-onyx/10 bg-canvas/90 space-y-6">
               <h3 className="font-serif text-heading-sm text-deep-ink flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-deep-ink" />
-                <span>Primary & Fallback Model Architecture</span>
+                <span>{t('studio.model.architecture')}</span>
               </h3>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -723,7 +726,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <label className="text-caption font-semibold text-deep-ink">
-                      Primary LLM Model
+                      {t('studio.model.primary')}
                     </label>
                     <button
                       type="button"
@@ -738,7 +741,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                     <Input
                       value={primaryModel}
                       onChange={(e) => setPrimaryModel(e.target.value)}
-                      placeholder="e.g. anthropic/claude-sonnet-4-6 or custom_openai/default-model"
+                      placeholder={t('studio.model.primaryPlaceholder')}
                       className="font-mono text-body-sm"
                     />
                   ) : (
@@ -799,7 +802,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <label className="text-caption font-semibold text-deep-ink">
-                      Fallback Recovery Model
+                      {t('studio.model.fallback')}
                     </label>
                     <button
                       type="button"
@@ -814,7 +817,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                     <Input
                       value={fallbackModel}
                       onChange={(e) => setFallbackModel(e.target.value)}
-                      placeholder="e.g. google/gemini-2.5-flash"
+                      placeholder={t('studio.model.fallbackPlaceholder')}
                       className="font-mono text-body-sm"
                     />
                   ) : (
@@ -863,7 +866,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                           : `Setup Required: Fallback provider key is missing`}
                       </span>
                       <span className="text-[11px] opacity-80 block mt-0.5">
-                        If primary model encounters rate limits or errors, cascade automatically recovers using this model.
+                        {t('studio.model.fallbackDescription')}
                       </span>
                     </div>
                   </div>
@@ -874,7 +877,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               <div className="p-4 bg-soft-meadow rounded-2xl border border-onyx/5 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-body-sm font-semibold text-deep-ink">
-                    Creativity Temperature: <strong className="font-mono">{temperature.toFixed(2)}</strong>
+                    {t('studio.model.temperature')} <strong className="font-mono">{temperature.toFixed(2)}</strong>
                   </span>
                   <span className="text-caption text-slate">
                     {temperature <= 0.2
@@ -899,7 +902,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               <div className="p-4 bg-soft-meadow rounded-2xl border border-onyx/5 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-body-sm font-semibold text-deep-ink">
-                    Max Generation Tokens: <strong className="font-mono">{maxTokens}</strong>
+                    {t('studio.model.maxTokens')} <strong className="font-mono">{maxTokens}</strong>
                   </span>
                   <span className="text-caption text-slate font-mono">1,024 - 16,384</span>
                 </div>
@@ -924,19 +927,19 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               <div>
                 <h3 className="font-serif text-heading-sm text-deep-ink flex items-center gap-2">
                   <Wrench className="w-5 h-5 text-deep-ink" />
-                  <span>Authorized Tools</span>
+                  <span>{t('studio.tools.title')}</span>
                 </h3>
                 <p className="text-caption text-slate">
-                  Select native tools, MCP servers, and skills this agent is permitted to execute.
+                  {t('studio.tools.description')}
                 </p>
               </div>
 
               <div className="flex items-center gap-2">
                 <Button variant="ghost" size="sm" onClick={handleClearTools}>
-                  Clear All
+                  {t('studio.tools.clear')}
                 </Button>
                 <Button variant="primary" size="sm" onClick={handleSelectAllTools}>
-                  Select All (*)
+                  {t('studio.tools.selectAll')}
                 </Button>
               </div>
             </div>
@@ -945,7 +948,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-900 text-body-sm flex items-center gap-2.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
                 <span>
-                  <strong>Full Authorization:</strong> Agent can use all available tools and plugins.
+                  <strong>{t('studio.tools.fullTitle')}</strong> {t('studio.tools.fullDescription')}
                 </span>
               </div>
             )}
@@ -997,10 +1000,10 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               <div>
                 <h3 className="font-serif text-heading-sm text-deep-ink flex items-center gap-2">
                   <Radio className="w-5 h-5 text-deep-ink" />
-                  <span>Chat Channels Inbound Listeners</span>
+                  <span>{t('studio.channels.title')}</span>
                 </h3>
                 <p className="text-caption text-slate">
-                  Specify which messaging channels trigger this agent when messages or mentions are received.
+                  {t('studio.channels.description')}
                 </p>
               </div>
             </div>
@@ -1017,14 +1020,14 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-semibold text-body-sm text-deep-ink">
-                    All Chat Channels (Default)
+                    {t('studio.channels.all')}
                   </span>
                   <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${listenAllChannels ? 'border-deep-ink bg-deep-ink text-white' : 'border-onyx/30'}`}>
                     {listenAllChannels && <Check className="w-3 h-3" />}
                   </div>
                 </div>
                 <p className="text-caption text-slate">
-                  Agent listens to incoming messages across Telegram, Discord, WhatsApp, and Webhook.
+                  {t('studio.channels.allDescription')}
                 </p>
               </div>
 
@@ -1038,14 +1041,14 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-semibold text-body-sm text-deep-ink">
-                    Specific Channels Only
+                    {t('studio.channels.specific')}
                   </span>
                   <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${!listenAllChannels ? 'border-deep-ink bg-deep-ink text-white' : 'border-onyx/30'}`}>
                     {!listenAllChannels && <Check className="w-3 h-3" />}
                   </div>
                 </div>
                 <p className="text-caption text-slate">
-                  Restrict this agent to only respond to specific channels chosen below.
+                  {t('studio.channels.specificDescription')}
                 </p>
               </div>
             </div>
@@ -1054,7 +1057,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             {!listenAllChannels && (
               <div className="space-y-3 pt-2">
                 <span className="text-caption font-semibold text-deep-ink uppercase tracking-wider block">
-                  Select Channels to Listen
+                  {t('studio.channels.select')}
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {AVAILABLE_CHANNELS.map((ch) => {
@@ -1100,13 +1103,13 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
           <Card className="p-6 border border-onyx/10 bg-canvas/90 space-y-6">
             <h3 className="font-serif text-heading-sm text-deep-ink flex items-center gap-2">
               <Shield className="w-5 h-5 text-deep-ink" />
-              <span>Governance & Permissions</span>
+              <span>{t('studio.governance.title')}</span>
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div>
                 <label className="block text-caption font-semibold text-deep-ink mb-1">
-                  Monthly Budget Cap ($ USD)
+                  {t('studio.governance.budget')}
                 </label>
                 <Input
                   type="number"
@@ -1115,37 +1118,37 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                   placeholder="50"
                 />
                 <span className="text-[11px] text-slate mt-1 block">
-                  Agent halts when monthly token cost reaches this limit.
+                  {t('studio.governance.budgetHelp')}
                 </span>
               </div>
 
               <div>
                 <label className="block text-caption font-semibold text-deep-ink mb-1">
-                  Human Approval Level
+                  {t('studio.governance.approval')}
                 </label>
                 <select
                   value={approvalLevel}
-                  onChange={(e) => setApprovalLevel(e.target.value as any)}
+                  onChange={(e) => setApprovalLevel(e.target.value as ApprovalLevel)}
                   className="w-full bg-soft-meadow text-deep-ink p-2.5 rounded-full border border-onyx/10 text-body-sm font-sans focus:outline-none"
                 >
-                  <option value="Low">Low (Autonomous Auto-Execute)</option>
-                  <option value="Medium">Medium (Workspace Writes Allowed)</option>
-                  <option value="High">High (Confirm on Sensitive Actions)</option>
+                  <option value="Low">{t('studio.governance.low')}</option>
+                  <option value="Medium">{t('studio.governance.medium')}</option>
+                  <option value="High">{t('studio.governance.high')}</option>
                 </select>
               </div>
             </div>
 
             <div>
               <label className="block text-caption font-semibold text-deep-ink mb-1">
-                Allowed Workspace Paths
+                {t('studio.governance.paths')}
               </label>
               <Input
                 value={allowedPaths}
                 onChange={(e) => setAllowedPaths(e.target.value)}
-                placeholder="e.g., *, /data/workspace/project/*"
+                placeholder={t('studio.governance.pathsPlaceholder')}
               />
               <span className="text-[11px] text-slate mt-1 block">
-                Comma-separated file paths or wildcards (*) that this agent is permitted to access.
+                {t('studio.governance.pathsHelp')}
               </span>
             </div>
           </Card>

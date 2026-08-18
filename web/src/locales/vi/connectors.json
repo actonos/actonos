@@ -37,6 +37,26 @@
     "medium": "Rủi ro trung bình",
     "high": "Rủi ro cao"
   },
+  "ui": {
+    "connectTo": "Kết nối với {{connector}}",
+    "oauthBrowser": "OAuth 2.1 (đăng nhập trình duyệt)",
+    "directToken": "Token trực tiếp / PAT",
+    "browserAuthorization": "Ủy quyền liền mạch qua trình duyệt",
+    "browserAuthorizationHelp": "Tiếp tục đến màn hình đăng nhập bảo mật của {{connector}}. Sau khi phê duyệt, ActonOS trao đổi và lưu token truy cập trong kho mã hóa gắn với phần cứng.",
+    "clientId": "OAuth client ID",
+    "clientIdPlaceholder": "Client ID tùy chỉnh từ ứng dụng OAuth...",
+    "clientSecret": "OAuth client secret",
+    "clientSecretPlaceholder": "Client secret tùy chỉnh...",
+    "generateTokenOn": "Tạo token trên {{connector}}",
+    "encryptedEnclave": "Vùng mã hóa",
+    "refresh": "Làm mới",
+    "vaultCipher": "AES-256-GCM",
+    "oauthProtocol": "OAuth 2.1 PKCE",
+    "loading": "Đang tải connector...",
+    "emptyTitle": "Không có connector phù hợp với bộ lọc",
+    "emptyDescription": "Đặt lại bộ lọc danh mục hoặc tìm bằng từ khóa khác.",
+    "resetFilters": "Đặt lại bộ lọc"
+  },
   "details": {
     "account": "Tài khoản",
     "email": "Email",

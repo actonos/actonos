@@ -171,6 +171,17 @@ excluded. The xterm.js UI is an observation terminal, not an interactive host
 shell. Live Canvas is disabled until the operator explicitly configures
 `ACTONOS_CANVAS_URL`.
 
+The browser never persists the returned API bearer token in Web Storage.
+State-changing APIs can return `202 Accepted` with an exact-action approval;
+the UI must treat this as pending, open the global approval interruption, and
+must not display completion or apply optimistic state. MCP toggle and
+disconnect follow this same durable approval path.
+
+Live Canvas accepts same-origin relative paths, HTTPS, and plaintext HTTP only
+for localhost/loopback. Its iframe is sandboxed without clipboard permissions.
+The web server also emits Content Security Policy and Permissions Policy
+headers for embedded UI responses.
+
 ---
 
 ## Best Practices for Deployers

@@ -28,5 +28,20 @@
   "activeAgentInfo": "Thông tin Agent",
   "today": "Hôm nay",
   "yesterday": "Hôm qua",
-  "earlier": "Trước đó"
+  "earlier": "Trước đó",
+  "rootBadge": "? Root",
+  "root": "Root",
+  "toolsBound": "?? g?n {{count}} c?ng c?",
+  "manageAgents": "Qu?n l? Agent",
+  "agents": "Agent",
+  "clearConversation": "X?a h?i tho?i",
+  "newShort": "+ M?i",
+  "startConversation": "B?t ??u h?i tho?i th?i gian th?c v?i {{name}}",
+  "startDescription": "Stream token SSE th?i gian th?c, theo d?i th?c thi c?ng c? tr?c ti?p v? nh?t k? ki?m to?n b?o m?t b?t bi?n.",
+  "traces": "D?u v?t",
+  "arguments": "Tham s?:",
+  "noToolCalls": "Kh?ng c? l?nh g?i c?ng c? r? r?ng trong v?ng l?p n?y.",
+  "milliseconds": "{{value}} ms",
+  "copyResponse": "Sao ch?p ph?n h?i",
+  "connecting": "?ang k?t n?i t?ng m? h?nh..."
 }

@@ -59,7 +59,7 @@ export function WebhookCard({
               {t('webhook.name', 'Generic Inbound Webhook Gateway')}
             </h3>
             <span className="text-[11px] font-mono text-slate">
-              Universal HTTP Ingestion API
+              {t('ui.webhookApi')}
             </span>
           </div>
         </div>
@@ -81,7 +81,7 @@ export function WebhookCard({
         {/* Webhook Endpoint */}
         <div>
           <label className="text-[11px] font-semibold text-deep-ink block mb-1">
-            Endpoint URL
+            {t('ui.endpointUrl')}
           </label>
           <div className="p-2.5 bg-soft-meadow rounded-xl border border-onyx/10 flex items-center justify-between gap-2 text-caption font-mono text-deep-ink">
             <span className="truncate">{webhookEndpoint}</span>
@@ -89,7 +89,7 @@ export function WebhookCard({
               type="button"
               onClick={() => handleCopy(webhookEndpoint, 'url')}
               className="p-1.5 rounded-lg hover:bg-canvas text-slate hover:text-deep-ink transition-colors cursor-pointer shrink-0"
-              title="Copy endpoint"
+              title={t('ui.copyEndpoint')}
             >
               {copiedURL ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
             </button>
@@ -99,7 +99,7 @@ export function WebhookCard({
         {/* Webhook Secret */}
         <div>
           <label className="text-[11px] font-semibold text-deep-ink block mb-1">
-            Secret Key (X-Acton-Secret Header)
+            {t('ui.secretKey')}
           </label>
           <div className="p-2.5 bg-soft-meadow rounded-xl border border-onyx/10 flex items-center justify-between gap-2 text-caption font-mono text-deep-ink">
             <span className="truncate">
@@ -118,7 +118,7 @@ export function WebhookCard({
                 type="button"
                 onClick={() => handleCopy(webhookSecret, 'secret')}
                 className="p-1.5 rounded-lg hover:bg-canvas text-slate hover:text-deep-ink transition-colors cursor-pointer"
-                title="Copy secret"
+                title={t('ui.copySecret')}
               >
                 {copiedSecret ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
               </button>

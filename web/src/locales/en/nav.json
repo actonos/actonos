@@ -20,8 +20,44 @@
     "tools": "Tools",
     "system": "System"
   },
+  "categories": {
+    "overview": "Overview",
+    "aiManagement": "AI Management",
+    "configuration": "Configuration",
+    "conversation": "Conversation",
+    "operations": "Operations",
+    "observability": "Observability",
+    "scheduling": "Scheduling",
+    "systemTools": "System Tools",
+    "agentSkills": "Agent Skills",
+    "files": "Files",
+    "connections": "Connections",
+    "services": "Services",
+    "system": "System",
+    "kernel": "Kernel"
+  },
+  "sidebar": {
+    "open": "Open sidebar",
+    "expand": "Expand sidebar",
+    "collapse": "Collapse sidebar"
+  },
+  "session": {
+    "lock": "Lock",
+    "lockTitle": "Lock ActonOS session"
+  },
+  "language": {
+    "title": "Language",
+    "search": "Search language...",
+    "close": "Close language selector",
+    "full": "Full"
+  },
   "status": {
     "connected": "System Online",
-    "offline": "Offline"
+    "offline": "Offline",
+    "runtime": "Docker HAL"
+  },
+  "telemetry": {
+    "cpu": "CPU: {{value}}%",
+    "ram": "RAM: {{value}} MB"
   }
 }

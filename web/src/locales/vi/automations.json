@@ -1,52 +1,77 @@
 {
+  "eyebrow": "Lập lịch tự chủ chủ động",
+  "title": "Tự động hóa Cron",
+  "scheduled": "Đã lập lịch",
   "actions": {
-    "pause": "Tạm dừng",
-    "resume": "Tiếp tục"
+    "refresh": "Làm mới",
+    "newTask": "Lập lịch tác vụ mới"
   },
-  "toast": {
-    "pausedTitle": "Đã tạm dừng tự động hóa",
-    "resumedTitle": "Đã tiếp tục tự động hóa",
-    "toggleFailed": "Không thể cập nhật tự động hóa"
+  "tabs": {
+    "tasks": "Tác vụ đã lập lịch ({{count}})",
+    "history": "Lịch sử thực thi ({{count}})"
   },
-  "eyebrow": "Tự động hoá",
-  "title": "Tự động hoá",
-  "subtitle": "Lên lịch thực hiện tác vụ định kỳ và nhận thông báo tự động.",
-  "actions": {
-    "newTask": "Tác vụ mới",
-    "runNow": "Chạy ngay",
-    "edit": "Chỉnh sửa",
-    "delete": "Xoá",
-    "enable": "Bật",
-    "disable": "Tạm dừng"
+  "history": {
+    "emptyTitle": "Chưa có lịch sử thực thi",
+    "emptyDescription": "Khi tác vụ CRON hoặc pulse tự chủ chạy, thời lượng, token và nhật ký đầu ra sẽ được ghi lại tại đây.",
+    "columns": {
+      "status": "Trạng thái",
+      "time": "Thời gian thực thi",
+      "job": "Tác vụ / Agent",
+      "usage": "Thời lượng & Token",
+      "summary": "Prompt / Tóm tắt đầu ra"
+    },
+    "success": "Thành công",
+    "failed": "Thất bại",
+    "milliseconds": "{{value}} ms",
+    "tokens": "{{value}} token",
+    "prompt": "Prompt:"
+  },
+  "empty": {
+    "loading": "Đang tải tự động hóa...",
+    "title": "Chưa có tự động hóa theo lịch",
+    "description": "Tạo tác vụ lặp lại như bản tin hằng ngày, kiểm toán bảo mật, quét sức khỏe Git hoặc nhắc lịch họp.",
+    "action": "Lập lịch tác vụ đầu tiên"
   },
   "table": {
-    "taskName": "Tên tác vụ & Agent",
-    "schedule": "Lịch chạy",
-    "channel": "Kênh thông báo",
-    "lastRun": "Lần chạy cuối",
-    "status": "Trạng thái",
-    "actions": "Thao tác"
+    "schedule": "Lịch",
+    "name": "Tên tác vụ",
+    "agent": "Agent",
+    "directive": "Chỉ dẫn",
+    "route": "Tuyến thông báo",
+    "actions": "Thao tác",
+    "next": "Tiếp theo:"
   },
   "modal": {
-    "createTitle": "Lên lịch tác vụ mới",
-    "editTitle": "Sửa tác vụ",
+    "editTitle": "Sửa tác vụ Cron",
+    "createTitle": "Lập lịch tác vụ Cron mới",
     "nameLabel": "Tên tác vụ",
-    "namePlaceholder": "vd. Báo cáo buổi sáng hàng ngày",
+    "namePlaceholder": "ví dụ: Bản tin sáng & sức khỏe Repo",
     "agentLabel": "Agent thực thi",
-    "cronExprLabel": "Biểu thức lịch (Cron)",
-    "cronExprPlaceholder": "vd. 0 8 * * * (Hàng ngày lúc 8:00)",
-    "presetDaily": "Hàng ngày 8:00",
+    "cronExprLabel": "Biểu thức lịch Cron",
+    "presetDaily": "Hằng ngày 8 giờ",
     "presetHourly": "Mỗi giờ",
-    "presetWeekly": "Hàng tuần (Thứ 2 9:00)",
-    "presetCustom": "Tuỳ chỉnh",
-    "promptLabel": "Hướng dẫn / Prompt",
-    "promptPlaceholder": "Mô tả việc agent cần làm tự động...",
-    "channelLabel": "Kênh gửi thông báo",
-    "channelNone": "Không gửi",
-    "channelTelegram": "Telegram",
-    "channelWhatsApp": "WhatsApp",
-    "recipientLabel": "Người nhận / ID Chat",
-    "recipientPlaceholder": "vd. 123456789",
-    "save": "Lưu tác vụ"
+    "presetWeekly": "Hằng tuần (Thứ Hai 9 giờ)",
+    "promptLabel": "Chỉ dẫn / Prompt",
+    "channelLabel": "Kênh cảnh báo đẩy",
+    "channelTelegram": "Telegram Bot",
+    "channelWhatsApp": "WhatsApp Cloud API",
+    "channelDiscord": "Discord Bot",
+    "channelAll": "Mọi kênh đã ghép nối",
+    "channelNone": "Không gửi (Chỉ thực thi nội bộ)",
+    "accountLabel": "Tài khoản đích",
+    "allAccounts": "Mọi tài khoản / Phát rộng (*)",
+    "recipientLabel": "Người nhận / Chat ID",
+    "recipientPlaceholder": "Tự động / Đã ghép nối",
+    "cancel": "Hủy",
+    "scheduling": "Đang lập lịch...",
+    "save": "Lập lịch tác vụ"
+  },
+  "delete": {
+    "title": "Xóa tác vụ Cron",
+    "description": "Bạn có chắc muốn xóa tác vụ theo lịch này?",
+    "confirm": "Xóa tác vụ"
+  },
+  "toast": {
+    "toggleFailed": "Không thể cập nhật tự động hóa"
   }
 }

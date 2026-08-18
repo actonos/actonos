@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { getErrorMessage } from '@/lib/errors';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Save } from 'lucide-react';
@@ -13,6 +15,7 @@ interface SoulEditorModalProps {
 }
 
 export function SoulEditorModal({ isOpen, onClose, agentID = 'agent_system_core', agentName }: SoulEditorModalProps) {
+  const { t } = useTranslation('agents');
   const { success, error } = useToast();
   const [soul, setSoul] = useState('');
   const [loading, setLoading] = useState(false);
@@ -24,7 +27,7 @@ export function SoulEditorModal({ isOpen, onClose, agentID = 'agent_system_core'
       api
         .getSoul(agentID)
         .then((res) => setSoul(res.soul || ''))
-        .catch((err) => error('Failed to load SOUL.md', err.message))
+        .catch((err) => error(t('soulEditor.loadFailed'), getErrorMessage(err)))
         .finally(() => setLoading(false));
     }
   }, [isOpen, agentID]);
@@ -33,39 +36,39 @@ export function SoulEditorModal({ isOpen, onClose, agentID = 'agent_system_core'
     setSaving(true);
     try {
       await api.saveSoul(soul, agentID);
-      success('Agent Soul Updated', `SOUL.md synchronized for agent ${agentName || agentID}.`);
+      success(t('soulEditor.saved'), t('soulEditor.savedDescription', { agent: agentName || agentID }));
       onClose();
-    } catch (err: any) {
-      error('Failed to save SOUL.md', err.message);
+    } catch (err) {
+      error(t('soulEditor.saveFailed'), getErrorMessage(err));
     } finally {
       setSaving(false);
     }
   };
 
-  const displayName = agentName || (agentID === 'agent_system_core' ? 'Nova (Root System)' : agentID);
+  const displayName = agentName || (agentID === 'agent_system_core' ? t('soulEditor.rootName') : agentID);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`Agent Soul & Persona: ${displayName}`}>
+    <Modal isOpen={isOpen} onClose={onClose} title={t('soulEditor.title', { agent: displayName })}>
       <div className="space-y-4">
         <p className="text-body-sm text-slate font-sans">
-          The <strong>SOUL.md</strong> defines the isolated personality, core mission, emotional tone, and behavioral standards for <strong>{displayName}</strong>.
+          {t('soulEditor.descriptionPrefix')} <strong>{t('soulEditor.fileName')}</strong> {t('soulEditor.description', { agent: displayName })}
         </p>
 
         {loading ? (
-          <div className="py-12 text-center text-slate font-sans">Loading SOUL.md...</div>
+          <div className="py-12 text-center text-slate font-sans">{t('soulEditor.loading')}</div>
         ) : (
           <textarea
             rows={12}
             value={soul}
             onChange={(e) => setSoul(e.target.value)}
-            placeholder="# ActonOS Agent Soul&#10;Define personality, core mission, and tone of voice..."
+            placeholder={t('soulEditor.placeholder')}
             className="w-full bg-canvas text-deep-ink font-mono text-body-sm p-4 rounded-[16px] border border-onyx/20 focus:outline-none focus:ring-2 focus:ring-deep-ink"
           />
         )}
 
         <div className="flex items-center justify-end gap-2.5 pt-2">
           <Button variant="ghost" size="sm" onClick={onClose}>
-            Cancel
+            {t('soulEditor.cancel')}
           </Button>
           <Button
             variant="primary"
@@ -74,7 +77,7 @@ export function SoulEditorModal({ isOpen, onClose, agentID = 'agent_system_core'
             onClick={handleSave}
             disabled={saving || loading}
           >
-            {saving ? 'Saving...' : 'Save SOUL.md'}
+            {saving ? t('soulEditor.saving') : t('soulEditor.save')}
           </Button>
         </div>
       </div>

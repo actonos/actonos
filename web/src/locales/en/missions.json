@@ -11,7 +11,15 @@
     "status": "Status",
     "progress": "Progress",
     "channel": "Push Notification Channel",
-    "account": "Target Account"
+    "account": "Target Account",
+    "taskPlaceholder": "e.g. Verify database backups & storage limits",
+    "directivePlaceholder": "Detailed instructions for the autonomous agent. The coordinator will execute step-by-step and maintain memory across pulse cycles.",
+    "autoCoordinator": "? Auto Coordinator (Master Agent)",
+    "allAccounts": "All Accounts of {{channel}}",
+    "cancel": "Cancel",
+    "saving": "Saving...",
+    "update": "Update Mission",
+    "create": "Create Mission"
   },
   "toast": {
     "taskCreated": "Mission Created",
@@ -39,5 +47,110 @@
     "runsTitle": "Durable Agent Runs",
     "runsDescription": "Recent execution traces and termination reasons.",
     "runMetrics": "{{iterations}} iterations · {{tokens}} tokens · {{reason}}"
+  },
+  "priorities": {
+    "p0": "?? P0 - Critical (Immediate Pulse)",
+    "p1": "?? P1 - High Priority",
+    "p2": "?? P2 - Normal",
+    "p3": "? P3 - Low / Background",
+    "p0Short": "P0 Critical",
+    "p1Short": "P1 High",
+    "p2Short": "P2 Normal",
+    "p3Short": "P3 Low"
+  },
+  "statuses": {
+    "pending": "? Pending",
+    "inProgress": "? In Progress",
+    "completed": "? Completed",
+    "blocked": "?? Blocked",
+    "cancelled": "? Cancelled"
+  },
+  "channels": {
+    "allBroadcast": "?? All Active Channels (Broadcast)",
+    "telegram": "Telegram",
+    "whatsapp": "WhatsApp",
+    "discord": "Discord",
+    "noneSilent": "?? None (Silent in Workspace)",
+    "all": "?? All Active Channels",
+    "none": "?? None (Zero External Noise)"
+  },
+  "page": {
+    "eyebrow": "Autonomous Operations",
+    "activeBacklog": "{{count}} Active Backlog"
+  },
+  "actions": {
+    "refresh": "Refresh",
+    "pulsing": "Pulsing...",
+    "triggerPulse": "Trigger Pulse Now",
+    "newMission": "New Mission",
+    "chat": "Chat",
+    "complete": "Complete",
+    "edit": "Edit",
+    "delete": "Delete",
+    "createMission": "Create Mission"
+  },
+  "metrics": {
+    "activeMissions": "Active Missions",
+    "total": "/ {{count}} total",
+    "completed": "{{count}} completed",
+    "heartbeat": "Heartbeat Pulse",
+    "interval": "{{minutes}}m Interval",
+    "last": "Last: {{status}}",
+    "nominal": "Nominal",
+    "coordinator": "Coordinator Core",
+    "autoDelegate": "? Swarm Auto-Delegation Active",
+    "singleAgent": "Single Agent Execution"
+  },
+  "tabs": {
+    "tasks": "?? Tasks & Backlog ({{count}})",
+    "directives": "?? Standing Directives (HEARTBEAT.md)",
+    "audit": "??? Pulse Audit Ledger ({{count}})"
+  },
+  "filters": {
+    "allStatuses": "All Statuses",
+    "allPriorities": "All Priorities"
+  },
+  "task": {
+    "agent": "Agent:",
+    "channel": "Channel:"
+  },
+  "empty": {
+    "title": "No Missions Found",
+    "description": "Your autonomous backlog is clear. Create a mission above or let the Heartbeat daemon schedule routine maintenance."
+  },
+  "directives": {
+    "title": "Standing Autonomous Directives",
+    "description": "Instructions loaded on every cognitive pulse (`data/workspace/HEARTBEAT.md`).",
+    "saving": "Saving...",
+    "save": "Save Directives",
+    "instructions": "Standing Instructions (Markdown)",
+    "placeholder": "# Standing Directives\n- Continuously verify local storage and database integrity\n- If everything is nominal, reply HEARTBEAT_OK",
+    "interval": "Pulse Interval",
+    "intervals": {
+      "one": "Every 1 minute (High Frequency)",
+      "five": "Every 5 minutes (Recommended Standard)",
+      "fifteen": "Every 15 minutes",
+      "thirty": "Every 30 minutes",
+      "hour": "Every 1 hour"
+    },
+    "channel": "Notification Target Channel"
+  },
+  "audit": {
+    "title": "Cognitive Pulse Execution Ledger",
+    "description": "Historical record of autonomous 5-minute cognitive pulses and zero-noise evaluations.",
+    "columns": {
+      "time": "Time",
+      "agent": "Agent",
+      "status": "Status",
+      "tokens": "Tokens",
+      "summary": "Summary & Action Trace"
+    },
+    "zeroNoise": "Zero Noise",
+    "empty": "No pulse runs recorded yet. Click \"Trigger Pulse Now\" to execute an immediate cycle."
+  },
+  "delete": {
+    "title": "Delete Mission",
+    "description": "Are you sure you want to remove this mission from the autonomous backlog?",
+    "confirm": "Delete Mission"
   }
 }

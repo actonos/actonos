@@ -8,7 +8,24 @@
     "environmentHelp": "Bí mật được mã hóa trong ActonOS Vault và không được ghi vào tệp metadata MCP.",
     "servers": "Điều khiển MCP server",
     "updated": "Đã cập nhật MCP server",
-    "updateFailed": "Không thể cập nhật MCP server"
+    "updateFailed": "Không thể cập nhật MCP server",
+    "connectFailed": "Không thể kết nối MCP server",
+    "recommendedPresets": "Cấu hình đề xuất",
+    "serverIdentifier": "Định danh server (ID duy nhất)",
+    "serverIdentifierPlaceholder": "ví dụ: fetch_mcp",
+    "commandPlaceholder": "npx",
+    "urlPlaceholder": "https://mcp.example.com",
+    "arguments": "Tham số CLI (phân cách bằng khoảng trắng)",
+    "argumentsPlaceholder": "-y @modelcontextprotocol/server-fetch",
+    "transportSummary": "Giao thức: ống stdio với JSON-RPC 2.0",
+    "sandboxDescription": "ActonOS khởi chạy tiến trình MCP trong bộ thực thi cách ly và tự động đăng ký mọi công cụ được xuất.",
+    "connecting": "Đang kết nối và đăng ký công cụ...",
+    "connect": "Kết nối MCP server",
+    "transports": {
+      "stdio": "stdio",
+      "http": "HTTP có thể truyền luồng",
+      "sse": "SSE"
+    }
   },
   "eyebrow": "Công cụ",
   "title": "Công cụ",
@@ -35,5 +52,18 @@
     "argsLabel": "Tham số (Mảng JSON)",
     "urlLabel": "URL SSE",
     "save": "Kết nối"
-  }
+  },
+  "test": {
+    "title": "Khu thử nghiệm trực tiếp: {{tool}}",
+    "input": "Tham số đầu vào (JSON Schema)",
+    "invalidJson": "Cú pháp JSON đầu vào không hợp lệ",
+    "executionFailed": "Thực thi thất bại:\n{{error}}",
+    "executing": "Đang thực thi trong sandbox...",
+    "run": "Chạy hàm công cụ",
+    "output": "Dữ liệu đầu ra",
+    "copied": "Đã sao chép",
+    "copy": "Sao chép"
+  },
+  "loading": "?ang t?i c?ng c?...",
+  "empty": "Kh?ng t?m th?y c?ng c? ph? h?p v?i truy v?n."
 }

@@ -42,7 +42,20 @@
     "storage": "Ổ đĩa",
     "uptime": "Thời gian chạy",
     "temp": "Nhiệt độ",
-    "active": "Hoạt động"
+    "active": "Hoạt động",
+    "cores": "{{count}} l?i",
+    "temperature": "Nhi?t ??: {{value}}?C",
+    "ofMegabytes": "/ {{value}} MB",
+    "daemonMemory": "Daemon: {{value}} MB",
+    "usedPercent": "?? d?ng {{value}}%",
+    "ofGigabytes": "/ {{value}} GB",
+    "dataSize": "D? li?u: {{value}} GB",
+    "allocatedPercent": "?? c?p ph?t {{value}}%",
+    "uptimeMinutes": "Tr?c tuy?n {{value}} ph?t",
+    "processStatus": "PID {{status}}",
+    "halRunning": "HAL ?ang ch?y",
+    "kernelStable": "Kernel ?n ??nh",
+    "sync": "??ng b?: {{time}}"
   },
   "metrics": {
     "agents": "Agents",
@@ -53,7 +66,8 @@
     "automationsDesc": "{{total}} tác vụ lên lịch",
     "mesh": "Mạng Tailscale",
     "meshConnected": "Đã kết nối ({{ip}})",
-    "meshDisabled": "Chưa bật"
+    "meshDisabled": "Chưa bật",
+    "toolBreakdown": "{{native}} Native • {{mcp}} MCP • {{wasm}} WASM"
   },
   "launchpad": {
     "title": "Thao tác nhanh",
@@ -67,16 +81,39 @@
   },
   "tokens": {
     "title": "Lưu Lượng Token & Chi Phí",
-    "subtitle": "Theo dõi thời gian thực qua ReAct loops, Cron và Heartbeat tự hành"
+    "subtitle": "Theo dõi thời gian thực qua ReAct loops, Cron và Heartbeat tự hành",
+    "viewLedger": "Xem to?n b? s?",
+    "today": "Token h?m nay",
+    "month": "Token th?ng",
+    "lifetime": "T?ng to?n th?i gian",
+    "models": "M? h?nh:",
+    "noUsage": "Ch?a ghi nh?n s? d?ng",
+    "inspect": "Xem s? & l?ch s? ?"
   },
   "heartbeat": {
     "title": "Nhịp Đập Tự Hành",
-    "desc": "Chu kỳ tư duy 5 phút tự động kiểm tra tác vụ nền và cảnh báo."
+    "desc": "Chu kỳ tư duy 5 phút tự động kiểm tra tác vụ nền và cảnh báo.",
+    "lastStatus": "Tr?ng th?i chu k? g?n nh?t:"
   },
   "activity": {
     "title": "Hoạt động gần đây",
     "subtitle": "Nhật ký thực thi công cụ và hành động của agent theo thời gian thực.",
     "empty": "Chưa có nhật ký gần đây.",
-    "viewAll": "Xem tất cả"
+    "viewAll": "Xem tất cả",
+    "risk": "R?i ro {{level}}",
+    "statusDuration": "{{status}} ({{duration}} ms)",
+    "detail": "Agent: {{agent}} ? Trace: {{trace}}"
+  },
+  "actions": {
+    "refresh": "L?m m?i"
+  },
+  "units": {
+    "megabytes": "{{value}} MB",
+    "gigabytes": "{{value}} GB",
+    "usd": "${{value}} USD"
+  },
+  "storage": {
+    "detail": "SQLite: {{sqlite}} MB ? Vector: {{vectors}} MB",
+    "total": "L?u tr?: {{value}} MB"
   }
 }

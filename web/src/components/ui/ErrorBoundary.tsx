@@ -1,6 +1,7 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import { Button } from './Button';
+import i18n from '@/lib/i18n';
 
 interface Props {
   children: ReactNode;
@@ -53,10 +54,10 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
 
             <h1 className="text-2xl font-bold tracking-tight text-white mb-2">
-              Something went wrong
+              {i18n.t('common:errorBoundary.title')}
             </h1>
             <p className="text-sm text-slate-400 mb-6">
-              An unexpected error occurred in the application view. The system kernel remains safe.
+              {i18n.t('common:errorBoundary.description')}
             </p>
 
             {this.state.error && (
@@ -74,7 +75,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 className="flex items-center gap-2"
               >
                 <Home className="w-4 h-4" />
-                Return Home
+                {i18n.t('common:errorBoundary.home')}
               </Button>
               <Button
                 variant="primary"
@@ -82,7 +83,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 className="flex items-center gap-2"
               >
                 <RefreshCw className="w-4 h-4" />
-                Reload View
+                {i18n.t('common:errorBoundary.reload')}
               </Button>
             </div>
           </div>

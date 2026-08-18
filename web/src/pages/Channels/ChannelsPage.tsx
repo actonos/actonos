@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
@@ -105,13 +106,13 @@ export function ChannelsPage() {
           telegram: chanRes.telegram || [],
           discord: chanRes.discord || [],
           whatsapp: chanRes.whatsapp || [],
-          slack: (chanRes as any).slack || [],
+          slack: chanRes.slack || [],
         });
         if (chanRes.webhook_secret) setWebhookSecret(chanRes.webhook_secret);
       }
       setAuthorizations(authRes.users || []);
-    } catch (err: any) {
-      error('Failed to load channels', err.message);
+    } catch (err) {
+      error('Failed to load channels', getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -143,8 +144,8 @@ export function ChannelsPage() {
       });
       success(t('addAccount', 'Account Added'), `${account.label} added and active on ${channelId}.`);
       await loadData();
-    } catch (err: any) {
-      error('Failed to save channel account', err.message);
+    } catch (err) {
+      error('Failed to save channel account', getErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -167,8 +168,8 @@ export function ChannelsPage() {
       });
       success('Account Removed', `Account deleted from ${channelId}.`);
       await loadData();
-    } catch (err: any) {
-      error('Failed to remove channel account', err.message);
+    } catch (err) {
+      error('Failed to remove channel account', getErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -192,8 +193,8 @@ export function ChannelsPage() {
         webhook_secret: webhookSecret,
       });
       await loadData();
-    } catch (err: any) {
-      error('Failed to toggle channel account', err.message);
+    } catch (err) {
+      error('Failed to toggle channel account', getErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -210,8 +211,8 @@ export function ChannelsPage() {
       });
       success(t('saveAll', 'Saved'), 'Channel configuration stored in encrypted vault.');
       await loadData();
-    } catch (err: any) {
-      error('Failed to save channels', err.message);
+    } catch (err) {
+      error('Failed to save channels', getErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -224,8 +225,8 @@ export function ChannelsPage() {
       const res = await api.generatePairingCode(ch);
       setPairingCode(res.code);
       info(t('pairing.activeCode', 'Active PIN'), `PIN: ${res.code} (${Math.round(res.expires_in / 60)}m)`);
-    } catch (err: any) {
-      error('Failed to generate PIN', err.message);
+    } catch (err) {
+      error('Failed to generate PIN', getErrorMessage(err));
     } finally {
       setGeneratingCode(false);
     }
@@ -241,8 +242,8 @@ export function ChannelsPage() {
       success(t('pairing.revoke', 'Revoked'), `User ${revokingUser.sender_name || revokingUser.sender_id} removed.`);
       setRevokingUser(null);
       loadData();
-    } catch (err: any) {
-      error('Failed to revoke authorization', err.message);
+    } catch (err) {
+      error('Failed to revoke authorization', getErrorMessage(err));
     }
   };
 
@@ -366,7 +367,7 @@ export function ChannelsPage() {
               <span className="text-caption text-slate block">{t('stats.webhookGateway', 'Webhook Gateway')}</span>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span className="text-body-sm font-semibold text-deep-ink">Active</span>
+                <span className="text-body-sm font-semibold text-deep-ink">{t('status.active')}</span>
               </div>
             </div>
           </div>

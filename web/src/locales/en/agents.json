@@ -10,18 +10,46 @@
     "subtitle": "Defines core values, tone, and principles shared across all agents.",
     "save": "Save"
   },
+  "soulEditor": {
+    "fileName": "SOUL.md",
+    "title": "Agent soul and persona: {{agent}}",
+    "descriptionPrefix": "The",
+    "description": "defines the isolated personality, core mission, emotional tone, and behavioral standards for {{agent}}.",
+    "loading": "Loading SOUL.md...",
+    "placeholder": "# ActonOS Agent Soul\nDefine personality, core mission, and tone of voice...",
+    "cancel": "Cancel",
+    "saving": "Saving...",
+    "save": "Save SOUL.md",
+    "loadFailed": "Failed to load SOUL.md",
+    "saveFailed": "Failed to save SOUL.md",
+    "saved": "Agent soul updated",
+    "savedDescription": "SOUL.md synchronized for agent {{agent}}.",
+    "rootName": "Nova (root system)"
+  },
   "cron": {
-    "title": "Scheduled Tasks",
-    "subtitle": "Set up recurring tasks with automatic agent execution.",
-    "newJob": "New Task",
-    "empty": "No scheduled tasks.",
+    "title": "Schedule Autonomous Proactive Task (Cron)",
+    "successTitle": "Proactive Cron Task Scheduled",
+    "successDescription": "Task \"{{name}}\" is registered and active.",
+    "failureTitle": "Failed to schedule cron task",
     "name": "Task Name",
-    "agent": "Agent",
-    "expression": "Schedule",
-    "prompt": "Prompt",
-    "channel": "Channel",
-    "recipient": "Recipient",
-    "save": "Save Task"
+    "namePlaceholder": "e.g. Daily Morning Briefing",
+    "agent": "Executing Agent",
+    "expression": "Cron Expression (5-Field)",
+    "expressionPlaceholder": "e.g. 0 8 * * * or */30 * * * *",
+    "prompt": "Instruction / Prompt to Execute",
+    "promptPlaceholder": "e.g. Generate a concise weather forecast, summarize pending GitHub PRs, and list high-priority items.",
+    "channel": "Push Notification Channel",
+    "channels": {
+      "telegram": "Telegram Bot",
+      "whatsapp": "WhatsApp Cloud API",
+      "discord": "Discord Gateway",
+      "webhook": "Inbound/Outbound Webhook"
+    },
+    "recipient": "Recipient Chat ID / Phone",
+    "recipientPlaceholder": "e.g. 123456789 or +84912345678",
+    "cancel": "Cancel",
+    "scheduling": "Scheduling...",
+    "save": "Save & Schedule Task"
   },
   "onboarding": {
     "title": "Welcome to ActonOS",
@@ -45,6 +73,34 @@
     "editAgent": "Edit",
     "deleteConfirm": "Delete this agent?",
     "chat": "Chat"
+  },
+  "list": {
+    "exportTitle": "Export agents as JSON",
+    "export": "Export",
+    "importTitle": "Import agents from JSON",
+    "import": "Import",
+    "refresh": "Refresh",
+    "loading": "Loading agent manifest records...",
+    "columns": {
+      "identity": "Agent and identity",
+      "status": "Status",
+      "model": "Cognitive model",
+      "tools": "Tools and channels",
+      "governance": "Governance",
+      "actions": "Actions"
+    },
+    "root": "Root",
+    "modelDetails": "temp: {{temperature}} • max: {{maxTokens}}",
+    "allChannels": "All channels (*)",
+    "approval": "{{level}} approval",
+    "medium": "Medium",
+    "monthlyBudget": "${{amount}}/mo",
+    "launchChat": "Launch chat session",
+    "chat": "Chat",
+    "openStudio": "Open Agent Studio",
+    "deleteTitle": "Delete agent manifest",
+    "deleteDescription": "Are you sure you want to delete \"{{agent}}\"? This permanently removes its state, tool authorization, and execution manifests from ActonOS.",
+    "delete": "Delete agent"
   },
   "card": {
     "toolsCount": "{{count}} Tools",
@@ -73,5 +129,104 @@
     "approvalLow": "Low (Auto-execute)",
     "approvalMed": "Medium (Workspace writes)",
     "approvalHigh": "High (Always confirm)"
+  },
+  "studio": {
+    "loading": "Loading Agent Studio...",
+    "back": "Back to agents list",
+    "newEyebrow": "New Agent Studio",
+    "eyebrow": "Agent Studio Manifest",
+    "rootBadge": "? Root System Agent",
+    "untitled": "Untitled Agent",
+    "launch": "Launch Session",
+    "saving": "Saving...",
+    "save": "Save Agent",
+    "name": "Agent Name",
+    "namePlaceholder": "e.g., Senior Full-Stack Architect",
+    "identifier": "Identifier (Slug)",
+    "identifierPlaceholder": "e.g., agent_fullstack_lead",
+    "description": "Description & Role",
+    "descriptionPlaceholder": "Describe the agent's responsibilities, expertise, and operational boundaries...",
+    "lifecycle": "Lifecycle Status",
+    "active": "Active",
+    "stopped": "Stopped",
+    "avatar": "Avatar: {{icon}}",
+    "ready": "? Active",
+    "keyNeeded": "?? Key Needed",
+    "allTools": "All (*)",
+    "all": "All",
+    "tabs": {
+      "instructions": "?? Instructions",
+      "soul": "? Persona & Soul (SOUL.md)",
+      "memory": "?? Memory (MEMORY.md)",
+      "model": "? LLM & Reasoning ({{status}})",
+      "tools": "?? Tools ({{value}})",
+      "channels": "?? Channels ({{value}})",
+      "governance": "??? Governance"
+    },
+    "length": "Length: {{count}} characters",
+    "prompt": {
+      "title": "Cognitive System Instructions",
+      "description": "Defines the agent's core task capabilities, reasoning loops, and procedural directives.",
+      "loadPreset": "Load Standard Preset",
+      "placeholder": "Enter system instructions...",
+      "standard": "ActonOS Standard"
+    },
+    "soul": {
+      "title": "Agent Persona & Demeanor Kernel (SOUL.md)",
+      "description": "Defines this specific agent's conversational tone, philosophy, demeanor, and behavioral boundaries.",
+      "loadTemplate": "Load Soul Template",
+      "placeholder": "# Agent SOUL.md\nDescribe the agent's unique voice, demeanor, and philosophical principles...",
+      "isolated": "Isolated Agent Soul"
+    },
+    "memory": {
+      "title": "Persistent Episodic Memory Diary (MEMORY.md)",
+      "description": "Autonomous reflections, user preferences, and synthesized long-term knowledge accumulated by this agent across sessions.",
+      "refresh": "Refresh Memory",
+      "empty": "No Episodic Memory Recorded Yet",
+      "emptyDescription": "As you interact with this agent in Chat and background tasks, the ReAct reflection daemon will synthesize key decisions, project conventions, and user preferences into persistent timestamped memory here.",
+      "longTerm": "Autonomous Long-Term Memory"
+    },
+    "model": {
+      "syncTitle": "Dynamic LLM Provider Synchronization",
+      "syncDescription": "Agent automatically routes requests through providers configured in your hardware vault.",
+      "providersActive": "{{count}} Provider(s) Active",
+      "architecture": "Primary & Fallback Model Architecture",
+      "primary": "Primary LLM Model",
+      "primaryPlaceholder": "e.g. anthropic/claude-sonnet-4-6 or custom_openai/default-model",
+      "fallback": "Fallback Recovery Model",
+      "fallbackPlaceholder": "e.g. google/gemini-2.5-flash",
+      "fallbackDescription": "If primary model encounters rate limits or errors, cascade automatically recovers using this model.",
+      "temperature": "Creativity Temperature:",
+      "maxTokens": "Max Generation Tokens:"
+    },
+    "tools": {
+      "title": "Authorized Tools",
+      "description": "Select native tools, MCP servers, and skills this agent is permitted to execute.",
+      "clear": "Clear All",
+      "selectAll": "Select All (*)",
+      "fullTitle": "Full Authorization:",
+      "fullDescription": "Agent can use all available tools and plugins."
+    },
+    "channels": {
+      "title": "Chat Channels Inbound Listeners",
+      "description": "Specify which messaging channels trigger this agent when messages or mentions are received.",
+      "all": "All Chat Channels (Default)",
+      "allDescription": "Agent listens to incoming messages across Telegram, Discord, WhatsApp, and Webhook.",
+      "specific": "Specific Channels Only",
+      "specificDescription": "Restrict this agent to only respond to specific channels chosen below.",
+      "select": "Select Channels to Listen"
+    },
+    "governance": {
+      "title": "Governance & Permissions",
+      "budget": "Monthly Budget Cap ($ USD)",
+      "budgetHelp": "Agent halts when monthly token cost reaches this limit.",
+      "approval": "Human Approval Level",
+      "low": "Low (Autonomous Auto-Execute)",
+      "medium": "Medium (Workspace Writes Allowed)",
+      "high": "High (Confirm on Sensitive Actions)",
+      "paths": "Allowed Workspace Paths",
+      "pathsPlaceholder": "e.g., *, /data/workspace/project/*",
+      "pathsHelp": "Comma-separated file paths or wildcards (*) that this agent is permitted to access."
+    }
   }
 }

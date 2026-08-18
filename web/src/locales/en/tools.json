@@ -8,7 +8,24 @@
     "environmentHelp": "Secrets are encrypted in the ActonOS Vault and are never written to the MCP metadata file.",
     "servers": "MCP server control",
     "updated": "MCP server updated",
-    "updateFailed": "Could not update MCP server"
+    "updateFailed": "Could not update MCP server",
+    "connectFailed": "Failed to connect MCP server",
+    "recommendedPresets": "Recommended presets",
+    "serverIdentifier": "Server identifier (unique ID)",
+    "serverIdentifierPlaceholder": "e.g., fetch_mcp",
+    "commandPlaceholder": "npx",
+    "urlPlaceholder": "https://mcp.example.com",
+    "arguments": "CLI arguments (space-separated)",
+    "argumentsPlaceholder": "-y @modelcontextprotocol/server-fetch",
+    "transportSummary": "Transport: stdio pipe with JSON-RPC 2.0",
+    "sandboxDescription": "ActonOS starts the MCP process inside the isolated executor and automatically registers every exported tool.",
+    "connecting": "Connecting and registering tools...",
+    "connect": "Connect MCP server",
+    "transports": {
+      "stdio": "stdio",
+      "http": "Streamable HTTP",
+      "sse": "SSE"
+    }
   },
   "eyebrow": "Tools",
   "title": "Tools",
@@ -35,5 +52,18 @@
     "argsLabel": "Arguments (JSON Array)",
     "urlLabel": "SSE URL",
     "save": "Connect"
-  }
+  },
+  "test": {
+    "title": "Live playground: {{tool}}",
+    "input": "Input arguments (JSON Schema)",
+    "invalidJson": "Invalid JSON input syntax",
+    "executionFailed": "Execution failed:\n{{error}}",
+    "executing": "Executing in sandbox...",
+    "run": "Run tool function",
+    "output": "Output payload",
+    "copied": "Copied",
+    "copy": "Copy"
+  },
+  "loading": "Loading tools...",
+  "empty": "No tools found matching your query."
 }

@@ -31,54 +31,6 @@ export const SUPPORTED_LANGUAGES: LanguageOption[] = [
     flag: '🇻🇳',
     coverage: '100%',
   },
-  {
-    code: 'ja',
-    name: 'Japanese',
-    nativeName: '日本語',
-    region: 'Japan',
-    flag: '🇯🇵',
-    coverage: 'Core',
-  },
-  {
-    code: 'zh',
-    name: 'Chinese',
-    nativeName: '简体中文',
-    region: 'China',
-    flag: '🇨🇳',
-    coverage: 'Core',
-  },
-  {
-    code: 'fr',
-    name: 'French',
-    nativeName: 'Français',
-    region: 'France / EU',
-    flag: '🇫🇷',
-    coverage: 'Core',
-  },
-  {
-    code: 'de',
-    name: 'German',
-    nativeName: 'Deutsch',
-    region: 'Germany / EU',
-    flag: '🇩🇪',
-    coverage: 'Core',
-  },
-  {
-    code: 'es',
-    name: 'Spanish',
-    nativeName: 'Español',
-    region: 'Spain / LATAM',
-    flag: '🇪🇸',
-    coverage: 'Core',
-  },
-  {
-    code: 'ko',
-    name: 'Korean',
-    nativeName: '한국어',
-    region: 'South Korea',
-    flag: '🇰🇷',
-    coverage: 'Core',
-  },
 ];
 
 export interface LanguageSelectModalProps {
@@ -87,7 +39,7 @@ export interface LanguageSelectModalProps {
 }
 
 export function LanguageSelectModal({ isOpen, onClose }: LanguageSelectModalProps) {
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation('common');
   const [search, setSearch] = useState('');
 
   const currentLangCode = (i18n.language || 'en').split('-')[0].toLowerCase();
@@ -110,7 +62,7 @@ export function LanguageSelectModal({ isOpen, onClose }: LanguageSelectModalProp
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Select System Language"
+      title={t('language.selectTitle')}
       maxWidth="max-w-xl"
     >
       <div className="space-y-4">
@@ -119,7 +71,7 @@ export function LanguageSelectModal({ isOpen, onClose }: LanguageSelectModalProp
           <Search className="w-4 h-4 text-slate absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Search language or region..."
+            placeholder={t('language.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full bg-soft-meadow text-deep-ink pl-10 pr-4 py-2.5 rounded-full border border-onyx/10 text-body-sm font-sans focus:outline-none focus:ring-2 focus:ring-deep-ink/20"
@@ -168,7 +120,7 @@ export function LanguageSelectModal({ isOpen, onClose }: LanguageSelectModalProp
                           : 'bg-emerald-100 text-emerald-800'
                       }`}
                     >
-                      Full UI
+                      {t('language.fullUI')}
                     </span>
                   )}
                   {isSelected && <Check className="w-4 h-4 text-hi-yellow" />}
@@ -180,7 +132,7 @@ export function LanguageSelectModal({ isOpen, onClose }: LanguageSelectModalProp
 
         {filtered.length === 0 && (
           <div className="py-8 text-center text-slate font-sans text-body-sm">
-            No languages matching "{search}"
+            {t('language.noMatches', { search })}
           </div>
         )}
 
@@ -188,9 +140,9 @@ export function LanguageSelectModal({ isOpen, onClose }: LanguageSelectModalProp
         <div className="pt-3 border-t border-onyx/10 flex items-center justify-between text-caption font-mono text-slate">
           <span className="flex items-center gap-1.5">
             <Globe className="w-3.5 h-3.5 text-deep-ink" />
-            <span>Active: {SUPPORTED_LANGUAGES.find((l) => l.code === currentLangCode)?.nativeName || currentLangCode}</span>
+            <span>{t('language.active', { language: SUPPORTED_LANGUAGES.find((l) => l.code === currentLangCode)?.nativeName || currentLangCode })}</span>
           </span>
-          <span className="text-[11px] text-slate/70">ActonOS i18n Engine</span>
+          <span className="text-[11px] text-slate/70">{t('language.engine')}</span>
         </div>
       </div>
     </Modal>

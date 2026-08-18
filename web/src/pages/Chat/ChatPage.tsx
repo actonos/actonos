@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, type FormEvent } from 'react';
+import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { ConfirmModal } from '@/components/ui/Modal';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { useToast } from '@/components/ui/Toast';
 import {
   Bot,
@@ -33,6 +34,11 @@ import { api } from '@/lib/api';
 import type { AgentManifest, ConversationItem } from '@/lib/types';
 import type { NavTab } from '@/components/layout/Sidebar';
 import { MarkdownContent } from '@/components/chat/MarkdownContent';
+import {
+  formatRelativeTime,
+  type ChatMessage,
+  type ToolCallTrace,
+} from './chatTypes';
 
 export interface ChatPageProps {
   selectedAgentID?: string;
@@ -40,57 +46,8 @@ export interface ChatPageProps {
   onNavigateTab?: (tab: NavTab) => void;
 }
 
-export interface AuditLogItem {
-  timestamp: string;
-  agent_id: string;
-  action: string;
-  tool_name?: string;
-  parameters?: any;
-  status: string;
-  verification: string;
-  duration_ms: number;
-}
-
-export interface ToolCallTrace {
-  tool: string;
-  args?: any;
-  result?: string;
-  status?: string;
-  latency_ms?: number;
-}
-
-interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  timestamp: string;
-  model?: string;
-  tokens_used?: number;
-  thought?: string;
-  toolCalls?: ToolCallTrace[];
-  auditLogs?: AuditLogItem[];
-}
-
-function formatRelativeTime(dateStr?: string): string {
-  if (!dateStr) return '';
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  const diffMin = Math.floor(diffSec / 60);
-  const diffHour = Math.floor(diffMin / 60);
-  const diffDay = Math.floor(diffHour / 24);
-
-  if (diffSec < 60) return 'Just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  if (diffHour < 24) return `${diffHour}h ago`;
-  if (diffDay === 1) return 'Yesterday';
-  if (diffDay < 7) return `${diffDay}d ago`;
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
 export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: ChatPageProps) {
-  const { t } = useTranslation('chat');
+  const { t, i18n } = useTranslation('chat');
   const { t: tCommon } = useTranslation('common');
   const { success, error, info } = useToast();
 
@@ -140,8 +97,8 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
       if (!activeAgentID && res.agents?.length > 0) {
         setActiveAgentID(res.agents[0].agent_id);
       }
-    } catch (err: any) {
-      error('Failed to load agents', err.message);
+    } catch (err) {
+      error('Failed to load agents', getErrorMessage(err));
     }
   };
 
@@ -153,8 +110,8 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
       if (list.length > 0 && !activeConvID) {
         selectConversation(list[0].id);
       }
-    } catch (err: any) {
-      error('Failed to load conversations', err.message);
+    } catch (err) {
+      error('Failed to load conversations', getErrorMessage(err));
     }
   };
 
@@ -168,23 +125,33 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
       }
       if (res.messages) {
         setMessages(
-          res.messages.map((m: any) => {
+          res.messages.map((m) => {
             let toolCalls: ToolCallTrace[] = [];
             if (m.tool_calls_json && m.tool_calls_json !== 'null' && m.tool_calls_json !== '[]') {
               try {
                 const parsed = JSON.parse(m.tool_calls_json);
                 if (Array.isArray(parsed)) {
-                  toolCalls = parsed.map((tc: any) => ({
-                    tool: tc.function?.name || tc.name || 'native_tool',
-                    args: tc.function?.arguments,
+                  toolCalls = parsed.map((rawCall: unknown) => {
+                    const tc = typeof rawCall === 'object' && rawCall !== null
+                      ? rawCall as Record<string, unknown>
+                      : {};
+                    const fn = typeof tc.function === 'object' && tc.function !== null
+                      ? tc.function as Record<string, unknown>
+                      : {};
+                    return {
+                    tool: typeof fn.name === 'string'
+                      ? fn.name
+                      : typeof tc.name === 'string' ? tc.name : 'native_tool',
+                    args: fn.arguments,
                     status: 'success',
-                  }));
+                    };
+                  });
                 }
-              } catch (_) {}
+              } catch {}
             }
             return {
               id: m.id,
-              role: m.role as any,
+              role: m.role === 'user' || m.role === 'assistant' ? m.role : 'system',
               content: m.content,
               timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
               toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
@@ -194,8 +161,8 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
       } else {
         setMessages([]);
       }
-    } catch (err: any) {
-      error('Failed to load messages', err.message);
+    } catch (err) {
+      error('Failed to load messages', getErrorMessage(err));
     }
   };
 
@@ -222,8 +189,8 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
         }
       }
       setDeletingConvId(null);
-    } catch (err: any) {
-      error('Failed to delete session', err.message);
+    } catch (err) {
+      error('Failed to delete session', getErrorMessage(err));
     }
   };
 
@@ -238,8 +205,8 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
         prev.map((c) => (c.id === convID ? { ...c, title: editingConvTitle.trim() } : c))
       );
       success('Title Updated', 'Session renamed.');
-    } catch (err: any) {
-      error('Failed to update title', err.message);
+    } catch (err) {
+      error('Failed to update title', getErrorMessage(err));
     } finally {
       setEditingConvId(null);
     }
@@ -421,11 +388,11 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
           }
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantMsgId
-            ? { ...m, content: m.content + `\n\nExecution error: ${err.message}`, thought: undefined }
+            ? { ...m, content: m.content + `\n\nExecution error: ${getErrorMessage(err)}`, thought: undefined }
             : m
         )
       );
@@ -490,7 +457,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                   </span>
                   {activeAgent?.is_system && (
                     <span className="text-[10px] bg-hi-yellow/40 text-deep-ink px-2 py-0.5 rounded-full font-semibold">
-                      ⭐ Root
+                      {t('rootBadge')}
                     </span>
                   )}
                 </div>
@@ -564,7 +531,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                             <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
                               isSelected ? 'bg-white/20 text-hi-yellow' : 'bg-soft-meadow text-slate'
                             }`}>
-                              Root
+                              {t('root')}
                             </span>
                           )}
                         </button>
@@ -727,7 +694,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                             )}
                           </div>
                           <span className="font-mono text-[10px] shrink-0">
-                            {formatRelativeTime(conv.updated_at || conv.created_at)}
+                            {formatRelativeTime(conv.updated_at || conv.created_at, i18n.resolvedLanguage || i18n.language)}
                           </span>
                         </div>
                       </div>
@@ -748,7 +715,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                         {activeAgent.name}
                       </span>
                       <span className="text-[10px] text-slate font-mono block truncate">
-                        {activeAgent.authorized_tools?.length || 0} tools bound
+                        {t('toolsBound', { count: activeAgent.authorized_tools?.length || 0 })}
                       </span>
                     </div>
                   </div>
@@ -760,9 +727,9 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                         size="sm"
                         onClick={() => onNavigateTab('agents')}
                         className="text-[11px] px-2.5 py-1"
-                        title="Manage Agents"
+                        title={t('manageAgents')}
                       >
-                        Agents
+                        {t('agents')}
                       </Button>
                     )}
                   </div>
@@ -786,10 +753,10 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                 <div className="truncate">
                   <h3 className="font-serif text-heading-sm text-deep-ink flex items-center gap-2 truncate">
                     <span className="truncate">{activeAgent?.name || 'Nova (Root System)'}</span>
-                    {activeAgent?.is_system && <Badge variant="accent">Root</Badge>}
+                    {activeAgent?.is_system && <Badge variant="accent">{t('root')}</Badge>}
                   </h3>
                   <div className="flex items-center gap-2 text-caption text-slate font-mono text-[11px] truncate">
-                    <span className="truncate">Model: {activeAgent?.model_config.primary_model || 'claude-sonnet-4-6'}</span>
+                    <span className="truncate">{t('model', { name: activeAgent?.model_config.primary_model || 'claude-sonnet-4-6' })}</span>
                     {activeConv && (
                       <>
                         <span>•</span>
@@ -809,7 +776,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                     size="sm"
                     icon={<Trash2 className="w-3.5 h-3.5 text-red-500" />}
                     onClick={() => setDeletingConvId(activeConvID)}
-                    title="Clear Conversation"
+                    title={t('clearConversation')}
                   />
                 )}
                 <Button
@@ -819,7 +786,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                   onClick={handleNewChat}
                   className="lg:hidden text-caption px-3"
                 >
-                  + New
+                  {t('newShort')}
                 </Button>
               </div>
             </div>
@@ -832,10 +799,10 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                     <Sparkles className="w-7 h-7 text-hi-yellow" />
                   </div>
                   <h4 className="font-serif text-heading-sm text-deep-ink mb-1">
-                    Start a real-time conversation with {activeAgent?.name || 'Nova'}
+                    {t('startConversation', { name: activeAgent?.name || 'Nova' })}
                   </h4>
                   <p className="font-sans text-body-sm text-slate max-w-md mx-auto mb-6">
-                    Real-time SSE token streaming, live tool execution traces, and immutable security audit logs.
+                    {t('startDescription')}
                   </p>
 
                   {/* Prompt Suggestion Chips */}
@@ -919,7 +886,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                                         : 'text-slate hover:text-deep-ink'
                                     }`}
                                   >
-                                    Traces
+                                    {t('traces')}
                                   </button>
                                   <button
                                     onClick={() => setActiveTab((prev) => ({ ...prev, [msg.id]: 'audit' }))}
@@ -929,7 +896,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                                         : 'text-slate hover:text-deep-ink'
                                     }`}
                                   >
-                                    Audit Logs
+                                    {t('auditLogs')}
                                   </button>
                                 </div>
                               )}
@@ -952,14 +919,14 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                                             </div>
                                             {tc.latency_ms !== undefined && (
                                               <span className="text-[10px] bg-canvas px-1.5 py-0.5 rounded text-slate">
-                                                {tc.latency_ms} ms
+                                                {t('milliseconds', { value: tc.latency_ms })}
                                               </span>
                                             )}
                                           </div>
 
-                                          {tc.args && (
+                                          {tc.args != null && (
                                             <div className="text-slate text-[10px] truncate">
-                                              <strong>Args:</strong> {typeof tc.args === 'string' ? tc.args : JSON.stringify(tc.args)}
+                                              <strong>{t('arguments')}</strong> {typeof tc.args === 'string' ? tc.args : JSON.stringify(tc.args)}
                                             </div>
                                           )}
 
@@ -972,7 +939,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                                       ))
                                     ) : (
                                       <div className="text-[11px] text-slate italic">
-                                        No explicit tool calls executed in this iteration.
+                                        {t('noToolCalls')}
                                       </div>
                                     )}
                                   </div>
@@ -993,7 +960,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                                         </div>
                                         <div className="text-slate flex items-center justify-between">
                                           <span>{al.verification}</span>
-                                          <span>{al.duration_ms} ms</span>
+                                          <span>{t('milliseconds', { value: al.duration_ms })}</span>
                                         </div>
                                       </div>
                                     ))}
@@ -1022,7 +989,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                           <button
                             onClick={() => handleCopy(msg.content, idx)}
                             className="hover:opacity-100 flex items-center gap-1 cursor-pointer p-0.5"
-                            title="Copy response"
+                            title={t('copyResponse')}
                           >
                             {copiedIdx === idx ? (
                               <Check className="w-3 h-3 text-emerald-500" />
@@ -1040,7 +1007,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
               {loading && !messages.some((m) => m.role === 'assistant' && m.thought) && (
                 <div className="flex items-center gap-2 text-body-sm text-slate animate-pulse p-2">
                   <Bot className="w-4 h-4 text-hi-yellow" />
-                  <span>Connecting to model cascade...</span>
+                  <span>{t('connecting')}</span>
                 </div>
               )}
               <div ref={messagesEndRef} />

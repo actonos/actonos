@@ -124,7 +124,7 @@ export function ChannelCard({
             <div className="flex items-center justify-between text-[11px] text-slate font-medium px-1">
               <span>{t('accounts.title', 'Accounts')} ({accounts.length})</span>
               <span className="text-emerald-700 font-mono text-[10px]">
-                {activeAccounts.length} enabled
+                {t('ui.enabledCount', { count: activeAccounts.length })}
               </span>
             </div>
 
@@ -179,14 +179,14 @@ export function ChannelCard({
         ) : (
           <span className="text-[11px] text-slate flex items-center gap-1 font-mono">
             <ShieldCheck className="w-3 h-3 text-emerald-600" />
-            <span>Encrypted Vault</span>
+            <span>{t('ui.encryptedVault')}</span>
           </span>
         )}
 
         <div className="flex items-center gap-1.5">
           {channel.isComingSoon ? (
             <Button variant="ghost" size="sm" disabled className="text-[11px]">
-              Coming Soon
+              {t('status.comingSoon')}
             </Button>
           ) : (
             <>

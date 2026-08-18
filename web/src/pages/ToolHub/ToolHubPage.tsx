@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
@@ -16,12 +17,12 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { ToolInfo } from '@/lib/types';
-import type { MCPServerStatus } from '@/lib/types';
+import { isApprovalRequired, type MCPServerStatus } from '@/lib/types';
 import { Card } from '@/components/ui/Card';
 
 export function ToolHubPage() {
   const { t } = useTranslation('tools');
-  const { error, success } = useToast();
+  const { error, success, info } = useToast();
   const [tools, setTools] = useState<ToolInfo[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -43,8 +44,8 @@ export function ToolHubPage() {
       const nonSkillTools = (res.tools || []).filter((tl) => tl.category !== 'skill');
       setTools(nonSkillTools);
       setServers(mcp.servers);
-    } catch (err: any) {
-      error('Failed to load tools', err.message);
+    } catch (err) {
+      error('Failed to load tools', getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -56,21 +57,29 @@ export function ToolHubPage() {
 
   const handleConnectMCP = async (cfg: { id: string; transport: string; command?: string; args?: string[]; url?: string; env?: Record<string, string> }) => {
     try {
-      await api.connectMCP(cfg);
+      const result = await api.connectMCP(cfg);
+      if (isApprovalRequired(result)) {
+        info(t('common:approval.queuedTitle'), t('common:approval.queuedDescription'));
+        return;
+      }
       success('MCP Connected', `Server ${cfg.id} registered.`);
       loadTools();
-    } catch (err: any) {
-      error('MCP Connection Failed', err.message);
+    } catch (err) {
+      error('MCP Connection Failed', getErrorMessage(err));
     }
   };
 
   const handleToggleMCP = async (server: MCPServerStatus) => {
     try {
-      await api.toggleMCPServer(server.id, !server.enabled);
+      const result = await api.toggleMCPServer(server.id, !server.enabled);
+      if (isApprovalRequired(result)) {
+        info(t('common:approval.queuedTitle'), t('common:approval.queuedDescription'));
+        return;
+      }
       success(t('mcp.updated'), server.id);
       loadTools();
     } catch (cause) {
-      error(t('mcp.updateFailed'), cause instanceof Error ? cause.message : String(cause));
+      error(t('mcp.updateFailed'), cause instanceof Error ? getErrorMessage(cause) : String(cause));
     }
   };
 
@@ -79,11 +88,15 @@ export function ToolHubPage() {
     if (!file) return;
 
     try {
-      await api.uploadWASM(file);
+      const result = await api.uploadWASM(file);
+      if (isApprovalRequired(result)) {
+        info(t('common:approval.queuedTitle'), t('common:approval.queuedDescription'));
+        return;
+      }
       success('WASM Uploaded', `Plugin ${file.name} installed.`);
       loadTools();
-    } catch (err: any) {
-      error('Upload failed', err.message);
+    } catch (err) {
+      error('Upload failed', getErrorMessage(err));
     }
   };
 
@@ -219,11 +232,11 @@ export function ToolHubPage() {
         )}
 
         {loading ? (
-          <div className="py-20 text-center text-slate font-sans">Loading tools...</div>
+          <div className="py-20 text-center text-slate font-sans">{t('loading')}</div>
         ) : filteredTools.length === 0 ? (
           <div className="bg-soft-meadow rounded-[24px] p-12 text-center max-w-md mx-auto border border-onyx/10">
             <Wrench className="w-12 h-12 text-deep-ink mx-auto mb-3 opacity-40" />
-            <p className="font-sans text-body-sm text-slate mb-4">No tools found matching your query.</p>
+            <p className="font-sans text-body-sm text-slate mb-4">{t('empty')}</p>
             <Button variant="primary" size="sm" onClick={() => setIsMcpModalOpen(true)}>
               {t('actions.addMCP', 'Connect MCP')}
             </Button>

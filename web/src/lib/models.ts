@@ -4,7 +4,7 @@
  */
 
 import { api } from '@/lib/api';
-import type { ModelSpec } from '@/lib/types';
+import type { LLMProviderInfo, ModelSpec } from '@/lib/types';
 import { Sparkles, Zap, Cpu, Server, Bot } from 'lucide-react';
 import type React from 'react';
 
@@ -528,12 +528,11 @@ export async function fetchModelCatalog(): Promise<ModelOption[]> {
 /**
  * Returns models grouped by category or filtered by active configured API keys.
  */
-export function getCategorizedModels(configuredProviders?: any[], catalog: ModelOption[] = LATEST_MODEL_CATALOG) {
+export function getCategorizedModels(configuredProviders?: LLMProviderInfo[], catalog: ModelOption[] = LATEST_MODEL_CATALOG) {
   const activeProviderIds = new Set<string>();
   configuredProviders?.forEach((p) => {
-    if (p.is_configured || p.configured) {
-      const pid = p.provider || p.id || '';
-      activeProviderIds.add(pid);
+    if (p.configured) {
+      activeProviderIds.add(p.id);
     }
   });
 

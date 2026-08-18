@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
@@ -71,8 +72,8 @@ export function ConnectorsPage() {
       setLoading(true);
       const res = await api.listIntegrations().catch(() => ({ integrations: [], count: 0 }));
       setIntegrations(res.integrations || []);
-    } catch (err: any) {
-      error('Failed to load connectors', err.message);
+    } catch (err) {
+      error('Failed to load connectors', getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -114,8 +115,8 @@ export function ConnectorsPage() {
         info('Redirecting to Provider', `Redirecting to ${connector.name} login...`);
         window.location.href = res.auth_url;
       }
-    } catch (err: any) {
-      error('OAuth Initialization Failed', err.message);
+    } catch (err) {
+      error('OAuth Initialization Failed', getErrorMessage(err));
       setConnecting(false);
     }
   };
@@ -130,8 +131,8 @@ export function ConnectorsPage() {
       );
       setActiveConnector(null);
       loadData();
-    } catch (err: any) {
-      error('Token Verification Failed', err.message);
+    } catch (err) {
+      error('Token Verification Failed', getErrorMessage(err));
     } finally {
       setConnecting(false);
     }
@@ -150,16 +151,16 @@ export function ConnectorsPage() {
         },
       }));
       success('Connection Valid', `${res.provider} is verified (${res.latency_ms}ms).`);
-    } catch (err: any) {
+    } catch (err) {
       setTestResults((prev) => ({
         ...prev,
         [connectorId]: {
           success: false,
           latency: 0,
-          msg: `Failed: ${err.message}`,
+          msg: `Failed: ${getErrorMessage(err)}`,
         },
       }));
-      error('Connection Test Failed', err.message);
+      error('Connection Test Failed', getErrorMessage(err));
     } finally {
       setTestingId(null);
     }
@@ -172,8 +173,8 @@ export function ConnectorsPage() {
       success('Disconnected', `Disconnected ${disconnectingConnector.name}.`);
       setDisconnectingConnector(null);
       loadData();
-    } catch (err: any) {
-      error('Disconnect failed', err.message);
+    } catch (err) {
+      error('Disconnect failed', getErrorMessage(err));
     }
   };
 
@@ -284,7 +285,7 @@ export function ConnectorsPage() {
               icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />}
               onClick={loadData}
             >
-              Refresh
+              {t('ui.refresh')}
             </Button>
           </div>
         </div>
@@ -311,7 +312,7 @@ export function ConnectorsPage() {
               <span className="text-caption text-slate block">{t('stats.vault', 'Hardware Vault')}</span>
               <span className="text-body-sm font-semibold text-deep-ink flex items-center gap-1 mt-0.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                <span>AES-256-GCM</span>
+                <span>{t('ui.vaultCipher')}</span>
               </span>
             </div>
           </div>
@@ -323,7 +324,7 @@ export function ConnectorsPage() {
             <div>
               <span className="text-caption text-slate block">{t('stats.auth', 'OAuth Protocol')}</span>
               <span className="text-body-sm font-semibold text-deep-ink block mt-0.5 font-mono">
-                OAuth 2.1 PKCE
+                {t('ui.oauthProtocol')}
               </span>
             </div>
           </div>
@@ -356,13 +357,13 @@ export function ConnectorsPage() {
         {loading ? (
           <div className="py-24 text-center text-slate font-sans">
             <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-slate" />
-            <p>Loading connectors...</p>
+            <p>{t('ui.loading')}</p>
           </div>
         ) : filteredConnectors.length === 0 ? (
           <div className="py-16 text-center bg-soft-meadow/40 rounded-3xl border border-onyx/10 mb-12">
             <Sparkles className="w-8 h-8 text-slate mx-auto mb-2 opacity-50" />
-            <p className="text-body-sm font-semibold text-deep-ink">No connectors match your filter</p>
-            <p className="text-caption text-slate mt-1">Try resetting the category filter or searching for another keyword.</p>
+            <p className="text-body-sm font-semibold text-deep-ink">{t('ui.emptyTitle')}</p>
+            <p className="text-caption text-slate mt-1">{t('ui.emptyDescription')}</p>
             <Button
               variant="ghost"
               size="sm"
@@ -373,7 +374,7 @@ export function ConnectorsPage() {
               }}
               className="mt-3"
             >
-              Reset Filters
+              {t('ui.resetFilters')}
             </Button>
           </div>
         ) : (
@@ -387,7 +388,7 @@ export function ConnectorsPage() {
                 onConnect={(c) => setActiveConnector(c)}
                 onTest={handleTestConnection}
                 onDisconnect={(c) => setDisconnectingConnector(c)}
-                isComingSoon={(item as any).isComingSoon}
+                isComingSoon={item.isComingSoon}
               />
             ))}
           </div>

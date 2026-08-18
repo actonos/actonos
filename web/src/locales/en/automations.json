@@ -1,52 +1,77 @@
 {
+  "eyebrow": "Proactive Autonomous Scheduling",
+  "title": "Cron Automations",
+  "scheduled": "Scheduled",
   "actions": {
-    "pause": "Pause",
-    "resume": "Resume"
+    "refresh": "Refresh",
+    "newTask": "Schedule New Task"
   },
-  "toast": {
-    "pausedTitle": "Automation paused",
-    "resumedTitle": "Automation resumed",
-    "toggleFailed": "Could not update automation"
+  "tabs": {
+    "tasks": "Scheduled Tasks ({{count}})",
+    "history": "Execution History ({{count}})"
   },
-  "eyebrow": "Automations",
-  "title": "Automations",
-  "subtitle": "Schedule recurring AI tasks and receive automatic push notifications.",
-  "actions": {
-    "newTask": "New Task",
-    "runNow": "Run Now",
-    "edit": "Edit",
-    "delete": "Delete",
-    "enable": "Enable",
-    "disable": "Pause"
+  "history": {
+    "emptyTitle": "No Execution History Yet",
+    "emptyDescription": "When scheduled CRON jobs execute or autonomous pulses trigger, execution duration, tokens, and output logs will be tracked here.",
+    "columns": {
+      "status": "Status",
+      "time": "Executed Time",
+      "job": "Job / Agent",
+      "usage": "Duration & Tokens",
+      "summary": "Prompt / Output Summary"
+    },
+    "success": "Success",
+    "failed": "Failed",
+    "milliseconds": "{{value}} ms",
+    "tokens": "{{value}} tokens",
+    "prompt": "Prompt:"
+  },
+  "empty": {
+    "loading": "Loading automations...",
+    "title": "No Scheduled Automations",
+    "description": "Create recurring tasks like daily briefings, security audits, git health scans, or meeting reminders.",
+    "action": "Schedule Your First Task"
   },
   "table": {
-    "taskName": "Task Name & Agent",
     "schedule": "Schedule",
-    "channel": "Channel",
-    "lastRun": "Last Run",
-    "status": "Status",
-    "actions": "Actions"
+    "name": "Task Name",
+    "agent": "Agent",
+    "directive": "Instructions / Directive",
+    "route": "Push Route",
+    "actions": "Actions",
+    "next": "Next:"
   },
   "modal": {
-    "createTitle": "New Scheduled Task",
-    "editTitle": "Edit Task",
+    "editTitle": "Edit Cron Task",
+    "createTitle": "Schedule New Cron Task",
     "nameLabel": "Task Name",
-    "namePlaceholder": "e.g. Daily Morning Briefing",
-    "agentLabel": "Agent",
-    "cronExprLabel": "Schedule",
-    "cronExprPlaceholder": "e.g. 0 8 * * * (Daily at 8:00 AM)",
+    "namePlaceholder": "e.g., Daily Morning Briefing & Repo Health",
+    "agentLabel": "Executing Agent",
+    "cronExprLabel": "Cron Schedule Expression",
     "presetDaily": "Daily 8 AM",
     "presetHourly": "Every Hour",
     "presetWeekly": "Weekly (Mon 9 AM)",
-    "presetCustom": "Custom",
-    "promptLabel": "Prompt / Instructions",
-    "promptPlaceholder": "What should the agent do automatically...",
-    "channelLabel": "Alert Channel",
-    "channelNone": "None",
-    "channelTelegram": "Telegram",
-    "channelWhatsApp": "WhatsApp",
+    "promptLabel": "Instruction / Prompt",
+    "channelLabel": "Push Alert Channel",
+    "channelTelegram": "Telegram Bot",
+    "channelWhatsApp": "WhatsApp Cloud API",
+    "channelDiscord": "Discord Bot",
+    "channelAll": "All Paired Channels",
+    "channelNone": "None (Internal Execution Only)",
+    "accountLabel": "Target Account",
+    "allAccounts": "All Accounts / Broadcast (*)",
     "recipientLabel": "Recipient / Chat ID",
-    "recipientPlaceholder": "e.g. 123456789",
-    "save": "Save Task"
+    "recipientPlaceholder": "Auto / Paired",
+    "cancel": "Cancel",
+    "scheduling": "Scheduling...",
+    "save": "Schedule Task"
+  },
+  "delete": {
+    "title": "Delete Cron Task",
+    "description": "Are you sure you want to delete this scheduled task?",
+    "confirm": "Delete Task"
+  },
+  "toast": {
+    "toggleFailed": "Failed to update automation"
   }
 }

@@ -249,7 +249,26 @@ cd web
 npm run dev
 
 # The frontend will proxy API calls to localhost:8080 (configure in vite.config.ts)
+
+# Complete local frontend gate
+npm run quality
+npx tsc --noEmit
+
+# Browser smoke tests, with ActonOS running
+npm run test:e2e
 ```
+
+`npm run quality` runs ESLint, English/Vietnamese locale parity, the strict
+hardcoded-visible-text audit, Vitest, production compilation, the entry-bundle
+budget, and Playwright browser tests. The browser suite includes an axe scan
+that fails on serious or critical accessibility violations. New frontend
+behavior should include a colocated `*.test.ts(x)` regression test.
+
+Frontend production TypeScript follows a zero-explicit-`any` policy and treats
+unused variables as lint errors. Shared transport belongs in
+`web/src/lib/api/client.ts`; domain-specific API modules belong under
+`web/src/lib/api/` and are exposed through the compatibility facade in
+`web/src/lib/api.ts`.
 
 ---
 

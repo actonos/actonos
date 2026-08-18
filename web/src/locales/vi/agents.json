@@ -10,18 +10,46 @@
     "subtitle": "Quy định tính cách, nguyên tắc và phong cách giao tiếp chung.",
     "save": "Lưu"
   },
+  "soulEditor": {
+    "fileName": "SOUL.md",
+    "title": "Tính cách và persona của agent: {{agent}}",
+    "descriptionPrefix": "Tệp",
+    "description": "xác định tính cách riêng biệt, nhiệm vụ cốt lõi, sắc thái cảm xúc và chuẩn hành vi cho {{agent}}.",
+    "loading": "Đang tải SOUL.md...",
+    "placeholder": "# Soul của Agent ActonOS\nMô tả tính cách, nhiệm vụ cốt lõi và giọng điệu...",
+    "cancel": "Hủy",
+    "saving": "Đang lưu...",
+    "save": "Lưu SOUL.md",
+    "loadFailed": "Không thể tải SOUL.md",
+    "saveFailed": "Không thể lưu SOUL.md",
+    "saved": "Đã cập nhật soul của agent",
+    "savedDescription": "Đã đồng bộ SOUL.md cho agent {{agent}}.",
+    "rootName": "Nova (hệ thống gốc)"
+  },
   "cron": {
-    "title": "Tác vụ định kỳ",
-    "subtitle": "Lên lịch cho agent tự động chạy và gửi thông báo.",
-    "newJob": "Tác vụ mới",
-    "empty": "Chưa có tác vụ định kỳ nào.",
-    "name": "Tên tác vụ",
-    "agent": "Agent thực thi",
-    "expression": "Lịch chạy",
-    "prompt": "Prompt",
-    "channel": "Kênh thông báo",
-    "recipient": "Người nhận",
-    "save": "Lưu tác vụ"
+    "title": "L?p l?ch t?c v? t? ch? ch? ??ng (Cron)",
+    "successTitle": "?? l?p l?ch t?c v? Cron",
+    "successDescription": "T?c v? \"{{name}}\" ?? ???c ??ng k? v? k?ch ho?t.",
+    "failureTitle": "Kh?ng th? l?p l?ch t?c v? Cron",
+    "name": "T?n t?c v?",
+    "namePlaceholder": "v? d?: B?n tin s?ng h?ng ng?y",
+    "agent": "Agent th?c thi",
+    "expression": "Bi?u th?c Cron (5 tr??ng)",
+    "expressionPlaceholder": "v? d?: 0 8 * * * ho?c */30 * * * *",
+    "prompt": "Ch? d?n / Prompt th?c thi",
+    "promptPlaceholder": "v? d?: T?o d? b?o th?i ti?t ng?n g?n, t?m t?t GitHub PR ?ang ch? v? li?t k? vi?c ?u ti?n cao.",
+    "channel": "K?nh th?ng b?o ??y",
+    "channels": {
+      "telegram": "Telegram Bot",
+      "whatsapp": "WhatsApp Cloud API",
+      "discord": "Discord Gateway",
+      "webhook": "Webhook v?o/ra"
+    },
+    "recipient": "Chat ID / S? ?i?n tho?i ng??i nh?n",
+    "recipientPlaceholder": "v? d?: 123456789 ho?c +84912345678",
+    "cancel": "H?y",
+    "scheduling": "?ang l?p l?ch...",
+    "save": "L?u v? l?p l?ch"
   },
   "onboarding": {
     "title": "Chào mừng đến với ActonOS",
@@ -45,6 +73,34 @@
     "editAgent": "Chỉnh sửa",
     "deleteConfirm": "Bạn có chắc muốn xoá agent này?",
     "chat": "Trò chuyện"
+  },
+  "list": {
+    "exportTitle": "Xuất agent dưới dạng JSON",
+    "export": "Xuất",
+    "importTitle": "Nhập agent từ JSON",
+    "import": "Nhập",
+    "refresh": "Làm mới",
+    "loading": "Đang tải các manifest agent...",
+    "columns": {
+      "identity": "Agent và định danh",
+      "status": "Trạng thái",
+      "model": "Mô hình nhận thức",
+      "tools": "Công cụ và kênh",
+      "governance": "Quản trị",
+      "actions": "Thao tác"
+    },
+    "root": "Gốc",
+    "modelDetails": "nhiệt độ: {{temperature}} • tối đa: {{maxTokens}}",
+    "allChannels": "Tất cả kênh (*)",
+    "approval": "Phê duyệt {{level}}",
+    "medium": "Trung bình",
+    "monthlyBudget": "${{amount}}/tháng",
+    "launchChat": "Mở phiên trò chuyện",
+    "chat": "Trò chuyện",
+    "openStudio": "Mở Agent Studio",
+    "deleteTitle": "Xóa manifest agent",
+    "deleteDescription": "Bạn có chắc muốn xóa \"{{agent}}\"? Thao tác này xóa vĩnh viễn trạng thái, quyền công cụ và manifest thực thi của agent khỏi ActonOS.",
+    "delete": "Xóa agent"
   },
   "card": {
     "toolsCount": "{{count}} Công cụ",
@@ -73,5 +129,104 @@
     "approvalLow": "Thấp (Tự động chạy 100%)",
     "approvalMed": "Trung bình (Được sửa tệp)",
     "approvalHigh": "Cao (Luôn hỏi xác nhận)"
+  },
+  "studio": {
+    "loading": "?ang t?i Agent Studio...",
+    "back": "Quay l?i danh s?ch Agent",
+    "newEyebrow": "Agent Studio m?i",
+    "eyebrow": "Manifest Agent Studio",
+    "rootBadge": "? Agent h? th?ng Root",
+    "untitled": "Agent ch?a ??t t?n",
+    "launch": "M? phi?n",
+    "saving": "?ang l?u...",
+    "save": "L?u Agent",
+    "name": "T?n Agent",
+    "namePlaceholder": "v? d?: Ki?n tr?c s? Full-Stack cao c?p",
+    "identifier": "??nh danh (Slug)",
+    "identifierPlaceholder": "v? d?: agent_fullstack_lead",
+    "description": "M? t? & Vai tr?",
+    "descriptionPlaceholder": "M? t? tr?ch nhi?m, chuy?n m?n v? ranh gi?i v?n h?nh c?a Agent...",
+    "lifecycle": "Tr?ng th?i v?ng ??i",
+    "active": "Ho?t ??ng",
+    "stopped": "?? d?ng",
+    "avatar": "Avatar: {{icon}}",
+    "ready": "? Ho?t ??ng",
+    "keyNeeded": "?? C?n kh?a",
+    "allTools": "T?t c? (*)",
+    "all": "T?t c?",
+    "tabs": {
+      "instructions": "?? Ch? d?n",
+      "soul": "? Persona & Soul (SOUL.md)",
+      "memory": "?? B? nh? (MEMORY.md)",
+      "model": "? LLM & Suy lu?n ({{status}})",
+      "tools": "?? C?ng c? ({{value}})",
+      "channels": "?? K?nh ({{value}})",
+      "governance": "??? Qu?n tr?"
+    },
+    "length": "?? d?i: {{count}} k? t?",
+    "prompt": {
+      "title": "Ch? d?n h? th?ng nh?n th?c",
+      "description": "X?c ??nh kh? n?ng t?c v? c?t l?i, v?ng suy lu?n v? ch? d?n quy tr?nh c?a Agent.",
+      "loadPreset": "N?p preset ti?u chu?n",
+      "placeholder": "Nh?p ch? d?n h? th?ng...",
+      "standard": "Ti?u chu?n ActonOS"
+    },
+    "soul": {
+      "title": "Kernel Persona & Phong th?i Agent (SOUL.md)",
+      "description": "X?c ??nh gi?ng h?i tho?i, tri?t l?, phong th?i v? ranh gi?i h?nh vi c?a Agent n?y.",
+      "loadTemplate": "N?p m?u Soul",
+      "placeholder": "# Agent SOUL.md\nM? t? gi?ng n?i, phong th?i v? nguy?n t?c tri?t l? ri?ng c?a Agent...",
+      "isolated": "Soul Agent c?ch ly"
+    },
+    "memory": {
+      "title": "Nh?t k? b? nh? t?nh ti?t b?n v?ng (MEMORY.md)",
+      "description": "Ph?n t? t? ch?, t?y ch?n ng??i d?ng v? tri th?c d?i h?n t?ng h?p ???c t?ch l?y qua c?c phi?n.",
+      "refresh": "L?m m?i b? nh?",
+      "empty": "Ch?a ghi nh?n b? nh? t?nh ti?t",
+      "emptyDescription": "Khi b?n t??ng t?c v?i Agent qua Chat v? t?c v? n?n, daemon ph?n t? ReAct s? t?ng h?p quy?t ??nh, quy ??c d? ?n v? t?y ch?n ng??i d?ng th?nh b? nh? c? d?u th?i gian.",
+      "longTerm": "B? nh? d?i h?n t? ch?"
+    },
+    "model": {
+      "syncTitle": "??ng b? nh? cung c?p LLM ??ng",
+      "syncDescription": "Agent t? ??ng ??nh tuy?n y?u c?u qua nh? cung c?p ?? c?u h?nh trong kho ph?n c?ng.",
+      "providersActive": "{{count}} nh? cung c?p ho?t ??ng",
+      "architecture": "Ki?n tr?c m? h?nh ch?nh & d? ph?ng",
+      "primary": "M? h?nh LLM ch?nh",
+      "primaryPlaceholder": "v? d?: anthropic/claude-sonnet-4-6 ho?c custom_openai/default-model",
+      "fallback": "M? h?nh kh?i ph?c d? ph?ng",
+      "fallbackPlaceholder": "v? d?: google/gemini-2.5-flash",
+      "fallbackDescription": "N?u m? h?nh ch?nh g?p gi?i h?n t?c ?? ho?c l?i, cascade t? ??ng kh?i ph?c b?ng m? h?nh n?y.",
+      "temperature": "Nhi?t ?? s?ng t?o:",
+      "maxTokens": "Token sinh t?i ?a:"
+    },
+    "tools": {
+      "title": "C?ng c? ???c c?p quy?n",
+      "description": "Ch?n c?ng c? native, MCP server v? skill Agent ???c ph?p th?c thi.",
+      "clear": "B? ch?n t?t c?",
+      "selectAll": "Ch?n t?t c? (*)",
+      "fullTitle": "To?n quy?n:",
+      "fullDescription": "Agent c? th? d?ng m?i c?ng c? v? plugin hi?n c?."
+    },
+    "channels": {
+      "title": "Listener k?nh chat ??u v?o",
+      "description": "Ch? ??nh k?nh nh?n tin k?ch ho?t Agent khi nh?n tin ho?c ?? c?p.",
+      "all": "M?i k?nh chat (M?c ??nh)",
+      "allDescription": "Agent l?ng nghe tin nh?n t? Telegram, Discord, WhatsApp v? Webhook.",
+      "specific": "Ch? c?c k?nh c? th?",
+      "specificDescription": "Gi?i h?n Agent ch? ph?n h?i c?c k?nh ???c ch?n b?n d??i.",
+      "select": "Ch?n k?nh l?ng nghe"
+    },
+    "governance": {
+      "title": "Qu?n tr? & Quy?n h?n",
+      "budget": "Gi?i h?n ng?n s?ch th?ng ($ USD)",
+      "budgetHelp": "Agent d?ng khi chi ph? token th?ng ??t gi?i h?n n?y.",
+      "approval": "M?c ph? duy?t c?a con ng??i",
+      "low": "Th?p (T? ??ng th?c thi)",
+      "medium": "Trung b?nh (Cho ph?p ghi Workspace)",
+      "high": "Cao (X?c nh?n thao t?c nh?y c?m)",
+      "paths": "???ng d?n Workspace ???c ph?p",
+      "pathsPlaceholder": "v? d?: *, /data/workspace/project/*",
+      "pathsHelp": "Danh s?ch ???ng d?n ho?c wildcard (*) ph?n t?ch b?ng d?u ph?y m? Agent ???c ph?p truy c?p."
+    }
   }
 }

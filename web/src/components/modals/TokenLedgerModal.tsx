@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import {
@@ -16,7 +17,13 @@ interface TokenLedgerModalProps {
   onClose: () => void;
 }
 
-export function TokenLedgerModal({ isOpen, onClose }: TokenLedgerModalProps) {
+interface TokenLedgerPanelProps {
+  active?: boolean;
+  onClose?: () => void;
+}
+
+export function TokenLedgerPanel({ active = true, onClose }: TokenLedgerPanelProps) {
+  const { t } = useTranslation('settings');
   const [activeTab, setActiveTab] = useState<'overview' | 'transactions'>('overview');
   const [summary, setSummary] = useState<TokenUsageSummary | null>(null);
   const [history, setHistory] = useState<TokenUsageRecord[]>([]);
@@ -26,7 +33,7 @@ export function TokenLedgerModal({ isOpen, onClose }: TokenLedgerModalProps) {
   const [loading, setLoading] = useState(false);
 
   const loadData = async () => {
-    if (!isOpen) return;
+    if (!active) return;
     setLoading(true);
     try {
       const [sumRes, histRes, agsRes] = await Promise.all([
@@ -48,10 +55,10 @@ export function TokenLedgerModal({ isOpen, onClose }: TokenLedgerModalProps) {
   };
 
   useEffect(() => {
-    if (isOpen) {
+    if (active) {
       loadData();
     }
-  }, [isOpen, selectedAgent, selectedSource]);
+  }, [active, selectedAgent, selectedSource]);
 
   const maxDailyTokens = summary?.daily_trend && summary.daily_trend.length > 0
     ? Math.max(...summary.daily_trend.map((d) => d.total_tokens), 1)
@@ -73,13 +80,7 @@ export function TokenLedgerModal({ isOpen, onClose }: TokenLedgerModalProps) {
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title="Token Consumption & Cost Ledger"
-      maxWidth="max-w-4xl"
-    >
-      <div className="space-y-6">
+    <div className="space-y-6">
         {/* Header Tabs & Controls */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-onyx/10">
           <div className="flex items-center gap-1.5 p-1 bg-soft-meadow rounded-full border border-onyx/10">
@@ -92,7 +93,7 @@ export function TokenLedgerModal({ isOpen, onClose }: TokenLedgerModalProps) {
                   : 'text-slate hover:text-deep-ink'
               }`}
             >
-              Overview & Breakdown
+              {t('tokenLedger.overview')}
             </button>
             <button
               type="button"
@@ -103,7 +104,7 @@ export function TokenLedgerModal({ isOpen, onClose }: TokenLedgerModalProps) {
                   : 'text-slate hover:text-deep-ink'
               }`}
             >
-              Transaction Ledger ({history.length})
+              {t('tokenLedger.transactions', { count: history.length })}
             </button>
           </div>
 
@@ -115,7 +116,7 @@ export function TokenLedgerModal({ isOpen, onClose }: TokenLedgerModalProps) {
               onClick={loadData}
               disabled={loading}
             >
-              Refresh
+              {t('tokenLedger.refresh')}
             </Button>
           </div>
         </div>
@@ -126,42 +127,45 @@ export function TokenLedgerModal({ isOpen, onClose }: TokenLedgerModalProps) {
             {/* 4 Summary Metric Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="p-4 rounded-2xl bg-soft-meadow border border-onyx/10 space-y-1">
-                <span className="text-[11px] font-semibold uppercase text-slate block">Today Volume</span>
+                <span className="text-[11px] font-semibold uppercase text-slate block">{t('tokenLedger.today')}</span>
                 <div className="text-heading-sm font-serif font-bold text-deep-ink">
                   {(summary?.today_tokens || 0).toLocaleString()}
                 </div>
                 <span className="text-[11px] font-mono text-emerald-700 font-semibold block">
-                  ${(summary?.today_cost_usd || 0).toFixed(4)} USD
+                  {t('tokenLedger.currency', { value: (summary?.today_cost_usd || 0).toFixed(4) })}
                 </span>
               </div>
 
               <div className="p-4 rounded-2xl bg-soft-meadow border border-onyx/10 space-y-1">
-                <span className="text-[11px] font-semibold uppercase text-slate block">This Month</span>
+                <span className="text-[11px] font-semibold uppercase text-slate block">{t('tokenLedger.month')}</span>
                 <div className="text-heading-sm font-serif font-bold text-deep-ink">
                   {(summary?.month_tokens || 0).toLocaleString()}
                 </div>
                 <span className="text-[11px] font-mono text-emerald-700 font-semibold block">
-                  ${(summary?.month_cost_usd || 0).toFixed(4)} USD
+                  {t('tokenLedger.currency', { value: (summary?.month_cost_usd || 0).toFixed(4) })}
                 </span>
               </div>
 
               <div className="p-4 rounded-2xl bg-soft-meadow border border-onyx/10 space-y-1">
-                <span className="text-[11px] font-semibold uppercase text-slate block">Lifetime Tokens</span>
+                <span className="text-[11px] font-semibold uppercase text-slate block">{t('tokenLedger.lifetime')}</span>
                 <div className="text-heading-sm font-serif font-bold text-deep-ink">
                   {(summary?.total_tokens || 0).toLocaleString()}
                 </div>
                 <span className="text-[11px] font-mono text-slate block">
-                  {(summary?.total_prompt_tokens || 0).toLocaleString()} in / {(summary?.total_completion_tokens || 0).toLocaleString()} out
+                  {t('tokenLedger.inputOutput', {
+                    input: (summary?.total_prompt_tokens || 0).toLocaleString(),
+                    output: (summary?.total_completion_tokens || 0).toLocaleString(),
+                  })}
                 </span>
               </div>
 
               <div className="p-4 rounded-2xl bg-soft-meadow border border-onyx/10 space-y-1">
-                <span className="text-[11px] font-semibold uppercase text-slate block">Total Cost Burn</span>
+                <span className="text-[11px] font-semibold uppercase text-slate block">{t('tokenLedger.totalCost')}</span>
                 <div className="text-heading-sm font-serif font-bold text-emerald-700">
                   ${(summary?.total_cost_usd || 0).toFixed(4)}
                 </div>
                 <span className="text-[11px] font-mono text-slate block">
-                  Live Market Catalog
+                  {t('tokenLedger.marketCatalog')}
                 </span>
               </div>
             </div>
@@ -172,10 +176,10 @@ export function TokenLedgerModal({ isOpen, onClose }: TokenLedgerModalProps) {
                 <div className="flex items-center gap-2">
                   <TrendingUp className="w-4 h-4 text-deep-ink" />
                   <h4 className="font-serif text-body-sm font-semibold text-deep-ink">
-                    14-Day Token Traffic Trend
+                    {t('tokenLedger.trend')}
                   </h4>
                 </div>
-                <span className="text-[11px] text-slate font-mono">Daily Rollup</span>
+                <span className="text-[11px] text-slate font-mono">{t('tokenLedger.dailyRollup')}</span>
               </div>
 
               {summary?.daily_trend && summary.daily_trend.length > 0 ? (
@@ -187,7 +191,11 @@ export function TokenLedgerModal({ isOpen, onClose }: TokenLedgerModalProps) {
                         <div key={d.date} className="flex-1 flex flex-col items-center gap-1 group relative h-full justify-end">
                           {/* Tooltip on hover */}
                           <div className="absolute -top-10 bg-deep-ink text-white text-[10px] py-1 px-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 font-mono shadow-md">
-                            {d.date}: {d.total_tokens.toLocaleString()} tokens (${d.cost_usd.toFixed(4)})
+                            {t('tokenLedger.tooltip', {
+                              date: d.date,
+                              tokens: d.total_tokens.toLocaleString(),
+                              cost: d.cost_usd.toFixed(4),
+                            })}
                           </div>
                           <div
                             className="w-full bg-deep-ink rounded-t-md hover:bg-emerald-600 transition-all duration-300 min-h-[4px]"
@@ -203,7 +211,7 @@ export function TokenLedgerModal({ isOpen, onClose }: TokenLedgerModalProps) {
                 </div>
               ) : (
                 <div className="p-8 text-center text-caption text-slate bg-soft-meadow rounded-xl">
-                  No token consumption recorded in the last 14 days.
+                  {t('tokenLedger.noTrend')}
                 </div>
               )}
             </div>
@@ -215,7 +223,7 @@ export function TokenLedgerModal({ isOpen, onClose }: TokenLedgerModalProps) {
                 <div className="flex items-center gap-2">
                   <Layers className="w-4 h-4 text-deep-ink" />
                   <h4 className="font-serif text-body-sm font-semibold text-deep-ink">
-                    Consumption by Model
+                    {t('tokenLedger.byModel')}
                   </h4>
                 </div>
 
@@ -226,7 +234,10 @@ export function TokenLedgerModal({ isOpen, onClose }: TokenLedgerModalProps) {
                         <div className="flex items-center justify-between text-caption">
                           <span className="font-mono font-semibold text-deep-ink truncate">{m.model}</span>
                           <span className="font-mono text-slate text-[11px]">
-                            {m.total_tokens.toLocaleString()} tok (${m.cost_usd.toFixed(4)}) • <strong className="text-emerald-700">{m.percentage.toFixed(1)}%</strong>
+                            {t('tokenLedger.usage', {
+                              tokens: m.total_tokens.toLocaleString(),
+                              cost: m.cost_usd.toFixed(4),
+                            })} <strong className="text-emerald-700">{m.percentage.toFixed(1)}%</strong>
                           </span>
                         </div>
                         <div className="w-full bg-onyx/10 h-1.5 rounded-full overflow-hidden">
@@ -239,7 +250,7 @@ export function TokenLedgerModal({ isOpen, onClose }: TokenLedgerModalProps) {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-caption text-slate">No model stats available.</p>
+                  <p className="text-caption text-slate">{t('tokenLedger.noModels')}</p>
                 )}
               </div>
 
@@ -248,7 +259,7 @@ export function TokenLedgerModal({ isOpen, onClose }: TokenLedgerModalProps) {
                 <div className="flex items-center gap-2">
                   <Bot className="w-4 h-4 text-deep-ink" />
                   <h4 className="font-serif text-body-sm font-semibold text-deep-ink">
-                    Consumption by Agent
+                    {t('tokenLedger.byAgent')}
                   </h4>
                 </div>
 
@@ -259,7 +270,10 @@ export function TokenLedgerModal({ isOpen, onClose }: TokenLedgerModalProps) {
                         <div className="flex items-center justify-between text-caption">
                           <span className="font-mono font-semibold text-deep-ink truncate">{a.agent_id}</span>
                           <span className="font-mono text-slate text-[11px]">
-                            {a.total_tokens.toLocaleString()} tok (${a.cost_usd.toFixed(4)}) • <strong className="text-emerald-700">{a.percentage.toFixed(1)}%</strong>
+                            {t('tokenLedger.usage', {
+                              tokens: a.total_tokens.toLocaleString(),
+                              cost: a.cost_usd.toFixed(4),
+                            })} <strong className="text-emerald-700">{a.percentage.toFixed(1)}%</strong>
                           </span>
                         </div>
                         <div className="w-full bg-onyx/10 h-1.5 rounded-full overflow-hidden">
@@ -272,7 +286,7 @@ export function TokenLedgerModal({ isOpen, onClose }: TokenLedgerModalProps) {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-caption text-slate">No agent stats available.</p>
+                  <p className="text-caption text-slate">{t('tokenLedger.noAgents')}</p>
                 )}
               </div>
             </div>
@@ -286,7 +300,7 @@ export function TokenLedgerModal({ isOpen, onClose }: TokenLedgerModalProps) {
             <div className="flex flex-wrap items-center gap-3 p-3 bg-soft-meadow rounded-2xl border border-onyx/10">
               <div className="flex items-center gap-2 text-caption font-semibold text-deep-ink">
                 <Filter className="w-3.5 h-3.5 text-slate" />
-                <span>Filters:</span>
+                <span>{t('tokenLedger.filters')}</span>
               </div>
 
               <select
@@ -294,7 +308,7 @@ export function TokenLedgerModal({ isOpen, onClose }: TokenLedgerModalProps) {
                 onChange={(e) => setSelectedAgent(e.target.value)}
                 className="bg-canvas text-deep-ink text-[12px] font-sans px-3 py-1.5 rounded-full border border-onyx/10 focus:outline-none"
               >
-                <option value="all">All Agents</option>
+                <option value="all">{t('tokenLedger.allAgents')}</option>
                 {agents.map((ag) => (
                   <option key={ag.agent_id} value={ag.agent_id}>
                     {ag.name} ({ag.agent_id})
@@ -307,12 +321,12 @@ export function TokenLedgerModal({ isOpen, onClose }: TokenLedgerModalProps) {
                 onChange={(e) => setSelectedSource(e.target.value)}
                 className="bg-canvas text-deep-ink text-[12px] font-sans px-3 py-1.5 rounded-full border border-onyx/10 focus:outline-none"
               >
-                <option value="all">All Sources</option>
-                <option value="chat">Chat (Interactive)</option>
-                <option value="stream">Chat Stream (SSE)</option>
-                <option value="cron">Cron Automations</option>
-                <option value="heartbeat">Heartbeat Loop</option>
-                <option value="channel">External Channels</option>
+                <option value="all">{t('tokenLedger.allSources')}</option>
+                <option value="chat">{t('tokenLedger.sourceChat')}</option>
+                <option value="stream">{t('tokenLedger.sourceStream')}</option>
+                <option value="cron">{t('tokenLedger.sourceCron')}</option>
+                <option value="heartbeat">{t('tokenLedger.sourceHeartbeat')}</option>
+                <option value="channel">{t('tokenLedger.sourceChannel')}</option>
               </select>
             </div>
 
@@ -322,14 +336,14 @@ export function TokenLedgerModal({ isOpen, onClose }: TokenLedgerModalProps) {
                 <table className="w-full text-left border-collapse text-body-sm font-sans">
                   <thead>
                     <tr className="border-b border-onyx/10 bg-soft-meadow/50 text-[11px] font-semibold uppercase tracking-wider text-slate sticky top-0 bg-soft-meadow z-10">
-                      <th className="py-2.5 px-3">Time</th>
-                      <th className="py-2.5 px-3">Agent</th>
-                      <th className="py-2.5 px-3">Model</th>
-                      <th className="py-2.5 px-3">Source</th>
-                      <th className="py-2.5 px-3 text-right">Prompt</th>
-                      <th className="py-2.5 px-3 text-right">Completion</th>
-                      <th className="py-2.5 px-3 text-right">Total</th>
-                      <th className="py-2.5 px-3 text-right">Cost (USD)</th>
+                      <th className="py-2.5 px-3">{t('tokenLedger.columns.time')}</th>
+                      <th className="py-2.5 px-3">{t('tokenLedger.columns.agent')}</th>
+                      <th className="py-2.5 px-3">{t('tokenLedger.columns.model')}</th>
+                      <th className="py-2.5 px-3">{t('tokenLedger.columns.source')}</th>
+                      <th className="py-2.5 px-3 text-right">{t('tokenLedger.columns.prompt')}</th>
+                      <th className="py-2.5 px-3 text-right">{t('tokenLedger.columns.completion')}</th>
+                      <th className="py-2.5 px-3 text-right">{t('tokenLedger.columns.total')}</th>
+                      <th className="py-2.5 px-3 text-right">{t('tokenLedger.columns.cost')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-onyx/5 font-mono text-[12px]">
@@ -367,7 +381,7 @@ export function TokenLedgerModal({ isOpen, onClose }: TokenLedgerModalProps) {
                     ) : (
                       <tr>
                         <td colSpan={8} className="py-8 text-center text-caption text-slate font-sans">
-                          No token ledger transactions matching the selected criteria.
+                          {t('tokenLedger.noTransactions')}
                         </td>
                       </tr>
                     )}
@@ -379,12 +393,25 @@ export function TokenLedgerModal({ isOpen, onClose }: TokenLedgerModalProps) {
         )}
 
         {/* Modal Footer */}
-        <div className="flex items-center justify-end pt-3 border-t border-onyx/10">
+        {onClose && <div className="flex items-center justify-end pt-3 border-t border-onyx/10">
           <Button variant="primary" size="md" onClick={onClose}>
-            Close
+            {t('tokenLedger.close')}
           </Button>
-        </div>
+        </div>}
       </div>
+  );
+}
+
+export function TokenLedgerModal({ isOpen, onClose }: TokenLedgerModalProps) {
+  const { t } = useTranslation('settings');
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={t('tokenLedger.title')}
+      maxWidth="max-w-4xl"
+    >
+      <TokenLedgerPanel active={isOpen} onClose={onClose} />
     </Modal>
   );
 }

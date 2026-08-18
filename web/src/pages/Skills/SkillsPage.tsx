@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
@@ -22,11 +23,11 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { api, type HubSkillItem } from '@/lib/api';
-import type { ToolInfo } from '@/lib/types';
+import { isApprovalRequired, type ToolInfo } from '@/lib/types';
 
 export function SkillsPage() {
   const { t } = useTranslation('skills');
-  const { success, error } = useToast();
+  const { success, error, info } = useToast();
   const [installedSkills, setInstalledSkills] = useState<ToolInfo[]>([]);
   const [hubCatalog, setHubCatalog] = useState<HubSkillItem[]>([]);
   const [activeTab, setActiveTab] = useState<'installed' | 'hub'>('installed');
@@ -51,8 +52,8 @@ export function SkillsPage() {
       ]);
       setInstalledSkills(toolsRes.tools || []);
       setHubCatalog(hubRes.catalog || []);
-    } catch (err: any) {
-      error('Failed to load skills', err.message);
+    } catch (err) {
+      error('Failed to load skills', getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -65,11 +66,15 @@ export function SkillsPage() {
   const handleInstall = async (skillId: string) => {
     setInstallingId(skillId);
     try {
-      await api.installHubSkill(skillId);
+      const result = await api.installHubSkill(skillId);
+      if (isApprovalRequired(result)) {
+        info(t('common:approval.queuedTitle'), t('common:approval.queuedDescription'));
+        return;
+      }
       success(t('hub.installed', 'Installed'), `Skill ${skillId} is now active.`);
       loadData();
-    } catch (err: any) {
-      error('Install failed', err.message);
+    } catch (err) {
+      error('Install failed', getErrorMessage(err));
     } finally {
       setInstallingId(null);
     }
@@ -79,12 +84,17 @@ export function SkillsPage() {
     if (!uninstallingSkill) return;
     setInstallingId(uninstallingSkill);
     try {
-      await api.uninstallHubSkill(uninstallingSkill);
+      const result = await api.uninstallHubSkill(uninstallingSkill);
+      if (isApprovalRequired(result)) {
+        info(t('common:approval.queuedTitle'), t('common:approval.queuedDescription'));
+        setUninstallingSkill(null);
+        return;
+      }
       success(t('hub.uninstall', 'Uninstalled'), `Skill ${uninstallingSkill} removed.`);
       setUninstallingSkill(null);
       loadData();
-    } catch (err: any) {
-      error('Uninstall failed', err.message);
+    } catch (err) {
+      error('Uninstall failed', getErrorMessage(err));
     } finally {
       setInstallingId(null);
     }
@@ -95,19 +105,24 @@ export function SkillsPage() {
     if (!skillName.trim()) return;
     setCreating(true);
     try {
-      await api.createSkill({
+      const result = await api.createSkill({
         name: skillName.trim().toLowerCase().replace(/\s+/g, '_'),
         description: skillDesc.trim(),
         content: skillContent.trim(),
       });
+      if (isApprovalRequired(result)) {
+        info(t('common:approval.queuedTitle'), t('common:approval.queuedDescription'));
+        setIsCreateOpen(false);
+        return;
+      }
       success(t('createModal.submit', 'Created'), `Skill ${skillName} created.`);
       setIsCreateOpen(false);
       setSkillName('');
       setSkillDesc('');
       setSkillContent('');
       loadData();
-    } catch (err: any) {
-      error('Create failed', err.message);
+    } catch (err) {
+      error('Create failed', getErrorMessage(err));
     } finally {
       setCreating(false);
     }
@@ -213,7 +228,7 @@ export function SkillsPage() {
         {/* Installed Skills View */}
         {activeTab === 'installed' && (
           loading ? (
-            <div className="py-20 text-center text-slate font-sans">Loading...</div>
+            <div className="py-20 text-center text-slate font-sans">{t('loading')}</div>
           ) : filteredInstalled.length === 0 ? (
             <div className="bg-soft-meadow rounded-[24px] p-12 text-center max-w-md mx-auto border border-onyx/10">
               <Sparkles className="w-12 h-12 text-deep-ink mx-auto mb-3 opacity-40" />
@@ -295,7 +310,7 @@ export function SkillsPage() {
                   </div>
 
                   <div className="pt-4 border-t border-soft-meadow flex items-center justify-between">
-                    <span className="text-caption text-slate">By {skill.author}</span>
+                    <span className="text-caption text-slate">{t('hub.byAuthor', { author: skill.author })}</span>
                     {skill.installed ? (
                       <Button
                         variant="danger"

@@ -41,5 +41,25 @@
     "account": "Account",
     "email": "Email",
     "authMethod": "Method"
+  },
+  "ui": {
+    "connectTo": "Connect to {{connector}}",
+    "oauthBrowser": "OAuth 2.1 (browser login)",
+    "directToken": "Direct token / PAT",
+    "browserAuthorization": "Seamless browser authorization",
+    "browserAuthorizationHelp": "Continue to the secure {{connector}} login screen. After approval, ActonOS exchanges and stores access tokens in the hardware-bound encrypted vault.",
+    "clientId": "OAuth client ID",
+    "clientIdPlaceholder": "Custom client ID from your OAuth app...",
+    "clientSecret": "OAuth client secret",
+    "clientSecretPlaceholder": "Custom client secret...",
+    "generateTokenOn": "Generate token on {{connector}}",
+    "encryptedEnclave": "Encrypted enclave",
+    "refresh": "Refresh",
+    "vaultCipher": "AES-256-GCM",
+    "oauthProtocol": "OAuth 2.1 PKCE",
+    "loading": "Loading connectors...",
+    "emptyTitle": "No connectors match your filter",
+    "emptyDescription": "Reset the category filter or search for another keyword.",
+    "resetFilters": "Reset filters"
   }
 }

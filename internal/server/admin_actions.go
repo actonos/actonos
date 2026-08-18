@@ -167,6 +167,35 @@ func (s *Server) executeAdminAction(ctx context.Context, action string, raw json
 			return nil, err
 		}
 		return map[string]string{"status": strings.TrimPrefix(action, "hub_") + "ed", "skill_id": input.SkillID}, nil
+	case "mcp_toggle":
+		var input struct {
+			ServerID string `json:"server_id"`
+			Enabled  bool   `json:"enabled"`
+		}
+		if err := json.Unmarshal(raw, &input); err != nil {
+			return nil, fmt.Errorf("decoding MCP toggle input: %w", err)
+		}
+		if s.mcpHost == nil {
+			return nil, errors.New("mcp host is not configured")
+		}
+		if err := s.mcpHost.SetServerEnabled(ctx, input.ServerID, input.Enabled); err != nil {
+			return nil, fmt.Errorf("updating MCP server: %w", err)
+		}
+		return map[string]any{"status": "updated", "server_id": input.ServerID, "enabled": input.Enabled}, nil
+	case "mcp_disconnect":
+		var input struct {
+			ServerID string `json:"server_id"`
+		}
+		if err := json.Unmarshal(raw, &input); err != nil {
+			return nil, fmt.Errorf("decoding MCP disconnect input: %w", err)
+		}
+		if s.mcpHost == nil {
+			return nil, errors.New("mcp host is not configured")
+		}
+		if err := s.mcpHost.DisconnectServer(input.ServerID); err != nil {
+			return nil, fmt.Errorf("disconnecting MCP server: %w", err)
+		}
+		return map[string]string{"status": "disconnected", "server_id": input.ServerID}, nil
 	case "system_restart":
 		if s.hal == nil {
 			return nil, errors.New("HAL is not configured")

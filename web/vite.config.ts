@@ -29,7 +29,6 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          vendor: ['react', 'react-dom'],
           editor: [
             '@tiptap/react',
             '@tiptap/starter-kit',

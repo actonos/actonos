@@ -162,6 +162,7 @@ export interface ConnectorInfo {
   client_id?: string;
   client_secret?: string;
   direct_token?: string;
+  isComingSoon?: boolean;
 }
 
 export interface LLMProviderInfo {
@@ -339,6 +340,25 @@ export interface ApprovalRequest {
   expires_at: string;
   decided_at?: string;
   decided_by?: string;
+}
+
+export interface ApprovalRequiredResult {
+  status: 'approval_required';
+  approval: ApprovalRequest;
+}
+
+export type MutationResult<T> = T | ApprovalRequiredResult;
+
+export function isApprovalRequired<T>(
+  result: MutationResult<T>
+): result is ApprovalRequiredResult {
+  return (
+    typeof result === 'object' &&
+    result !== null &&
+    'status' in result &&
+    result.status === 'approval_required' &&
+    'approval' in result
+  );
 }
 
 export type AgentRunStatus =

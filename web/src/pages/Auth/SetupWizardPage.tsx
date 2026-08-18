@@ -1,4 +1,6 @@
 import { useState, type FormEvent } from 'react';
+import { getErrorMessage } from '@/lib/errors';
+import { useTranslation } from 'react-i18next';
 import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -23,6 +25,7 @@ export interface SetupWizardPageProps {
 }
 
 export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
+  const { t } = useTranslation('setup');
   const { success, error } = useToast();
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -45,7 +48,7 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
   const handleNextFromStep1 = (e: FormEvent) => {
     e.preventDefault();
     if (!userName.trim()) {
-      error('Validation Error', 'Please enter your name.');
+      error(t('wizard.validationTitle'), t('wizard.nameRequired'));
       return;
     }
     setStep(2);
@@ -54,11 +57,11 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
   const handleNextFromStep2 = (e: FormEvent) => {
     e.preventDefault();
     if (password.length < 4) {
-      error('Password Too Short', 'Master password must be at least 4 characters long.');
+      error(t('wizard.passwordShortTitle'), t('wizard.passwordShort'));
       return;
     }
     if (password !== confirmPassword) {
-      error('Passwords Do Not Match', 'Please ensure both passwords match.');
+      error(t('wizard.passwordMismatchTitle'), t('wizard.passwordMismatch'));
       return;
     }
     setStep(3);
@@ -67,7 +70,7 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
   const handleFinishSetup = async () => {
     try {
       setLoading(true);
-      const res = await api.setupInitialAdmin({
+      await api.setupInitialAdmin({
         password,
         user_name: userName,
         user_role: userRole,
@@ -76,13 +79,10 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
         custom_instructions: customInstructions,
       });
 
-      if (res.token) {
-        localStorage.setItem('actonos_token', res.token);
-      }
-      success('ActonOS Initialized', 'Welcome to your autonomous AI operating system.');
+      success(t('wizard.successTitle'), t('wizard.successDescription'));
       onCompleted();
-    } catch (err: any) {
-      error('Initialization Failed', err.message);
+    } catch (err) {
+      error(t('wizard.failureTitle'), getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -101,10 +101,10 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
             className="h-12 w-auto mx-auto mb-5 object-contain"
           />
           <h1 className="font-serif text-heading text-deep-ink mb-1 tracking-tight">
-            Kernel Appliance Initialization
+            {t('wizard.title')}
           </h1>
           <p className="font-sans text-body-sm text-slate">
-            Hardware-Bound AI Agent Operating System Kernel Setup
+            {t('wizard.subtitle')}
           </p>
 
           {/* Stepper Dots */}
@@ -130,7 +130,7 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
             <div className="flex items-center gap-2 border-b border-onyx/10 pb-4 mb-6">
               <User className="w-5 h-5 text-deep-ink" />
               <h2 className="font-serif text-subheading font-semibold text-deep-ink">
-                Step 1: Operator Identity & Regional Settings
+                {t('wizard.identityTitle')}
               </h2>
             </div>
 
@@ -138,27 +138,27 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-caption uppercase text-slate font-semibold block mb-1.5">
-                    Your Name / Handle
+                    {t('wizard.nameLabel')}
                   </label>
                   <input
                     type="text"
                     required
                     value={userName}
                     onChange={(e) => setUserName(e.target.value)}
-                    placeholder="e.g. Alex, Operator"
+                    placeholder={t('wizard.namePlaceholder')}
                     className="w-full bg-canvas text-deep-ink px-4 py-2.5 rounded-full border border-onyx/15 font-sans text-body-sm focus:outline-none focus:ring-2 focus:ring-deep-ink"
                   />
                 </div>
 
                 <div>
                   <label className="text-caption uppercase text-slate font-semibold block mb-1.5">
-                    Role & Title
+                    {t('wizard.roleLabel')}
                   </label>
                   <input
                     type="text"
                     value={userRole}
                     onChange={(e) => setUserRole(e.target.value)}
-                    placeholder="e.g. System Architect"
+                    placeholder={t('wizard.rolePlaceholder')}
                     className="w-full bg-canvas text-deep-ink px-4 py-2.5 rounded-full border border-onyx/15 font-sans text-body-sm focus:outline-none focus:ring-2 focus:ring-deep-ink"
                   />
                 </div>
@@ -167,41 +167,41 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
                 <div>
                   <label className="text-caption uppercase text-slate font-semibold block mb-1.5 flex items-center gap-1.5">
-                    <Globe className="w-3.5 h-3.5" /> Language
+                    <Globe className="w-3.5 h-3.5" /> {t('wizard.languageLabel')}
                   </label>
                   <select
                     value={language}
                     onChange={(e) => setLanguage(e.target.value as 'en' | 'vi')}
                     className="w-full bg-canvas text-deep-ink px-4 py-2.5 rounded-full border border-onyx/15 font-sans text-body-sm focus:outline-none focus:ring-2 focus:ring-deep-ink"
                   >
-                    <option value="en">English (US)</option>
-                    <option value="vi">Tiếng Việt (Vietnam)</option>
+                    <option value="en">{t('wizard.english')}</option>
+                    <option value="vi">{t('wizard.vietnamese')}</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="text-caption uppercase text-slate font-semibold block mb-1.5 flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5" /> Timezone
+                    <Clock className="w-3.5 h-3.5" /> {t('wizard.timezoneLabel')}
                   </label>
                   <select
                     value={timezone}
                     onChange={(e) => setTimezone(e.target.value)}
                     className="w-full bg-canvas text-deep-ink px-4 py-2.5 rounded-full border border-onyx/15 font-sans text-body-sm focus:outline-none focus:ring-2 focus:ring-deep-ink"
                   >
-                    <option value="Asia/Ho_Chi_Minh">Asia/Ho_Chi_Minh (UTC+7)</option>
-                    <option value="UTC">UTC (Universal)</option>
-                    <option value="America/New_York">America/New_York (EST)</option>
-                    <option value="America/Los_Angeles">America/Los_Angeles (PST)</option>
-                    <option value="Europe/London">Europe/London (GMT)</option>
-                    <option value="Asia/Tokyo">Asia/Tokyo (JST)</option>
-                    <option value="Asia/Singapore">Asia/Singapore (SGT)</option>
+                    <option value="Asia/Ho_Chi_Minh">{t('wizard.timezones.hoChiMinh')}</option>
+                    <option value="UTC">{t('wizard.timezones.utc')}</option>
+                    <option value="America/New_York">{t('wizard.timezones.newYork')}</option>
+                    <option value="America/Los_Angeles">{t('wizard.timezones.losAngeles')}</option>
+                    <option value="Europe/London">{t('wizard.timezones.london')}</option>
+                    <option value="Asia/Tokyo">{t('wizard.timezones.tokyo')}</option>
+                    <option value="Asia/Singapore">{t('wizard.timezones.singapore')}</option>
                   </select>
                 </div>
               </div>
 
               <div className="pt-2">
                 <label className="text-caption uppercase text-slate font-semibold block mb-1.5">
-                  Universal Operator Custom Directives
+                  {t('wizard.directivesLabel')}
                 </label>
                 <textarea
                   rows={3}
@@ -219,7 +219,7 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
                   icon={<ArrowRight className="w-4 h-4" />}
                   className="px-6 font-semibold"
                 >
-                  Continue to Security
+                  {t('wizard.continue')}
                 </Button>
               </div>
             </form>
@@ -232,18 +232,18 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
             <div className="flex items-center gap-2 border-b border-onyx/10 pb-4 mb-6">
               <Key className="w-5 h-5 text-deep-ink" />
               <h2 className="font-serif text-subheading font-semibold text-deep-ink">
-                Step 2: Master Administrator Password
+                {t('wizard.securityTitle')}
               </h2>
             </div>
 
             <p className="font-sans text-body-sm text-slate mb-6">
-              Set a master password to secure your local hardware node, REST API endpoints, and web administration console.
+              {t('wizard.securityDescription')}
             </p>
 
             <form onSubmit={handleNextFromStep2} className="space-y-4">
               <div>
                 <label className="text-caption uppercase text-slate font-semibold block mb-1.5">
-                  Master Password
+                  {t('wizard.passwordLabel')}
                 </label>
                 <div className="relative">
                   <input
@@ -251,12 +251,13 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter strong admin password..."
+                    placeholder={t('wizard.passwordPlaceholder')}
                     className="w-full bg-canvas text-deep-ink px-4 py-2.5 pr-11 rounded-full border border-onyx/15 font-sans text-body-sm focus:outline-none focus:ring-2 focus:ring-deep-ink"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')}
                     className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate hover:text-deep-ink"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -266,14 +267,14 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
 
               <div>
                 <label className="text-caption uppercase text-slate font-semibold block mb-1.5">
-                  Confirm Master Password
+                  {t('wizard.confirmPasswordLabel')}
                 </label>
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Re-type password..."
+                  placeholder={t('wizard.confirmPasswordPlaceholder')}
                   className="w-full bg-canvas text-deep-ink px-4 py-2.5 rounded-full border border-onyx/15 font-sans text-body-sm focus:outline-none focus:ring-2 focus:ring-deep-ink"
                 />
               </div>
@@ -286,7 +287,7 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
                   onClick={() => setStep(1)}
                   icon={<ArrowLeft className="w-4 h-4" />}
                 >
-                  Back
+                  {t('wizard.back')}
                 </Button>
                 <Button
                   type="submit"
@@ -295,7 +296,7 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
                   icon={<ArrowRight className="w-4 h-4" />}
                   className="px-6 font-semibold"
                 >
-                  Review & Boot
+                  {t('wizard.review')}
                 </Button>
               </div>
             </form>
@@ -308,31 +309,31 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
             <div className="flex items-center gap-2 border-b border-onyx/10 pb-4 mb-6">
               <ShieldCheck className="w-5 h-5 text-emerald-600" />
               <h2 className="font-serif text-subheading font-semibold text-deep-ink">
-                Step 3: Review & Initialize Appliance
+                {t('wizard.reviewTitle')}
               </h2>
             </div>
 
             <div className="space-y-4 mb-8 bg-canvas p-5 rounded-2xl border border-onyx/10 text-body-sm">
               <div className="flex items-center justify-between border-b border-onyx/5 pb-2.5">
-                <span className="text-slate">Operator Name:</span>
+                <span className="text-slate">{t('wizard.reviewName')}</span>
                 <span className="font-semibold text-deep-ink">{userName}</span>
               </div>
               <div className="flex items-center justify-between border-b border-onyx/5 pb-2.5">
-                <span className="text-slate">System Role:</span>
+                <span className="text-slate">{t('wizard.reviewRole')}</span>
                 <span className="font-medium text-deep-ink">{userRole}</span>
               </div>
               <div className="flex items-center justify-between border-b border-onyx/5 pb-2.5">
-                <span className="text-slate">Interface Language:</span>
-                <span className="font-medium text-deep-ink">{language === 'en' ? 'English (US)' : 'Tiếng Việt'}</span>
+                <span className="text-slate">{t('wizard.reviewLanguage')}</span>
+                <span className="font-medium text-deep-ink">{language === 'en' ? t('wizard.english') : t('wizard.vietnamese')}</span>
               </div>
               <div className="flex items-center justify-between border-b border-onyx/5 pb-2.5">
-                <span className="text-slate">Timezone:</span>
+                <span className="text-slate">{t('wizard.reviewTimezone')}</span>
                 <span className="font-mono text-[12px] text-deep-ink">{timezone}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-slate">Admin Password:</span>
+                <span className="text-slate">{t('wizard.reviewPassword')}</span>
                 <span className="flex items-center gap-1 text-emerald-700 font-semibold text-caption uppercase">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Configured & Protected
+                  <CheckCircle2 className="w-3.5 h-3.5" /> {t('wizard.protected')}
                 </span>
               </div>
             </div>
@@ -346,7 +347,7 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
                 disabled={loading}
                 icon={<ArrowLeft className="w-4 h-4" />}
               >
-                Back
+                {t('wizard.back')}
               </Button>
               <Button
                 type="button"
@@ -357,7 +358,7 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
                 icon={<Sparkles className="w-4 h-4" />}
                 className="px-8 font-semibold"
               >
-                {loading ? 'Initializing Kernel...' : 'Initialize & Launch ActonOS'}
+                {loading ? t('wizard.initializing') : t('wizard.launch')}
               </Button>
             </div>
           </Card>

@@ -8,48 +8,12 @@ import type {
   SystemMetrics,
   TailscaleStatus,
   MCPServerStatus,
+  MutationResult,
 } from './types';
-
-export const API_BASE = '/api';
-
-export function getAuthHeaders(extra?: Record<string, string>): Record<string, string> {
-  const token = localStorage.getItem('actonos_token');
-  const headers: Record<string, string> = {
-    ...extra,
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
-}
-
-async function fetchJSON<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const headers = getAuthHeaders({
-    'Content-Type': 'application/json',
-    ...(options?.headers as Record<string, string>),
-  });
-
-  const res = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
-
-  if (!res.ok) {
-    let errorMsg = `HTTP Error ${res.status}`;
-    try {
-      const errBody = await res.json();
-      if (errBody.error?.message) {
-        errorMsg = errBody.error.message;
-      }
-    } catch {
-      // Ignore json parse error on non-json response
-    }
-    throw new Error(errorMsg);
-  }
-
-  const json = await res.json();
-  return json.data !== undefined ? json.data : json;
-}
+import { API_BASE, fetchJSON, getAuthHeaders, HTTP_STATUS_ACCEPTED } from './api/client';
+import { operationsApi, type OTAStatus } from './api/operations';
+export { API_BASE, createRealtimeSocket, fetchJSON, getAuthHeaders } from './api/client';
+export type { OTAStatus, WifiNetwork } from './api/operations';
 
 export interface ConversationItem {
   id: string;
@@ -64,6 +28,7 @@ export interface MessageRecordItem {
   conversation_id: string;
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
+  tool_calls_json?: string;
   created_at: string;
 }
 
@@ -91,6 +56,15 @@ export interface UserIdentityProfile {
   soul?: string;
   updated_at?: string;
 }
+
+export interface HealthData {
+  status: string;
+  runtime_mode?: string;
+  version?: string;
+  [key: string]: unknown;
+}
+
+export type IntegrationIdentity = Record<string, unknown> | null;
 
 export interface AuditLogItem {
   timestamp: string;
@@ -181,6 +155,7 @@ export interface ChannelAuthorizationItem {
 }
 
 export const api = {
+  ...operationsApi,
   // Authentication & Initial Setup
   getAuthStatus: () =>
     fetchJSON<{ initialized: boolean; authenticated: boolean; user_name?: string }>('/auth/status'),
@@ -193,12 +168,12 @@ export const api = {
     communication_style?: string;
     custom_instructions?: string;
   }) =>
-    fetchJSON<{ status: string; token: string }>('/auth/setup', {
+    fetchJSON<{ status: string }>('/auth/setup', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
   login: (password: string) =>
-    fetchJSON<{ status: string; token: string }>('/auth/login', {
+    fetchJSON<{ status: string }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ password }),
     }),
@@ -213,7 +188,7 @@ export const api = {
     }),
 
   // Health & Dashboard
-  getHealth: () => fetchJSON<any>('/health'),
+  getHealth: () => fetchJSON<HealthData>('/health'),
   getDashboardSummary: () => fetchJSON<DashboardSummaryData>('/dashboard/summary'),
 
   // Agents, Soul & Cron
@@ -276,7 +251,7 @@ export const api = {
     fetchJSON<{
       response: string;
       conversation_id: string;
-      tool_calls?: any[];
+      tool_calls?: unknown[];
       usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
     }>(`/agents/${agentID}/chat`, {
       method: 'POST',
@@ -313,26 +288,26 @@ export const api = {
   listTools: (category?: string) =>
     fetchJSON<{ tools: ToolInfo[]; count: number }>(`/tools${category ? `?category=${category}` : ''}`),
   connectMCP: (cfg: { id: string; transport?: string; command?: string; args?: string[]; env?: Record<string, string>; url?: string }) =>
-    fetchJSON<{ status: string; server_id: string; tools_discovered: number }>('/tools/mcp', {
+    fetchJSON<MutationResult<{ status: string; server_id: string; tools_discovered: number }>>('/tools/mcp', {
       method: 'POST',
       body: JSON.stringify({ transport: cfg.transport || 'stdio', ...cfg }),
     }),
   disconnectMCP: (id: string) =>
-    fetchJSON<{ status: string }>(`/tools/mcp/${id}`, { method: 'DELETE' }),
+    fetchJSON<MutationResult<{ status: string }>>(`/tools/mcp/${id}`, { method: 'DELETE' }),
   listMCPServers: () =>
     fetchJSON<{ servers: MCPServerStatus[] }>('/tools/mcp'),
   toggleMCPServer: (id: string, enabled: boolean) =>
-    fetchJSON<{ status: string; enabled: boolean }>(`/tools/mcp/${id}`, {
+    fetchJSON<MutationResult<{ status: string; enabled: boolean }>>(`/tools/mcp/${id}`, {
       method: 'PUT',
       body: JSON.stringify({ enabled }),
     }),
-  executeTool: (name: string, input: any) =>
-    fetchJSON<any>('/tools/execute', {
+  executeTool: (name: string, input: Record<string, unknown>) =>
+    fetchJSON<unknown>('/tools/execute', {
       method: 'POST',
       body: JSON.stringify({ name, tool: name, input, arguments: input }),
     }),
   createSkill: (skill: { name: string; description: string; content: string }) =>
-    fetchJSON<{ status: string; name: string; path: string }>('/tools/skill', {
+    fetchJSON<MutationResult<{ status: string; name: string; path: string }>>('/tools/skill', {
       method: 'POST',
       body: JSON.stringify(skill),
     }),
@@ -343,18 +318,26 @@ export const api = {
       method: 'POST',
       headers: getAuthHeaders(),
       body: fd,
-    }).then((r) => r.json());
+    }).then(async (response) => {
+      if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
+      const envelope = await response.json();
+      const data = envelope.data ?? envelope;
+      if (response.status === HTTP_STATUS_ACCEPTED && data?.approval) {
+        window.dispatchEvent(new CustomEvent('actonos:approval-required', { detail: data.approval }));
+      }
+      return data as MutationResult<{ status: string; filename?: string }>;
+    });
   },
 
   // Skills Public Community Hub
   listHubCatalog: () => fetchJSON<{ catalog: HubSkillItem[]; count: number }>('/tools/hub/catalog'),
   installHubSkill: (skillId: string) =>
-    fetchJSON<{ status: string; skill: string }>('/tools/hub/install', {
+    fetchJSON<MutationResult<{ status: string; skill: string }>>('/tools/hub/install', {
       method: 'POST',
       body: JSON.stringify({ skill_id: skillId }),
     }),
   uninstallHubSkill: (skillId: string) =>
-    fetchJSON<{ status: string; skill: string }>('/tools/hub/uninstall', {
+    fetchJSON<MutationResult<{ status: string; skill: string }>>('/tools/hub/uninstall', {
       method: 'POST',
       body: JSON.stringify({ skill_id: skillId }),
     }),
@@ -371,14 +354,14 @@ export const api = {
   getWorkspaceFile: (path: string) =>
     fetchJSON<{ path: string; content: string; size?: number }>(`/workspace/file?path=${encodeURIComponent(path)}`),
   saveWorkspaceFile: (path: string, content: string) =>
-    fetchJSON<{ path: string; written: number }>('/workspace/file', {
+    fetchJSON<MutationResult<{ path: string; written: number }>>('/workspace/file', {
       method: 'POST',
       body: JSON.stringify({ path, content }),
     }),
   deleteWorkspaceFile: (path: string) =>
-    fetchJSON<{ status: string }>(`/workspace/file?path=${encodeURIComponent(path)}`, { method: 'DELETE' }),
+    fetchJSON<MutationResult<{ status: string }>>(`/workspace/file?path=${encodeURIComponent(path)}`, { method: 'DELETE' }),
   mkdirWorkspace: (path: string) =>
-    fetchJSON<{ status: string; path: string }>('/workspace/mkdir', {
+    fetchJSON<MutationResult<{ status: string; path: string }>>('/workspace/mkdir', {
       method: 'POST',
       body: JSON.stringify({ path }),
     }),
@@ -431,7 +414,7 @@ export const api = {
       body: JSON.stringify(profile),
     }),
   checkOTA: () =>
-    fetchJSON<{ current_version: string; update_available: boolean; latest_version: string; last_checked: string }>(
+    fetchJSON<OTAStatus>(
       '/system/ota/check',
       { method: 'POST' }
     ),
@@ -447,7 +430,7 @@ export const api = {
       }
     ),
   saveDirectToken: (provider: string, token: string) =>
-    fetchJSON<{ status: string; provider: string; auth_type: string; identity: any }>(
+    fetchJSON<{ status: string; provider: string; auth_type: string; identity: IntegrationIdentity }>(
       `/integrations/${provider}/token`,
       {
         method: 'POST',
@@ -460,7 +443,7 @@ export const api = {
       body: JSON.stringify({ client_id, client_secret }),
     }),
   testConnector: (provider: string) =>
-    fetchJSON<{ status: string; provider: string; latency_ms: number; identity: any }>(
+    fetchJSON<{ status: string; provider: string; latency_ms: number; identity: IntegrationIdentity }>(
       `/integrations/${provider}/test`,
       { method: 'POST' }
     ),
@@ -477,6 +460,7 @@ export const api = {
       telegram: ChannelAccount[];
       discord: ChannelAccount[];
       whatsapp: ChannelAccount[];
+      slack: ChannelAccount[];
       webhook_secret: string;
       webhook_url: string;
     }>('/integrations/channels'),
@@ -491,6 +475,7 @@ export const api = {
     telegram_accounts?: ChannelAccount[];
     discord_accounts?: ChannelAccount[];
     whatsapp_accounts?: ChannelAccount[];
+    slack_accounts?: ChannelAccount[];
   }) =>
     fetchJSON<{ status: string }>('/integrations/channels', {
       method: 'POST',
@@ -555,69 +540,4 @@ export const api = {
   listHeartbeatRuns: () =>
     fetchJSON<import('./types').HeartbeatRun[]>('/heartbeat/runs'),
 
-  // Human approvals and durable autonomous run tracing
-  listApprovals: (status: string = 'pending') =>
-    fetchJSON<{ approvals: import('./types').ApprovalRequest[] }>(
-      `/approvals?status=${encodeURIComponent(status)}`
-    ),
-  approveAction: (id: string, reason: string = '') =>
-    fetchJSON<{ approval: import('./types').ApprovalRequest; result: unknown }>(
-      `/approvals/${id}/approve`,
-      { method: 'POST', body: JSON.stringify({ reason }) }
-    ),
-  rejectAction: (id: string, reason: string = '') =>
-    fetchJSON<import('./types').ApprovalRequest>(`/approvals/${id}/reject`, {
-      method: 'POST',
-      body: JSON.stringify({ reason }),
-    }),
-  listAgentRuns: (limit: number = 100) =>
-    fetchJSON<{ runs: import('./types').AgentRun[] }>(`/runs?limit=${limit}`),
-  listRunEvents: (runID: string) =>
-    fetchJSON<{ events: import('./types').RunEvent[] }>(`/runs/${runID}/events`),
-
-  // Observability, Tokens & History
-  getTokenUsage: () => fetchJSON<import('./types').TokenUsageSummary>('/system/token-usage'),
-  getTokenHistory: (params?: { agent_id?: string; source?: string }) => {
-    const query = new URLSearchParams();
-    if (params?.agent_id) query.set('agent_id', params.agent_id);
-    if (params?.source) query.set('source', params.source);
-    const qStr = query.toString() ? `?${query.toString()}` : '';
-    return fetchJSON<import('./types').TokenUsageRecord[]>(`/system/token-usage/history${qStr}`);
-  },
-  getHeartbeatHistory: () => fetchJSON<import('./types').HeartbeatRun[]>('/system/heartbeat/history'),
-  getCronHistory: (jobID?: string) =>
-    fetchJSON<import('./types').CronExecutionRecord[]>(
-      jobID ? `/cron/${jobID}/history` : '/cron/history'
-    ),
-
-  // HAL & Network
-  getMetrics: () => fetchJSON<SystemMetrics>('/system/metrics'),
-  getTailscale: () => fetchJSON<TailscaleStatus>('/system/tailscale'),
-  scanWifi: () => fetchJSON<{ networks: any[]; count: number }>('/system/wifi/scan'),
-  connectWifi: (ssid: string, password?: string) =>
-    fetchJSON<{ status: string }>('/system/wifi/connect', {
-      method: 'POST',
-      body: JSON.stringify({ ssid, password }),
-    }),
-  restartDaemon: () => fetchJSON<{ status: string }>('/system/restart', { method: 'POST' }),
-  downloadBackup: async () => {
-    const res = await fetch(`${API_BASE}/system/backup`, {
-      headers: getAuthHeaders(),
-    });
-    if (!res.ok) throw new Error(`Backup failed: ${res.statusText}`);
-    const blob = await res.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `actonos-backup-${new Date().toISOString().slice(0, 10)}.db`;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
-  },
 };
-
-export function createRealtimeSocket(): WebSocket {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return new WebSocket(`${protocol}//${window.location.host}${API_BASE}/realtime`);
-}

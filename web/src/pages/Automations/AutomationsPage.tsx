@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
@@ -63,8 +64,8 @@ export function AutomationsPage() {
       setAgents(agentsRes.agents || []);
       setHistoryRecords(histRes || []);
       setChannelAccounts(accsRes.accounts || []);
-    } catch (err: any) {
-      error('Failed to load cron tasks', err.message);
+    } catch (err) {
+      error('Failed to load cron tasks', getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -127,8 +128,8 @@ export function AutomationsPage() {
       );
       setIsModalOpen(false);
       loadData();
-    } catch (err: any) {
-      error('Failed to schedule cron task', err.message);
+    } catch (err) {
+      error('Failed to schedule cron task', getErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -139,8 +140,8 @@ export function AutomationsPage() {
     try {
       const res = await api.triggerCronJob(job.id);
       success('Execution Triggered', res.message || `Running "${job.name}" immediately.`);
-    } catch (err: any) {
-      error('Failed to trigger execution', err.message);
+    } catch (err) {
+      error('Failed to trigger execution', getErrorMessage(err));
     } finally {
       setRunningJobId(null);
     }
@@ -155,7 +156,7 @@ export function AutomationsPage() {
       );
       await loadData();
     } catch (err: unknown) {
-      error(t('toast.toggleFailed'), err instanceof Error ? err.message : String(err));
+      error(t('toast.toggleFailed'), err instanceof Error ? getErrorMessage(err) : String(err));
     }
   };
 
@@ -166,8 +167,8 @@ export function AutomationsPage() {
       success('Task Deleted', 'The scheduled automation has been removed.');
       setDeletingJobId(null);
       loadData();
-    } catch (err: any) {
-      error('Failed to delete cron task', err.message);
+    } catch (err) {
+      error('Failed to delete cron task', getErrorMessage(err));
     }
   };
 
@@ -192,7 +193,7 @@ export function AutomationsPage() {
             <h1 className="font-serif text-heading-lg text-deep-ink tracking-tight flex items-center gap-3">
               <span>{t('title', 'Cron Automations')}</span>
               <Badge variant="neutral" className="text-caption font-mono">
-                {jobs.length} Scheduled
+                {jobs.length} {t('scheduled')}
               </Badge>
             </h1>
             <p className="font-sans text-body text-slate mt-1 max-w-2xl">
@@ -210,7 +211,7 @@ export function AutomationsPage() {
               icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />}
               onClick={loadData}
             >
-              Refresh
+              {t('actions.refresh')}
             </Button>
             <Button
               variant="primary"
@@ -234,7 +235,7 @@ export function AutomationsPage() {
             }`}
           >
             <Calendar className="w-4 h-4" />
-            <span>Scheduled Tasks ({jobs.length})</span>
+            <span>{t('tabs.tasks', { count: jobs.length })}</span>
           </button>
           <button
             onClick={() => setActiveSubTab('history')}
@@ -245,7 +246,7 @@ export function AutomationsPage() {
             }`}
           >
             <History className="w-4 h-4" />
-            <span>Execution History ({historyRecords.length})</span>
+            <span>{t('tabs.history', { count: historyRecords.length })}</span>
           </button>
         </div>
 
@@ -257,9 +258,9 @@ export function AutomationsPage() {
                 <div className="w-12 h-12 rounded-full bg-soft-meadow text-deep-ink flex items-center justify-center mx-auto mb-3">
                   <History className="w-6 h-6" />
                 </div>
-                <h3 className="font-serif text-heading-sm text-deep-ink mb-1">No Execution History Yet</h3>
+                <h3 className="font-serif text-heading-sm text-deep-ink mb-1">{t('history.emptyTitle')}</h3>
                 <p className="text-body-sm text-slate max-w-md mx-auto">
-                  When scheduled CRON jobs execute or autonomous pulses trigger, execution duration, tokens, and output logs will be tracked here.
+                  {t('history.emptyDescription')}
                 </p>
               </Card>
             ) : (
@@ -268,11 +269,11 @@ export function AutomationsPage() {
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="border-b border-onyx/10 bg-soft-meadow/50 text-[11px] font-mono uppercase tracking-wider text-slate">
-                        <th className="py-3.5 px-4 font-semibold">Status</th>
-                        <th className="py-3.5 px-4 font-semibold">Executed Time</th>
-                        <th className="py-3.5 px-4 font-semibold">Job / Agent</th>
-                        <th className="py-3.5 px-4 font-semibold">Duration & Tokens</th>
-                        <th className="py-3.5 px-4 font-semibold">Prompt / Output Summary</th>
+                        <th className="py-3.5 px-4 font-semibold">{t('history.columns.status')}</th>
+                        <th className="py-3.5 px-4 font-semibold">{t('history.columns.time')}</th>
+                        <th className="py-3.5 px-4 font-semibold">{t('history.columns.job')}</th>
+                        <th className="py-3.5 px-4 font-semibold">{t('history.columns.usage')}</th>
+                        <th className="py-3.5 px-4 font-semibold">{t('history.columns.summary')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-onyx/5 text-body-sm font-sans">
@@ -282,12 +283,12 @@ export function AutomationsPage() {
                             {rec.status === 'success' ? (
                               <Badge variant="active" className="flex items-center gap-1 text-[11px]">
                                 <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                Success
+                                {t('history.success')}
                               </Badge>
                             ) : (
                               <Badge variant="stopped" className="flex items-center gap-1 text-[11px]">
                                 <AlertCircle className="w-3 h-3 text-rose-600" />
-                                Failed
+                                {t('history.failed')}
                               </Badge>
                             )}
                           </td>
@@ -299,12 +300,12 @@ export function AutomationsPage() {
                             <div className="text-[11px] text-slate font-mono">{rec.agent_id}</div>
                           </td>
                           <td className="py-4 px-4 align-top whitespace-nowrap font-mono text-[12px] text-slate">
-                            <div>{rec.duration_ms} ms</div>
-                            <div className="text-emerald-700 font-semibold">{rec.tokens_used} tokens</div>
+                            <div>{t('history.milliseconds', { value: rec.duration_ms })}</div>
+                            <div className="text-emerald-700 font-semibold">{t('history.tokens', { value: rec.tokens_used })}</div>
                           </td>
                           <td className="py-4 px-4 align-top max-w-md">
                             <div className="text-[12px] text-slate font-sans line-clamp-1 mb-1">
-                              <strong>Prompt:</strong> {rec.prompt}
+                              <strong>{t('history.prompt')}</strong> {rec.prompt}
                             </div>
                             {rec.output && (
                               <div className="text-[12px] text-deep-ink bg-soft-meadow/70 p-2 rounded-xl font-mono whitespace-pre-wrap max-h-24 overflow-y-auto">
@@ -331,18 +332,18 @@ export function AutomationsPage() {
         {activeSubTab === 'jobs' && (
           <div>
             {loading ? (
-              <div className="py-24 text-center text-slate font-sans text-body">Loading automations...</div>
+              <div className="py-24 text-center text-slate font-sans text-body">{t('empty.loading')}</div>
             ) : jobs.length === 0 ? (
               <Card className="p-12 text-center border border-dashed border-onyx/20 bg-canvas/60">
                 <div className="w-12 h-12 rounded-full bg-soft-meadow text-deep-ink flex items-center justify-center mx-auto mb-3">
                   <Calendar className="w-6 h-6" />
                 </div>
-                <h3 className="font-serif text-heading-sm text-deep-ink mb-1">No Scheduled Automations</h3>
+                <h3 className="font-serif text-heading-sm text-deep-ink mb-1">{t('empty.title')}</h3>
                 <p className="text-body-sm text-slate max-w-md mx-auto mb-6">
-                  Create recurring tasks like daily briefings, security audits, git health scans, or meeting reminders.
+                  {t('empty.description')}
                 </p>
                 <Button variant="primary" size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={openCreateModal}>
-                  Schedule Your First Task
+                  {t('empty.action')}
                 </Button>
               </Card>
             ) : (
@@ -351,12 +352,12 @@ export function AutomationsPage() {
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="border-b border-onyx/10 bg-soft-meadow/50 text-[11px] font-mono uppercase tracking-wider text-slate">
-                        <th className="py-3.5 px-4 font-semibold">Schedule</th>
-                        <th className="py-3.5 px-4 font-semibold">Task Name</th>
-                        <th className="py-3.5 px-4 font-semibold">Agent</th>
-                        <th className="py-3.5 px-4 font-semibold">Instructions / Directive</th>
-                        <th className="py-3.5 px-4 font-semibold">Push Route</th>
-                        <th className="py-3.5 px-4 font-semibold text-right">Actions</th>
+                        <th className="py-3.5 px-4 font-semibold">{t('table.schedule')}</th>
+                        <th className="py-3.5 px-4 font-semibold">{t('table.name')}</th>
+                        <th className="py-3.5 px-4 font-semibold">{t('table.agent')}</th>
+                        <th className="py-3.5 px-4 font-semibold">{t('table.directive')}</th>
+                        <th className="py-3.5 px-4 font-semibold">{t('table.route')}</th>
+                        <th className="py-3.5 px-4 font-semibold text-right">{t('table.actions')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-onyx/5 text-body-sm font-sans">
@@ -375,7 +376,7 @@ export function AutomationsPage() {
                               </Badge>
                               {job.next_run && (
                                 <div className="text-[11px] text-slate mt-1 font-mono">
-                                  Next: {new Date(job.next_run).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  {t('table.next')} {new Date(job.next_run).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                 </div>
                               )}
                             </td>
@@ -571,22 +572,22 @@ export function AutomationsPage() {
                   >
                     <option value="telegram">{t('modal.channelTelegram', 'Telegram Bot')}</option>
                     <option value="whatsapp">{t('modal.channelWhatsApp', 'WhatsApp Cloud API')}</option>
-                    <option value="discord">Discord Bot</option>
-                    <option value="all">All Paired Channels</option>
+                    <option value="discord">{t('modal.channelDiscord')}</option>
+                    <option value="all">{t('modal.channelAll')}</option>
                     <option value="none">{t('modal.channelNone', 'None (Internal Execution Only)')}</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-caption font-semibold text-deep-ink mb-1">
-                    Target Account
+                    {t('modal.accountLabel')}
                   </label>
                   <select
                     value={targetAccountID}
                     onChange={(e) => setTargetAccountID(e.target.value)}
                     className="w-full bg-soft-meadow text-deep-ink p-2 rounded-full border border-onyx/10 text-[13px] font-sans focus:outline-none"
                   >
-                    <option value="all">All Accounts / Broadcast (*)</option>
+                    <option value="all">{t('modal.allAccounts')}</option>
                     {channelAccounts
                       .filter((acc) => targetChannel === 'all' || !acc.channel || acc.channel === targetChannel)
                       .map((acc) => (
@@ -612,10 +613,10 @@ export function AutomationsPage() {
 
             <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-onyx/10">
               <Button variant="ghost" size="sm" onClick={() => setIsModalOpen(false)}>
-                Cancel
+                {t('modal.cancel')}
               </Button>
               <Button variant="primary" size="sm" onClick={handleSave} disabled={saving}>
-                {saving ? 'Scheduling...' : t('modal.save', 'Schedule Task')}
+                {saving ? t('modal.scheduling') : t('modal.save')}
               </Button>
             </div>
           </Card>
@@ -627,9 +628,9 @@ export function AutomationsPage() {
         isOpen={!!deletingJobId}
         onClose={() => setDeletingJobId(null)}
         onConfirm={handleDelete}
-        title="Delete Cron Task"
-        description="Are you sure you want to permanently remove this automated cron task? Scheduled executions will stop immediately."
-        confirmLabel="Delete Task"
+        title={t('delete.title')}
+        description={t('delete.description')}
+        confirmLabel={t('delete.confirm')}
         variant="danger"
       />
     </div>

@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
+import { useRealtime } from '@/components/providers/RealtimeProvider';
 
 export function ApprovalInterruption() {
   const { t } = useTranslation('operations');
@@ -13,18 +14,19 @@ export function ApprovalInterruption() {
   const [approval, setApproval] = useState<ApprovalRequest | null>(null);
   const [feedback, setFeedback] = useState('');
   const [deciding, setDeciding] = useState(false);
+  const { snapshot } = useRealtime();
 
   useEffect(() => {
-    let disposed = false;
-    const load = async () => {
-      const result = await api.listApprovals('pending').catch(() => ({ approvals: [] }));
-      if (!disposed) setApproval(result.approvals[0] || null);
+    setApproval((current) => current || snapshot?.approvals?.[0] || null);
+  }, [snapshot?.approvals]);
+
+  useEffect(() => {
+    const handleApprovalRequired = (event: Event) => {
+      setApproval((event as CustomEvent<ApprovalRequest>).detail);
     };
-    load();
-    const interval = window.setInterval(load, 3000);
+    window.addEventListener('actonos:approval-required', handleApprovalRequired);
     return () => {
-      disposed = true;
-      window.clearInterval(interval);
+      window.removeEventListener('actonos:approval-required', handleApprovalRequired);
     };
   }, []);
 
@@ -51,9 +53,14 @@ export function ApprovalInterruption() {
 
   return (
     <div className="fixed inset-0 z-[100] bg-deep-ink/55 backdrop-blur-sm flex items-center justify-center p-4">
-      <Card className="w-full max-w-2xl p-6 bg-canvas border-2 border-deep-ink">
+      <Card
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="approval-interruption-title"
+        className="w-full max-w-2xl p-6 bg-canvas border-2 border-deep-ink"
+      >
         <Badge variant="stopped">{approval.risk_level}</Badge>
-        <h2 className="font-serif text-heading mt-3 font-bold">{t('approval.title')}</h2>
+        <h2 id="approval-interruption-title" className="font-serif text-heading mt-3 font-bold">{t('approval.title')}</h2>
         <p className="text-body-sm text-slate mt-1">
           {t('approval.description', { tool: approval.tool_name, agent: approval.agent_id })}
         </p>

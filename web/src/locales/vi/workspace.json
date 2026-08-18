@@ -12,7 +12,13 @@
     "refresh": "Làm mới",
     "save": "Lưu",
     "delete": "Xoá",
-    "deleteConfirm": "Bạn có chắc muốn xoá tệp này?"
+    "deleteConfirm": "Bạn có chắc muốn xoá tệp này?",
+    "upload": "T?i l?n",
+    "newFolder": "Th? m?c m?i",
+    "download": "T?i xu?ng",
+    "downloadTitle": "T?i t?p v? m?y",
+    "saving": "?ang l?u...",
+    "createFile": "T?o t?p m?i"
   },
   "table": {
     "name": "Tên tệp",
@@ -22,6 +28,31 @@
   },
   "editor": {
     "title": "Chỉnh sửa: {{path}}",
-    "placeholder": "Nội dung tệp..."
+    "placeholder": "Nội dung tệp...",
+    "stats": "D?ng: {{lines}} ? K?ch th??c: {{bytes}} byte",
+    "shortcut": "UTF-8 ? Ctrl+S ?? l?u",
+    "noSelection": "Ch?a ch?n t?p",
+    "noSelectionDescription": "Ch?n m?t t?p t? tr?nh kh?m ph? b?n tr?i ho?c t?o t?p m?i ?? b?t ??u ch?nh s?a."
+  },
+  "loading": "?ang t?i t?p...",
+  "navigation": {
+    "root": "g?c",
+    "up": "L?n"
+  },
+  "deleteModal": {
+    "title": "X?a t?p Workspace",
+    "description": "B?n c? ch?c mu?n x?a v?nh vi?n \"{{path}}\" kh?i workspace c?ch ly?"
+  },
+  "createFileModal": {
+    "title": "T?o t?p m?i",
+    "label": "T?n t?p v? ph?n m? r?ng",
+    "placeholder": "v? d?: main.py, data.json, script.sh",
+    "confirm": "T?o v? ch?nh s?a"
+  },
+  "createFolderModal": {
+    "title": "T?o th? m?c m?i",
+    "label": "T?n th? m?c",
+    "placeholder": "v? d?: scripts, models, datasets",
+    "confirm": "T?o th? m?c"
   }
 }

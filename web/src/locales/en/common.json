@@ -1,10 +1,21 @@
 {
+  "approval": {
+    "queuedTitle": "Approval required",
+    "queuedDescription": "The action is waiting for operator approval and has not been executed yet."
+  },
   "appName": "ActonOS",
+  "startup": "Starting ActonOS Kernel...",
   "tagline": "AI Agent Operating System Kernel",
   "language": {
     "toggle": "Switch Language",
     "en": "English",
-    "vi": "Tiếng Việt"
+    "vi": "Tiếng Việt",
+    "selectTitle": "Select System Language",
+    "searchPlaceholder": "Search language or region...",
+    "fullUI": "Full UI",
+    "noMatches": "No languages matching \"{{search}}\"",
+    "active": "Active: {{language}}",
+    "engine": "ActonOS i18n Engine"
   },
   "buttons": {
     "save": "Save Changes",
@@ -26,5 +37,11 @@
     "error": "Error",
     "connected": "Connected",
     "disconnected": "Disconnected"
+  },
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "description": "An unexpected error occurred in the application view. The system kernel remains safe.",
+    "home": "Return Home",
+    "reload": "Reload View"
   }
 }

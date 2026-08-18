@@ -54,6 +54,7 @@ type Server struct {
 	workspaceDir string
 	skillsDir    string
 	wasmDir      string
+	realtime     *realtimeHub
 }
 
 // Config holds configuration parameters for the HTTP server.
@@ -145,6 +146,7 @@ func NewServer(cfg Config) *Server {
 		skillsDir:    skillsDir,
 		wasmDir:      wasmDir,
 	}
+	s.realtime = newRealtimeHub(s)
 
 	s.setupRoutes()
 	return s
@@ -161,6 +163,8 @@ func (s *Server) securityHeadersMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("X-XSS-Protection", "1; mode=block")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; connect-src 'self' ws: wss: https:; frame-src 'self' https: http://localhost:* http://127.0.0.1:*; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
 		next.ServeHTTP(w, r)
 	})
 }

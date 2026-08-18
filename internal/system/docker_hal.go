@@ -37,7 +37,7 @@ func (h *DockerHAL) GetMetrics(ctx context.Context) (*SystemMetrics, error) {
 		UptimeSeconds: uint64(time.Since(h.startTime).Seconds()),
 		Timestamp:     time.Now().UTC(),
 		RuntimeMode:   h.RuntimeMode(),
-		CanvasURL:     os.Getenv("ACTONOS_CANVAS_URL"),
+		CanvasURL:     canvasURLFromEnvironment(),
 	}
 
 	metrics.CPU.Model = runtime.GOARCH + " (" + runtime.GOOS + ")"

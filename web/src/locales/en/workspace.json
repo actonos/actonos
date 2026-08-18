@@ -12,7 +12,13 @@
     "refresh": "Refresh",
     "save": "Save",
     "delete": "Delete",
-    "deleteConfirm": "Are you sure you want to delete this file?"
+    "deleteConfirm": "Are you sure you want to delete this file?",
+    "upload": "Upload",
+    "newFolder": "New Folder",
+    "download": "Download",
+    "downloadTitle": "Download file to local machine",
+    "saving": "Saving...",
+    "createFile": "Create New File"
   },
   "table": {
     "name": "Name",
@@ -22,6 +28,31 @@
   },
   "editor": {
     "title": "Editing: {{path}}",
-    "placeholder": "File content..."
+    "placeholder": "File content...",
+    "stats": "Lines: {{lines}} ? Size: {{bytes}} bytes",
+    "shortcut": "UTF-8 ? Ctrl+S to save",
+    "noSelection": "No File Selected",
+    "noSelectionDescription": "Select a file from the explorer on the left, or create a new file to start editing."
+  },
+  "loading": "Loading files...",
+  "navigation": {
+    "root": "root",
+    "up": "Up"
+  },
+  "deleteModal": {
+    "title": "Delete Workspace File",
+    "description": "Are you sure you want to permanently delete \"{{path}}\" from your sandboxed workspace?"
+  },
+  "createFileModal": {
+    "title": "Create New File",
+    "label": "File Name & Extension",
+    "placeholder": "e.g. main.py, data.json, script.sh",
+    "confirm": "Create & Edit"
+  },
+  "createFolderModal": {
+    "title": "Create New Directory",
+    "label": "Folder Name",
+    "placeholder": "e.g. scripts, models, datasets",
+    "confirm": "Create Folder"
   }
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
@@ -55,8 +56,8 @@ export function AgentsPage({
       setLoading(true);
       const agentRes = await api.listAgents();
       setAgents(agentRes.agents || []);
-    } catch (err: any) {
-      error('Failed to load agents', err.message);
+    } catch (err) {
+      error('Failed to load agents', getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -73,8 +74,8 @@ export function AgentsPage({
       success('Agent Deleted', `Agent ${deletingAgentId} has been removed.`);
       setDeletingAgentId(null);
       loadData();
-    } catch (err: any) {
-      error('Failed to delete agent', err.message);
+    } catch (err) {
+      error('Failed to delete agent', getErrorMessage(err));
     }
   };
 
@@ -88,8 +89,8 @@ export function AgentsPage({
         success('Agent Started', `Agent ${id} is now active.`);
       }
       loadData();
-    } catch (err: any) {
-      error('Failed to toggle agent status', err.message);
+    } catch (err) {
+      error('Failed to toggle agent status', getErrorMessage(err));
     }
   };
 
@@ -120,8 +121,8 @@ export function AgentsPage({
       }
       loadData();
       success('Import Succeeded', `Imported ${items.length} agent manifest(s) successfully!`);
-    } catch (err: any) {
-      error('Manifest Import Failed', err.message);
+    } catch (err) {
+      error('Manifest Import Failed', getErrorMessage(err));
     }
   };
 
@@ -170,18 +171,18 @@ export function AgentsPage({
               size="sm"
               icon={<Download className="w-3.5 h-3.5" />}
               onClick={handleExportAgents}
-              title="Export agents as JSON"
+              title={t('list.exportTitle')}
             >
-              Export
+              {t('list.export')}
             </Button>
             <Button
               variant="ghost"
               size="sm"
               icon={<Upload className="w-3.5 h-3.5" />}
               onClick={() => fileInputRef.current?.click()}
-              title="Import agents from JSON"
+              title={t('list.importTitle')}
             >
-              Import
+              {t('list.import')}
             </Button>
             <input
               type="file"
@@ -196,7 +197,7 @@ export function AgentsPage({
               icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />}
               onClick={loadData}
             >
-              Refresh
+              {t('list.refresh')}
             </Button>
             <Button
               variant="primary"
@@ -252,7 +253,7 @@ export function AgentsPage({
 
         {/* Agents Table View */}
         {loading ? (
-          <div className="py-24 text-center text-slate font-sans text-body">Loading agent manifest records...</div>
+          <div className="py-24 text-center text-slate font-sans text-body">{t('list.loading')}</div>
         ) : filteredAgents.length === 0 ? (
           <Card className="p-12 text-center border-dashed border-onyx/20 bg-canvas/60">
             <Bot className="w-12 h-12 text-slate/50 mx-auto mb-3" />
@@ -279,12 +280,12 @@ export function AgentsPage({
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-onyx/10 bg-soft-meadow/70 text-slate text-[11px] uppercase tracking-wider font-semibold font-sans select-none">
-                    <th className="py-3.5 px-5">Agent & Identity</th>
-                    <th className="py-3.5 px-4">Status</th>
-                    <th className="py-3.5 px-4">Cognitive Model</th>
-                    <th className="py-3.5 px-4">Tools & Channels</th>
-                    <th className="py-3.5 px-4">Governance</th>
-                    <th className="py-3.5 px-5 text-right">Actions</th>
+                    <th className="py-3.5 px-5">{t('list.columns.identity')}</th>
+                    <th className="py-3.5 px-4">{t('list.columns.status')}</th>
+                    <th className="py-3.5 px-4">{t('list.columns.model')}</th>
+                    <th className="py-3.5 px-4">{t('list.columns.tools')}</th>
+                    <th className="py-3.5 px-4">{t('list.columns.governance')}</th>
+                    <th className="py-3.5 px-5 text-right">{t('list.columns.actions')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-onyx/5 font-sans text-body-sm">
@@ -319,7 +320,7 @@ export function AgentsPage({
                                 </button>
                                 {isSystem && (
                                   <Badge variant="accent" className="text-[10px] px-2 py-0.5 shrink-0">
-                                    Root
+                                    {t('list.root')}
                                   </Badge>
                                 )}
                               </div>
@@ -373,7 +374,10 @@ export function AgentsPage({
                               </span>
                             </div>
                             <div className="text-[10px] font-mono text-slate pl-1">
-                              temp: {agent.model_config?.temperature ?? 0.2} • max: {agent.model_config?.max_tokens || 4096}
+                              {t('list.modelDetails', {
+                                temperature: agent.model_config?.temperature ?? 0.2,
+                                maxTokens: agent.model_config?.max_tokens || 4096,
+                              })}
                             </div>
                           </div>
                         </td>
@@ -390,7 +394,7 @@ export function AgentsPage({
                             <div className="flex items-center gap-1">
                               {listenAll ? (
                                 <span className="text-[10px] font-mono text-slate px-2 py-0.5 bg-soft-meadow rounded-full border border-onyx/5">
-                                  All Channels (*)
+                                  {t('list.allChannels')}
                                 </span>
                               ) : (
                                 agent.listen_channels.map((ch) => (
@@ -421,11 +425,15 @@ export function AgentsPage({
                                 }
                                 className="text-[10px] px-2 py-0.5 font-mono"
                               >
-                                {agent.delegation_scope?.require_human_approval_level || 'Medium'} Approval
+                                {t('list.approval', {
+                                  level: agent.delegation_scope?.require_human_approval_level || t('list.medium'),
+                                })}
                               </Badge>
                             </div>
                             <div className="text-[11px] font-mono text-slate pl-5">
-                              ${agent.delegation_scope?.max_monthly_budget_usd ?? 50}/mo
+                              {t('list.monthlyBudget', {
+                                amount: agent.delegation_scope?.max_monthly_budget_usd ?? 50,
+                              })}
                             </div>
                           </div>
                         </td>
@@ -439,16 +447,16 @@ export function AgentsPage({
                               icon={<MessageSquare className="w-3.5 h-3.5" />}
                               onClick={() => onOpenChat(agent.agent_id)}
                               className="px-3"
-                              title="Launch chat session"
+                              title={t('list.launchChat')}
                             >
-                              Chat
+                              {t('list.chat')}
                             </Button>
                             <Button
                               variant="ghost"
                               size="sm"
                               icon={<Sliders className="w-3.5 h-3.5" />}
                               onClick={() => onEditAgent(agent.agent_id)}
-                              title="Open Agent Studio"
+                              title={t('list.openStudio')}
                             />
                             <Button
                               variant="ghost"
@@ -488,9 +496,9 @@ export function AgentsPage({
         isOpen={!!deletingAgentId}
         onClose={() => setDeletingAgentId(null)}
         onConfirm={handleConfirmDeleteAgent}
-        title="Delete Agent Manifest"
-        description={`Are you sure you want to delete "${deletingAgentId}"? This will permanently remove its state, tools authorization, and execution manifests from ActonOS.`}
-        confirmLabel="Delete Agent"
+        title={t('list.deleteTitle')}
+        description={t('list.deleteDescription', { agent: deletingAgentId })}
+        confirmLabel={t('list.delete')}
         variant="danger"
       />
     </div>

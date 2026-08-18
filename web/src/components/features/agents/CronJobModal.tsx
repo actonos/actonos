@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { getErrorMessage } from '@/lib/errors';
+import { useTranslation } from 'react-i18next';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -15,6 +17,7 @@ interface CronJobModalProps {
 }
 
 export function CronJobModal({ isOpen, onClose, onJobCreated, agents }: CronJobModalProps) {
+  const { t } = useTranslation('agents');
   const { success, error } = useToast();
   const [name, setName] = useState('');
   const [agentId, setAgentId] = useState(agents[0]?.agent_id || 'default');
@@ -41,25 +44,25 @@ export function CronJobModal({ isOpen, onClose, onJobCreated, agents }: CronJobM
         recipient: recipient.trim() || undefined,
         enabled: true,
       });
-      success('Proactive Cron Task Scheduled', `Task "${name}" is registered and active.`);
+      success(t('cron.successTitle'), t('cron.successDescription', { name }));
       onJobCreated();
       onClose();
-    } catch (err: any) {
-      error('Failed to schedule cron task', err.message);
+    } catch (err) {
+      error(t('cron.failureTitle'), getErrorMessage(err));
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Schedule Autonomous Proactive Task (Cron)">
+    <Modal isOpen={isOpen} onClose={onClose} title={t('cron.title')}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="text-caption uppercase text-slate font-semibold block mb-1">
-            Task Name
+            {t('cron.name')}
           </label>
           <Input
-            placeholder="e.g. Daily Morning Briefing"
+            placeholder={t('cron.namePlaceholder')}
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
@@ -69,7 +72,7 @@ export function CronJobModal({ isOpen, onClose, onJobCreated, agents }: CronJobM
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="text-caption uppercase text-slate font-semibold block mb-1">
-              Executing Agent
+              {t('cron.agent')}
             </label>
             <select
               value={agentId}
@@ -86,10 +89,10 @@ export function CronJobModal({ isOpen, onClose, onJobCreated, agents }: CronJobM
 
           <div>
             <label className="text-caption uppercase text-slate font-semibold block mb-1">
-              Cron Expression (5-Field)
+              {t('cron.expression')}
             </label>
             <Input
-              placeholder="e.g. 0 8 * * * or */30 * * * *"
+              placeholder={t('cron.expressionPlaceholder')}
               value={cronExpr}
               onChange={(e) => setCronExpr(e.target.value)}
               required
@@ -99,13 +102,13 @@ export function CronJobModal({ isOpen, onClose, onJobCreated, agents }: CronJobM
 
         <div>
           <label className="text-caption uppercase text-slate font-semibold block mb-1">
-            Instruction / Prompt to Execute
+            {t('cron.prompt')}
           </label>
           <textarea
             rows={3}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder="e.g. Generate a concise weather forecast, summarize pending GitHub PRs, and list high-priority items."
+            placeholder={t('cron.promptPlaceholder')}
             className="w-full bg-canvas text-deep-ink font-sans text-body-sm p-3 rounded-[12px] border border-onyx/20 focus:outline-none focus:ring-2 focus:ring-deep-ink"
             required
           />
@@ -114,26 +117,26 @@ export function CronJobModal({ isOpen, onClose, onJobCreated, agents }: CronJobM
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="text-caption uppercase text-slate font-semibold block mb-1">
-              Push Notification Channel
+              {t('cron.channel')}
             </label>
             <select
               value={channel}
               onChange={(e) => setChannel(e.target.value)}
               className="w-full bg-soft-meadow text-deep-ink text-body-sm p-2.5 rounded-[12px] border border-onyx/10 focus:outline-none focus:ring-2 focus:ring-deep-ink"
             >
-              <option value="telegram">Telegram Bot</option>
-              <option value="whatsapp">WhatsApp Cloud API</option>
-              <option value="discord">Discord Gateway</option>
-              <option value="webhook">Inbound/Outbound Webhook</option>
+              <option value="telegram">{t('cron.channels.telegram')}</option>
+              <option value="whatsapp">{t('cron.channels.whatsapp')}</option>
+              <option value="discord">{t('cron.channels.discord')}</option>
+              <option value="webhook">{t('cron.channels.webhook')}</option>
             </select>
           </div>
 
           <div>
             <label className="text-caption uppercase text-slate font-semibold block mb-1">
-              Recipient Chat ID / Phone
+              {t('cron.recipient')}
             </label>
             <Input
-              placeholder="e.g. 123456789 or +84912345678"
+              placeholder={t('cron.recipientPlaceholder')}
               value={recipient}
               onChange={(e) => setRecipient(e.target.value)}
             />
@@ -142,7 +145,7 @@ export function CronJobModal({ isOpen, onClose, onJobCreated, agents }: CronJobM
 
         <div className="flex items-center justify-end gap-2.5 pt-2">
           <Button variant="ghost" size="sm" onClick={onClose}>
-            Cancel
+            {t('cron.cancel')}
           </Button>
           <Button
             type="submit"
@@ -151,7 +154,7 @@ export function CronJobModal({ isOpen, onClose, onJobCreated, agents }: CronJobM
             icon={<Plus className="w-3.5 h-3.5" />}
             disabled={saving}
           >
-            {saving ? 'Scheduling...' : 'Save & Schedule Task'}
+            {saving ? t('cron.scheduling') : t('cron.save')}
           </Button>
         </div>
       </form>

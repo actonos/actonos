@@ -2,6 +2,10 @@ package system
 
 import (
 	"context"
+	"net"
+	"net/url"
+	"os"
+	"strings"
 	"time"
 )
 
@@ -40,6 +44,33 @@ type ContainerStatus struct {
 	CPUPercent    float64 `json:"cpu_percent"`
 	MemoryUsageMB float64 `json:"memory_usage_mb"`
 	MemoryLimitMB float64 `json:"memory_limit_mb"`
+}
+
+func canvasURLFromEnvironment() string {
+	raw := strings.TrimSpace(os.Getenv("ACTONOS_CANVAS_URL"))
+	if raw == "" {
+		return raw
+	}
+	if strings.HasPrefix(raw, "/") && !strings.HasPrefix(raw, "//") {
+		return raw
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Hostname() == "" {
+		return ""
+	}
+	if parsed.Scheme == "https" {
+		return parsed.String()
+	}
+	if parsed.Scheme == "http" {
+		host := parsed.Hostname()
+		if host == "localhost" {
+			return parsed.String()
+		}
+		if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+			return parsed.String()
+		}
+	}
+	return ""
 }
 
 // WifiNetwork describes a detected Wi-Fi Access Point.

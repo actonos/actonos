@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
@@ -24,6 +25,7 @@ import {
   Columns2,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { isApprovalRequired } from '@/lib/types';
 
 interface WorkspaceFile {
   name: string;
@@ -35,7 +37,7 @@ interface WorkspaceFile {
 
 export function WorkspacePage() {
   const { t } = useTranslation('workspace');
-  const { success, error } = useToast();
+  const { success, error, info } = useToast();
   const [currentDir, setCurrentDir] = useState<string>('');
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
@@ -55,8 +57,8 @@ export function WorkspacePage() {
       const res = await api.listWorkspaceFiles(dir);
       setFiles(res.files || []);
       setCurrentDir(res.dir || '');
-    } catch (err: any) {
-      error('Failed to load workspace files', err.message);
+    } catch (err) {
+      error('Failed to load workspace files', getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -69,8 +71,8 @@ export function WorkspacePage() {
       setFileContent(res.content || '');
       setOriginalContent(res.content || '');
       setShowDiff(false);
-    } catch (err: any) {
-      error('Failed to read file', err.message);
+    } catch (err) {
+      error('Failed to read file', getErrorMessage(err));
     }
   };
 
@@ -78,12 +80,16 @@ export function WorkspacePage() {
     if (!selectedFile) return;
     try {
       setSaving(true);
-      await api.saveWorkspaceFile(selectedFile, fileContent);
+      const result = await api.saveWorkspaceFile(selectedFile, fileContent);
+      if (isApprovalRequired(result)) {
+        info(t('common:approval.queuedTitle'), t('common:approval.queuedDescription'));
+        return;
+      }
       setOriginalContent(fileContent);
       success('File Saved', `${selectedFile} saved to workspace.`);
       loadFiles(currentDir);
-    } catch (err: any) {
-      error('Failed to save file', err.message);
+    } catch (err) {
+      error('Failed to save file', getErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -92,7 +98,12 @@ export function WorkspacePage() {
   const handleConfirmDelete = async () => {
     if (!deletingPath) return;
     try {
-      await api.deleteWorkspaceFile(deletingPath);
+      const result = await api.deleteWorkspaceFile(deletingPath);
+      if (isApprovalRequired(result)) {
+        info(t('common:approval.queuedTitle'), t('common:approval.queuedDescription'));
+        setDeletingPath(null);
+        return;
+      }
       success('File Deleted', `${deletingPath} removed from sandbox.`);
       if (selectedFile === deletingPath) {
         setSelectedFile(null);
@@ -100,8 +111,8 @@ export function WorkspacePage() {
       }
       setDeletingPath(null);
       loadFiles(currentDir);
-    } catch (err: any) {
-      error('Failed to delete file', err.message);
+    } catch (err) {
+      error('Failed to delete file', getErrorMessage(err));
     }
   };
 
@@ -115,11 +126,15 @@ export function WorkspacePage() {
   const handleCreateFolder = async (folderName: string) => {
     const fullPath = currentDir ? `${currentDir}/${folderName}` : folderName;
     try {
-      await api.mkdirWorkspace(fullPath);
+      const result = await api.mkdirWorkspace(fullPath);
+      if (isApprovalRequired(result)) {
+        info(t('common:approval.queuedTitle'), t('common:approval.queuedDescription'));
+        return;
+      }
       success('Folder Created', `Directory "${fullPath}" created.`);
       loadFiles(currentDir);
-    } catch (err: any) {
-      error('Failed to create folder', err.message);
+    } catch (err) {
+      error('Failed to create folder', getErrorMessage(err));
     }
   };
 
@@ -134,12 +149,16 @@ export function WorkspacePage() {
         const file = fileList[i];
         const content = await file.text();
         const fullPath = currentDir ? `${currentDir}/${file.name}` : file.name;
-        await api.saveWorkspaceFile(fullPath, content);
+        const result = await api.saveWorkspaceFile(fullPath, content);
+        if (isApprovalRequired(result)) {
+          info(t('common:approval.queuedTitle'), t('common:approval.queuedDescription'));
+          return;
+        }
       }
       success('Files Uploaded', `Uploaded ${fileList.length} file(s) into workspace.`);
       loadFiles(currentDir);
-    } catch (err: any) {
-      error('Upload failed', err.message);
+    } catch (err) {
+      error('Upload failed', getErrorMessage(err));
     }
   };
 
@@ -198,7 +217,7 @@ export function WorkspacePage() {
               icon={<RefreshCw className="w-3.5 h-3.5" />}
               onClick={() => loadFiles(currentDir)}
             >
-              Refresh
+              {t('actions.refresh')}
             </Button>
             <input
               type="file"
@@ -213,7 +232,7 @@ export function WorkspacePage() {
               icon={<Upload className="w-3.5 h-3.5" />}
               onClick={() => fileInputRef.current?.click()}
             >
-              Upload
+              {t('actions.upload')}
             </Button>
             <Button
               variant="ghost"
@@ -221,7 +240,7 @@ export function WorkspacePage() {
               icon={<FolderPlus className="w-3.5 h-3.5" />}
               onClick={() => setIsNewFolderModalOpen(true)}
             >
-              New Folder
+              {t('actions.newFolder')}
             </Button>
             <Button
               variant="primary"
@@ -229,7 +248,7 @@ export function WorkspacePage() {
               icon={<Plus className="w-3.5 h-3.5" />}
               onClick={() => setIsNewFileModalOpen(true)}
             >
-              New File
+              {t('actions.newFile')}
             </Button>
           </div>
         </div>
@@ -245,7 +264,7 @@ export function WorkspacePage() {
                   onClick={() => loadFiles('')}
                   className="hover:underline font-bold text-deep-ink"
                 >
-                  root
+                  {t('navigation.root')}
                 </button>
                 {currentDir &&
                   currentDir.split('/').map((seg, idx, arr) => {
@@ -272,7 +291,7 @@ export function WorkspacePage() {
                   onClick={navigateUp}
                   className="px-2 py-1 h-auto text-caption"
                 >
-                  Up
+                  {t('navigation.up')}
                 </Button>
               )}
             </div>
@@ -280,10 +299,10 @@ export function WorkspacePage() {
             {/* Files List */}
             <div className="flex-1 overflow-y-auto divide-y divide-onyx/5">
               {loading ? (
-                <div className="py-16 text-center text-slate font-sans text-caption">Loading files...</div>
+                <div className="py-16 text-center text-slate font-sans text-caption">{t('loading')}</div>
               ) : files.length === 0 ? (
                 <div className="py-16 text-center text-slate font-sans text-caption">
-                  Directory is empty.
+                  {t('table.empty')}
                 </div>
               ) : (
                 files.map((file) => {
@@ -317,7 +336,7 @@ export function WorkspacePage() {
                           className={`p-1 rounded-full hover:bg-black/10 transition-colors ${
                             isSelected ? 'text-white/80 hover:text-white' : 'text-slate hover:text-red-600'
                           }`}
-                          title="Delete file"
+                          title={t('actions.delete')}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -363,9 +382,9 @@ export function WorkspacePage() {
                         URL.revokeObjectURL(url);
                         success('File Downloaded', `Downloaded ${a.download}`);
                       }}
-                      title="Download file to local machine"
+                      title={t('actions.downloadTitle')}
                     >
-                      Download
+                      {t('actions.download')}
                     </Button>
                     <Button
                       variant="primary"
@@ -374,7 +393,7 @@ export function WorkspacePage() {
                       onClick={saveFile}
                       disabled={saving}
                     >
-                      {saving ? 'Saving...' : 'Save File'}
+                      {saving ? t('actions.saving') : t('actions.save')}
                     </Button>
                   </div>
                 </div>
@@ -415,7 +434,7 @@ export function WorkspacePage() {
                         saveFile();
                       }
                     }}
-                    placeholder="File content..."
+                    placeholder={t('editor.placeholder')}
                     className="w-full h-full p-4 font-mono text-body-sm bg-soft-meadow rounded-[16px] border border-onyx/10 focus:outline-none focus:ring-2 focus:ring-deep-ink resize-none text-deep-ink leading-relaxed selection:bg-hi-yellow selection:text-deep-ink"
                     spellCheck={false}
                   />
@@ -424,19 +443,19 @@ export function WorkspacePage() {
 
                 {/* Status Bar */}
                 <div className="pt-3 mt-2 border-t border-soft-meadow flex items-center justify-between text-caption font-mono text-slate">
-                  <span>Lines: {lineCount} • Size: {byteSize} bytes</span>
-                  <span>UTF-8 • Ctrl+S to save</span>
+                  <span>{t('editor.stats', { lines: lineCount, bytes: byteSize })}</span>
+                  <span>{t('editor.shortcut')}</span>
                 </div>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-center p-8">
                 <FileCode className="w-12 h-12 text-slate opacity-40 mb-3" />
-                <h3 className="font-serif text-heading-sm text-deep-ink mb-1">No File Selected</h3>
+                <h3 className="font-serif text-heading-sm text-deep-ink mb-1">{t('editor.noSelection')}</h3>
                 <p className="font-sans text-body-sm text-slate max-w-sm mb-4">
-                  Select a file from the explorer on the left, or create a new file to start editing.
+                  {t('editor.noSelectionDescription')}
                 </p>
                 <Button variant="primary" size="sm" onClick={() => setIsNewFileModalOpen(true)}>
-                  Create New File
+                  {t('actions.createFile')}
                 </Button>
               </div>
             )}
@@ -449,9 +468,9 @@ export function WorkspacePage() {
         isOpen={!!deletingPath}
         onClose={() => setDeletingPath(null)}
         onConfirm={handleConfirmDelete}
-        title="Delete Workspace File"
-        description={`Are you sure you want to permanently delete "${deletingPath}" from your sandboxed workspace?`}
-        confirmLabel="Delete"
+        title={t('deleteModal.title')}
+        description={t('deleteModal.description', { path: deletingPath })}
+        confirmLabel={t('actions.delete')}
         variant="danger"
       />
 
@@ -460,10 +479,10 @@ export function WorkspacePage() {
         isOpen={isNewFileModalOpen}
         onClose={() => setIsNewFileModalOpen(false)}
         onSubmit={handleCreateFile}
-        title="Create New File"
-        label="File Name & Extension"
-        placeholder="e.g. main.py, data.json, script.sh"
-        confirmLabel="Create & Edit"
+        title={t('createFileModal.title')}
+        label={t('createFileModal.label')}
+        placeholder={t('createFileModal.placeholder')}
+        confirmLabel={t('createFileModal.confirm')}
       />
 
       {/* New Folder Modal */}
@@ -471,10 +490,10 @@ export function WorkspacePage() {
         isOpen={isNewFolderModalOpen}
         onClose={() => setIsNewFolderModalOpen(false)}
         onSubmit={handleCreateFolder}
-        title="Create New Directory"
-        label="Folder Name"
-        placeholder="e.g. scripts, models, datasets"
-        confirmLabel="Create Folder"
+        title={t('createFolderModal.title')}
+        label={t('createFolderModal.label')}
+        placeholder={t('createFolderModal.placeholder')}
+        confirmLabel={t('createFolderModal.confirm')}
       />
     </div>
   );

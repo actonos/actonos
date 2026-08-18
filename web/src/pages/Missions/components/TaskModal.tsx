@@ -107,7 +107,7 @@ export function TaskModal({ isOpen, onClose, onSave, task }: TaskModalProps) {
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Verify database backups & storage limits"
+            placeholder={t('modal.taskPlaceholder')}
             required
             autoFocus
           />
@@ -121,7 +121,7 @@ export function TaskModal({ isOpen, onClose, onSave, task }: TaskModalProps) {
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Detailed instructions for the autonomous agent. The coordinator will execute step-by-step and maintain memory across pulse cycles."
+            placeholder={t('modal.directivePlaceholder')}
             rows={3}
             className="w-full bg-soft-meadow text-deep-ink text-body-sm font-sans p-3 rounded-2xl border border-onyx/10 focus:outline-none focus:border-onyx/30 resize-none"
           />
@@ -139,10 +139,10 @@ export function TaskModal({ isOpen, onClose, onSave, task }: TaskModalProps) {
               onChange={(e) => setPriority(e.target.value as TaskPriority)}
               className="w-full bg-soft-meadow text-deep-ink text-body-sm font-sans p-2.5 rounded-full border border-onyx/10 focus:outline-none"
             >
-              <option value="p0_critical">🔴 P0 - Critical (Immediate Pulse)</option>
-              <option value="p1_high">🟠 P1 - High Priority</option>
-              <option value="p2_normal">🔵 P2 - Normal</option>
-              <option value="p3_low">⚪ P3 - Low / Background</option>
+              <option value="p0_critical">{t('priorities.p0')}</option>
+              <option value="p1_high">{t('priorities.p1')}</option>
+              <option value="p2_normal">{t('priorities.p2')}</option>
+              <option value="p3_low">{t('priorities.p3')}</option>
             </select>
           </div>
 
@@ -156,7 +156,7 @@ export function TaskModal({ isOpen, onClose, onSave, task }: TaskModalProps) {
               onChange={(e) => setAssignedAgentId(e.target.value)}
               className="w-full bg-soft-meadow text-deep-ink text-body-sm font-sans p-2.5 rounded-full border border-onyx/10 focus:outline-none"
             >
-              <option value="auto">⚡ Auto Coordinator (Master Agent)</option>
+              <option value="auto">{t('modal.autoCoordinator')}</option>
               {availableAgents.map((ag) => (
                 <option key={ag.agent_id} value={ag.agent_id}>
                   {ag.name} ({ag.agent_id})
@@ -178,11 +178,11 @@ export function TaskModal({ isOpen, onClose, onSave, task }: TaskModalProps) {
                 onChange={(e) => setStatus(e.target.value as TaskStatus)}
                 className="w-full bg-canvas text-deep-ink text-body-sm font-sans p-2 rounded-full border border-onyx/10 focus:outline-none"
               >
-                <option value="pending">⏳ Pending</option>
-                <option value="in_progress">⚡ In Progress</option>
-                <option value="completed">✅ Completed</option>
-                <option value="blocked">🚫 Blocked</option>
-                <option value="cancelled">❌ Cancelled</option>
+                <option value="pending">{t('statuses.pending')}</option>
+                <option value="in_progress">{t('statuses.inProgress')}</option>
+                <option value="completed">{t('statuses.completed')}</option>
+                <option value="blocked">{t('statuses.blocked')}</option>
+                <option value="cancelled">{t('statuses.cancelled')}</option>
               </select>
             </div>
 
@@ -219,11 +219,11 @@ export function TaskModal({ isOpen, onClose, onSave, task }: TaskModalProps) {
               }}
               className="w-full bg-soft-meadow text-deep-ink text-body-sm font-sans p-2.5 rounded-full border border-onyx/10 focus:outline-none"
             >
-              <option value="all">📢 All Active Channels (Broadcast)</option>
-              <option value="telegram">Telegram</option>
-              <option value="whatsapp">WhatsApp</option>
-              <option value="discord">Discord</option>
-              <option value="none">🔕 None (Silent in Workspace)</option>
+              <option value="all">{t('channels.allBroadcast')}</option>
+              <option value="telegram">{t('channels.telegram')}</option>
+              <option value="whatsapp">{t('channels.whatsapp')}</option>
+              <option value="discord">{t('channels.discord')}</option>
+              <option value="none">{t('channels.noneSilent')}</option>
             </select>
           </div>
 
@@ -237,7 +237,7 @@ export function TaskModal({ isOpen, onClose, onSave, task }: TaskModalProps) {
               disabled={targetChannel === 'none' || targetChannel === 'all'}
               className="w-full bg-soft-meadow text-deep-ink text-body-sm font-sans p-2.5 rounded-full border border-onyx/10 focus:outline-none disabled:opacity-50"
             >
-              <option value="all">All Accounts of {targetChannel}</option>
+              <option value="all">{t('modal.allAccounts', { channel: targetChannel })}</option>
               {channelAccounts
                 .filter((acc) => acc.channel === targetChannel)
                 .map((acc) => (
@@ -252,10 +252,10 @@ export function TaskModal({ isOpen, onClose, onSave, task }: TaskModalProps) {
         {/* Action Buttons */}
         <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-onyx/10">
           <Button variant="ghost" size="md" onClick={onClose} type="button" disabled={saving}>
-            Cancel
+            {t('modal.cancel')}
           </Button>
           <Button variant="primary" size="md" type="submit" disabled={saving || !title.trim()}>
-            {saving ? 'Saving...' : task ? 'Update Mission' : 'Create Mission'}
+            {saving ? t('modal.saving') : task ? t('modal.update') : t('modal.create')}
           </Button>
         </div>
       </form>

@@ -500,13 +500,26 @@ of HAL telemetry, Docker state, durable runs, pending approvals, and token
 usage. Detailed ordered run events remain sourced from the durable
 `run_events` table.
 
+The server-side realtime hub caches one aggregate snapshot for 1.5 seconds so
+concurrent browser sessions do not multiply Docker, SQL, and sensor collection.
+The React application mounts one `RealtimeProvider`; Header, Operations,
+approval interruption, and cost displays consume that shared state. The
+provider rejects malformed frames and reconnects with bounded exponential
+backoff and jitter.
+
 The Operations UI deliberately separates observation from execution:
 
 - xterm.js renders run events as a read-only terminal.
 - sensitive decisions call the durable approval REST endpoints.
 - Live Canvas embeds only the URL explicitly published by the sandbox runtime
-  through `ACTONOS_CANVAS_URL`.
+  through `ACTONOS_CANVAS_URL`. Relative paths, HTTPS URLs, and HTTP loopback
+  URLs are accepted; remote plaintext HTTP and protocol-relative URLs are
+  rejected. The iframe is sandboxed and sends no referrer.
 - interactive commands never bypass `ToolRegistry.Execute` or the sandbox.
+
+Primary UI pages use hash routes and lazy loading. This preserves deep links and
+browser history in the embedded `go:embed` deployment while keeping editor and
+xterm dependencies outside the application entry chunk.
 
 ## References
 

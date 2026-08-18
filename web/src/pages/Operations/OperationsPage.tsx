@@ -13,12 +13,9 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
-import { api, createRealtimeSocket } from '@/lib/api';
-import type {
-  AgentRun, AutonomousTask, RealtimeSnapshot, RunEvent, SystemMetrics, TokenUsageSummary,
-} from '@/lib/types';
-
-type ConnectionState = 'connecting' | 'online' | 'offline';
+import { api } from '@/lib/api';
+import type { AutonomousTask, RunEvent } from '@/lib/types';
+import { useRealtime } from '@/components/providers/RealtimeProvider';
 
 function percent(value: number) {
   return `${Math.max(0, Math.min(100, value)).toFixed(0)}%`;
@@ -32,10 +29,10 @@ function eventText(event: RunEvent) {
 export function OperationsPage() {
   const { t } = useTranslation('operations');
   const { error, success } = useToast();
-  const [connection, setConnection] = useState<ConnectionState>('connecting');
-  const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
-  const [runs, setRuns] = useState<AgentRun[]>([]);
-  const [tokens, setTokens] = useState<TokenUsageSummary | null>(null);
+  const { connection, snapshot } = useRealtime();
+  const metrics = snapshot?.metrics || null;
+  const runs = snapshot?.runs || [];
+  const tokens = snapshot?.tokens || null;
   const [tasks, setTasks] = useState<AutonomousTask[]>([]);
   const [events, setEvents] = useState<RunEvent[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -53,35 +50,8 @@ export function OperationsPage() {
   }, [refreshTasks]);
 
   useEffect(() => {
-    let socket: WebSocket | null = null;
-    let reconnectTimer: number | undefined;
-    let closed = false;
-    const connect = () => {
-      setConnection('connecting');
-      socket = createRealtimeSocket();
-      socket.onopen = () => setConnection('online');
-      socket.onmessage = (message) => {
-        const snapshot = JSON.parse(message.data as string) as RealtimeSnapshot;
-        if (snapshot.metrics) setMetrics(snapshot.metrics);
-        if (snapshot.runs) {
-          setRuns(snapshot.runs);
-          setSelectedRun((current) => current || snapshot.runs?.[0]?.id || '');
-        }
-        if (snapshot.tokens) setTokens(snapshot.tokens);
-      };
-      socket.onclose = () => {
-        setConnection('offline');
-        if (!closed) reconnectTimer = window.setTimeout(connect, 2000);
-      };
-      socket.onerror = () => socket?.close();
-    };
-    connect();
-    return () => {
-      closed = true;
-      if (reconnectTimer) window.clearTimeout(reconnectTimer);
-      socket?.close();
-    };
-  }, []);
+    setSelectedRun((current) => current || runs[0]?.id || '');
+  }, [runs]);
 
   useEffect(() => {
     if (!selectedRun) {
@@ -207,7 +177,7 @@ export function OperationsPage() {
                     {open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                     <Badge variant={event.status === 'failed' ? 'stopped' : 'neutral'}>{event.type}</Badge>
                     <span className="font-mono text-caption truncate flex-1">{event.tool_name || event.status}</span>
-                    <span className="text-[10px] text-slate">{event.duration_ms || 0} ms</span>
+                    <span className="text-[10px] text-slate">{t('units.milliseconds', { value: event.duration_ms || 0 })}</span>
                   </div>
                   {open && <pre className="mt-3 whitespace-pre-wrap break-words text-[11px] font-mono text-slate">{JSON.stringify(event.data || {}, null, 2)}</pre>}
                 </button>
@@ -234,8 +204,8 @@ export function OperationsPage() {
                     <p className="text-[11px] text-slate truncate">{container.image}</p>
                   </div>
                   <div className="text-right font-mono text-[10px] text-slate">
-                    <div>{container.cpu_percent.toFixed(1)}% CPU</div>
-                    <div>{container.memory_usage_mb.toFixed(0)} MB</div>
+                    <div>{t('units.cpuPercent', { value: container.cpu_percent.toFixed(1) })}</div>
+                    <div>{t('units.megabytes', { value: container.memory_usage_mb.toFixed(0) })}</div>
                   </div>
                 </div>
               ))}
@@ -251,7 +221,7 @@ export function OperationsPage() {
             {metrics?.canvas_url && <a href={metrics.canvas_url} target="_blank" rel="noreferrer" className="rounded-full p-2 bg-soft-meadow"><ExternalLink className="w-4 h-4" /></a>}
           </div>
           <div className="aspect-video rounded-[20px] overflow-hidden bg-deep-ink flex items-center justify-center">
-            {metrics?.canvas_url ? <iframe title={t('canvas.frameTitle')} src={metrics.canvas_url} className="w-full h-full border-0" allow="clipboard-read; clipboard-write" /> :
+            {metrics?.canvas_url ? <iframe title={t('canvas.frameTitle')} src={metrics.canvas_url} className="w-full h-full border-0" sandbox="allow-scripts allow-same-origin" referrerPolicy="no-referrer" /> :
               <div className="text-center text-canvas/70 p-8"><Monitor className="w-10 h-10 mx-auto mb-3" /><p>{t('canvas.waiting')}</p></div>}
           </div>
         </Card>
@@ -284,8 +254,8 @@ export function OperationsPage() {
         <Card className="xl:col-span-5 p-5 border border-onyx/10">
           <div className="flex items-center gap-2 mb-4"><Coins className="w-5 h-5" /><h2 className="font-serif text-heading-sm font-bold">{t('cost.title')}</h2></div>
           <div className="grid grid-cols-2 gap-3 mb-4">
-            <div className="p-3 rounded-[18px] bg-soft-meadow"><p className="text-caption text-slate">{t('cost.today')}</p><p className="text-heading-sm font-bold">${(tokens?.today_cost_usd || 0).toFixed(4)}</p><p className="text-[11px] text-slate">{(tokens?.today_tokens || 0).toLocaleString()} tokens</p></div>
-            <div className="p-3 rounded-[18px] bg-soft-meadow"><p className="text-caption text-slate">{t('cost.month')}</p><p className="text-heading-sm font-bold">${(tokens?.month_cost_usd || 0).toFixed(4)}</p><p className="text-[11px] text-slate">{(tokens?.month_tokens || 0).toLocaleString()} tokens</p></div>
+            <div className="p-3 rounded-[18px] bg-soft-meadow"><p className="text-caption text-slate">{t('cost.today')}</p><p className="text-heading-sm font-bold">${(tokens?.today_cost_usd || 0).toFixed(4)}</p><p className="text-[11px] text-slate">{t('units.tokens', { value: (tokens?.today_tokens || 0).toLocaleString() })}</p></div>
+            <div className="p-3 rounded-[18px] bg-soft-meadow"><p className="text-caption text-slate">{t('cost.month')}</p><p className="text-heading-sm font-bold">${(tokens?.month_cost_usd || 0).toFixed(4)}</p><p className="text-[11px] text-slate">{t('units.tokens', { value: (tokens?.month_tokens || 0).toLocaleString() })}</p></div>
           </div>
           <div className="space-y-2">{tokens?.by_model.slice(0, 5).map((model) => <div key={model.model} className="flex justify-between text-caption"><span className="truncate">{model.model}</span><span className="font-mono">${model.cost_usd.toFixed(4)}</span></div>)}</div>
         </Card>

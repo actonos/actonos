@@ -207,7 +207,7 @@ export function ChannelAccountModal({
                           {acc.bound_agent_ids && acc.bound_agent_ids.includes('*') ? (
                             <span className="inline-flex items-center gap-1 text-[10px] bg-onyx/5 text-deep-ink px-1.5 py-0.5 rounded-md font-medium">
                               <Sparkles className="w-3 h-3 text-amber-500" />
-                              All Agents
+                              {t('ui.allAgents')}
                             </span>
                           ) : acc.bound_agent_ids && acc.bound_agent_ids.length > 0 ? (
                             <span className="inline-flex items-center gap-1 text-[10px] bg-onyx/5 text-deep-ink px-1.5 py-0.5 rounded-md font-medium">
@@ -217,8 +217,8 @@ export function ChannelAccountModal({
                           ) : null}
                         </div>
                         <div className="text-caption font-mono text-slate truncate flex items-center gap-2 mt-0.5">
-                          <span>Token: {acc.token ? '••••••••' + acc.token.slice(-4) : '••••••'}</span>
-                          {acc.phone_id && <span>• Phone ID: {acc.phone_id}</span>}
+                          <span>{t('ui.token')}: {acc.token ? '••••••••' + acc.token.slice(-4) : '••••••'}</span>
+                          {acc.phone_id && <span>• {t('ui.phoneId')}: {acc.phone_id}</span>}
                         </div>
                       </div>
                     </div>
@@ -226,7 +226,7 @@ export function ChannelAccountModal({
                     <div className="flex items-center gap-1 shrink-0">
                       {deleteConfirmId === acc.id ? (
                         <div className="flex items-center gap-1 bg-red-50 p-1 rounded-xl border border-red-200">
-                          <span className="text-[10px] text-red-700 font-semibold px-1">Delete?</span>
+                          <span className="text-[10px] text-red-700 font-semibold px-1">{t('ui.deleteQuestion')}</span>
                           <button
                             type="button"
                             onClick={() => {
@@ -235,14 +235,14 @@ export function ChannelAccountModal({
                             }}
                             className="px-2 py-1 text-[11px] bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 cursor-pointer"
                           >
-                            Yes
+                            {t('ui.yes')}
                           </button>
                           <button
                             type="button"
                             onClick={() => setDeleteConfirmId(null)}
                             className="px-2 py-1 text-[11px] bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 cursor-pointer"
                           >
-                            No
+                            {t('ui.no')}
                           </button>
                         </div>
                       ) : (
@@ -279,7 +279,7 @@ export function ChannelAccountModal({
                       rel="noreferrer"
                       className="text-deep-ink font-semibold underline hover:text-slate inline-flex items-center gap-1 mt-1.5"
                     >
-                      <span>Open Setup Portal</span>
+                      <span>{t('ui.openSetupPortal')}</span>
                       <ExternalLink className="w-3 h-3" />
                     </a>
                   )}
@@ -292,7 +292,7 @@ export function ChannelAccountModal({
                 {t('accounts.label', 'Account Label')}
               </label>
               <Input
-                placeholder="e.g. Primary Support Bot, Community Monitor"
+                placeholder={t('ui.accountPlaceholder')}
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
               />
@@ -304,7 +304,7 @@ export function ChannelAccountModal({
               </label>
               <Input
                 type="password"
-                placeholder="Paste token or API key..."
+                placeholder={t('ui.tokenPlaceholder')}
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
                 required
@@ -318,7 +318,7 @@ export function ChannelAccountModal({
                   <span>{t('accounts.phoneId', 'Phone Number ID')}</span>
                 </label>
                 <Input
-                  placeholder="e.g. 104928374928192"
+                  placeholder={t('ui.phoneIdPlaceholder')}
                   value={phoneId}
                   onChange={(e) => setPhoneId(e.target.value)}
                 />
@@ -329,10 +329,10 @@ export function ChannelAccountModal({
             <div className="pt-1">
               <label className="text-caption font-semibold text-deep-ink block mb-1 flex items-center gap-1.5">
                 <Bot className="w-3.5 h-3.5 text-deep-ink" />
-                <span>Assigned Agent(s)</span>
+                <span>{t('ui.assignedAgents')}</span>
               </label>
               <p className="text-[11px] text-slate mb-2">
-                Choose which agent responds to incoming messages on this account.
+                {t('ui.assignedAgentsHelp')}
               </p>
               <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
                 <label className="flex items-center gap-2 text-caption text-deep-ink p-2 rounded-xl bg-canvas border border-onyx/10 hover:border-onyx/30 cursor-pointer">
@@ -348,7 +348,7 @@ export function ChannelAccountModal({
                     }}
                     className="rounded text-deep-ink focus:ring-onyx"
                   />
-                  <span className="font-semibold">All Agents (Broadcast / Default)</span>
+                  <span className="font-semibold">{t('ui.allAgentsDefault')}</span>
                 </label>
 
                 {!boundAgentIds.includes('*') &&
@@ -392,7 +392,7 @@ export function ChannelAccountModal({
                 size="md"
                 onClick={() => setMode('manage')}
               >
-                Cancel
+                {t('ui.cancel')}
               </Button>
             </div>
           </form>

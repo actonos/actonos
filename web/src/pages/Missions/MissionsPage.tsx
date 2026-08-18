@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
@@ -78,8 +79,8 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
       if (runsRes) setHeartbeatRuns(runsRes);
       setApprovals(approvalsRes.approvals);
       setAgentRuns(agentRunsRes.runs);
-    } catch (err: any) {
-      error('Failed to load mission data', err.message);
+    } catch (err) {
+      error('Failed to load mission data', getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -101,8 +102,8 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
         success(t('toast.taskCreated', 'Mission Created'), `Task '${taskData.title}' added to active backlog.`);
       }
       loadData();
-    } catch (err: any) {
-      error('Failed to save task', err.message);
+    } catch (err) {
+      error('Failed to save task', getErrorMessage(err));
       throw err;
     }
   };
@@ -114,8 +115,8 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
       success(t('toast.taskDeleted', 'Mission Deleted'), 'Task removed from backlog.');
       setDeletingTaskId(null);
       loadData();
-    } catch (err: any) {
-      error('Failed to delete task', err.message);
+    } catch (err) {
+      error('Failed to delete task', getErrorMessage(err));
     }
   };
 
@@ -128,8 +129,8 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
       };
       await api.updateTask(task.id, updated);
       loadData();
-    } catch (err: any) {
-      error('Failed to update status', err.message);
+    } catch (err) {
+      error('Failed to update status', getErrorMessage(err));
     }
   };
 
@@ -143,8 +144,8 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
         run.status === 'ok' ? 'System Nominal (Zero Noise)' : `Action executed: ${run.summary}`
       );
       loadData();
-    } catch (err: any) {
-      error('Pulse execution failed', err.message);
+    } catch (err) {
+      error('Pulse execution failed', getErrorMessage(err));
     } finally {
       setTriggeringPulse(false);
     }
@@ -155,8 +156,8 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
     try {
       await api.saveHeartbeatConfig(heartbeatConfig);
       success(t('toast.directivesSaved', 'Directives Saved'), 'Standing HEARTBEAT instructions synchronized.');
-    } catch (err: any) {
-      error('Failed to save directives', err.message);
+    } catch (err) {
+      error('Failed to save directives', getErrorMessage(err));
     } finally {
       setSavingDirectives(false);
     }
@@ -173,7 +174,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
       }
       await loadData();
     } catch (err: unknown) {
-      error(t('governance.decisionFailed'), err instanceof Error ? err.message : String(err));
+      error(t('governance.decisionFailed'), err instanceof Error ? getErrorMessage(err) : String(err));
     }
   };
 
@@ -184,30 +185,30 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
   const getPriorityBadge = (p: TaskPriority) => {
     switch (p) {
       case 'p0_critical':
-        return <Badge variant="stopped" className="text-[10px] font-mono">P0 Critical</Badge>;
+        return <Badge variant="stopped" className="text-[10px] font-mono">{t('priorities.p0Short')}</Badge>;
       case 'p1_high':
-        return <Badge variant="accent" className="text-[10px] font-mono">P1 High</Badge>;
+        return <Badge variant="accent" className="text-[10px] font-mono">{t('priorities.p1Short')}</Badge>;
       case 'p2_normal':
-        return <Badge variant="neutral" className="text-[10px] font-mono">P2 Normal</Badge>;
+        return <Badge variant="neutral" className="text-[10px] font-mono">{t('priorities.p2Short')}</Badge>;
       case 'p3_low':
       default:
-        return <Badge variant="neutral" className="text-[10px] font-mono opacity-70">P3 Low</Badge>;
+        return <Badge variant="neutral" className="text-[10px] font-mono opacity-70">{t('priorities.p3Short')}</Badge>;
     }
   };
 
   const getStatusPill = (s: TaskStatus) => {
     switch (s) {
       case 'completed':
-        return <Badge variant="active" className="text-[11px]">✅ Completed</Badge>;
+        return <Badge variant="active" className="text-[11px]">{t('statuses.completed')}</Badge>;
       case 'in_progress':
-        return <Badge variant="accent" className="text-[11px] animate-pulse">⚡ In Progress</Badge>;
+        return <Badge variant="accent" className="text-[11px] animate-pulse">{t('statuses.inProgress')}</Badge>;
       case 'blocked':
-        return <Badge variant="stopped" className="text-[11px]">🚫 Blocked</Badge>;
+        return <Badge variant="stopped" className="text-[11px]">{t('statuses.blocked')}</Badge>;
       case 'cancelled':
-        return <Badge variant="neutral" className="text-[11px] line-through">Cancelled</Badge>;
+        return <Badge variant="neutral" className="text-[11px] line-through">{t('statuses.cancelled')}</Badge>;
       case 'pending':
       default:
-        return <Badge variant="neutral" className="text-[11px]">⏳ Pending</Badge>;
+        return <Badge variant="neutral" className="text-[11px]">{t('statuses.pending')}</Badge>;
     }
   };
 
@@ -220,12 +221,12 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
             <span className="text-caption uppercase tracking-wider text-slate font-semibold block mb-1">
-              Autonomous Operations
+              {t('page.eyebrow')}
             </span>
             <h1 className="font-serif text-heading-lg text-deep-ink tracking-tight flex items-center gap-3">
               <span>{t('title', 'Missions & Heartbeat Control')}</span>
               <Badge variant="active" className="text-caption font-mono">
-                {activeCount} Active Backlog
+                {t('page.activeBacklog', { count: activeCount })}
               </Badge>
             </h1>
             <p className="font-sans text-body text-slate mt-1 max-w-2xl">
@@ -240,7 +241,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
               icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />}
               onClick={loadData}
             >
-              Refresh
+              {t('actions.refresh')}
             </Button>
             <Button
               variant="primary"
@@ -249,7 +250,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
               onClick={handleTriggerPulse}
               disabled={triggeringPulse}
             >
-              {triggeringPulse ? 'Pulsing...' : 'Trigger Pulse Now'}
+              {triggeringPulse ? t('actions.pulsing') : t('actions.triggerPulse')}
             </Button>
           </div>
         </div>
@@ -260,13 +261,13 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
           <Card className="p-5 border border-onyx/10 bg-canvas/90 shadow-xs flex items-center justify-between">
             <div>
               <span className="text-caption font-semibold uppercase text-slate block mb-1">
-                Active Missions
+                {t('metrics.activeMissions')}
               </span>
               <div className="text-heading font-serif text-deep-ink">
-                {activeCount} <span className="text-body-sm font-sans text-slate font-normal">/ {tasks.length} total</span>
+                {activeCount} <span className="text-body-sm font-sans text-slate font-normal">{t('metrics.total', { count: tasks.length })}</span>
               </div>
               <span className="text-[11px] text-emerald-700 font-mono font-semibold">
-                {completedCount} completed
+                {t('metrics.completed', { count: completedCount })}
               </span>
             </div>
             <div className="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
@@ -278,14 +279,14 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
           <Card className="p-5 border border-onyx/10 bg-canvas/90 shadow-xs flex items-center justify-between">
             <div>
               <span className="text-caption font-semibold uppercase text-slate block mb-1">
-                Heartbeat Pulse
+                {t('metrics.heartbeat')}
               </span>
               <div className="text-heading font-serif text-deep-ink flex items-center gap-2">
-                <span>{heartbeatConfig.interval_minutes}m Interval</span>
+                <span>{t('metrics.interval', { minutes: heartbeatConfig.interval_minutes })}</span>
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
               </div>
               <span className="text-[11px] text-slate font-mono truncate block max-w-[200px]">
-                Last: {lastRun ? lastRun.status : 'Nominal'}
+                {t('metrics.last', { status: lastRun ? lastRun.status : t('metrics.nominal') })}
               </span>
             </div>
             <div className="w-10 h-10 rounded-full bg-rose-500/10 text-rose-600 flex items-center justify-center">
@@ -297,13 +298,13 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
           <Card className="p-5 border border-onyx/10 bg-canvas/90 shadow-xs flex items-center justify-between">
             <div>
               <span className="text-caption font-semibold uppercase text-slate block mb-1">
-                Coordinator Core
+                {t('metrics.coordinator')}
               </span>
               <div className="text-heading-sm font-serif font-bold text-deep-ink">
                 agent_system_core
               </div>
               <span className="text-[11px] text-slate font-mono">
-                {heartbeatConfig.auto_delegate ? '⚡ Swarm Auto-Delegation Active' : 'Single Agent Execution'}
+                {heartbeatConfig.auto_delegate ? t('metrics.autoDelegate') : t('metrics.singleAgent')}
               </span>
             </div>
             <div className="w-10 h-10 rounded-full bg-hi-yellow/20 text-deep-ink flex items-center justify-center">
@@ -321,7 +322,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
               activeTab === 'tasks' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
             }`}
           >
-            📋 Tasks & Backlog ({tasks.length})
+            {t('tabs.tasks', { count: tasks.length })}
           </button>
           <button
             type="button"
@@ -330,7 +331,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
               activeTab === 'directives' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
             }`}
           >
-            💓 Standing Directives (HEARTBEAT.md)
+            {t('tabs.directives')}
           </button>
           <button
             type="button"
@@ -339,7 +340,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
               activeTab === 'audit' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
             }`}
           >
-            🛡️ Pulse Audit Ledger ({heartbeatRuns.length})
+            {t('tabs.audit', { count: heartbeatRuns.length })}
           </button>
           <button
             type="button"
@@ -363,11 +364,11 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                   onChange={(e) => setStatusFilter(e.target.value)}
                   className="bg-soft-meadow text-deep-ink text-[12px] font-sans px-3 py-1.5 rounded-full border border-onyx/10 focus:outline-none"
                 >
-                  <option value="all">All Statuses</option>
-                  <option value="pending">⏳ Pending</option>
-                  <option value="in_progress">⚡ In Progress</option>
-                  <option value="completed">✅ Completed</option>
-                  <option value="blocked">🚫 Blocked</option>
+                  <option value="all">{t('filters.allStatuses')}</option>
+                  <option value="pending">{t('statuses.pending')}</option>
+                  <option value="in_progress">{t('statuses.inProgress')}</option>
+                  <option value="completed">{t('statuses.completed')}</option>
+                  <option value="blocked">{t('statuses.blocked')}</option>
                 </select>
 
                 <select
@@ -375,11 +376,11 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                   onChange={(e) => setPriorityFilter(e.target.value)}
                   className="bg-soft-meadow text-deep-ink text-[12px] font-sans px-3 py-1.5 rounded-full border border-onyx/10 focus:outline-none"
                 >
-                  <option value="all">All Priorities</option>
-                  <option value="p0_critical">🔴 P0 Critical</option>
-                  <option value="p1_high">🟠 P1 High</option>
-                  <option value="p2_normal">🔵 P2 Normal</option>
-                  <option value="p3_low">⚪ P3 Low</option>
+                  <option value="all">{t('filters.allPriorities')}</option>
+                  <option value="p0_critical">{t('priorities.p0Short')}</option>
+                  <option value="p1_high">{t('priorities.p1Short')}</option>
+                  <option value="p2_normal">{t('priorities.p2Short')}</option>
+                  <option value="p3_low">{t('priorities.p3Short')}</option>
                 </select>
               </div>
 
@@ -392,7 +393,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                   setIsTaskModalOpen(true);
                 }}
               >
-                New Mission
+                {t('actions.newMission')}
               </Button>
             </div>
 
@@ -422,7 +423,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                             className="text-[11px]"
                             icon={<MessageSquare className="w-3.5 h-3.5" />}
                           >
-                            Chat
+                            {t('actions.chat')}
                           </Button>
                         )}
                         {tItem.status !== 'completed' && (
@@ -433,7 +434,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                             className="text-[11px] text-emerald-700"
                             icon={<CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
                           >
-                            Complete
+                            {t('actions.complete')}
                           </Button>
                         )}
                         <Button
@@ -446,7 +447,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                           className="text-[11px]"
                           icon={<Edit2 className="w-3.5 h-3.5" />}
                         >
-                          Edit
+                          {t('actions.edit')}
                         </Button>
                         <Button
                           variant="ghost"
@@ -455,7 +456,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                           className="text-[11px] text-red-600 hover:text-red-700"
                           icon={<Trash2 className="w-3.5 h-3.5" />}
                         >
-                          Delete
+                          {t('actions.delete')}
                         </Button>
                       </div>
                     </div>
@@ -471,9 +472,9 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                     <div className="space-y-1.5 pt-1">
                       <div className="flex items-center justify-between text-[11px] font-mono text-slate">
                         <div className="flex items-center gap-2">
-                          <span>Agent: <strong className="text-deep-ink">{tItem.assigned_agent_id}</strong></span>
+                          <span>{t('task.agent')} <strong className="text-deep-ink">{tItem.assigned_agent_id}</strong></span>
                           <span>•</span>
-                          <span>Channel: <strong className="text-deep-ink">{tItem.target_channel || 'all'}</strong></span>
+                          <span>{t('task.channel')} <strong className="text-deep-ink">{tItem.target_channel || 'all'}</strong></span>
                         </div>
                         <span className="font-semibold text-deep-ink">{tItem.progress}%</span>
                       </div>
@@ -504,9 +505,9 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
             ) : (
               <Card className="p-12 text-center border border-onyx/10 bg-canvas space-y-3">
                 <CheckSquare className="w-10 h-10 text-slate/40 mx-auto" />
-                <h3 className="font-serif text-heading-sm text-deep-ink">No Missions Found</h3>
+                <h3 className="font-serif text-heading-sm text-deep-ink">{t('empty.title')}</h3>
                 <p className="text-caption text-slate max-w-md mx-auto">
-                  Your autonomous backlog is clear. Create a mission above or let the Heartbeat daemon schedule routine maintenance.
+                  {t('empty.description')}
                 </p>
                 <Button
                   variant="primary"
@@ -517,7 +518,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                   }}
                   icon={<Plus className="w-3.5 h-3.5" />}
                 >
-                  Create Mission
+                  {t('actions.createMission')}
                 </Button>
               </Card>
             )}
@@ -532,10 +533,10 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                 <div>
                   <h3 className="font-serif text-heading-sm text-deep-ink font-semibold flex items-center gap-2">
                     <HeartPulse className="w-5 h-5 text-rose-600" />
-                    <span>Standing Autonomous Directives</span>
+                    <span>{t('directives.title')}</span>
                   </h3>
                   <p className="text-caption text-slate mt-0.5">
-                    Instructions loaded on every cognitive pulse (`data/workspace/HEARTBEAT.md`).
+                    {t('directives.description')}
                   </p>
                 </div>
                 <Button
@@ -545,20 +546,20 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                   onClick={handleSaveDirectives}
                   disabled={savingDirectives}
                 >
-                  {savingDirectives ? 'Saving...' : 'Save Directives'}
+                  {savingDirectives ? t('directives.saving') : t('directives.save')}
                 </Button>
               </div>
 
               {/* Directives Markdown Editor */}
               <div className="space-y-2">
                 <label className="block text-caption font-semibold text-deep-ink">
-                  Standing Instructions (Markdown)
+                  {t('directives.instructions')}
                 </label>
                 <textarea
                   rows={8}
                   value={heartbeatConfig.directives}
                   onChange={(e) => setHeartbeatConfig({ ...heartbeatConfig, directives: e.target.value })}
-                  placeholder="# Standing Directives&#10;- Continuously verify local storage and database integrity&#10;- If everything is nominal, reply HEARTBEAT_OK"
+                  placeholder={t('directives.placeholder')}
                   className="w-full bg-soft-meadow text-deep-ink font-mono text-[13px] p-4 rounded-2xl border border-onyx/10 focus:outline-none focus:border-onyx/30 resize-none leading-relaxed"
                 />
               </div>
@@ -567,35 +568,35 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                 <div>
                   <label className="block text-caption font-semibold text-deep-ink mb-1.5">
-                    Pulse Interval
+                    {t('directives.interval')}
                   </label>
                   <select
                     value={heartbeatConfig.interval_minutes}
                     onChange={(e) => setHeartbeatConfig({ ...heartbeatConfig, interval_minutes: Number(e.target.value) })}
                     className="w-full bg-soft-meadow text-deep-ink text-body-sm font-sans p-2.5 rounded-full border border-onyx/10 focus:outline-none"
                   >
-                    <option value={1}>Every 1 minute (High Frequency)</option>
-                    <option value={5}>Every 5 minutes (Recommended Standard)</option>
-                    <option value={15}>Every 15 minutes</option>
-                    <option value={30}>Every 30 minutes</option>
-                    <option value={60}>Every 1 hour</option>
+                    <option value={1}>{t('directives.intervals.one')}</option>
+                    <option value={5}>{t('directives.intervals.five')}</option>
+                    <option value={15}>{t('directives.intervals.fifteen')}</option>
+                    <option value={30}>{t('directives.intervals.thirty')}</option>
+                    <option value={60}>{t('directives.intervals.hour')}</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-caption font-semibold text-deep-ink mb-1.5">
-                    Notification Target Channel
+                    {t('directives.channel')}
                   </label>
                   <select
                     value={heartbeatConfig.target_channel}
                     onChange={(e) => setHeartbeatConfig({ ...heartbeatConfig, target_channel: e.target.value })}
                     className="w-full bg-soft-meadow text-deep-ink text-body-sm font-sans p-2.5 rounded-full border border-onyx/10 focus:outline-none"
                   >
-                    <option value="all">📢 All Active Channels</option>
-                    <option value="telegram">Telegram</option>
-                    <option value="whatsapp">WhatsApp</option>
-                    <option value="discord">Discord</option>
-                    <option value="none">🔕 None (Zero External Noise)</option>
+                    <option value="all">{t('channels.all')}</option>
+                    <option value="telegram">{t('channels.telegram')}</option>
+                    <option value="whatsapp">{t('channels.whatsapp')}</option>
+                    <option value="discord">{t('channels.discord')}</option>
+                    <option value="none">{t('channels.none')}</option>
                   </select>
                 </div>
               </div>
@@ -610,10 +611,10 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-serif text-heading-sm text-deep-ink font-semibold">
-                    Cognitive Pulse Execution Ledger
+                    {t('audit.title')}
                   </h3>
                   <p className="text-caption text-slate mt-0.5">
-                    Historical record of autonomous 5-minute cognitive pulses and zero-noise evaluations.
+                    {t('audit.description')}
                   </p>
                 </div>
               </div>
@@ -622,11 +623,11 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                 <table className="w-full text-left border-collapse text-body-sm font-sans">
                   <thead>
                     <tr className="border-b border-onyx/10 bg-soft-meadow text-[11px] font-semibold uppercase text-slate">
-                      <th className="py-2.5 px-3">Time</th>
-                      <th className="py-2.5 px-3">Agent</th>
-                      <th className="py-2.5 px-3">Status</th>
-                      <th className="py-2.5 px-3">Tokens</th>
-                      <th className="py-2.5 px-3">Summary & Action Trace</th>
+                      <th className="py-2.5 px-3">{t('audit.columns.time')}</th>
+                      <th className="py-2.5 px-3">{t('audit.columns.agent')}</th>
+                      <th className="py-2.5 px-3">{t('audit.columns.status')}</th>
+                      <th className="py-2.5 px-3">{t('audit.columns.tokens')}</th>
+                      <th className="py-2.5 px-3">{t('audit.columns.summary')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-onyx/5 font-mono text-[12px]">
@@ -647,7 +648,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                                 ? 'bg-hi-yellow/20 text-deep-ink'
                                 : 'bg-red-500/10 text-red-700'
                             }`}>
-                              {r.status === 'ok' ? 'Zero Noise' : r.status}
+                              {r.status === 'ok' ? t('audit.zeroNoise') : r.status}
                             </span>
                           </td>
                           <td className="py-2.5 px-3 text-slate">
@@ -661,7 +662,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                     ) : (
                       <tr>
                         <td colSpan={5} className="py-8 text-center text-caption text-slate font-sans">
-                          No pulse runs recorded yet. Click "Trigger Pulse Now" to execute an immediate cycle.
+                          {t('audit.empty')}
                         </td>
                       </tr>
                     )}
@@ -743,9 +744,9 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
           isOpen={deletingTaskId !== null}
           onClose={() => setDeletingTaskId(null)}
           onConfirm={handleDeleteTask}
-          title="Delete Mission"
-          description="Are you sure you want to remove this mission from the autonomous backlog?"
-          confirmLabel="Delete Mission"
+          title={t('delete.title')}
+          description={t('delete.description')}
+          confirmLabel={t('delete.confirm')}
           variant="danger"
         />
       </PageContainer>

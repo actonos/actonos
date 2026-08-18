@@ -14,6 +14,9 @@ Use this skill when writing or running tests for ActonOS.
 | Unit Tests | `internal/**/*_test.go` | (none) | `make test-unit` |
 | Integration Tests | `tests/integration/` or `*_integ_test.go` | `integration` | `make test-integ` |
 | E2E / Smoke Tests | `tests/e2e/` | `e2e` | `go test -tags=e2e ./tests/e2e/...` |
+| Frontend Unit | `web/src/**/*.test.{ts,tsx}` | (none) | `cd web && npm test` |
+| Frontend Browser | `web/tests/*.spec.ts` | (none) | `cd web && npm run test:e2e` |
+| Frontend Quality | `web/` | (none) | `cd web && npm run quality` |
 
 ## Running Tests
 
@@ -38,7 +41,26 @@ go test -v -run TestDecayScore ./internal/memory/...
 # With coverage
 go test -coverprofile=build/coverage.out ./internal/...
 go tool cover -html=build/coverage.out -o build/coverage.html
+
+# Frontend lint, locale parity, strict visible-text audit, Vitest, build,
+# bundle budget, Playwright smoke tests, and axe accessibility checks
+cd web
+npm run quality
+npx tsc --noEmit
+
+# Playwright smoke test (requires a running ActonOS server)
+npm run test:e2e
 ```
+
+Frontend mutation tests must cover `202 approval_required` separately from
+successful completion. Realtime tests must verify malformed-frame handling,
+reconnect behavior, and shared snapshot consumption. Modal tests must assert
+dialog semantics and asynchronous close behavior.
+
+`npm run quality` must execute the hardcoded text audit with `--fail` and the
+Playwright suite. Browser tests must use axe and reject serious or critical
+accessibility violations. Production frontend lint must reject explicit `any`
+and unused variables.
 
 ## Test Patterns
 

@@ -5,7 +5,7 @@ import { AlertTriangle, Info, Trash2 } from 'lucide-react';
 export interface ConfirmModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
   title: string;
   description: string;
   confirmLabel?: string;
@@ -25,6 +25,19 @@ export function ConfirmModal({
   variant = 'danger',
   loading = false,
 }: ConfirmModalProps) {
+  const [submitting, setSubmitting] = useState(false);
+  const busy = loading || submitting;
+
+  const handleConfirm = async () => {
+    setSubmitting(true);
+    try {
+      await onConfirm();
+      onClose();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title}>
       <div className="space-y-4">
@@ -51,17 +64,14 @@ export function ConfirmModal({
         </div>
 
         <div className="flex items-center justify-end gap-2.5 pt-2">
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={loading}>
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={busy}>
             {cancelLabel}
           </Button>
           <Button
             variant={variant === 'danger' ? 'danger' : 'primary'}
             size="sm"
-            onClick={() => {
-              onConfirm();
-              onClose();
-            }}
-            disabled={loading}
+            onClick={handleConfirm}
+            disabled={busy}
           >
             {confirmLabel}
           </Button>
@@ -70,3 +80,4 @@ export function ConfirmModal({
     </Modal>
   );
 }
+import { useState } from 'react';

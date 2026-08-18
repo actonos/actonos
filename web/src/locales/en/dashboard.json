@@ -42,7 +42,20 @@
     "storage": "Disk Storage",
     "uptime": "Uptime",
     "temp": "Core Temp",
-    "active": "Active"
+    "active": "Active",
+    "cores": "{{count}} Cores",
+    "temperature": "Temp: {{value}}?C",
+    "ofMegabytes": "/ {{value}} MB",
+    "daemonMemory": "Daemon: {{value}} MB",
+    "usedPercent": "{{value}}% used",
+    "ofGigabytes": "/ {{value}} GB",
+    "dataSize": "Data: {{value}} GB",
+    "allocatedPercent": "{{value}}% allocated",
+    "uptimeMinutes": "{{value}}m online",
+    "processStatus": "PID {{status}}",
+    "halRunning": "HAL Running",
+    "kernelStable": "Kernel Stable",
+    "sync": "Sync: {{time}}"
   },
   "metrics": {
     "agents": "Agents",
@@ -53,7 +66,8 @@
     "automationsDesc": "{{total}} scheduled tasks",
     "mesh": "Tailscale VPN",
     "meshConnected": "Connected ({{ip}})",
-    "meshDisabled": "Disabled"
+    "meshDisabled": "Disabled",
+    "toolBreakdown": "{{native}} Native • {{mcp}} MCP • {{wasm}} WASM"
   },
   "launchpad": {
     "title": "Quick Actions",
@@ -67,16 +81,39 @@
   },
   "tokens": {
     "title": "Token Consumption & Cost Ledger",
-    "subtitle": "Live tracking across ReAct loops, Crons, and autonomous Heartbeats"
+    "subtitle": "Live tracking across ReAct loops, Crons, and autonomous Heartbeats",
+    "viewLedger": "View Full Ledger",
+    "today": "Today Tokens",
+    "month": "Month Tokens",
+    "lifetime": "Lifetime Total",
+    "models": "Models:",
+    "noUsage": "No active usage recorded",
+    "inspect": "Inspect Ledger & History ?"
   },
   "heartbeat": {
     "title": "Heartbeat Pulse",
-    "desc": "Autonomous 5m cognitive loop reviewing pending tasks and alerts."
+    "desc": "Autonomous 5m cognitive loop reviewing pending tasks and alerts.",
+    "lastStatus": "Last Cycle Status:"
   },
   "activity": {
     "title": "Recent Activity",
     "subtitle": "Real-time log of tool executions and agent actions.",
     "empty": "No recent logs.",
-    "viewAll": "View All"
+    "viewAll": "View All",
+    "risk": "{{level}} Risk",
+    "statusDuration": "{{status}} ({{duration}} ms)",
+    "detail": "Agent: {{agent}} ? Trace: {{trace}}"
+  },
+  "actions": {
+    "refresh": "Refresh"
+  },
+  "units": {
+    "megabytes": "{{value}} MB",
+    "gigabytes": "{{value}} GB",
+    "usd": "${{value}} USD"
+  },
+  "storage": {
+    "detail": "SQLite: {{sqlite}} MB ? Vectors: {{vectors}} MB",
+    "total": "Storage: {{value}} MB"
   }
 }

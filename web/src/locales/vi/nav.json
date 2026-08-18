@@ -20,8 +20,44 @@
     "tools": "Công cụ",
     "system": "Hệ thống"
   },
+  "categories": {
+    "overview": "Tổng quan",
+    "aiManagement": "Quản lý AI",
+    "configuration": "Cấu hình",
+    "conversation": "Hội thoại",
+    "operations": "Vận hành",
+    "observability": "Giám sát",
+    "scheduling": "Lập lịch",
+    "systemTools": "Công cụ hệ thống",
+    "agentSkills": "Kỹ năng Agent",
+    "files": "Tệp",
+    "connections": "Kết nối",
+    "services": "Dịch vụ",
+    "system": "Hệ thống",
+    "kernel": "Kernel"
+  },
+  "sidebar": {
+    "open": "Mở thanh điều hướng",
+    "expand": "Mở rộng thanh điều hướng",
+    "collapse": "Thu gọn thanh điều hướng"
+  },
+  "session": {
+    "lock": "Khóa",
+    "lockTitle": "Khóa phiên ActonOS"
+  },
+  "language": {
+    "title": "Ngôn ngữ",
+    "search": "Tìm ngôn ngữ...",
+    "close": "Đóng bộ chọn ngôn ngữ",
+    "full": "Đầy đủ"
+  },
   "status": {
     "connected": "Hệ thống hoạt động",
-    "offline": "Ngoại tuyến"
+    "offline": "Ngoại tuyến",
+    "runtime": "Docker HAL"
+  },
+  "telemetry": {
+    "cpu": "CPU: {{value}}%",
+    "ram": "RAM: {{value}} MB"
   }
 }

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
@@ -75,8 +76,8 @@ export function McpServerModal({ isOpen, onClose, onConnect }: McpServerModalPro
       );
       await onConnect({ id, transport, command: transport === 'stdio' ? command : undefined, args, url: transport === 'stdio' ? undefined : url, env });
       onClose();
-    } catch (err: any) {
-      setError(err.message || 'Failed to connect MCP server');
+    } catch (err) {
+      setError(getErrorMessage(err) || t('mcp.connectFailed'));
     } finally {
       setLoading(false);
     }
@@ -94,7 +95,7 @@ export function McpServerModal({ isOpen, onClose, onConnect }: McpServerModalPro
         {/* 1-Click Presets */}
         <div>
           <label className="text-caption uppercase text-slate font-semibold block mb-2 flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-hi-yellow" /> Recommended Presets
+            <Sparkles className="w-3.5 h-3.5 text-hi-yellow" /> {t('mcp.recommendedPresets')}
           </label>
           <div className="grid grid-cols-2 gap-2">
             {presets.map((p) => (
@@ -118,8 +119,8 @@ export function McpServerModal({ isOpen, onClose, onConnect }: McpServerModalPro
         </div>
 
         <Input
-          label="Server Identifier (Unique ID)"
-          placeholder="e.g., fetch_mcp"
+          label={t('mcp.serverIdentifier')}
+          placeholder={t('mcp.serverIdentifierPlaceholder')}
           value={id}
           onChange={(e) => setId(e.target.value)}
           required
@@ -128,25 +129,25 @@ export function McpServerModal({ isOpen, onClose, onConnect }: McpServerModalPro
         <div>
           <label className="text-caption uppercase text-slate font-semibold block mb-1">{t('mcp.transport')}</label>
           <select value={transport} onChange={(event) => setTransport(event.target.value)} className="w-full bg-canvas text-deep-ink px-4 py-2.5 rounded-full border border-onyx/15 text-body-sm">
-            <option value="stdio">stdio</option>
-            <option value="http">Streamable HTTP</option>
-            <option value="sse">SSE</option>
+            <option value="stdio">{t('mcp.transports.stdio')}</option>
+            <option value="http">{t('mcp.transports.http')}</option>
+            <option value="sse">{t('mcp.transports.sse')}</option>
           </select>
         </div>
 
         {transport === 'stdio' ? (
-          <Input label={t('mcp.command')} placeholder="npx" value={command} onChange={(e) => setCommand(e.target.value)} required />
+          <Input label={t('mcp.command')} placeholder={t('mcp.commandPlaceholder')} value={command} onChange={(e) => setCommand(e.target.value)} required />
         ) : (
-          <Input label={t('mcp.url')} placeholder="https://mcp.example.com" value={url} onChange={(e) => setURL(e.target.value)} required />
+          <Input label={t('mcp.url')} placeholder={t('mcp.urlPlaceholder')} value={url} onChange={(e) => setURL(e.target.value)} required />
         )}
 
         <div>
           <label className="text-caption uppercase text-slate font-semibold block mb-1">
-            CLI Arguments (Space-separated)
+            {t('mcp.arguments')}
           </label>
           <input
             type="text"
-            placeholder="-y @modelcontextprotocol/server-fetch"
+            placeholder={t('mcp.argumentsPlaceholder')}
             value={argsStr}
             onChange={(e) => setArgsStr(e.target.value)}
             className="w-full bg-canvas text-deep-ink font-mono text-body-sm px-4 py-2.5 rounded-full border border-onyx/15 focus:outline-none focus:ring-2 focus:ring-deep-ink"
@@ -167,9 +168,9 @@ export function McpServerModal({ isOpen, onClose, onConnect }: McpServerModalPro
 
         <div className="p-3 bg-canvas rounded-[14px] border border-onyx/5 text-caption text-slate space-y-1">
           <div className="font-mono flex items-center gap-1 text-deep-ink font-semibold">
-            <Terminal className="w-3.5 h-3.5" /> Transport: stdio pipe with JSON-RPC 2.0
+            <Terminal className="w-3.5 h-3.5" /> {t('mcp.transportSummary')}
           </div>
-          <p>ActonOS spawns the MCP process inside the isolated executor and automatically registers all exported tools.</p>
+          <p>{t('mcp.sandboxDescription')}</p>
         </div>
 
         <Button
@@ -178,7 +179,7 @@ export function McpServerModal({ isOpen, onClose, onConnect }: McpServerModalPro
           disabled={loading || !id.trim()}
           className="w-full justify-center mt-2"
         >
-          {loading ? 'Connecting & Registering Tools...' : 'Connect MCP Server'}
+          {loading ? t('mcp.connecting') : t('mcp.connect')}
         </Button>
       </form>
     </Modal>

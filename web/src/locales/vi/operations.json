@@ -58,5 +58,11 @@
     "failed": "Không thể xử lý phê duyệt",
     "approvedFeedback": "Đã kiểm tra và chấp thuận từ Vận hành trực tiếp",
     "defaultFeedback": "Người vận hành đã từ chối từ Vận hành trực tiếp"
+  },
+  "units": {
+    "milliseconds": "{{value}} ms",
+    "cpuPercent": "CPU {{value}}%",
+    "megabytes": "{{value}} MB",
+    "tokens": "{{value}} token"
   }
 }

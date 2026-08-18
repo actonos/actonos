@@ -109,11 +109,15 @@ func (s *Server) handleToggleMCPServer(w http.ResponseWriter, r *http.Request) {
 		s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
-	if err := s.mcpHost.SetServerEnabled(r.Context(), chi.URLParam(r, "serverID"), req.Enabled); err != nil {
-		s.respondError(w, http.StatusBadRequest, "MCP_TOGGLE_FAILED", err.Error())
+	approval, err := s.requestAdminAction(r.Context(), "mcp_toggle", map[string]any{
+		"server_id": chi.URLParam(r, "serverID"),
+		"enabled":   req.Enabled,
+	})
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "APPROVAL_REQUEST_FAILED", err.Error())
 		return
 	}
-	s.respondJSON(w, http.StatusOK, map[string]any{"status": "updated", "enabled": req.Enabled})
+	s.respondJSON(w, http.StatusAccepted, map[string]any{"status": "approval_required", "approval": approval})
 }
 
 func (s *Server) handleDisconnectMCP(w http.ResponseWriter, r *http.Request) {
@@ -123,15 +127,12 @@ func (s *Server) handleDisconnectMCP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	serverID := chi.URLParam(r, "serverID")
-	if err := s.mcpHost.DisconnectServer(serverID); err != nil {
-		s.respondError(w, http.StatusBadRequest, "MCP_DISCONNECT_FAILED", err.Error())
+	approval, err := s.requestAdminAction(r.Context(), "mcp_disconnect", map[string]string{"server_id": serverID})
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "APPROVAL_REQUEST_FAILED", err.Error())
 		return
 	}
-
-	s.respondJSON(w, http.StatusOK, map[string]any{
-		"status":    "disconnected",
-		"server_id": serverID,
-	})
+	s.respondJSON(w, http.StatusAccepted, map[string]any{"status": "approval_required", "approval": approval})
 }
 
 func (s *Server) handleExecuteTool(w http.ResponseWriter, r *http.Request) {

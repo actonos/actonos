@@ -2,8 +2,46 @@ package system
 
 import (
 	"context"
+	"os"
 	"testing"
 )
+
+func TestCanvasURLFromEnvironment(t *testing.T) {
+	original, existed := os.LookupEnv("ACTONOS_CANVAS_URL")
+	t.Cleanup(func() {
+		if existed {
+			_ = os.Setenv("ACTONOS_CANVAS_URL", original)
+		} else {
+			_ = os.Unsetenv("ACTONOS_CANVAS_URL")
+		}
+	})
+
+	tests := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "relative", raw: "/canvas/session", want: "/canvas/session"},
+		{name: "https", raw: "https://canvas.example.com/live", want: "https://canvas.example.com/live"},
+		{name: "localhost http", raw: "http://localhost:6080/vnc.html", want: "http://localhost:6080/vnc.html"},
+		{name: "ipv4 loopback http", raw: "http://127.0.0.1:6080/vnc.html", want: "http://127.0.0.1:6080/vnc.html"},
+		{name: "ipv6 loopback http", raw: "http://[::1]:6080/vnc.html", want: "http://[::1]:6080/vnc.html"},
+		{name: "remote http rejected", raw: "http://canvas.example.com/live", want: ""},
+		{name: "javascript rejected", raw: "javascript:alert(1)", want: ""},
+		{name: "protocol relative rejected", raw: "//canvas.example.com/live", want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := os.Setenv("ACTONOS_CANVAS_URL", tt.raw); err != nil {
+				t.Fatalf("setting environment: %v", err)
+			}
+			if got := canvasURLFromEnvironment(); got != tt.want {
+				t.Fatalf("canvasURLFromEnvironment() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
 
 func TestDockerHAL_GetMetrics(t *testing.T) {
 	hal := NewDockerHAL(t.TempDir())

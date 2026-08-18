@@ -232,7 +232,7 @@ export function Sidebar({
                 </span>
                 <span className="font-mono font-medium text-deep-ink">{t('status.connected', 'System Online')}</span>
               </div>
-              <span className="text-slate font-mono text-[10px]">Docker HAL</span>
+              <span className="text-slate font-mono text-[10px]">{t('status.runtime')}</span>
             </div>
           ) : (
             <div className="flex justify-center py-1" title={t('status.connected', 'System Online')}>
@@ -253,7 +253,7 @@ export function Sidebar({
             <button
               onClick={onToggleCollapse}
               className="hidden lg:flex items-center justify-center w-9 h-9 p-0 rounded-full hover:bg-canvas text-slate hover:text-deep-ink transition-colors border border-onyx/10 cursor-pointer shrink-0"
-              title={collapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+              title={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
             >
               {collapsed && !showLangOverlay ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
             </button>
@@ -268,12 +268,12 @@ export function Sidebar({
               <div className="flex items-center justify-between pb-3 mb-3 border-b border-onyx/10 shrink-0">
                 <div className="flex items-center gap-2">
                   <Globe className="w-4 h-4 text-deep-ink" />
-                  <h3 className="font-serif font-bold text-body text-deep-ink">Language</h3>
+                  <h3 className="font-serif font-bold text-body text-deep-ink">{t('language.title')}</h3>
                 </div>
                 <button
                   onClick={() => setShowLangOverlay(false)}
                   className="p-1.5 rounded-full hover:bg-black/5 text-deep-ink transition-colors cursor-pointer"
-                  title="Close language selector"
+                  title={t('language.close')}
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -284,7 +284,7 @@ export function Sidebar({
                 <Search className="w-3.5 h-3.5 text-slate absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Search language..."
+                  placeholder={t('language.search')}
                   value={langSearch}
                   onChange={(e) => setLangSearch(e.target.value)}
                   className="w-full bg-canvas text-deep-ink pl-8 pr-3 py-1.5 rounded-full border border-onyx/10 text-caption font-sans focus:outline-none focus:ring-1 focus:ring-deep-ink"
@@ -332,7 +332,7 @@ export function Sidebar({
                                 : 'bg-emerald-100 text-emerald-800'
                               }`}
                           >
-                            Full
+                            {t('language.full')}
                           </span>
                         )}
                         {isSelected && <Check className="w-3.5 h-3.5 text-hi-yellow" />}
@@ -350,7 +350,7 @@ export function Sidebar({
                 onClick={() => setShowLangOverlay(false)}
                 className="text-caption font-sans font-medium text-deep-ink hover:underline cursor-pointer"
               >
-                Close
+                {t('language.close')}
               </button>
             </div>
           </div>

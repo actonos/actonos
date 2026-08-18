@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -68,6 +69,7 @@ export function ConnectorModal({
   onConnectWithToken,
   connecting,
 }: ConnectorModalProps) {
+  const { t } = useTranslation('connectors');
   const [authMode, setAuthMode] = useState<'oauth' | 'token'>('oauth');
   const [directToken, setDirectToken] = useState('');
   const [customClientID, setCustomClientID] = useState('');
@@ -110,7 +112,7 @@ export function ConnectorModal({
       onClose={() => {
         if (!connecting) onClose();
       }}
-      title={`Connect to ${connector.name}`}
+      title={t('ui.connectTo', { connector: connector.name })}
     >
       <div className="space-y-5">
         {/* Auth Mode Switcher */}
@@ -124,7 +126,7 @@ export function ConnectorModal({
                 : 'text-deep-ink hover:text-slate'
             }`}
           >
-            🔐 OAuth 2.1 (Browser Login)
+            {t('ui.oauthBrowser')}
           </button>
           <button
             type="button"
@@ -135,7 +137,7 @@ export function ConnectorModal({
                 : 'text-deep-ink hover:text-slate'
             }`}
           >
-            🔑 Direct Token / PAT
+            {t('ui.directToken')}
           </button>
         </div>
 
@@ -145,10 +147,10 @@ export function ConnectorModal({
             <div className="p-4 rounded-2xl bg-soft-meadow border border-onyx/10 text-body-sm text-deep-ink">
               <div className="flex items-center gap-2 mb-1.5 font-semibold">
                 <Shield className="w-4 h-4 text-emerald-600" />
-                <span>Seamless Browser Authorization</span>
+                <span>{t('ui.browserAuthorization')}</span>
               </div>
               <p className="text-caption text-slate leading-relaxed">
-                Clicking continue will redirect you to {connector.name}'s secure login screen. Upon approval, ActonOS will exchange and store access tokens in the hardware-bound encrypted vault.
+                {t('ui.browserAuthorizationHelp', { connector: connector.name })}
               </p>
             </div>
 
@@ -170,21 +172,21 @@ export function ConnectorModal({
                 <div className="mt-3 p-4 rounded-2xl bg-canvas border border-onyx/10 space-y-3">
                   <div>
                     <label className="text-caption font-semibold text-deep-ink block mb-1">
-                      OAuth Client ID
+                      {t('ui.clientId')}
                     </label>
                     <Input
-                      placeholder="Custom Client ID from your OAuth App..."
+                      placeholder={t('ui.clientIdPlaceholder')}
                       value={customClientID}
                       onChange={(e) => setCustomClientID(e.target.value)}
                     />
                   </div>
                   <div>
                     <label className="text-caption font-semibold text-deep-ink block mb-1">
-                      OAuth Client Secret
+                      {t('ui.clientSecret')}
                     </label>
                     <Input
                       type="password"
-                      placeholder="Custom Client Secret..."
+                      placeholder={t('ui.clientSecretPlaceholder')}
                       value={customClientSecret}
                       onChange={(e) => setCustomClientSecret(e.target.value)}
                     />
@@ -233,7 +235,7 @@ export function ConnectorModal({
                     rel="noreferrer"
                     className="text-deep-ink font-semibold underline hover:text-slate inline-flex items-center gap-1 mt-1 font-medium"
                   >
-                    <span>Generate token on {connector.name}</span>
+                    <span>{t('ui.generateTokenOn', { connector: connector.name })}</span>
                     <ExternalLink className="w-3 h-3" />
                   </a>
                 </div>

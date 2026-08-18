@@ -184,12 +184,24 @@ web/src/
 
 ### Verification Checklist
 ```bash
-# 1. Type Check
-cd web && npx tsc --noEmit
+# Complete frontend quality gate
+cd web
+npm run quality
+npx tsc --noEmit
 
-# 2. Build Check
-cd web && npm run build
+# Browser smoke tests require a running backend and installed browser
+npm run test:e2e
 ```
+
+The quality gate must include `audit:i18n -- --fail`; a report-only hardcoded
+text scan is not sufficient. Playwright includes `@axe-core/playwright` and
+must fail on serious or critical accessibility violations.
+
+Keep the REST facade small by placing shared fetch/session behavior in
+`lib/api/client.ts` and domain clients in `lib/api/`. Reusable feature panels
+belong in their feature module rather than being duplicated by pages. Chat
+message contracts and formatting helpers live outside the route component so
+the page remains focused on orchestration.
 
 ### Governance UI
 
@@ -200,8 +212,35 @@ in both English and Vietnamese.
 
 ### Live Operations UI
 
-- Consume `/api/realtime` with a same-origin authenticated WebSocket and reconnect with bounded backoff.
+- Mount exactly one `RealtimeProvider` at the authenticated application root.
+  Header, Operations, approvals, and cost widgets consume its shared snapshot;
+  feature components must not open duplicate realtime sockets.
+- Consume `/api/realtime` with the HttpOnly session cookie and reconnect with
+  exponential bounded backoff plus jitter. Invalid frames must close the socket.
 - Keep xterm.js read-only. Shell execution must continue through the authorized Tool Registry and sandbox.
 - Render run events as collapsible Thought/Action/Observation cards and fetch ordered detail from `/api/runs/{id}/events`.
-- Live Canvas embeds only `SystemMetrics.canvas_url`; show a waiting state when unavailable.
+- Live Canvas embeds only a sanitized `SystemMetrics.canvas_url`, uses a sandboxed
+  iframe without clipboard permissions, and shows a waiting state when unavailable.
 - Never invent telemetry fallback values when sensors or Docker access are unavailable.
+
+### Browser Authentication and Mutations
+
+- Browser authentication is cookie-only. Never persist bearer tokens in
+  `localStorage`, session storage, URLs, or WebSocket query strings.
+- Every mutation that can return `202 Accepted` must use `MutationResult<T>` and
+  check `isApprovalRequired()` before showing success or changing optimistic state.
+- `fetchJSON` emits `actonos:approval-required`; the global
+  `ApprovalInterruption` renders the exact action and arguments immediately.
+
+### Routing and Bundle Discipline
+
+- Primary pages use hash routes (`#/dashboard`, `#/operations`, and so on) so
+  embedded deployments support reload, deep links, and browser history.
+- All primary pages remain lazy-loaded. Heavy editor/xterm dependencies must not
+  return to the entry chunk.
+- `npm run check:bundle` enforces the current entry-JavaScript budget.
+- Supported language choices must match complete locale resources. Do not expose
+  placeholder languages or add user-visible hardcoded strings.
+- Production TypeScript has zero explicit `any`, and unused variables are lint
+  errors. Technical identifiers may remain untranslated only when the strict
+  audit explicitly recognizes them as immutable protocol values.

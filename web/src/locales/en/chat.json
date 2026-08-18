@@ -28,5 +28,20 @@
   "activeAgentInfo": "Active Agent Profile",
   "today": "Today",
   "yesterday": "Yesterday",
-  "earlier": "Earlier"
+  "earlier": "Earlier",
+  "rootBadge": "? Root",
+  "root": "Root",
+  "toolsBound": "{{count}} tools bound",
+  "manageAgents": "Manage Agents",
+  "agents": "Agents",
+  "clearConversation": "Clear Conversation",
+  "newShort": "+ New",
+  "startConversation": "Start a real-time conversation with {{name}}",
+  "startDescription": "Real-time SSE token streaming, live tool execution traces, and immutable security audit logs.",
+  "traces": "Traces",
+  "arguments": "Args:",
+  "noToolCalls": "No explicit tool calls executed in this iteration.",
+  "milliseconds": "{{value}} ms",
+  "copyResponse": "Copy response",
+  "connecting": "Connecting to model cascade..."
 }

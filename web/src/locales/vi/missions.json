@@ -11,7 +11,15 @@
     "status": "Trạng thái",
     "progress": "Tiến độ",
     "channel": "Kênh thông báo",
-    "account": "Tài khoản đích"
+    "account": "Tài khoản đích",
+    "taskPlaceholder": "v? d?: X?c minh sao l?u c? s? d? li?u v? gi?i h?n l?u tr?",
+    "directivePlaceholder": "Ch? d?n chi ti?t cho Agent t? ch?. ?i?u ph?i vi?n s? th?c hi?n t?ng b??c v? duy tr? b? nh? qua c?c chu k? pulse.",
+    "autoCoordinator": "? ?i?u ph?i t? ??ng (Agent ch?nh)",
+    "allAccounts": "M?i t?i kho?n c?a {{channel}}",
+    "cancel": "H?y",
+    "saving": "?ang l?u...",
+    "update": "C?p nh?t nhi?m v?",
+    "create": "T?o nhi?m v?"
   },
   "toast": {
     "taskCreated": "Đã tạo nhiệm vụ",
@@ -39,5 +47,110 @@
     "runsTitle": "Luồng chạy Agent bền vững",
     "runsDescription": "Dấu vết thực thi và nguyên nhân kết thúc gần đây.",
     "runMetrics": "{{iterations}} vòng · {{tokens}} token · {{reason}}"
+  },
+  "priorities": {
+    "p0": "?? P0 - Kh?n c?p (Pulse ngay)",
+    "p1": "?? P1 - ?u ti?n cao",
+    "p2": "?? P2 - B?nh th??ng",
+    "p3": "? P3 - Th?p / N?n",
+    "p0Short": "P0 Kh?n c?p",
+    "p1Short": "P1 Cao",
+    "p2Short": "P2 B?nh th??ng",
+    "p3Short": "P3 Th?p"
+  },
+  "statuses": {
+    "pending": "? ?ang ch?",
+    "inProgress": "? ?ang th?c hi?n",
+    "completed": "? Ho?n th?nh",
+    "blocked": "?? B? ch?n",
+    "cancelled": "? ?? h?y"
+  },
+  "channels": {
+    "allBroadcast": "?? M?i k?nh ho?t ??ng (Ph?t r?ng)",
+    "telegram": "Telegram",
+    "whatsapp": "WhatsApp",
+    "discord": "Discord",
+    "noneSilent": "?? Kh?ng g?i (Im l?ng trong Workspace)",
+    "all": "?? M?i k?nh ho?t ??ng",
+    "none": "?? Kh?ng g?i (Kh?ng g?y nhi?u b?n ngo?i)"
+  },
+  "page": {
+    "eyebrow": "V?n h?nh t? ch?",
+    "activeBacklog": "{{count}} vi?c ?ang ho?t ??ng"
+  },
+  "actions": {
+    "refresh": "L?m m?i",
+    "pulsing": "?ang ch?y pulse...",
+    "triggerPulse": "Ch?y Pulse ngay",
+    "newMission": "Nhi?m v? m?i",
+    "chat": "Chat",
+    "complete": "Ho?n th?nh",
+    "edit": "S?a",
+    "delete": "X?a",
+    "createMission": "T?o nhi?m v?"
+  },
+  "metrics": {
+    "activeMissions": "Nhi?m v? ?ang ho?t ??ng",
+    "total": "/ t?ng {{count}}",
+    "completed": "{{count}} ?? ho?n th?nh",
+    "heartbeat": "Heartbeat Pulse",
+    "interval": "Chu k? {{minutes}} ph?t",
+    "last": "G?n nh?t: {{status}}",
+    "nominal": "B?nh th??ng",
+    "coordinator": "L?i ?i?u ph?i",
+    "autoDelegate": "? T? ??ng ?y quy?n Swarm ?ang ho?t ??ng",
+    "singleAgent": "Th?c thi Agent ??n"
+  },
+  "tabs": {
+    "tasks": "?? T?c v? & Backlog ({{count}})",
+    "directives": "?? Ch? d?n th??ng tr?c (HEARTBEAT.md)",
+    "audit": "??? S? ki?m to?n Pulse ({{count}})"
+  },
+  "filters": {
+    "allStatuses": "M?i tr?ng th?i",
+    "allPriorities": "M?i m?c ?u ti?n"
+  },
+  "task": {
+    "agent": "Agent:",
+    "channel": "K?nh:"
+  },
+  "empty": {
+    "title": "Kh?ng c? nhi?m v?",
+    "description": "Backlog t? ch? ?ang tr?ng. H?y t?o nhi?m v? ho?c ?? daemon Heartbeat l?n l?ch b?o tr? ??nh k?."
+  },
+  "directives": {
+    "title": "Ch? d?n t? ch? th??ng tr?c",
+    "description": "Ch? d?n ???c n?p trong m?i cognitive pulse (`data/workspace/HEARTBEAT.md`).",
+    "saving": "?ang l?u...",
+    "save": "L?u ch? d?n",
+    "instructions": "Ch? d?n th??ng tr?c (Markdown)",
+    "placeholder": "# Ch? d?n th??ng tr?c\n- Li?n t?c x?c minh l?u tr? c?c b? v? t?nh to?n v?n c? s? d? li?u\n- N?u m?i th? b?nh th??ng, tr? l?i HEARTBEAT_OK",
+    "interval": "Chu k? Pulse",
+    "intervals": {
+      "one": "M?i 1 ph?t (T?n su?t cao)",
+      "five": "M?i 5 ph?t (Khuy?n ngh?)",
+      "fifteen": "M?i 15 ph?t",
+      "thirty": "M?i 30 ph?t",
+      "hour": "M?i 1 gi?"
+    },
+    "channel": "K?nh nh?n th?ng b?o"
+  },
+  "audit": {
+    "title": "S? th?c thi Cognitive Pulse",
+    "description": "L?ch s? c?c cognitive pulse t? ch? 5 ph?t v? ??nh gi? zero-noise.",
+    "columns": {
+      "time": "Th?i gian",
+      "agent": "Agent",
+      "status": "Tr?ng th?i",
+      "tokens": "Token",
+      "summary": "T?m t?t & d?u v?t h?nh ??ng"
+    },
+    "zeroNoise": "Kh?ng c? nhi?u",
+    "empty": "Ch?a ghi nh?n l?n ch?y pulse. Nh?n \"Ch?y Pulse ngay\" ?? th?c thi m?t chu k?."
+  },
+  "delete": {
+    "title": "X?a nhi?m v?",
+    "description": "B?n c? ch?c mu?n x?a nhi?m v? n?y kh?i backlog t? ch??",
+    "confirm": "X?a nhi?m v?"
   }
 }

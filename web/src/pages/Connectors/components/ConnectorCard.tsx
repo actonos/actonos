@@ -201,13 +201,13 @@ export function ConnectorCard({
       <div className="pt-4 border-t border-onyx/10 flex items-center justify-between gap-2 mt-2">
         <span className="text-[11px] font-mono text-slate flex items-center gap-1">
           <Shield className="w-3 h-3 text-emerald-600" />
-          <span>Encrypted Enclave</span>
+          <span>{t('ui.encryptedEnclave')}</span>
         </span>
 
         <div className="flex items-center gap-1.5">
           {isComingSoon ? (
             <Button variant="ghost" size="sm" disabled className="text-[11px]">
-              Coming Soon
+              {t('status.comingSoon')}
             </Button>
           ) : connector.connected ? (
             <>

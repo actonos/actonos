@@ -1,10 +1,21 @@
 {
+  "approval": {
+    "queuedTitle": "Cần phê duyệt",
+    "queuedDescription": "Thao tác đang chờ người vận hành phê duyệt và chưa được thực thi."
+  },
   "appName": "ActonOS",
+  "startup": "Đang khởi động ActonOS Kernel...",
   "tagline": "Kernel Hệ Điều Hành AI Agent Đa Năng",
   "language": {
     "toggle": "Đổi Ngôn Ngữ",
     "en": "English",
-    "vi": "Tiếng Việt"
+    "vi": "Tiếng Việt",
+    "selectTitle": "Ch?n ng?n ng? h? th?ng",
+    "searchPlaceholder": "T?m ng?n ng? ho?c khu v?c...",
+    "fullUI": "Giao di?n ??y ??",
+    "noMatches": "Kh?ng c? ng?n ng? ph? h?p v?i \"{{search}}\"",
+    "active": "?ang d?ng: {{language}}",
+    "engine": "B? m?y i18n ActonOS"
   },
   "buttons": {
     "save": "Lưu Thay Đổi",
@@ -26,5 +37,11 @@
     "error": "Lỗi",
     "connected": "Đã Kết Nối",
     "disconnected": "Chưa Kết Nối"
+  },
+  "errorBoundary": {
+    "title": "?? x?y ra l?i",
+    "description": "Giao di?n ?ng d?ng g?p l?i kh?ng mong mu?n. Kernel h? th?ng v?n an to?n.",
+    "home": "V? trang ch?nh",
+    "reload": "T?i l?i giao di?n"
   }
 }

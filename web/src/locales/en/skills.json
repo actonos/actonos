@@ -14,7 +14,8 @@
     "install": "Install",
     "installing": "Installing...",
     "uninstall": "Uninstall",
-    "uninstalling": "Uninstalling..."
+    "uninstalling": "Uninstalling...",
+    "byAuthor": "By {{author}}"
   },
   "actions": {
     "newSkill": "Create Skill",
@@ -35,5 +36,7 @@
   "empty": {
     "title": "No skills found",
     "subtitle": "Create a custom skill or install one from the community hub."
-  }
+  },
+  "loading": "Loading...",
+  "byAuthor": "By {{author}}"
 }

@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { getErrorMessage } from '@/lib/errors';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Play, Copy, Check, Terminal } from 'lucide-react';
@@ -12,6 +14,7 @@ export interface ToolTestModalProps {
 }
 
 export function ToolTestModal({ tool, isOpen, onClose }: ToolTestModalProps) {
+  const { t } = useTranslation('tools');
   const [inputJSON, setInputJSON] = useState('{}');
   const [output, setOutput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -19,8 +22,11 @@ export function ToolTestModal({ tool, isOpen, onClose }: ToolTestModalProps) {
 
   useEffect(() => {
     if (tool?.schema?.properties) {
-      const sample: Record<string, any> = {};
-      for (const [key, val] of Object.entries(tool.schema.properties as Record<string, any>)) {
+      const sample: Record<string, unknown> = {};
+      for (const [key, rawValue] of Object.entries(tool.schema.properties as Record<string, unknown>)) {
+        const val = typeof rawValue === 'object' && rawValue !== null
+          ? rawValue as Record<string, unknown>
+          : {};
         if (val.type === 'string') {
           sample[key] = key === 'url' ? 'https://httpbin.org/get' : 'sample_value';
         } else if (val.type === 'number' || val.type === 'integer') {
@@ -48,14 +54,14 @@ export function ToolTestModal({ tool, isOpen, onClose }: ToolTestModalProps) {
       try {
         parsed = JSON.parse(inputJSON);
       } catch {
-        setOutput('Invalid JSON input syntax');
+        setOutput(t('test.invalidJson'));
         return;
       }
 
       const res = await api.executeTool(tool.name, parsed);
       setOutput(JSON.stringify(res, null, 2));
-    } catch (err: any) {
-      setOutput(`Execution Failed:\n${err.message}`);
+    } catch (err) {
+      setOutput(t('test.executionFailed', { error: getErrorMessage(err) }));
     } finally {
       setLoading(false);
     }
@@ -71,7 +77,7 @@ export function ToolTestModal({ tool, isOpen, onClose }: ToolTestModalProps) {
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`Live Playground: ${tool.name}`}
+      title={t('test.title', { tool: tool.name })}
     >
       <div className="flex flex-col gap-4">
         <div>
@@ -79,7 +85,7 @@ export function ToolTestModal({ tool, isOpen, onClose }: ToolTestModalProps) {
             {tool.description}
           </span>
           <label className="text-caption uppercase tracking-wider text-slate font-semibold block mb-1">
-            Input Arguments (JSON Schema)
+            {t('test.input')}
           </label>
           <textarea
             rows={5}
@@ -96,21 +102,21 @@ export function ToolTestModal({ tool, isOpen, onClose }: ToolTestModalProps) {
           icon={<Play className="w-4 h-4" />}
           className="w-full justify-center"
         >
-          {loading ? 'Executing in Sandbox...' : 'Run Tool Function'}
+          {loading ? t('test.executing') : t('test.run')}
         </Button>
 
         {output && (
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="text-caption uppercase tracking-wider text-slate font-semibold flex items-center gap-1.5">
-                <Terminal className="w-3.5 h-3.5" /> Output Payload
+                <Terminal className="w-3.5 h-3.5" /> {t('test.output')}
               </label>
               <button
                 onClick={handleCopy}
                 className="text-caption text-slate hover:text-deep-ink flex items-center gap-1"
               >
                 {copied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                <span>{copied ? 'Copied' : 'Copy'}</span>
+                <span>{copied ? t('test.copied') : t('test.copy')}</span>
               </button>
             </div>
             <pre className="w-full bg-deep-ink text-white font-mono text-caption p-4 rounded-[16px] max-h-56 overflow-auto border border-onyx/10">

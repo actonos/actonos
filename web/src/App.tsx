@@ -3,28 +3,39 @@ import { ToastProvider } from '@/components/ui/Toast';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { Sidebar, type NavTab } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
-import { DashboardPage } from '@/pages/Dashboard/DashboardPage';
-import { AgentsPage } from '@/pages/Agents/AgentsPage';
-import { AgentStudioPage } from '@/pages/Agents/AgentStudioPage';
-import { AutomationsPage } from '@/pages/Automations/AutomationsPage';
-import { ToolHubPage } from '@/pages/ToolHub/ToolHubPage';
-import { SkillsPage } from '@/pages/Skills/SkillsPage';
-import { ChannelsPage } from '@/pages/Channels/ChannelsPage';
-import { ConnectorsPage } from '@/pages/Connectors/ConnectorsPage';
-import { WorkspacePage } from '@/pages/Workspace/WorkspacePage';
-import { ChatPage } from '@/pages/Chat/ChatPage';
-import { MissionsPage } from '@/pages/Missions/MissionsPage';
-import { SettingsPage } from '@/pages/Settings/SettingsPage';
 import { SetupWizardPage } from '@/pages/Auth/SetupWizardPage';
 import { LoginPage } from '@/pages/Auth/LoginPage';
 import { api } from '@/lib/api';
 import { ApprovalInterruption } from '@/components/features/governance/ApprovalInterruption';
+import { RealtimeProvider } from '@/components/providers/RealtimeProvider';
+import { useTranslation } from 'react-i18next';
 
-const OperationsPage = lazy(() =>
-  import('@/pages/Operations/OperationsPage').then((module) => ({ default: module.OperationsPage }))
-);
+const DashboardPage = lazy(() => import('@/pages/Dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })));
+const AgentsPage = lazy(() => import('@/pages/Agents/AgentsPage').then((m) => ({ default: m.AgentsPage })));
+const AgentStudioPage = lazy(() => import('@/pages/Agents/AgentStudioPage').then((m) => ({ default: m.AgentStudioPage })));
+const ChatPage = lazy(() => import('@/pages/Chat/ChatPage').then((m) => ({ default: m.ChatPage })));
+const MissionsPage = lazy(() => import('@/pages/Missions/MissionsPage').then((m) => ({ default: m.MissionsPage })));
+const OperationsPage = lazy(() => import('@/pages/Operations/OperationsPage').then((m) => ({ default: m.OperationsPage })));
+const AutomationsPage = lazy(() => import('@/pages/Automations/AutomationsPage').then((m) => ({ default: m.AutomationsPage })));
+const ChannelsPage = lazy(() => import('@/pages/Channels/ChannelsPage').then((m) => ({ default: m.ChannelsPage })));
+const ConnectorsPage = lazy(() => import('@/pages/Connectors/ConnectorsPage').then((m) => ({ default: m.ConnectorsPage })));
+const ToolHubPage = lazy(() => import('@/pages/ToolHub/ToolHubPage').then((m) => ({ default: m.ToolHubPage })));
+const SkillsPage = lazy(() => import('@/pages/Skills/SkillsPage').then((m) => ({ default: m.SkillsPage })));
+const WorkspacePage = lazy(() => import('@/pages/Workspace/WorkspacePage').then((m) => ({ default: m.WorkspacePage })));
+const SettingsPage = lazy(() => import('@/pages/Settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+
+export const navTabs: NavTab[] = [
+  'dashboard', 'agents', 'agent-studio', 'chat', 'missions', 'operations',
+  'automations', 'tools', 'skills', 'workspace', 'channels', 'connectors', 'settings',
+];
+
+export function tabFromLocation(): NavTab {
+  const value = window.location.hash.replace(/^#\/?/, '') as NavTab;
+  return navTabs.includes(value) ? value : 'dashboard';
+}
 
 export function App() {
+  const { t } = useTranslation('common');
   const [authStatus, setAuthStatus] = useState<{
     loading: boolean;
     initialized: boolean;
@@ -36,7 +47,7 @@ export function App() {
     authenticated: false,
   });
 
-  const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
+  const [activeTab, setActiveTab] = useState<NavTab>(tabFromLocation);
   const [selectedAgentID, setSelectedAgentID] = useState<string>('agent_system_core');
   const [studioAgentID, setStudioAgentID] = useState<string>('agent_system_core');
   const [collapsed, setCollapsed] = useState<boolean>(() => {
@@ -66,11 +77,21 @@ export function App() {
     checkAuth();
   }, []);
 
+  useEffect(() => {
+    const syncLocation = () => setActiveTab(tabFromLocation());
+    window.addEventListener('hashchange', syncLocation);
+    return () => window.removeEventListener('hashchange', syncLocation);
+  }, []);
+
+  const navigateTab = (tab: NavTab) => {
+    if (window.location.hash !== `#/${tab}`) window.location.hash = `/${tab}`;
+    setActiveTab(tab);
+  };
+
   const handleLogout = async () => {
     try {
       await api.logout();
     } catch {}
-    localStorage.removeItem('actonos_token');
     setAuthStatus((prev) => ({ ...prev, authenticated: false }));
   };
 
@@ -86,12 +107,12 @@ export function App() {
     if (agentID) {
       setSelectedAgentID(agentID);
     }
-    setActiveTab('chat');
+    navigateTab('chat');
   };
 
   const handleEditAgent = (agentID: string) => {
     setStudioAgentID(agentID);
-    setActiveTab('agent-studio');
+    navigateTab('agent-studio');
   };
 
   if (authStatus.loading) {
@@ -99,7 +120,7 @@ export function App() {
       <div className="min-h-screen bg-canvas flex items-center justify-center font-sans text-slate">
         <div className="flex items-center gap-3 text-body-sm font-medium">
           <div className="w-4 h-4 border-2 border-deep-ink border-t-transparent rounded-full animate-spin" />
-          <span>Starting ActonOS Kernel...</span>
+          <span>{t('startup')}</span>
         </div>
       </div>
     );
@@ -123,12 +144,13 @@ export function App() {
 
   return (
     <ToastProvider>
+      <RealtimeProvider>
       <div className="min-h-screen bg-canvas text-deep-ink selection:bg-hi-yellow selection:text-deep-ink font-sans flex">
         <ApprovalInterruption />
         {/* Sleek Collapsible Left Sidebar */}
         <Sidebar
           activeTab={activeTab}
-          onSelectTab={setActiveTab}
+          onSelectTab={navigateTab}
           collapsed={collapsed}
           onToggleCollapse={handleToggleCollapse}
           mobileOpen={mobileOpen}
@@ -152,9 +174,10 @@ export function App() {
           {/* Page Views */}
           <main className="flex-1 w-full pb-12">
             <ErrorBoundary>
+              <Suspense fallback={<div className="m-8 h-8 w-8 animate-spin rounded-full border-2 border-deep-ink border-t-transparent" />}>
               {activeTab === 'dashboard' && (
                 <DashboardPage
-                  onNavigateTab={setActiveTab}
+                  onNavigateTab={navigateTab}
                   onOpenChat={handleOpenChatWithAgent}
                   onEditAgent={handleEditAgent}
                 />
@@ -162,14 +185,14 @@ export function App() {
               {activeTab === 'agents' && (
                 <AgentsPage
                   onOpenChat={handleOpenChatWithAgent}
-                  onNavigateTab={setActiveTab}
+                  onNavigateTab={navigateTab}
                   onEditAgent={handleEditAgent}
                 />
               )}
               {activeTab === 'agent-studio' && (
                 <AgentStudioPage
                   agentID={studioAgentID}
-                  onBack={() => setActiveTab('agents')}
+                  onBack={() => navigateTab('agents')}
                   onOpenChat={handleOpenChatWithAgent}
                 />
               )}
@@ -177,7 +200,7 @@ export function App() {
                 <ChatPage
                   selectedAgentID={selectedAgentID}
                   onSelectAgentID={setSelectedAgentID}
-                  onNavigateTab={setActiveTab}
+                  onNavigateTab={navigateTab}
                 />
               )}
               {activeTab === 'missions' && (
@@ -185,11 +208,7 @@ export function App() {
                   onOpenChat={handleOpenChatWithAgent}
                 />
               )}
-              {activeTab === 'operations' && (
-                <Suspense fallback={<div className="m-8 h-8 w-8 animate-spin rounded-full border-2 border-deep-ink border-t-transparent" />}>
-                  <OperationsPage />
-                </Suspense>
-              )}
+              {activeTab === 'operations' && <OperationsPage />}
               {activeTab === 'automations' && <AutomationsPage />}
               {activeTab === 'channels' && <ChannelsPage />}
               {activeTab === 'connectors' && <ConnectorsPage />}
@@ -197,10 +216,12 @@ export function App() {
               {activeTab === 'skills' && <SkillsPage />}
               {activeTab === 'workspace' && <WorkspacePage />}
               {activeTab === 'settings' && <SettingsPage />}
+              </Suspense>
             </ErrorBoundary>
           </main>
         </div>
       </div>
+      </RealtimeProvider>
     </ToastProvider>
   );
 }

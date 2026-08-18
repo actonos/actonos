@@ -119,7 +119,7 @@ export function PairingSection({
                       ? 'bg-deep-ink text-hi-yellow shadow-xs'
                       : 'text-slate hover:text-deep-ink'
                   }`}
-                  title="Telegram"
+                  title={t('telegram.name')}
                 >
                   <Send className="w-3.5 h-3.5" />
                 </button>
@@ -131,7 +131,7 @@ export function PairingSection({
                       ? 'bg-deep-ink text-hi-yellow shadow-xs'
                       : 'text-slate hover:text-deep-ink'
                   }`}
-                  title="WhatsApp"
+                  title={t('whatsapp.name')}
                 >
                   <Phone className="w-3.5 h-3.5" />
                 </button>
@@ -142,13 +142,13 @@ export function PairingSection({
               <div className="my-2 p-5 rounded-2xl bg-emerald-500/5 border-2 border-emerald-500/30 text-center">
                 <div className="flex items-center justify-center gap-1.5 text-[11px] font-mono text-emerald-700 font-semibold mb-2">
                   <Clock className="w-3.5 h-3.5 animate-pulse" />
-                  <span>Expires in {formatCountdown(countdown)}</span>
+                  <span>{t('ui.expiresIn', { time: formatCountdown(countdown) })}</span>
                 </div>
                 <div className="font-mono text-3xl font-bold tracking-widest text-deep-ink bg-canvas py-3 px-6 rounded-xl border border-onyx/10 shadow-xs inline-block">
                   {pairingCode}
                 </div>
                 <p className="font-sans text-[11px] text-slate mt-3 leading-relaxed">
-                  Send <code className="font-mono font-semibold text-deep-ink">/pair {pairingCode}</code> to your {selectedChannel} bot.
+                  {t('ui.sendPairPrefix')} <code className="font-mono font-semibold text-deep-ink">{t('ui.pairCommand')} {pairingCode}</code> {t('ui.sendPairSuffix', { channel: selectedChannel })}
                 </p>
               </div>
             ) : (
@@ -158,7 +158,7 @@ export function PairingSection({
                   {pairingCode ? 'PIN Expired' : 'No Active Pairing PIN'}
                 </p>
                 <p className="text-caption text-slate mt-1 max-w-[200px] mx-auto">
-                  Click generate below to create a single-use 10-minute PIN.
+                  {t('ui.generatePinHelp')}
                 </p>
               </div>
             )}
@@ -220,7 +220,7 @@ export function PairingSection({
                   <Search className="w-3.5 h-3.5 text-slate absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
-                    placeholder="Search paired users..."
+                    placeholder={t('ui.searchPairedUsers')}
                     value={filterQuery}
                     onChange={(e) => setFilterQuery(e.target.value)}
                     className="w-full pl-8 pr-3 py-1.5 text-caption bg-soft-meadow rounded-full border border-onyx/10 focus:outline-none focus:border-onyx/30"
@@ -262,9 +262,9 @@ export function PairingSection({
                           </Badge>
                         </div>
                         <div className="text-[11px] font-mono text-slate truncate flex items-center gap-2 mt-0.5">
-                          <span>ID: {u.sender_id}</span>
+                          <span>{t('ui.id')}: {u.sender_id}</span>
                           <span>•</span>
-                          <span>Paired: {new Date(u.paired_at).toLocaleDateString()}</span>
+                          <span>{t('ui.paired')}: {new Date(u.paired_at).toLocaleDateString()}</span>
                         </div>
                       </div>
                     </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
@@ -90,8 +91,8 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
       if (hb.status === 'fulfilled') {
         setHeartbeatRuns(hb.value);
       }
-    } catch (err: any) {
-      error('Failed to load dashboard summary', err.message);
+    } catch (err) {
+      error('Failed to load dashboard summary', getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -218,7 +219,7 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
               icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />}
               onClick={loadSummary}
             >
-              Refresh
+              {t('actions.refresh')}
             </Button>
             <Button
               variant="primary"
@@ -341,7 +342,7 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
             <div className="text-heading font-serif text-deep-ink flex items-baseline gap-2">
               <span>{cpuPercent.toFixed(1)}%</span>
               <span className="text-caption text-slate font-mono font-normal">
-                {data?.metrics?.cpu?.cores || 1} Cores
+                {t('gauges.cores', { count: data?.metrics?.cpu?.cores || 1 })}
               </span>
             </div>
             <div className="w-full bg-onyx/10 h-2 rounded-full mt-3 overflow-hidden">
@@ -351,7 +352,7 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
               />
             </div>
             <div className="text-[11px] font-mono text-slate mt-2 flex items-center justify-between">
-              <span>Temp: {data?.metrics?.cpu?.temperature_celsius || 42}°C</span>
+              <span>{t('gauges.temperature', { value: data?.metrics?.cpu?.temperature_celsius || 42 })}</span>
               <span className="text-emerald-700 font-semibold">{t('gauges.active', 'Active')}</span>
             </div>
           </Card>
@@ -365,9 +366,9 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
               </div>
             </div>
             <div className="text-heading font-serif text-deep-ink flex items-baseline gap-2">
-              <span>{ramUsed} MB</span>
+              <span>{t('units.megabytes', { value: ramUsed })}</span>
               <span className="text-caption text-slate font-mono font-normal">
-                / {ramTotal} MB
+                {t('gauges.ofMegabytes', { value: ramTotal })}
               </span>
             </div>
             <div className="w-full bg-onyx/10 h-2 rounded-full mt-3 overflow-hidden">
@@ -377,8 +378,8 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
               />
             </div>
             <div className="text-[11px] font-mono text-slate mt-2 flex items-center justify-between">
-              <span>Daemon: {data?.metrics?.memory?.actond_mb || 14} MB</span>
-              <span>{ramPercent}% used</span>
+              <span>{t('gauges.daemonMemory', { value: data?.metrics?.memory?.actond_mb || 14 })}</span>
+              <span>{t('gauges.usedPercent', { value: ramPercent })}</span>
             </div>
           </Card>
 
@@ -391,9 +392,9 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
               </div>
             </div>
             <div className="text-heading font-serif text-deep-ink flex items-baseline gap-2">
-              <span>{diskUsed.toFixed(1)} GB</span>
+              <span>{t('units.gigabytes', { value: diskUsed.toFixed(1) })}</span>
               <span className="text-caption text-slate font-mono font-normal">
-                / {diskTotal.toFixed(0)} GB
+                {t('gauges.ofGigabytes', { value: diskTotal.toFixed(0) })}
               </span>
             </div>
             <div className="w-full bg-onyx/10 h-2 rounded-full mt-3 overflow-hidden">
@@ -403,8 +404,8 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
               />
             </div>
             <div className="text-[11px] font-mono text-slate mt-2 flex items-center justify-between">
-              <span>Data: {data?.metrics?.disk?.data_dir_gb?.toFixed(2) || '0.05'} GB</span>
-              <span>{diskPercent}% allocated</span>
+              <span>{t('gauges.dataSize', { value: data?.metrics?.disk?.data_dir_gb?.toFixed(2) || '0.05' })}</span>
+              <span>{t('gauges.allocatedPercent', { value: diskPercent })}</span>
             </div>
           </Card>
 
@@ -417,14 +418,14 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
               </div>
             </div>
             <div className="text-heading font-serif text-deep-ink">
-              {uptimeMins}m <span className="text-body-sm font-sans font-normal text-slate">online</span>
+              {t('gauges.uptimeMinutes', { value: uptimeMins })}
             </div>
             <div className="flex items-center gap-2 text-caption font-mono text-emerald-700 mt-3">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-              <span>PID {data?.metrics?.cpu?.cores ? 'HAL Running' : 'Kernel Stable'}</span>
+              <span>{t('gauges.processStatus', { status: data?.metrics?.cpu?.cores ? t('gauges.halRunning') : t('gauges.kernelStable') })}</span>
             </div>
             <div className="text-[11px] font-mono text-slate mt-2">
-              Sync: {new Date(data?.timestamp || Date.now()).toLocaleTimeString()}
+              {t('gauges.sync', { time: new Date(data?.timestamp || Date.now()).toLocaleTimeString() })}
             </div>
           </Card>
         </div>
@@ -468,7 +469,11 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
               {data?.tools_count || 6} {t('metrics.tools', 'Tools')}
             </div>
             <p className="text-caption text-slate">
-              {data?.tools_native || 4} Native • {data?.tools_mcp || 0} MCP • {data?.tools_wasm || 0} WASM
+              {t('metrics.toolBreakdown', {
+                native: data?.tools_native || 4,
+                mcp: data?.tools_mcp || 0,
+                wasm: data?.tools_wasm || 0,
+              })}
             </p>
           </div>
 
@@ -534,7 +539,7 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="neutral" className="font-mono">
-                    ${(tokenStats?.total_cost_usd || 0).toFixed(4)} USD
+                    {t('units.usd', { value: (tokenStats?.total_cost_usd || 0).toFixed(4) })}
                   </Badge>
                   <Button
                     variant="ghost"
@@ -543,14 +548,14 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
                     className="text-[12px] font-sans"
                     icon={<ArrowUpRight className="w-3.5 h-3.5" />}
                   >
-                    View Full Ledger
+                    {t('tokens.viewLedger')}
                   </Button>
                 </div>
               </div>
 
               <div className="grid grid-cols-3 gap-3 pt-1">
                 <div className="p-3 bg-soft-meadow rounded-2xl border border-onyx/5">
-                  <span className="text-[11px] font-semibold uppercase text-slate block mb-1">Today Tokens</span>
+                  <span className="text-[11px] font-semibold uppercase text-slate block mb-1">{t('tokens.today')}</span>
                   <span className="text-body font-serif font-bold text-deep-ink">
                     {(tokenStats?.today_tokens || 0).toLocaleString()}
                   </span>
@@ -559,7 +564,7 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
                   </span>
                 </div>
                 <div className="p-3 bg-soft-meadow rounded-2xl border border-onyx/5">
-                  <span className="text-[11px] font-semibold uppercase text-slate block mb-1">Month Tokens</span>
+                  <span className="text-[11px] font-semibold uppercase text-slate block mb-1">{t('tokens.month')}</span>
                   <span className="text-body font-serif font-bold text-deep-ink">
                     {(tokenStats?.month_tokens || 0).toLocaleString()}
                   </span>
@@ -568,7 +573,7 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
                   </span>
                 </div>
                 <div className="p-3 bg-soft-meadow rounded-2xl border border-onyx/5">
-                  <span className="text-[11px] font-semibold uppercase text-slate block mb-1">Lifetime Total</span>
+                  <span className="text-[11px] font-semibold uppercase text-slate block mb-1">{t('tokens.lifetime')}</span>
                   <span className="text-body font-serif font-bold text-deep-ink">
                     {(tokenStats?.total_tokens || 0).toLocaleString()}
                   </span>
@@ -582,7 +587,7 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
             {/* Model Breakdown Bars */}
             <div className="mt-4 pt-3 border-t border-onyx/5 flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap gap-2 items-center">
-                <span className="text-[11px] font-semibold text-slate uppercase mr-1">Models:</span>
+                <span className="text-[11px] font-semibold text-slate uppercase mr-1">{t('tokens.models')}</span>
                 {tokenStats?.by_model && tokenStats.by_model.length > 0 ? (
                   tokenStats.by_model.slice(0, 4).map((m) => (
                     <span key={m.model} className="text-[11px] bg-canvas border border-onyx/10 px-2 py-0.5 rounded-full font-mono text-deep-ink">
@@ -590,7 +595,7 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
                     </span>
                   ))
                 ) : (
-                  <span className="text-[11px] text-slate font-mono">No active usage recorded</span>
+                  <span className="text-[11px] text-slate font-mono">{t('tokens.noUsage')}</span>
                 )}
               </div>
               <button
@@ -598,7 +603,7 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
                 onClick={() => setIsTokenLedgerOpen(true)}
                 className="text-[11px] font-semibold text-deep-ink hover:text-emerald-700 underline cursor-pointer"
               >
-                Inspect Ledger & History →
+                {t('tokens.inspect')}
               </button>
             </div>
           </Card>
@@ -624,7 +629,7 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
 
             <div className="p-3 bg-soft-meadow rounded-2xl border border-onyx/5 text-[11px]">
               <div className="flex justify-between items-center mb-1 text-slate">
-                <span>Last Cycle Status:</span>
+                <span>{t('heartbeat.lastStatus')}</span>
                 <span className="font-semibold text-emerald-700 font-mono">
                   {heartbeatRuns[0]?.status || 'Nominal (Zero Noise)'}
                 </span>
@@ -766,14 +771,14 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
                             }
                             className="text-[10px]"
                           >
-                            {entry.risk_level} Risk
+                            {t('activity.risk', { level: entry.risk_level })}
                           </Badge>
                           <span className="text-caption font-mono text-slate">
-                            {entry.status} ({entry.execution_time_ms}ms)
+                            {t('activity.statusDuration', { status: entry.status, duration: entry.execution_time_ms })}
                           </span>
                         </div>
                         <div className="text-caption font-mono text-slate truncate max-w-md">
-                          Agent: {entry.agent_id} • Trace: {entry.trace_id}
+                          {t('activity.detail', { agent: entry.agent_id, trace: entry.trace_id })}
                         </div>
                       </div>
 
@@ -789,10 +794,10 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
             {/* Storage Footprint Footer */}
             <div className="pt-4 mt-4 border-t border-onyx/5 flex items-center justify-between text-caption font-mono text-slate">
               <span>
-                SQLite: {((data?.storage?.storage_bytes || 0) / (1024 * 1024)).toFixed(2)} MB • Vectors: {((data?.storage?.vectors_bytes || 0) / (1024 * 1024)).toFixed(2)} MB
+                {t('storage.detail', { sqlite: ((data?.storage?.storage_bytes || 0) / (1024 * 1024)).toFixed(2), vectors: ((data?.storage?.vectors_bytes || 0) / (1024 * 1024)).toFixed(2) })}
               </span>
               <span className="font-semibold text-deep-ink">
-                Storage: {((data?.storage?.total_bytes || 0) / (1024 * 1024)).toFixed(2)} MB
+                {t('storage.total', { value: ((data?.storage?.total_bytes || 0) / (1024 * 1024)).toFixed(2) })}
               </span>
             </div>
           </Card>
