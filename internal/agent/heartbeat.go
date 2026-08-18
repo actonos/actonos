@@ -393,6 +393,13 @@ CRITICAL INSTRUCTIONS:
 
 	resp, execErr := h.engine.ExecuteStepWithHistory(ctx, primaryAgentID, prompt, nil)
 	if execErr != nil {
+		var approvalErr *tools.ApprovalRequiredError
+		if errors.As(execErr, &approvalErr) {
+			run.Status = "approval_required"
+			run.Summary = fmt.Sprintf("Standing directive paused: operator approval required for '%s'.", approvalErr.Approval.ToolName)
+			h.recordRun(*run)
+			return run
+		}
 		run.Status = "error"
 		run.Summary = execErr.Error()
 		slog.Warn("heartbeat execution failed", "agent_id", primaryAgentID, "error", execErr)
