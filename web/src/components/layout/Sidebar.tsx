@@ -24,6 +24,7 @@ import {
   Gauge,
   ShieldCheck,
   Bell,
+  Terminal,
 } from 'lucide-react';
 
 export type NavTab =
@@ -37,6 +38,7 @@ export type NavTab =
   | 'tools'
   | 'skills'
   | 'workspace'
+  | 'terminal'
   | 'channels'
   | 'connectors'
   | 'notifications'
@@ -95,6 +97,7 @@ export function Sidebar({
         { id: 'chat', label: t('links.chat', 'Chat'), icon: MessageSquare },
         { id: 'automations', label: t('links.automations', 'Automations'), icon: Calendar },
         { id: 'workspace', label: t('links.workspace', 'Workspace'), icon: Folder },
+        { id: 'terminal', label: t('links.terminal', 'Terminal'), icon: Terminal },
       ],
     },
     {

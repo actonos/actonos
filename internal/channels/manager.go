@@ -140,40 +140,56 @@ func (m *ChannelManager) startAccountAdapterLocked(ctx context.Context, acc Chan
 	}
 }
 
-func (m *ChannelManager) startTelegramAccountLocked(ctx context.Context, acc ChannelAccount) {
+func (m *ChannelManager) startTelegramAccountLocked(_ context.Context, acc ChannelAccount) {
 	if acc.Token == "" {
 		return
 	}
+	adapterCtx := m.ctx
+	if adapterCtx == nil || adapterCtx.Err() != nil {
+		m.ctx, m.cancel = context.WithCancel(context.Background())
+		adapterCtx = m.ctx
+	}
 	adapter := NewTelegramAdapter(acc.Token, m.eventBus, m.pairingMgr)
-	if err := adapter.Start(ctx); err == nil {
+	adapter.SetAccountID(acc.ID)
+	if err := adapter.Start(adapterCtx); err == nil {
 		m.tgAdapters[acc.ID] = adapter
 	} else {
 		slog.Warn("failed to start telegram account adapter", "account_id", acc.ID, "error", err)
 	}
 }
 
-func (m *ChannelManager) startWhatsAppAccountLocked(ctx context.Context, acc ChannelAccount) {
+func (m *ChannelManager) startWhatsAppAccountLocked(_ context.Context, acc ChannelAccount) {
 	if acc.Token == "" {
 		return
+	}
+	adapterCtx := m.ctx
+	if adapterCtx == nil || adapterCtx.Err() != nil {
+		m.ctx, m.cancel = context.WithCancel(context.Background())
+		adapterCtx = m.ctx
 	}
 	secret := acc.WebhookSecret
 	if secret == "" {
 		secret = "acton_verify_token"
 	}
 	adapter := NewWhatsAppAdapter(acc.Token, acc.PhoneID, secret, m.eventBus, m.pairingMgr)
-	if err := adapter.Start(ctx); err == nil {
+	if err := adapter.Start(adapterCtx); err == nil {
 		m.waAdapters[acc.ID] = adapter
 	} else {
 		slog.Warn("failed to start whatsapp account adapter", "account_id", acc.ID, "error", err)
 	}
 }
 
-func (m *ChannelManager) startDiscordAccountLocked(ctx context.Context, acc ChannelAccount) {
+func (m *ChannelManager) startDiscordAccountLocked(_ context.Context, acc ChannelAccount) {
 	if acc.Token == "" {
 		return
 	}
+	adapterCtx := m.ctx
+	if adapterCtx == nil || adapterCtx.Err() != nil {
+		m.ctx, m.cancel = context.WithCancel(context.Background())
+		adapterCtx = m.ctx
+	}
 	adapter := NewDiscordAdapter(acc.Token, m.eventBus)
-	if err := adapter.Start(ctx); err == nil {
+	if err := adapter.Start(adapterCtx); err == nil {
 		m.dcAdapters[acc.ID] = adapter
 	} else {
 		slog.Warn("failed to start discord account adapter", "account_id", acc.ID, "error", err)

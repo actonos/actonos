@@ -21,6 +21,7 @@ import enOperations from '../locales/en/operations.json';
 import enAutomations from '../locales/en/automations.json';
 import enAudit from '../locales/en/audit.json';
 import enNotifications from '../locales/en/notifications.json';
+import enTerminal from '../locales/en/terminal.json';
 
 // Vietnamese translations
 import viCommon from '../locales/vi/common.json';
@@ -41,6 +42,7 @@ import viOperations from '../locales/vi/operations.json';
 import viAutomations from '../locales/vi/automations.json';
 import viAudit from '../locales/vi/audit.json';
 import viNotifications from '../locales/vi/notifications.json';
+import viTerminal from '../locales/vi/terminal.json';
 
 export const defaultNS = 'common';
 export const resources = {
@@ -63,6 +65,7 @@ export const resources = {
     automations: enAutomations,
     audit: enAudit,
     notifications: enNotifications,
+    terminal: enTerminal,
   },
   vi: {
     common: viCommon,
@@ -83,6 +86,7 @@ export const resources = {
     automations: viAutomations,
     audit: viAudit,
     notifications: viNotifications,
+    terminal: viTerminal,
   },
 } as const;
 
@@ -92,7 +96,7 @@ i18n
   .init({
     fallbackLng: 'en',
     defaultNS,
-    ns: ['common', 'nav', 'agents', 'tools', 'skills', 'settings', 'chat', 'setup', 'workspace', 'integrations', 'channels', 'connectors', 'dashboard', 'missions', 'operations', 'automations', 'audit', 'notifications'],
+    ns: ['common', 'nav', 'agents', 'tools', 'skills', 'settings', 'chat', 'setup', 'workspace', 'integrations', 'channels', 'connectors', 'dashboard', 'missions', 'operations', 'automations', 'audit', 'notifications', 'terminal'],
     resources,
     interpolation: {
       escapeValue: false,

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
@@ -68,14 +68,20 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
   const [editingTask, setEditingTask] = useState<AutonomousTask | null>(null);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [selectedRunDetail, setSelectedRunDetail] = useState<AgentRun | null>(null);
+  const [isDirectivesDirty, setIsDirectivesDirty] = useState(false);
+  const isDirectivesDirtyRef = useRef(false);
+  isDirectivesDirtyRef.current = isDirectivesDirty;
+
   const changeTab = (tab: 'tasks' | 'directives' | 'audit' | 'governance') => {
     setActiveTab(tab);
     setHashParam('view', tab === 'tasks' ? undefined : tab);
   };
 
-  const loadData = async () => {
+  const loadData = async (isBackground = false) => {
     try {
-      setLoading(true);
+      if (!isBackground) {
+        setLoading(true);
+      }
       const [tasksRes, cfgRes, runsRes, approvalsRes, agentRunsRes] = await Promise.all([
         api.listTasks({
           status: statusFilter !== 'all' ? statusFilter : undefined,
@@ -88,20 +94,26 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
       ]);
 
       if (tasksRes && tasksRes.tasks) setTasks(tasksRes.tasks);
-      if (cfgRes) setHeartbeatConfig(cfgRes);
+      if (cfgRes && (!isBackground || !isDirectivesDirtyRef.current)) {
+        setHeartbeatConfig(cfgRes);
+      }
       if (runsRes) setHeartbeatRuns(runsRes);
       setApprovals(approvalsRes.approvals);
       setAgentRuns(agentRunsRes.runs);
     } catch (err) {
-      error('Failed to load mission data', getErrorMessage(err));
+      if (!isBackground) {
+        error('Failed to load mission data', getErrorMessage(err));
+      }
     } finally {
-      setLoading(false);
+      if (!isBackground) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 10000);
+    loadData(false);
+    const interval = setInterval(() => loadData(true), 10000);
     return () => clearInterval(interval);
   }, [statusFilter, priorityFilter]);
 
@@ -167,6 +179,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
     setSavingDirectives(true);
     try {
       await api.saveHeartbeatConfig(heartbeatConfig);
+      setIsDirectivesDirty(false);
       success(t('toast.directivesSaved', 'Directives Saved'), 'Standing HEARTBEAT instructions synchronized.');
     } catch (err) {
       error('Failed to save directives', getErrorMessage(err));
@@ -239,7 +252,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                 variant="ghost"
                 size="sm"
                 icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />}
-                onClick={loadData}
+                onClick={() => loadData(false)}
               >
                 {t('actions.refresh')}
               </Button>
@@ -533,7 +546,10 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                 <textarea
                   rows={8}
                   value={heartbeatConfig.directives}
-                  onChange={(e) => setHeartbeatConfig({ ...heartbeatConfig, directives: e.target.value })}
+                  onChange={(e) => {
+                    setIsDirectivesDirty(true);
+                    setHeartbeatConfig({ ...heartbeatConfig, directives: e.target.value });
+                  }}
                   placeholder={t('directives.placeholder')}
                   className="w-full bg-soft-meadow text-deep-ink font-mono text-[13px] p-4 rounded-2xl border border-onyx/10 focus:outline-none focus:border-onyx/30 resize-none leading-relaxed"
                 />
@@ -547,7 +563,10 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                   </label>
                   <select
                     value={heartbeatConfig.interval_minutes}
-                    onChange={(e) => setHeartbeatConfig({ ...heartbeatConfig, interval_minutes: Number(e.target.value) })}
+                    onChange={(e) => {
+                      setIsDirectivesDirty(true);
+                      setHeartbeatConfig({ ...heartbeatConfig, interval_minutes: Number(e.target.value) });
+                    }}
                     className="w-full bg-soft-meadow text-deep-ink text-body-sm font-sans p-2.5 rounded-full border border-onyx/10 focus:outline-none"
                   >
                     <option value={1}>{t('directives.intervals.one')}</option>
@@ -564,7 +583,10 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                   </label>
                   <select
                     value={heartbeatConfig.target_channel}
-                    onChange={(e) => setHeartbeatConfig({ ...heartbeatConfig, target_channel: e.target.value })}
+                    onChange={(e) => {
+                      setIsDirectivesDirty(true);
+                      setHeartbeatConfig({ ...heartbeatConfig, target_channel: e.target.value });
+                    }}
                     className="w-full bg-soft-meadow text-deep-ink text-body-sm font-sans p-2.5 rounded-full border border-onyx/10 focus:outline-none"
                   >
                     <option value="all">{t('channels.all')}</option>

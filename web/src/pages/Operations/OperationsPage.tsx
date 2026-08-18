@@ -1,12 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
-import '@xterm/xterm/css/xterm.css';
 import {
-  Activity, Bot, Box, CheckCircle2, ChevronDown, ChevronRight, CirclePause,
-  CirclePlay, Coins, Cpu, ExternalLink, HardDrive, MemoryStick, Monitor,
-  RefreshCw, RotateCcw, SquareTerminal, Thermometer, XCircle,
+  Activity, Bot, ChevronDown, ChevronRight, CirclePause,
+  CirclePlay, Coins, Cpu, HardDrive, MemoryStick,
+  RefreshCw, RotateCcw, Thermometer, XCircle,
 } from 'lucide-react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Card } from '@/components/ui/Card';
@@ -17,18 +14,12 @@ import { api } from '@/lib/api';
 import type { AutonomousTask, RunEvent } from '@/lib/types';
 import { useRealtime } from '@/components/providers/RealtimeProvider';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { readHashParams, setHashParam } from '@/lib/url-state';
 
 function percent(value: number) {
   return `${Math.max(0, Math.min(100, value)).toFixed(0)}%`;
-}
-
-function eventText(event: RunEvent) {
-  const data = event.data ? JSON.stringify(event.data) : '';
-  return `[${event.type.toUpperCase()}] ${event.tool_name || event.status}${data ? ` ${data}` : ''}`;
 }
 
 export function OperationsPage() {
@@ -42,13 +33,10 @@ export function OperationsPage() {
   const [events, setEvents] = useState<RunEvent[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [selectedRun, setSelectedRun] = useState<string>('');
-  const [view, setView] = useState<'overview' | 'feed' | 'runtime' | 'cost'>(() => {
+  const [view, setView] = useState<'overview' | 'feed' | 'cost'>(() => {
     const value = readHashParams().get('view');
-    return value === 'feed' || value === 'runtime' || value === 'cost' ? value : 'overview';
+    return value === 'feed' || value === 'cost' ? value : 'overview';
   });
-  const terminalNode = useRef<HTMLDivElement>(null);
-  const terminal = useRef<Terminal | null>(null);
-
   const refreshTasks = useCallback(async () => {
     const result = await api.listTasks().catch(() => ({ tasks: [], count: 0 }));
     setTasks(result.tasks);
@@ -79,39 +67,6 @@ export function OperationsPage() {
       window.clearInterval(interval);
     };
   }, [selectedRun]);
-
-  useEffect(() => {
-    if (!terminalNode.current || terminal.current) return;
-    const instance = new Terminal({
-      convertEol: true,
-      cursorBlink: false,
-      disableStdin: true,
-      fontFamily: '"Cascadia Code", "SFMono-Regular", Consolas, monospace',
-      fontSize: 12,
-      theme: { background: '#130e30', foreground: '#f9fbf2', cursor: '#ffe228' },
-    });
-    const fit = new FitAddon();
-    instance.loadAddon(fit);
-    instance.open(terminalNode.current);
-    fit.fit();
-    instance.writeln(t('terminal.ready'));
-    terminal.current = instance;
-    const resize = () => fit.fit();
-    window.addEventListener('resize', resize);
-    return () => {
-      window.removeEventListener('resize', resize);
-      instance.dispose();
-      terminal.current = null;
-    };
-  }, [t]);
-
-  useEffect(() => {
-    const instance = terminal.current;
-    if (!instance) return;
-    instance.clear();
-    instance.writeln(`\x1b[33mActonOS observability terminal · ${selectedRun || t('terminal.noRun')}\x1b[0m`);
-    events.forEach((event) => instance.writeln(eventText(event)));
-  }, [events, selectedRun, t]);
 
   const handleTaskStatus = async (task: AutonomousTask, status: AutonomousTask['status']) => {
     try {
@@ -157,13 +112,12 @@ export function OperationsPage() {
         options={[
           { value: 'overview', label: t('views.overview') },
           { value: 'feed', label: t('views.feed') },
-          { value: 'runtime', label: t('views.runtime') },
           { value: 'cost', label: t('views.cost') },
         ]}
         className="mb-6"
       />
 
-      <div className={`${view === 'overview' || view === 'runtime' ? 'grid' : 'hidden'} grid-cols-2 gap-3 xl:grid-cols-4 mb-6`}>
+      <div className={`${view === 'overview' ? 'grid' : 'hidden'} grid-cols-2 gap-3 xl:grid-cols-4 mb-6`}>
         {gaugeCards.map((gauge) => {
           const Icon = gauge.icon;
           return (
@@ -183,7 +137,7 @@ export function OperationsPage() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
-        <Card className={`${view === 'overview' || view === 'feed' ? 'block' : 'hidden'} xl:col-span-7 p-5 border border-onyx/10`}>
+        <Card className={`${view === 'overview' || view === 'feed' ? 'block' : 'hidden'} xl:col-span-12 p-5 border border-onyx/10`}>
           <div className="flex items-start justify-between gap-3 mb-4">
             <div className="min-w-0 flex-1">
               <h2 className="font-serif text-heading-sm font-bold">{t('feed.title')}</h2>
@@ -211,51 +165,6 @@ export function OperationsPage() {
               );
             })}
           </div>
-        </Card>
-
-        <Card className={`${view === 'overview' || view === 'runtime' ? 'block' : 'hidden'} xl:col-span-5 p-5 border border-onyx/10`}>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="font-serif text-heading-sm font-bold">{t('containers.title')}</h2>
-              <p className="text-caption text-slate">{t('containers.subtitle')}</p>
-            </div>
-            <Box className="w-5 h-5" />
-          </div>
-          <div className="space-y-2 max-h-[420px] overflow-y-auto">
-            {(metrics?.containers || []).length === 0 ? <EmptyState compact icon={<Box className="h-6 w-6" />} title={t('containers.empty')} /> :
-              metrics?.containers.map((container) => (
-                <div key={container.id} className="p-3 rounded-[18px] bg-soft-meadow flex items-center gap-3">
-                  {container.state === 'running' ? <CheckCircle2 className="w-5 h-5" /> : <XCircle className="w-5 h-5 text-slate" />}
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold truncate">{container.name}</p>
-                    <p className="text-[11px] text-slate truncate">{container.image}</p>
-                  </div>
-                  <div className="text-right font-mono text-[10px] text-slate">
-                    <div>{t('units.cpuPercent', { value: container.cpu_percent.toFixed(1) })}</div>
-                    <div>{t('units.megabytes', { value: container.memory_usage_mb.toFixed(0) })}</div>
-                  </div>
-                </div>
-              ))}
-          </div>
-        </Card>
-
-        <Card className={`${view === 'runtime' ? 'block' : 'hidden'} xl:col-span-7 p-5 border border-onyx/10`}>
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h2 className="font-serif text-heading-sm font-bold">{t('canvas.title')}</h2>
-              <p className="text-caption text-slate">{t('canvas.subtitle')}</p>
-            </div>
-            {metrics?.canvas_url && <a href={metrics.canvas_url} target="_blank" rel="noreferrer" className="rounded-full p-2 bg-soft-meadow"><ExternalLink className="w-4 h-4" /></a>}
-          </div>
-          <div className="aspect-video rounded-[20px] overflow-hidden bg-deep-ink flex items-center justify-center">
-            {metrics?.canvas_url ? <iframe title={t('canvas.frameTitle')} src={metrics.canvas_url} className="w-full h-full border-0" sandbox="allow-scripts allow-same-origin" referrerPolicy="no-referrer" /> :
-              <div className="text-center text-canvas/70 p-8"><Monitor className="w-10 h-10 mx-auto mb-3" /><p>{t('canvas.waiting')}</p></div>}
-          </div>
-        </Card>
-
-        <Card className={`${view === 'runtime' ? 'block' : 'hidden'} xl:col-span-5 p-0 border border-onyx/10 overflow-hidden`}>
-          <div className="p-4 flex items-center gap-2 bg-soft-meadow"><SquareTerminal className="w-4 h-4" /><h2 className="font-serif text-heading-sm font-bold">{t('terminal.title')}</h2></div>
-          <div ref={terminalNode} className="h-[330px] bg-deep-ink p-2" />
         </Card>
 
         <Card className={`${view === 'overview' ? 'block' : 'hidden'} xl:col-span-7 p-5 border border-onyx/10`}>

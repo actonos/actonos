@@ -194,7 +194,7 @@ func (s *Server) securityHeadersMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("X-XSS-Protection", "1; mode=block")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; connect-src 'self' ws: wss: https:; frame-src 'self' https: http://localhost:* http://127.0.0.1:*; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; connect-src 'self' ws: wss: https:; frame-src 'self' data: blob: https: http://localhost:* http://127.0.0.1:*; object-src 'self' data: blob:; base-uri 'self'; frame-ancestors 'none'")
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
 		next.ServeHTTP(w, r)
 	})
@@ -410,6 +410,11 @@ func (s *Server) setupRoutes() {
 				r.Get("/wifi/scan", s.handleWifiScan)
 				r.Post("/wifi/connect", s.handleWifiConnect)
 				r.Post("/restart", s.handleRestart)
+			})
+
+			// Interactive Web Terminal
+			r.Route("/terminal", func(r chi.Router) {
+				r.Get("/ws", s.handleTerminalWebSocket)
 			})
 		})
 	})

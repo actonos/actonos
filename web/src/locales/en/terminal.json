@@ -1,0 +1,15 @@
+{
+  "eyebrow": "Host System Shell",
+  "title": "Web Terminal",
+  "subtitle": "Direct interactive terminal connection to host operating system environment.",
+  "status": {
+    "connecting": "Connecting...",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "error": "Error"
+  },
+  "actions": {
+    "clear": "Clear",
+    "reconnect": "Reconnect"
+  }
+}

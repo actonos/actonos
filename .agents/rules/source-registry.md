@@ -228,6 +228,7 @@
 | `Connectors/` | `connectors` | `ConnectorsPage` | SaaS integrations (OAuth) |
 | `ToolHub/` | `tools` | `ToolHubPage` | MCP servers, WASM plugins |
 | `Workspace/` | `workspace` | `WorkspacePage` | File manager |
+| `Terminal/` | `terminal` | `TerminalPage` | Direct interactive web terminal connected to host OS shell |
 | `Notifications/` | `notifications` | `NotificationsPage` | Full notification history, filters, pagination, clear actions |
 | `AuditLogs/` | `audit-logs` | `AuditLogsPage` | Tamper-evident audit log ledger & trace inspector |
 | `Settings/` | `settings` | `SettingsPage` | System settings, keys, backup, token ledger |

@@ -1,0 +1,15 @@
+{
+  "eyebrow": "Hệ thống Shell Máy chủ",
+  "title": "Web Terminal",
+  "subtitle": "Kết nối terminal tương tác trực tiếp tới hệ điều hành máy chủ.",
+  "status": {
+    "connecting": "Đang kết nối...",
+    "connected": "Đã kết nối",
+    "disconnected": "Đã ngắt kết nối",
+    "error": "Lỗi"
+  },
+  "actions": {
+    "clear": "Xóa màn hình",
+    "reconnect": "Kết nối lại"
+  }
+}

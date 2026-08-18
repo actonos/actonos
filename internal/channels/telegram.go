@@ -20,6 +20,7 @@ import (
 type TelegramAdapter struct {
 	mu           sync.RWMutex
 	token        string
+	accountID    string
 	bus          *bus.EventBus
 	pairingMgr   *PairingManager
 	client       *http.Client
@@ -43,6 +44,20 @@ func NewTelegramAdapter(token string, bus *bus.EventBus, pairingMgr *PairingMana
 }
 
 func (t *TelegramAdapter) Name() string { return "telegram" }
+
+// SetAccountID sets the account identifier for this adapter.
+func (t *TelegramAdapter) SetAccountID(id string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.accountID = id
+}
+
+// GetAccountID returns the account identifier for this adapter.
+func (t *TelegramAdapter) GetAccountID() string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.accountID
+}
 
 // UpdateToken updates the bot token dynamically.
 func (t *TelegramAdapter) UpdateToken(token string) {
@@ -265,6 +280,7 @@ func (t *TelegramAdapter) handleInboundMessage(ctx context.Context, upd tgUpdate
 	if t.bus != nil {
 		t.bus.Publish(bus.NewEvent(bus.EventAgentActionStarted, "telegram", InboundMessage{
 			ChannelID:   "telegram",
+			AccountID:   t.GetAccountID(),
 			SenderID:    senderID,
 			SenderName:  senderName,
 			TargetAgent: "default",
