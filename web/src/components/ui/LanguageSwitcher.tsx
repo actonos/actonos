@@ -43,7 +43,6 @@ export function LanguageSwitcher({ onClick, className = '', compact = false }: L
           <>
             <Globe className="w-3.5 h-3.5 text-slate" />
             <span className="text-caption font-semibold uppercase">{currentCode}</span>
-            <span className="text-caption font-semibold">{currentLang.shortCode}</span>
             <ChevronDown className="w-3 h-3 text-slate opacity-60 ml-0.5" />
           </>
         )}
