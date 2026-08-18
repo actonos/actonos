@@ -229,10 +229,22 @@
       "select": "Select Channels to Listen",
       "modeLabel": "Channel listener mode",
       "catalog": {
-        "telegram": { "name": "Telegram", "description": "Listen to Telegram bot chats and mentions" },
-        "discord": { "name": "Discord", "description": "Listen to Discord server messages and threads" },
-        "whatsapp": { "name": "WhatsApp", "description": "Listen to WhatsApp Cloud API messages" },
-        "webhook": { "name": "Inbound Webhook", "description": "Trigger the agent from HTTP webhooks" }
+        "telegram": {
+          "name": "Telegram",
+          "description": "Listen to Telegram bot chats and mentions"
+        },
+        "discord": {
+          "name": "Discord",
+          "description": "Listen to Discord server messages and threads"
+        },
+        "whatsapp": {
+          "name": "WhatsApp",
+          "description": "Listen to WhatsApp Cloud API messages"
+        },
+        "webhook": {
+          "name": "Inbound Webhook",
+          "description": "Trigger the agent from HTTP webhooks"
+        }
       }
     },
     "governance": {
@@ -266,5 +278,11 @@
       "approval": "Approval",
       "budget": "Monthly budget"
     }
+  },
+  "filters": {
+    "all": "All",
+    "system": "System",
+    "active": "Active",
+    "stopped": "Stopped"
   }
 }

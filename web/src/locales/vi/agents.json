@@ -150,10 +150,10 @@
     "description": "Mô tả & Vai trò",
     "descriptionPlaceholder": "Mô tả trách nhiệm, chuyên môn và ranh giới hoạt động của người đại diện...",
     "lifecycle": "Trạng thái vòng đời",
-    "active": "Tích cực",
+    "active": "Hoạt động",
     "stopped": "Đã dừng",
     "avatar": "Avatar: {{icon}}",
-    "ready": "Tích cực",
+    "ready": "Sẵn sàng",
     "keyNeeded": "Cần có chìa khóa",
     "allTools": "Tất cả (*)",
     "all": "Tất cả",
@@ -229,10 +229,22 @@
       "select": "Chọn kênh để nghe",
       "modeLabel": "Chế độ lắng nghe kênh",
       "catalog": {
-        "telegram": { "name": "Telegram", "description": "Lắng nghe hội thoại và lượt nhắc từ bot Telegram" },
-        "discord": { "name": "Discord", "description": "Lắng nghe tin nhắn và luồng thảo luận Discord" },
-        "whatsapp": { "name": "WhatsApp", "description": "Lắng nghe tin nhắn WhatsApp Cloud API" },
-        "webhook": { "name": "Webhook nhận vào", "description": "Kích hoạt agent từ HTTP webhook" }
+        "telegram": {
+          "name": "Telegram",
+          "description": "Lắng nghe hội thoại và lượt nhắc từ bot Telegram"
+        },
+        "discord": {
+          "name": "Discord",
+          "description": "Lắng nghe tin nhắn và luồng thảo luận Discord"
+        },
+        "whatsapp": {
+          "name": "WhatsApp",
+          "description": "Lắng nghe tin nhắn WhatsApp Cloud API"
+        },
+        "webhook": {
+          "name": "Webhook nhận vào",
+          "description": "Kích hoạt agent từ HTTP webhook"
+        }
       }
     },
     "governance": {
@@ -266,5 +278,11 @@
       "approval": "Phê duyệt",
       "budget": "Ngân sách tháng"
     }
+  },
+  "filters": {
+    "all": "Tất cả",
+    "system": "Hệ thống",
+    "active": "Hoạt động",
+    "stopped": "Đã dừng"
   }
 }

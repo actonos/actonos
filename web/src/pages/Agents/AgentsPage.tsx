@@ -157,47 +157,47 @@ export function AgentsPage({
           description={t('subtitle')}
           actions={(
             <>
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<Download className="w-3.5 h-3.5" />}
-              onClick={handleExportAgents}
-              title={t('list.exportTitle')}
-            >
-              {t('list.export')}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<Upload className="w-3.5 h-3.5" />}
-              onClick={() => fileInputRef.current?.click()}
-              title={t('list.importTitle')}
-            >
-              {t('list.import')}
-            </Button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleImportAgents}
-              accept=".json"
-              className="hidden"
-            />
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />}
-              onClick={loadData}
-            >
-              {t('list.refresh')}
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              icon={<Plus className="w-3.5 h-3.5" />}
-              onClick={() => onEditAgent('new')}
-            >
-              {t('actions.createNew', 'Create New Agent')}
-            </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<Download className="w-3.5 h-3.5" />}
+                onClick={handleExportAgents}
+                title={t('list.exportTitle')}
+              >
+                {t('list.export')}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<Upload className="w-3.5 h-3.5" />}
+                onClick={() => fileInputRef.current?.click()}
+                title={t('list.importTitle')}
+              >
+                {t('list.import')}
+              </Button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleImportAgents}
+                accept=".json"
+                className="hidden"
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />}
+                onClick={loadData}
+              >
+                {t('list.refresh')}
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<Plus className="w-3.5 h-3.5" />}
+                onClick={() => onEditAgent('new')}
+              >
+                {t('actions.createNew', 'Create New Agent')}
+              </Button>
             </>
           )}
         />
@@ -214,8 +214,8 @@ export function AgentsPage({
                 filter === 'all'
                   ? agents.length
                   : filter === 'system'
-                  ? agents.filter((a) => a.is_system || a.agent_id === 'agent_system_core').length
-                  : agents.filter((a) => a.status === filter).length;
+                    ? agents.filter((a) => a.is_system || a.agent_id === 'agent_system_core').length
+                    : agents.filter((a) => a.status === filter).length;
 
               return {
                 value: filter,
@@ -302,7 +302,7 @@ export function AgentsPage({
                                 )}
                               </div>
                               <div className="flex items-center gap-2 mt-0.5">
-                          <span className="font-mono text-[11px] text-slate select-all">
+                                <span className="font-mono text-[11px] text-slate select-all">
                                   {agent.agent_id}
                                 </span>
                               </div>
@@ -331,11 +331,10 @@ export function AgentsPage({
                                 className="capitalize cursor-pointer"
                               >
                                 <span
-                                  className={`w-1.5 h-1.5 rounded-full ${
-                                    agent.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-red-400'
-                                  }`}
+                                  className={`w-1.5 h-1.5 rounded-full mr-2 ${agent.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-red-400'
+                                    }`}
                                 />
-                                <span>{agent.status}</span>
+                                <span>{t('studio.' + agent.status)}</span>
                               </Badge>
                             </button>
                           </div>
@@ -397,8 +396,8 @@ export function AgentsPage({
                                   agent.delegation_scope?.require_human_approval_level === 'High'
                                     ? 'accent'
                                     : agent.delegation_scope?.require_human_approval_level === 'Low'
-                                    ? 'active'
-                                    : 'neutral'
+                                      ? 'active'
+                                      : 'neutral'
                                 }
                                 className="text-[10px] px-2 py-0.5 font-mono"
                               >
