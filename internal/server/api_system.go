@@ -137,62 +137,41 @@ var providerDefaults = map[string]LLMProviderRecord{
 	"anthropic": {
 		ID:           "anthropic",
 		Name:         "Anthropic Claude",
-		DefaultModel: "claude-3-7-sonnet",
-		BaseURL:      "https://api.anthropic.com",
+		DefaultModel: "claude-sonnet-4-6",
+		BaseURL:      "https://api.anthropic.com/v1",
 		Enabled:      true,
 	},
 	"openai": {
 		ID:           "openai",
 		Name:         "OpenAI",
-		DefaultModel: "gpt-4o",
+		DefaultModel: "gpt-5",
 		BaseURL:      "https://api.openai.com/v1",
-		Enabled:      true,
-	},
-	"gemini": {
-		ID:           "gemini",
-		Name:         "Google Gemini",
-		DefaultModel: "gemini-2.5-flash",
-		BaseURL:      "https://generativelanguage.googleapis.com",
 		Enabled:      true,
 	},
 	"deepseek": {
 		ID:           "deepseek",
 		Name:         "DeepSeek",
-		DefaultModel: "deepseek-chat",
+		DefaultModel: "deepseek-v4-flash",
 		BaseURL:      "https://api.deepseek.com/v1",
 		Enabled:      true,
 	},
-	"groq": {
-		ID:           "groq",
-		Name:         "Groq",
-		DefaultModel: "llama-3.3-70b-versatile",
-		BaseURL:      "https://api.groq.com/openai/v1",
+	"grok": {
+		ID:           "grok",
+		Name:         "xAI (Grok)",
+		DefaultModel: "grok-4.5",
+		BaseURL:      "https://api.x.ai/v1",
 		Enabled:      true,
 	},
 	"openrouter": {
 		ID:           "openrouter",
 		Name:         "OpenRouter",
-		DefaultModel: "anthropic/claude-3.7-sonnet",
+		DefaultModel: "anthropic/claude-sonnet-5",
 		BaseURL:      "https://openrouter.ai/api/v1",
-		Enabled:      true,
-	},
-	"mistral": {
-		ID:           "mistral",
-		Name:         "Mistral AI",
-		DefaultModel: "mistral-large-latest",
-		BaseURL:      "https://api.mistral.ai/v1",
-		Enabled:      true,
-	},
-	"ollama": {
-		ID:           "ollama",
-		Name:         "Local Ollama / vLLM",
-		DefaultModel: "llama3",
-		BaseURL:      "http://localhost:11434",
 		Enabled:      true,
 	},
 	"custom_openai": {
 		ID:           "custom_openai",
-		Name:         "Custom OpenAI Compatible",
+		Name:         "Custom OpenAI-Compatible",
 		DefaultModel: "default-model",
 		BaseURL:      "http://localhost:8000/v1",
 		Enabled:      false,
@@ -524,154 +503,63 @@ func RegisterAllStoredProviders(router *llm.ModelCascadeRouter, configDir string
 
 // RegisterProviderInRouter registers a specific provider and all its supported model aliases into llmRouter.
 func RegisterProviderInRouter(router *llm.ModelCascadeRouter, rec LLMProviderRecord) {
-	if router == nil || !rec.Enabled {
+	if router == nil || !rec.Enabled || (rec.APIKey == "" && rec.ID != "custom_openai") {
 		return
 	}
 
-	switch rec.ID {
-	case "anthropic":
-		if rec.APIKey != "" {
-			defaultModel := rec.DefaultModel
-			if defaultModel == "" {
-				defaultModel = "claude-3-7-sonnet"
-			}
-			prov := llm.NewAnthropicProvider(rec.APIKey, defaultModel)
-			router.RegisterProvider("anthropic", prov)
-			router.RegisterProvider("claude", prov)
-			router.RegisterProvider("anthropic/"+defaultModel, prov)
-			for _, m := range []string{"claude-3-7-sonnet", "claude-3-5-sonnet", "claude-3-5-haiku", "claude-3-opus"} {
-				router.RegisterProvider("anthropic/"+m, llm.NewAnthropicProvider(rec.APIKey, m))
-			}
-		}
-	case "gemini":
-		if rec.APIKey != "" {
-			defaultModel := rec.DefaultModel
-			if defaultModel == "" {
-				defaultModel = "gemini-2.5-flash"
-			}
-			prov := llm.NewGeminiProvider(rec.APIKey, defaultModel)
-			router.RegisterProvider("gemini", prov)
-			router.RegisterProvider("google", prov)
-			router.RegisterProvider("google/"+defaultModel, prov)
-			for _, m := range []string{"gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-thinking-exp", "gemini-2.0-pro-exp-02-05", "gemini-1.5-pro", "gemini-1.5-flash"} {
-				p := llm.NewGeminiProvider(rec.APIKey, m)
-				router.RegisterProvider("google/"+m, p)
-				router.RegisterProvider("gemini/"+m, p)
-			}
-		}
-	case "ollama":
-		defaultModel := rec.DefaultModel
-		if defaultModel == "" {
-			defaultModel = "llama3.3"
-		}
-		url := rec.BaseURL
-		if url == "" {
-			url = "http://localhost:11434"
-		}
-		prov := llm.NewOllamaProvider(defaultModel, url)
-		router.RegisterProvider("ollama", prov)
-		router.RegisterProvider("ollama/"+defaultModel, prov)
-		for _, m := range []string{"llama3.3", "deepseek-r1:70b", "deepseek-r1:14b", "deepseek-r1:8b", "qwen2.5-coder:32b", "phi4", "mistral-nemo"} {
-			router.RegisterProvider("ollama/"+m, llm.NewOllamaProvider(m, url))
-		}
-	case "openai":
-		if rec.APIKey != "" {
-			defaultModel := rec.DefaultModel
-			if defaultModel == "" {
-				defaultModel = "gpt-4o"
-			}
-			baseURL := rec.BaseURL
+	defaultModel := rec.DefaultModel
+	baseURL := rec.BaseURL
+
+	// Match provider from canonical catalog
+	for _, provSpec := range llm.GetCanonicalProviders() {
+		if provSpec.ID == rec.ID {
 			if baseURL == "" {
-				baseURL = "https://api.openai.com/v1"
+				baseURL = provSpec.DefaultBaseURL
 			}
-			prov := llm.NewOpenAIProvider(rec.APIKey, defaultModel, baseURL)
-			router.RegisterProvider("openai", prov)
-			router.RegisterProvider("openai/"+defaultModel, prov)
-			for _, m := range []string{"gpt-4.5-preview", "gpt-4o", "gpt-4o-mini", "o3-mini", "o1", "o1-mini"} {
-				router.RegisterProvider("openai/"+m, llm.NewOpenAIProvider(rec.APIKey, m, baseURL))
+			if defaultModel == "" && len(provSpec.ModelPresets) > 0 {
+				defaultModel = provSpec.ModelPresets[0].ID
 			}
+
+			var baseProv llm.LLMProvider
+			switch rec.ID {
+			case "anthropic":
+				baseProv = llm.NewAnthropicProvider(rec.APIKey, defaultModel)
+			case "deepseek":
+				baseProv = llm.NewDeepSeekProvider(rec.APIKey, defaultModel)
+			default:
+				baseProv = llm.NewOpenAIProvider(rec.APIKey, defaultModel, baseURL)
+			}
+
+			router.RegisterProvider(rec.ID, baseProv)
+			router.RegisterProvider(rec.ID+"/"+defaultModel, baseProv)
+
+			// Register each canonical model preset
+			for _, m := range provSpec.ModelPresets {
+				var p llm.LLMProvider
+				switch rec.ID {
+				case "anthropic":
+					p = llm.NewAnthropicProvider(rec.APIKey, m.ID)
+				case "deepseek":
+					p = llm.NewDeepSeekProvider(rec.APIKey, m.ID)
+				default:
+					p = llm.NewOpenAIProvider(rec.APIKey, m.ID, baseURL)
+				}
+				router.RegisterProvider(m.ID, p)
+			}
+			return
 		}
-	case "deepseek":
-		if rec.APIKey != "" {
-			defaultModel := rec.DefaultModel
-			if defaultModel == "" {
-				defaultModel = "deepseek-chat"
-			}
-			baseURL := rec.BaseURL
-			if baseURL == "" {
-				baseURL = "https://api.deepseek.com/v1"
-			}
-			prov := llm.NewDeepSeekProvider(rec.APIKey, defaultModel)
-			router.RegisterProvider("deepseek", prov)
-			router.RegisterProvider("deepseek/"+defaultModel, prov)
-			for _, m := range []string{"deepseek-chat", "deepseek-reasoner"} {
-				router.RegisterProvider("deepseek/"+m, llm.NewDeepSeekProvider(rec.APIKey, m))
-			}
-		}
-	case "groq":
-		if rec.APIKey != "" {
-			defaultModel := rec.DefaultModel
-			if defaultModel == "" {
-				defaultModel = "llama-3.3-70b-versatile"
-			}
-			baseURL := rec.BaseURL
-			if baseURL == "" {
-				baseURL = "https://api.groq.com/openai/v1"
-			}
-			prov := llm.NewOpenAIProvider(rec.APIKey, defaultModel, baseURL)
-			router.RegisterProvider("groq", prov)
-			router.RegisterProvider("groq/"+defaultModel, prov)
-			for _, m := range []string{"llama-3.3-70b-versatile", "deepseek-r1-distill-llama-70b", "qwen-2.5-32b", "llama-3.1-8b-instant", "mixtral-8x7b-32768"} {
-				router.RegisterProvider("groq/"+m, llm.NewOpenAIProvider(rec.APIKey, m, baseURL))
-			}
-		}
-	case "openrouter":
-		if rec.APIKey != "" {
-			defaultModel := rec.DefaultModel
-			if defaultModel == "" {
-				defaultModel = "anthropic/claude-3.7-sonnet"
-			}
-			baseURL := rec.BaseURL
-			if baseURL == "" {
-				baseURL = "https://openrouter.ai/api/v1"
-			}
-			prov := llm.NewOpenAIProvider(rec.APIKey, defaultModel, baseURL)
-			router.RegisterProvider("openrouter", prov)
-			router.RegisterProvider("openrouter/"+defaultModel, prov)
-			for _, m := range []string{"anthropic/claude-3.7-sonnet", "openai/gpt-4o", "openai/o3-mini", "google/gemini-2.5-flash", "deepseek/deepseek-r1", "meta-llama/llama-3.3-70b-instruct"} {
-				router.RegisterProvider("openrouter/"+m, llm.NewOpenAIProvider(rec.APIKey, m, baseURL))
-			}
-		}
-	case "mistral":
-		if rec.APIKey != "" {
-			defaultModel := rec.DefaultModel
-			if defaultModel == "" {
-				defaultModel = "mistral-large-latest"
-			}
-			baseURL := rec.BaseURL
-			if baseURL == "" {
-				baseURL = "https://api.mistral.ai/v1"
-			}
-			prov := llm.NewOpenAIProvider(rec.APIKey, defaultModel, baseURL)
-			router.RegisterProvider("mistral", prov)
-			router.RegisterProvider("mistral/"+defaultModel, prov)
-			for _, m := range []string{"mistral-large-latest", "codestral-latest", "mistral-small-latest", "pixtral-large-latest"} {
-				router.RegisterProvider("mistral/"+m, llm.NewOpenAIProvider(rec.APIKey, m, baseURL))
-			}
-		}
-	case "custom_openai":
-		defaultModel := rec.DefaultModel
-		if defaultModel == "" {
-			defaultModel = "default-model"
-		}
-		baseURL := rec.BaseURL
-		if baseURL == "" {
-			baseURL = "http://localhost:8000/v1"
-		}
-		prov := llm.NewOpenAIProvider(rec.APIKey, defaultModel, baseURL)
-		router.RegisterProvider("custom_openai", prov)
-		router.RegisterProvider("custom_openai/"+defaultModel, prov)
 	}
+
+	// Custom OpenAI-compatible fallback
+	if defaultModel == "" {
+		defaultModel = "default-model"
+	}
+	if baseURL == "" {
+		baseURL = "http://localhost:8000/v1"
+	}
+	prov := llm.NewOpenAIProvider(rec.APIKey, defaultModel, baseURL)
+	router.RegisterProvider(rec.ID, prov)
+	router.RegisterProvider(rec.ID+"/"+defaultModel, prov)
 }
 
 // Helper: dynamically registers/updates provider in s.llmRouter
@@ -730,14 +618,10 @@ func (s *Server) handleTestAPIKey(w http.ResponseWriter, r *http.Request) {
 	switch req.Provider {
 	case "anthropic":
 		provider = llm.NewAnthropicProvider(key, model)
-	case "gemini":
-		provider = llm.NewGeminiProvider(key, model)
-	case "ollama":
-		provider = llm.NewOllamaProvider(model, baseURL)
 	case "deepseek":
 		provider = llm.NewDeepSeekProvider(key, model)
 	default:
-		// OpenAI compatible
+		// OpenAI-compatible (OpenAI, Grok, OpenRouter, Custom)
 		provider = llm.NewOpenAIProvider(key, model, baseURL)
 	}
 
@@ -1066,4 +950,9 @@ func (s *Server) handleSaveIdentity(w http.ResponseWriter, r *http.Request) {
 		"profile":    current,
 		"updated_at": current.UpdatedAt,
 	})
+}
+
+func (s *Server) handleGetModelsCatalog(w http.ResponseWriter, r *http.Request) {
+	catalog := llm.GetCatalogResponse()
+	s.respondJSON(w, http.StatusOK, catalog)
 }

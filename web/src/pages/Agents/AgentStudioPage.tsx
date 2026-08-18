@@ -113,8 +113,8 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
   const [isSystem, setIsSystem] = useState(false);
 
   // Model & Reasoning
-  const [primaryModel, setPrimaryModel] = useState('anthropic/claude-3-7-sonnet');
-  const [fallbackModel, setFallbackModel] = useState('google/gemini-2.5-flash');
+  const [primaryModel, setPrimaryModel] = useState('anthropic/claude-sonnet-4-6');
+  const [fallbackModel, setFallbackModel] = useState('openai/gpt-5-mini');
   const [temperature, setTemperature] = useState(0.2);
   const [maxTokens, setMaxTokens] = useState(4096);
 
@@ -159,8 +159,8 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
           setIsSystem(!!agent.is_system);
 
           if (agent.model_config) {
-            const pMod = agent.model_config.primary_model || 'anthropic/claude-3-7-sonnet';
-            const fMod = agent.model_config.fallback_model || 'google/gemini-2.5-flash';
+            const pMod = agent.model_config.primary_model || 'anthropic/claude-sonnet-4-6';
+            const fMod = agent.model_config.fallback_model || 'openai/gpt-5-mini';
             setPrimaryModel(pMod);
             setFallbackModel(fMod);
             setTemperature(agent.model_config.temperature ?? 0.2);
@@ -738,7 +738,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                     <Input
                       value={primaryModel}
                       onChange={(e) => setPrimaryModel(e.target.value)}
-                      placeholder="e.g. anthropic/claude-3-7-sonnet or ollama/custom:latest"
+                      placeholder="e.g. anthropic/claude-sonnet-4-6 or custom_openai/default-model"
                       className="font-mono text-body-sm"
                     />
                   ) : (

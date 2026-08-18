@@ -12,6 +12,7 @@
 | Method | Path | Handler | File |
 |:---|:---|:---|:---|
 | `GET` | `/api/health` | `handleHealth` | `router.go` |
+| `GET` | `/api/models` | `handleGetModelsCatalog` | `api_system.go` |
 | `GET` | `/api/auth/status` | `handleGetAuthStatus` | `api_auth.go` |
 | `POST` | `/api/auth/setup` | `handleSetupAuth` | `api_auth.go` |
 | `POST` | `/api/auth/login` | `handleLogin` | `api_auth.go` |

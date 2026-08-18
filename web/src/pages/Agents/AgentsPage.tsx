@@ -369,7 +369,7 @@ export function AgentsPage({
                             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-soft-meadow border border-onyx/10 font-mono text-[11px] text-deep-ink font-semibold">
                               <Cpu className="w-3 h-3 text-slate" />
                               <span className="truncate max-w-[170px]">
-                                {agent.model_config?.primary_model || 'claude-3-7-sonnet'}
+                                {agent.model_config?.primary_model || 'claude-sonnet-4-6'}
                               </span>
                             </div>
                             <div className="text-[10px] font-mono text-slate pl-1">

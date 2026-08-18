@@ -22,15 +22,11 @@ import {
   XCircle,
   Activity,
   Clock,
-  Sparkles,
   Layers,
   RotateCcw,
   Eye,
   EyeOff,
-  Zap,
   Save,
-  Server,
-  Terminal,
   User,
   Coins,
   TrendingUp,
@@ -47,162 +43,7 @@ import type { SystemMetrics, TailscaleStatus, LLMProviderInfo, TokenUsageSummary
 
 type SettingsTab = 'identity' | 'keys' | 'tokens' | 'network' | 'audit' | 'maintenance';
 
-interface ProviderMeta {
-  id: string;
-  name: string;
-  category: string;
-  description: string;
-  defaultBaseURL: string;
-  modelPresets: { id: string; label: string }[];
-  accentColor: string;
-  icon: React.ElementType;
-}
-
-const PROVIDER_METAS: ProviderMeta[] = [
-  {
-    id: 'anthropic',
-    name: 'Anthropic Claude',
-    category: 'Cloud Frontier',
-    description: 'Premier coding, hybrid reasoning, and ReAct loop capabilities.',
-    defaultBaseURL: 'https://api.anthropic.com',
-    modelPresets: [
-      { id: 'claude-3-7-sonnet', label: 'Claude 3.7 Sonnet (Hybrid Reasoning Flagship)' },
-      { id: 'claude-opus-4-8', label: 'Claude Opus 4.8 (Supreme Intelligence)' },
-      { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (Frontier Coding Specialist)' },
-      { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5 (Ultra Fast Worker)' },
-      { id: 'claude-3-5-sonnet', label: 'Claude 3.5 Sonnet' },
-    ],
-    accentColor: '#D97706',
-    icon: Sparkles,
-  },
-  {
-    id: 'openai',
-    name: 'OpenAI',
-    category: 'Cloud Frontier',
-    description: 'General intelligence, multimodal reasoning, and structured output.',
-    defaultBaseURL: 'https://api.openai.com/v1',
-    modelPresets: [
-      { id: 'gpt-5.6', label: 'GPT-5.6 (Omni Flagship 2026)' },
-      { id: 'gpt-5.5', label: 'GPT-5.5 (General Multimodal)' },
-      { id: 'gpt-5.4-pro', label: 'GPT-5.4 Pro (Enterprise Reasoning)' },
-      { id: 'gpt-5.4-mini', label: 'GPT-5.4 Mini (Light Fast)' },
-      { id: 'o3', label: 'o3 (Next-Gen Deliberate Reasoning)' },
-      { id: 'o3-mini', label: 'o3-mini (High STEM & Coding Reasoning)' },
-      { id: 'gpt-4o', label: 'GPT-4o (Omni Multimodal Standard)' },
-      { id: 'gpt-4o-mini', label: 'GPT-4o Mini (Fast & Cheap)' },
-    ],
-    accentColor: '#10B981',
-    icon: Zap,
-  },
-  {
-    id: 'gemini',
-    name: 'Google Gemini',
-    category: 'Cloud Frontier',
-    description: 'Massive 2M+ token context window, ultra-fast latency, and native tool use.',
-    defaultBaseURL: 'https://generativelanguage.googleapis.com',
-    modelPresets: [
-      { id: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro (2M+ Context Flagship)' },
-      { id: 'gemini-3-flash', label: 'Gemini 3 Flash (1M+ Realtime Streaming)' },
-      { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (Deep Multimodal Code)' },
-      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (1M+ Context Recommended)' },
-    ],
-    accentColor: '#3B82F6',
-    icon: Sparkles,
-  },
-  {
-    id: 'deepseek',
-    name: 'DeepSeek',
-    category: 'Open Weights & Cloud',
-    description: 'Cost-effective high-performance reasoning and code intelligence.',
-    defaultBaseURL: 'https://api.deepseek.com/v1',
-    modelPresets: [
-      { id: 'deepseek-v4-pro', label: 'DeepSeek-V4 Pro (1M MoE Architecture)' },
-      { id: 'deepseek-v4-flash', label: 'DeepSeek-V4 Flash (High Throughput MoE)' },
-      { id: 'deepseek-r1', label: 'DeepSeek-R1 (Open Reasoning Benchmark Leader)' },
-      { id: 'deepseek-v3.2', label: 'DeepSeek-V3.2 Chat' },
-    ],
-    accentColor: '#6366F1',
-    icon: Cpu,
-  },
-  {
-    id: 'groq',
-    name: 'Groq Cloud',
-    category: 'Ultra-Fast Inference',
-    description: 'LPU inference engine delivering 500+ tokens/sec for open models.',
-    defaultBaseURL: 'https://api.groq.com/openai/v1',
-    modelPresets: [
-      { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B Versatile (Groq LPU)' },
-      { id: 'deepseek-r1-distill-llama-70b', label: 'DeepSeek R1 Distill 70B (Groq)' },
-      { id: 'qwen3-coder', label: 'Qwen3 Coder (Groq LPU)' },
-      { id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B Instant (800+ tok/s)' },
-    ],
-    accentColor: '#F97316',
-    icon: Zap,
-  },
-  {
-    id: 'openrouter',
-    name: 'OpenRouter',
-    category: 'Unified Aggregator',
-    description: 'One API key to access 100+ open-source and proprietary models.',
-    defaultBaseURL: 'https://openrouter.ai/api/v1',
-    modelPresets: [
-      { id: 'anthropic/claude-3.7-sonnet', label: 'Claude 3.7 Sonnet (via OpenRouter)' },
-      { id: 'openai/gpt-4o', label: 'GPT-4o (via OpenRouter)' },
-      { id: 'openai/o3-mini', label: 'o3-mini (via OpenRouter)' },
-      { id: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash (via OpenRouter)' },
-      { id: 'deepseek/deepseek-r1', label: 'DeepSeek R1 (via OpenRouter)' },
-      { id: 'meta-llama/llama-3.3-70b-instruct', label: 'Llama 3.3 70B (via OpenRouter)' },
-    ],
-    accentColor: '#8B5CF6',
-    icon: Server,
-  },
-  {
-    id: 'mistral',
-    name: 'Mistral AI',
-    category: 'European AI',
-    description: 'State-of-the-art multilingual and European code models.',
-    defaultBaseURL: 'https://api.mistral.ai/v1',
-    modelPresets: [
-      { id: 'mistral-large-latest', label: 'Mistral Large 2 (128k Context)' },
-      { id: 'codestral-latest', label: 'Codestral 2501 (Code Specialist)' },
-      { id: 'mistral-small-latest', label: 'Mistral Small 3' },
-      { id: 'pixtral-large-latest', label: 'Pixtral Large (Vision & Documents)' },
-    ],
-    accentColor: '#EC4899',
-    icon: Sparkles,
-  },
-  {
-    id: 'ollama',
-    name: 'Local Ollama / vLLM',
-    category: 'On-Premise / Offline',
-    description: 'Run completely private models on local GPU without internet connection.',
-    defaultBaseURL: 'http://localhost:11434',
-    modelPresets: [
-      { id: 'llama3.3', label: 'Llama 3.3 (70B Local)' },
-      { id: 'deepseek-r1:70b', label: 'DeepSeek R1 70B (Local Reasoning)' },
-      { id: 'deepseek-r1:14b', label: 'DeepSeek R1 14B (Local Reasoning)' },
-      { id: 'deepseek-r1:8b', label: 'DeepSeek R1 8B (Fast Local Reasoning)' },
-      { id: 'qwen2.5-coder:32b', label: 'Qwen 2.5 Coder 32B (Local)' },
-      { id: 'phi4', label: 'Phi-4 (14B High Quality)' },
-      { id: 'mistral-nemo', label: 'Mistral NeMo 12B' },
-    ],
-    accentColor: '#64748B',
-    icon: Terminal,
-  },
-  {
-    id: 'custom_openai',
-    name: 'Custom OpenAI-Compatible',
-    category: 'Self-Hosted / Gateway',
-    description: 'Connect LM Studio, LocalAI, Azure OpenAI, or custom enterprise gateway.',
-    defaultBaseURL: 'http://localhost:8000/v1',
-    modelPresets: [
-      { id: 'default-model', label: 'Default Model' },
-      { id: 'custom-model', label: 'Custom Model Tag' },
-    ],
-    accentColor: '#0EA5E9',
-    icon: Server,
-  },
-];
+import { PROVIDER_METAS, type ProviderMeta } from '@/lib/models';
 
 export function SettingsPage() {
   const { t } = useTranslation('settings');

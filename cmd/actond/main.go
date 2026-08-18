@@ -209,9 +209,14 @@ func main() {
 	if profileMgr != nil {
 		engine.SetProfileManager(profileMgr)
 	}
-
 	tokenTracker := memory.NewTokenTracker(db.SQLDB())
 	engine.SetTokenTracker(tokenTracker)
+
+	// Initialize Cognitive Reflection Daemon
+	reflectionEngine := agent.NewReflectionEngine(profileMgr, hybridEngine, llmRouter, eventBus)
+	engine.SetReflectionEngine(reflectionEngine)
+	reflectionEngine.Start(ctx)
+	defer reflectionEngine.Stop()
 
 	cronSched := agent.NewCronScheduler(engine, eventBus, db.SQLDB())
 	tools.AttachCronScheduler(toolReg, cronSched)

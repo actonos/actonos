@@ -103,6 +103,44 @@ System health check. No authentication required.
 }
 ```
 
+### `GET /api/models`
+Retrieve the canonical catalog of all supported LLM models, provider specs, badges, and pricing tiers. Single source of truth for the entire system.
+
+**Response:**
+```json
+{
+  "data": {
+    "models": [
+      {
+        "id": "anthropic/claude-sonnet-4-6",
+        "name": "Claude Sonnet 4.6",
+        "provider_id": "anthropic",
+        "provider_name": "Anthropic Claude",
+        "badge": "Frontier Coding & Multi-Agent Swarm",
+        "context_window": "512k",
+        "category": "Cloud Frontier",
+        "prompt_per_1m": 3.0,
+        "completion_per_1m": 15.0,
+        "is_default": true,
+        "supports_tools": true,
+        "supports_vision": true
+      }
+    ],
+    "providers": [
+      {
+        "id": "anthropic",
+        "name": "Anthropic Claude",
+        "category": "Cloud Frontier",
+        "description": "Frontier coding, hybrid reasoning, and safety-hardened models.",
+        "default_base_url": "https://api.anthropic.com/v1",
+        "accent_color": "#D97706",
+        "model_presets": [...]
+      }
+    ]
+  }
+}
+```
+
 ### `GET /api/system/metrics`
 Hardware and container metrics (CPU usage, RAM, disk, uptime).
 
@@ -179,8 +217,8 @@ Create a new agent manifest.
   "description": "Helps with academic research and web summaries",
   "avatar_icon": "bot",
   "model_config": {
-    "primary_model": "anthropic/claude-3-7-sonnet",
-    "fallback_model": "google/gemini-2.5-flash",
+    "primary_model": "anthropic/claude-sonnet-4-6",
+    "fallback_model": "openai/gpt-5-mini",
     "temperature": 0.3
   },
   "system_instructions": "You are an expert research analyst...",

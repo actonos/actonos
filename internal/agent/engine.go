@@ -18,15 +18,16 @@ const DefaultEntropyThreshold = 0.65
 
 // Engine orchestrates the POMDP & ReAct cognitive loop for agents.
 type Engine struct {
-	agentMgr     *AgentManager
-	bus          *bus.EventBus
-	llm          *llm.ModelCascadeRouter
-	memory       *memory.HybridEngine
-	profileMgr   *UserProfileManager
-	tools        *tools.ToolRegistry
-	verifier     *Verifier
-	tokenTracker *memory.TokenTracker
-	theta        float64 // Entropy threshold
+	agentMgr         *AgentManager
+	bus              *bus.EventBus
+	llm              *llm.ModelCascadeRouter
+	memory           *memory.HybridEngine
+	profileMgr       *UserProfileManager
+	tools            *tools.ToolRegistry
+	verifier         *Verifier
+	tokenTracker     *memory.TokenTracker
+	reflectionEngine *ReflectionEngine
+	theta            float64 // Entropy threshold
 }
 
 // NewEngine creates an Engine instance.
@@ -49,6 +50,11 @@ func NewEngine(
 // SetProfileManager attaches the user profile & soul manager.
 func (e *Engine) SetProfileManager(m *UserProfileManager) {
 	e.profileMgr = m
+}
+
+// SetReflectionEngine attaches the memory reflection daemon.
+func (e *Engine) SetReflectionEngine(r *ReflectionEngine) {
+	e.reflectionEngine = r
 }
 
 // SetToolRegistry attaches the system tool registry to enable tool execution.
@@ -275,19 +281,23 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 		}
 	}
 
-	// 4. Store memory fragment asynchronously
-	if e.memory != nil && finalResp != nil && finalResp.Content != "" {
-		go func() {
-			_, _ = e.memory.StoreMemory(
-				context.Background(),
-				agentID,
-				memory.LayerEpisodic,
-				fmt.Sprintf("User asked: %s | Response: %s", userMessage, finalResp.Content),
-				nil,
-				map[string]any{"timestamp": time.Now().UTC()},
-				1.0,
-			)
-		}()
+	// 4. Trigger reflection daemon asynchronously (updates MEMORY.md, preferences, and episodic memory)
+	if finalResp != nil && finalResp.Content != "" {
+		if e.reflectionEngine != nil {
+			e.reflectionEngine.ReflectOnConversation(context.Background(), agentID, userMessage, finalResp.Content)
+		} else if e.memory != nil {
+			go func() {
+				_, _ = e.memory.StoreMemory(
+					context.Background(),
+					agentID,
+					memory.LayerEpisodic,
+					fmt.Sprintf("User asked: %s | Response: %s", userMessage, finalResp.Content),
+					nil,
+					map[string]any{"timestamp": time.Now().UTC()},
+					1.0,
+				)
+			}()
+		}
 	}
 
 	if e.bus != nil && finalResp != nil {
@@ -567,19 +577,23 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 		}
 	}
 
-	// 4. Store memory fragment asynchronously
-	if e.memory != nil && finalResp != nil && finalResp.Content != "" {
-		go func() {
-			_, _ = e.memory.StoreMemory(
-				context.Background(),
-				agentID,
-				memory.LayerEpisodic,
-				fmt.Sprintf("User asked: %s | Response: %s", userMessage, finalResp.Content),
-				nil,
-				map[string]any{"timestamp": time.Now().UTC()},
-				1.0,
-			)
-		}()
+	// 4. Trigger reflection daemon asynchronously (updates MEMORY.md, preferences, and episodic memory)
+	if finalResp != nil && finalResp.Content != "" {
+		if e.reflectionEngine != nil {
+			e.reflectionEngine.ReflectOnConversation(context.Background(), agentID, userMessage, finalResp.Content)
+		} else if e.memory != nil {
+			go func() {
+				_, _ = e.memory.StoreMemory(
+					context.Background(),
+					agentID,
+					memory.LayerEpisodic,
+					fmt.Sprintf("User asked: %s | Response: %s", userMessage, finalResp.Content),
+					nil,
+					map[string]any{"timestamp": time.Now().UTC()},
+					1.0,
+				)
+			}()
+		}
 	}
 
 	if e.bus != nil && finalResp != nil {

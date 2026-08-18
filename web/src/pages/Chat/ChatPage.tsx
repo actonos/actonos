@@ -514,7 +514,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                         {activeAgent?.name || 'Nova (Root System)'}
                       </div>
                       <div className="text-[11px] font-mono text-slate truncate">
-                        {activeAgent?.model_config.primary_model || 'claude-3-7-sonnet'}
+                        {activeAgent?.model_config.primary_model || 'claude-sonnet-4-6'}
                       </div>
                     </div>
                   </div>
@@ -789,7 +789,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                     {activeAgent?.is_system && <Badge variant="accent">Root</Badge>}
                   </h3>
                   <div className="flex items-center gap-2 text-caption text-slate font-mono text-[11px] truncate">
-                    <span className="truncate">Model: {activeAgent?.model_config.primary_model || 'claude-3-7-sonnet'}</span>
+                    <span className="truncate">Model: {activeAgent?.model_config.primary_model || 'claude-sonnet-4-6'}</span>
                     {activeConv && (
                       <>
                         <span>•</span>

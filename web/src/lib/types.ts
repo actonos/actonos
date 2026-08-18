@@ -143,6 +143,36 @@ export interface LLMProviderInfo {
   status: 'connected' | 'error' | 'not_configured' | 'configured';
 }
 
+export interface ModelSpec {
+  id: string;
+  name: string;
+  provider_id: string;
+  provider_name: string;
+  badge?: string;
+  context_window?: string;
+  category: string;
+  prompt_per_1m: number;
+  completion_per_1m: number;
+  is_default?: boolean;
+  supports_tools?: boolean;
+  supports_vision?: boolean;
+}
+
+export interface ProviderSpec {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  default_base_url: string;
+  accent_color: string;
+  model_presets: ModelSpec[];
+}
+
+export interface CatalogResponse {
+  models: ModelSpec[];
+  providers: ProviderSpec[];
+}
+
 export interface ChannelDefinition {
   id: string;
   nameKey: string;

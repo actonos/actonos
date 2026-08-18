@@ -6,9 +6,10 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"log/slog"
-	"strings"
 	"sync"
 	"time"
+
+	"github.com/actonos/actonos/internal/llm"
 )
 
 // TokenUsageRecord represents a single token usage ledger event.
@@ -66,59 +67,11 @@ type DailyUsagePoint struct {
 	CostUSD          float64 `json:"cost_usd"`
 }
 
-// ModelPricing defines rate per 1 Million tokens in USD.
-type ModelPricing struct {
-	PromptPer1M     float64
-	CompletionPer1M float64
-}
-
-// Standard Pricing Table (USD per 1 Million Tokens)
-var defaultPricing = map[string]ModelPricing{
-	// OpenAI
-	"gpt-4o":            {PromptPer1M: 2.50, CompletionPer1M: 10.00},
-	"gpt-4o-mini":       {PromptPer1M: 0.15, CompletionPer1M: 0.60},
-	"gpt-4-turbo":       {PromptPer1M: 10.00, CompletionPer1M: 30.00},
-	"o1":                {PromptPer1M: 15.00, CompletionPer1M: 60.00},
-	"o3-mini":           {PromptPer1M: 1.10, CompletionPer1M: 4.40},
-	// Anthropic
-	"claude-3-7-sonnet": {PromptPer1M: 3.00, CompletionPer1M: 15.00},
-	"claude-3-5-sonnet": {PromptPer1M: 3.00, CompletionPer1M: 15.00},
-	"claude-3-5-haiku":  {PromptPer1M: 0.80, CompletionPer1M: 4.00},
-	"claude-3-opus":     {PromptPer1M: 15.00, CompletionPer1M: 75.00},
-	// Google Gemini
-	"gemini-2.0-flash":  {PromptPer1M: 0.10, CompletionPer1M: 0.40},
-	"gemini-1.5-flash":  {PromptPer1M: 0.075, CompletionPer1M: 0.30},
-	"gemini-1.5-pro":    {PromptPer1M: 1.25, CompletionPer1M: 5.00},
-	// DeepSeek
-	"deepseek-chat":     {PromptPer1M: 0.14, CompletionPer1M: 0.28},
-	"deepseek-reasoner": {PromptPer1M: 0.55, CompletionPer1M: 2.19},
-	// Local / Ollama (Free)
-	"ollama":            {PromptPer1M: 0.00, CompletionPer1M: 0.00},
-	"local":             {PromptPer1M: 0.00, CompletionPer1M: 0.00},
-}
-
-// CalculateEstimatedCost estimates the cost of a request in USD.
+// CalculateEstimatedCost estimates the cost of a request in USD using the canonical pricing catalog.
 func CalculateEstimatedCost(model string, promptTokens, completionTokens int) float64 {
-	lower := strings.ToLower(model)
-	var price ModelPricing
-	found := false
-
-	for k, p := range defaultPricing {
-		if strings.Contains(lower, k) {
-			price = p
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		// Default generic estimate ($1 / 1M prompt, $3 / 1M completion)
-		price = ModelPricing{PromptPer1M: 1.0, CompletionPer1M: 3.0}
-	}
-
-	costPrompt := (float64(promptTokens) / 1_000_000.0) * price.PromptPer1M
-	costCompletion := (float64(completionTokens) / 1_000_000.0) * price.CompletionPer1M
-	return costPrompt + costCompletion
+	prompt1M, compl1M := llm.GetModelPricing(model)
+	cost := (float64(promptTokens) / 1000000.0 * prompt1M) + (float64(completionTokens) / 1000000.0 * compl1M)
+	return cost
 }
 
 // TokenTracker manages recording and querying token metrics in SQLite.

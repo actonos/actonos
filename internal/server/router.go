@@ -149,6 +149,7 @@ func (s *Server) setupRoutes() {
 	r.Route("/api", func(r chi.Router) {
 		// Public Endpoints
 		r.Get("/health", s.handleHealth)
+		r.Get("/models", s.handleGetModelsCatalog)
 
 		// Authentication Endpoints
 		r.Route("/auth", func(r chi.Router) {
@@ -290,6 +291,7 @@ func (s *Server) setupRoutes() {
 			r.Route("/system", func(r chi.Router) {
 				r.Get("/metrics", s.handleGetMetrics)
 				r.Get("/metrics/prometheus", s.handlePrometheusMetrics)
+				r.Get("/models", s.handleGetModelsCatalog)
 				r.Get("/token-usage", s.handleGetTokenUsage)
 				r.Get("/token-usage/history", s.handleGetTokenHistory)
 				r.Get("/heartbeat/history", s.handleGetHeartbeatHistory)

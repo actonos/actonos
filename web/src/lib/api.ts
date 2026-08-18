@@ -1,5 +1,6 @@
 import type {
   AgentManifest,
+  CatalogResponse,
   ChannelAccount,
   ConnectorInfo,
   LLMProviderInfo,
@@ -414,6 +415,7 @@ export const api = {
     }),
   getAuditLogs: () => fetchJSON<{ entries: AuditLogItem[]; count: number }>('/system/audit'),
   getStorageInfo: () => fetchJSON<StorageInfoData>('/system/storage'),
+  getModelsCatalog: () => fetchJSON<CatalogResponse>('/models'),
   getIdentity: () => fetchJSON<UserIdentityProfile>('/system/identity'),
   saveIdentity: (profile: Partial<UserIdentityProfile>) =>
     fetchJSON<{ status: string; profile: UserIdentityProfile; updated_at: string }>('/system/identity', {

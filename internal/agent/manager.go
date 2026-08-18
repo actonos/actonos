@@ -298,8 +298,8 @@ You are an elite, proactive, and empathetic AI companion and systems architect r
 		Status:      StatusActive,
 		IsSystem:    true,
 		ModelConfig: llm.ModelConfig{
-			PrimaryModel:  "anthropic/claude-3-7-sonnet",
-			FallbackModel: "google/gemini-2.5-flash",
+			PrimaryModel:  "anthropic/claude-sonnet-4-6",
+			FallbackModel: "openai/gpt-5-mini",
 			Temperature:   0.2,
 			MaxTokens:     4096,
 		},

@@ -1,375 +1,539 @@
+/**
+ * ActonOS Universal Model & Provider Catalog
+ * Unified Single Source of Truth for frontend components and synchronized with backend /api/models.
+ */
+
+import { api } from '@/lib/api';
+import type { ModelSpec } from '@/lib/types';
+import { Sparkles, Zap, Cpu, Server, Bot } from 'lucide-react';
+import type React from 'react';
+
 export interface ModelOption {
-  id: string; // e.g. "anthropic/claude-3-7-sonnet"
-  name: string; // e.g. "Claude 3.7 Sonnet"
+  id: string; // e.g. "anthropic/claude-sonnet-4-6"
+  name: string; // e.g. "Claude Sonnet 4.6"
   providerId: string; // e.g. "anthropic"
   providerName: string; // e.g. "Anthropic Claude"
-  badge?: string; // e.g. "Hybrid Reasoning", "Ultra Fast", "Code Specialist"
-  contextWindow?: string; // e.g. "200k", "1M+", "128k"
-  category: 'Cloud Frontier' | 'Reasoning' | 'Ultra Fast' | 'Local / Private' | 'Aggregator';
+  badge?: string; // e.g. "Hybrid Reasoning", "Ultra Fast", "Frontier Coding"
+  contextWindow?: string; // e.g. "256k", "512k", "1M+", "2M+"
+  category: 'Cloud Frontier' | 'Reasoning' | 'Ultra Fast' | 'Aggregator' | 'Custom';
+  promptPer1M?: number;
+  completionPer1M?: number;
+}
+
+export interface ProviderMeta {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  defaultBaseURL: string;
+  modelPresets: { id: string; label: string }[];
+  accentColor: string;
+  icon: React.ElementType;
 }
 
 export const LATEST_MODEL_CATALOG: ModelOption[] = [
   // Anthropic
   {
-    id: 'anthropic/claude-3-7-sonnet',
-    name: 'Claude 3.7 Sonnet',
+    id: 'anthropic/claude-haiku-4-5',
+    name: 'Claude Haiku 4.5',
     providerId: 'anthropic',
-    providerName: 'Anthropic',
-    badge: 'Hybrid Reasoning & Frontier Coding',
-    contextWindow: '200k',
-    category: 'Cloud Frontier',
+    providerName: 'Anthropic Claude',
+    badge: 'Ultra Fast & High Efficiency Sub-Agent',
+    contextWindow: '256k',
+    category: 'Ultra Fast',
+    promptPer1M: 0.8,
+    completionPer1M: 4.0,
   },
   {
-    id: 'anthropic/claude-opus-4-8',
-    name: 'Claude Opus 4.8',
+    id: 'anthropic/claude-sonnet-4-5',
+    name: 'Claude Sonnet 4.5',
     providerId: 'anthropic',
-    providerName: 'Anthropic',
-    badge: 'Supreme Intelligence & Complex Math',
-    contextWindow: '200k',
+    providerName: 'Anthropic Claude',
+    badge: 'Autonomous Engineering Specialist',
+    contextWindow: '256k',
     category: 'Cloud Frontier',
+    promptPer1M: 3.0,
+    completionPer1M: 15.0,
   },
   {
     id: 'anthropic/claude-sonnet-4-6',
     name: 'Claude Sonnet 4.6',
     providerId: 'anthropic',
-    providerName: 'Anthropic',
-    badge: 'Advanced Multi-Agent Specialist',
-    contextWindow: '200k',
+    providerName: 'Anthropic Claude',
+    badge: 'Frontier Coding & Multi-Agent Swarm',
+    contextWindow: '512k',
     category: 'Cloud Frontier',
+    promptPer1M: 3.0,
+    completionPer1M: 15.0,
   },
   {
-    id: 'anthropic/claude-haiku-4-5',
-    name: 'Claude Haiku 4.5',
+    id: 'anthropic/claude-opus-4-5',
+    name: 'Claude Opus 4.5',
     providerId: 'anthropic',
-    providerName: 'Anthropic',
-    badge: 'Ultra-Fast Sub-Agent Worker',
-    contextWindow: '200k',
-    category: 'Ultra Fast',
+    providerName: 'Anthropic Claude',
+    badge: 'Deep Cognitive Reasoning Flagship',
+    contextWindow: '256k',
+    category: 'Reasoning',
+    promptPer1M: 10.0,
+    completionPer1M: 40.0,
   },
   {
-    id: 'anthropic/claude-3-5-sonnet',
-    name: 'Claude 3.5 Sonnet',
+    id: 'anthropic/claude-sonnet-5',
+    name: 'Claude Sonnet 5',
     providerId: 'anthropic',
-    providerName: 'Anthropic',
-    badge: 'Coding Benchmark Leader',
-    contextWindow: '200k',
+    providerName: 'Anthropic Claude',
+    badge: 'Next-Gen Cognitive Architecture',
+    contextWindow: '1M+',
     category: 'Cloud Frontier',
+    promptPer1M: 3.5,
+    completionPer1M: 17.5,
   },
   {
-    id: 'anthropic/claude-3-5-haiku',
-    name: 'Claude 3.5 Haiku',
+    id: 'anthropic/claude-opus-4-6',
+    name: 'Claude Opus 4.6',
     providerId: 'anthropic',
-    providerName: 'Anthropic',
-    badge: 'Fast & Cost Efficient',
-    contextWindow: '200k',
-    category: 'Ultra Fast',
+    providerName: 'Anthropic Claude',
+    badge: 'Supreme STEM & System Architecture',
+    contextWindow: '512k',
+    category: 'Reasoning',
+    promptPer1M: 12.0,
+    completionPer1M: 50.0,
+  },
+  {
+    id: 'anthropic/claude-opus-4-7',
+    name: 'Claude Opus 4.7',
+    providerId: 'anthropic',
+    providerName: 'Anthropic Claude',
+    badge: 'Advanced Deliberate Reasoning',
+    contextWindow: '512k',
+    category: 'Reasoning',
+    promptPer1M: 14.0,
+    completionPer1M: 55.0,
+  },
+  {
+    id: 'anthropic/claude-opus-4-8',
+    name: 'Claude Opus 4.8',
+    providerId: 'anthropic',
+    providerName: 'Anthropic Claude',
+    badge: 'Supreme Autonomous Superintelligence',
+    contextWindow: '1M+',
+    category: 'Reasoning',
+    promptPer1M: 15.0,
+    completionPer1M: 60.0,
+  },
+  {
+    id: 'anthropic/claude-opus-5',
+    name: 'Claude Opus 5',
+    providerId: 'anthropic',
+    providerName: 'Anthropic Claude',
+    badge: 'Peak Frontier Superintelligence Flagship',
+    contextWindow: '2M+',
+    category: 'Cloud Frontier',
+    promptPer1M: 20.0,
+    completionPer1M: 80.0,
   },
 
   // OpenAI
   {
-    id: 'openai/gpt-5.6',
-    name: 'GPT-5.6',
+    id: 'openai/gpt-5-mini',
+    name: 'GPT-5 Mini',
     providerId: 'openai',
     providerName: 'OpenAI',
-    badge: '2026 Autonomous Frontier Flagship',
+    badge: 'Lightweight Ultra-Fast Multimodal',
     contextWindow: '256k',
-    category: 'Cloud Frontier',
+    category: 'Ultra Fast',
+    promptPer1M: 0.2,
+    completionPer1M: 0.8,
   },
   {
-    id: 'openai/gpt-5.5',
-    name: 'GPT-5.5',
+    id: 'openai/gpt-5',
+    name: 'GPT-5',
     providerId: 'openai',
     providerName: 'OpenAI',
-    badge: 'General Cognitive Multimodal',
+    badge: 'GPT-5 Flagship Foundation Model',
     contextWindow: '256k',
     category: 'Cloud Frontier',
+    promptPer1M: 2.0,
+    completionPer1M: 8.0,
   },
   {
-    id: 'openai/gpt-5.4-pro',
-    name: 'GPT-5.4 Pro',
+    id: 'openai/gpt-5.1',
+    name: 'GPT-5.1',
     providerId: 'openai',
     providerName: 'OpenAI',
-    badge: 'Enterprise Deep Reasoning',
-    contextWindow: '200k',
-    category: 'Reasoning',
+    badge: 'Enhanced Code & Tool Calling',
+    contextWindow: '256k',
+    category: 'Cloud Frontier',
+    promptPer1M: 2.2,
+    completionPer1M: 8.8,
+  },
+  {
+    id: 'openai/gpt-5.2',
+    name: 'GPT-5.2',
+    providerId: 'openai',
+    providerName: 'OpenAI',
+    badge: 'Adaptive Multi-Step Reasoning',
+    contextWindow: '512k',
+    category: 'Cloud Frontier',
+    promptPer1M: 2.5,
+    completionPer1M: 10.0,
   },
   {
     id: 'openai/gpt-5.4-mini',
     name: 'GPT-5.4 Mini',
     providerId: 'openai',
     providerName: 'OpenAI',
-    badge: 'High-Throughput Light Engine',
-    contextWindow: '128k',
+    badge: 'High-Throughput Sub-Agent Brain',
+    contextWindow: '256k',
     category: 'Ultra Fast',
+    promptPer1M: 0.3,
+    completionPer1M: 1.2,
   },
   {
-    id: 'openai/o3',
-    name: 'o3',
+    id: 'openai/gpt-5.4',
+    name: 'GPT-5.4',
     providerId: 'openai',
     providerName: 'OpenAI',
-    badge: 'Next-Gen Frontier Reasoning',
-    contextWindow: '200k',
-    category: 'Reasoning',
-  },
-  {
-    id: 'openai/o3-mini',
-    name: 'o3-mini',
-    providerId: 'openai',
-    providerName: 'OpenAI',
-    badge: 'Fast STEM & Code Reasoning',
-    contextWindow: '200k',
-    category: 'Reasoning',
-  },
-  {
-    id: 'openai/gpt-4o',
-    name: 'GPT-4o',
-    providerId: 'openai',
-    providerName: 'OpenAI',
-    badge: 'Omni Multimodal Standard',
-    contextWindow: '128k',
+    badge: 'Enterprise Cognitive Flagship',
+    contextWindow: '512k',
     category: 'Cloud Frontier',
+    promptPer1M: 3.0,
+    completionPer1M: 12.0,
   },
   {
-    id: 'openai/gpt-4o-mini',
-    name: 'GPT-4o Mini',
+    id: 'openai/gpt-5.5',
+    name: 'GPT-5.5',
     providerId: 'openai',
     providerName: 'OpenAI',
-    badge: 'Fast & Lightweight',
-    contextWindow: '128k',
-    category: 'Ultra Fast',
-  },
-
-  // Google Gemini
-  {
-    id: 'google/gemini-3.1-pro',
-    name: 'Gemini 3.1 Pro',
-    providerId: 'gemini',
-    providerName: 'Google Gemini',
-    badge: '2M+ Context & Native System Agent',
-    contextWindow: '2M+',
-    category: 'Cloud Frontier',
-  },
-  {
-    id: 'google/gemini-3-flash',
-    name: 'Gemini 3 Flash',
-    providerId: 'gemini',
-    providerName: 'Google Gemini',
-    badge: '1M+ Context Real-time Streaming',
+    badge: 'Advanced Multimodal Deep Understanding',
     contextWindow: '1M+',
-    category: 'Ultra Fast',
-  },
-  {
-    id: 'google/gemini-2.5-pro',
-    name: 'Gemini 2.5 Pro',
-    providerId: 'gemini',
-    providerName: 'Google Gemini',
-    badge: 'Deep Multi-Modal Code Analysis',
-    contextWindow: '2M+',
     category: 'Cloud Frontier',
+    promptPer1M: 3.5,
+    completionPer1M: 14.0,
   },
   {
-    id: 'google/gemini-2.5-flash',
-    name: 'Gemini 2.5 Flash',
-    providerId: 'gemini',
-    providerName: 'Google Gemini',
-    badge: '1M Context & Fast Execution',
+    id: 'openai/gpt-5.6-terra',
+    name: 'GPT-5.6 Terra',
+    providerId: 'openai',
+    providerName: 'OpenAI',
+    badge: 'Grounding & Large-Scale Data Systems',
     contextWindow: '1M+',
-    category: 'Ultra Fast',
-  },
-
-  // xAI Grok
-  {
-    id: 'xai/grok-4.5',
-    name: 'Grok 4.5',
-    providerId: 'xai',
-    providerName: 'xAI Grok',
-    badge: 'Real-Time Web & Deep Logic',
-    contextWindow: '128k',
     category: 'Cloud Frontier',
+    promptPer1M: 4.0,
+    completionPer1M: 16.0,
   },
   {
-    id: 'xai/grok-4.1-fast',
-    name: 'Grok 4.1 Fast',
-    providerId: 'xai',
-    providerName: 'xAI Grok',
-    badge: 'Rapid Realtime Analysis',
-    contextWindow: '128k',
-    category: 'Ultra Fast',
-  },
-  {
-    id: 'xai/grok-code-fast',
-    name: 'Grok Code Fast',
-    providerId: 'xai',
-    providerName: 'xAI Grok',
-    badge: 'Dedicated Code Generation Engine',
-    contextWindow: '128k',
-    category: 'Cloud Frontier',
-  },
-  {
-    id: 'xai/grok-3',
-    name: 'Grok 3',
-    providerId: 'xai',
-    providerName: 'xAI Grok',
-    badge: 'Supercomputing Reasoning',
-    contextWindow: '128k',
+    id: 'openai/gpt-5.6-sol',
+    name: 'GPT-5.6 Sol',
+    providerId: 'openai',
+    providerName: 'OpenAI',
+    badge: 'Peak Autonomous Agent Flagship',
+    contextWindow: '2M+',
     category: 'Reasoning',
+    promptPer1M: 5.0,
+    completionPer1M: 20.0,
   },
 
   // DeepSeek
-  {
-    id: 'deepseek/deepseek-v4-pro',
-    name: 'DeepSeek-V4 Pro',
-    providerId: 'deepseek',
-    providerName: 'DeepSeek',
-    badge: '1M Context MoE Architecture',
-    contextWindow: '1M',
-    category: 'Cloud Frontier',
-  },
   {
     id: 'deepseek/deepseek-v4-flash',
     name: 'DeepSeek-V4 Flash',
     providerId: 'deepseek',
     providerName: 'DeepSeek',
-    badge: 'Fast Cost-Effective MoE',
-    contextWindow: '128k',
-    category: 'Ultra Fast',
-  },
-  {
-    id: 'deepseek/deepseek-r1',
-    name: 'DeepSeek-R1 (Reasoner)',
-    providerId: 'deepseek',
-    providerName: 'DeepSeek',
-    badge: 'Open Reasoning Standard',
-    contextWindow: '128k',
-    category: 'Reasoning',
-  },
-  {
-    id: 'deepseek/deepseek-v3.2',
-    name: 'DeepSeek-V3.2',
-    providerId: 'deepseek',
-    providerName: 'DeepSeek',
-    badge: 'High Accuracy MoE Chat',
-    contextWindow: '128k',
-    category: 'Cloud Frontier',
-  },
-
-  // Open-Source / Local / Ollama / Haimaker
-  {
-    id: 'ollama/qwen3-coder',
-    name: 'Qwen3 Coder (Local/Ollama)',
-    providerId: 'ollama',
-    providerName: 'Local Ollama',
-    badge: 'State of the Art Open Coding',
-    contextWindow: '128k',
-    category: 'Local / Private',
-  },
-  {
-    id: 'ollama/gemma4:latest',
-    name: 'Gemma 4 (Local/Ollama)',
-    providerId: 'ollama',
-    providerName: 'Local Ollama',
-    badge: 'Google Open Hardware-Optimized',
-    contextWindow: '64k',
-    category: 'Local / Private',
-  },
-  {
-    id: 'ollama/llama-3.3-70b',
-    name: 'Llama 3.3 70B (Local/Ollama)',
-    providerId: 'ollama',
-    providerName: 'Local Ollama',
-    badge: 'Open Weight Production Standard',
-    contextWindow: '128k',
-    category: 'Local / Private',
-  },
-  {
-    id: 'ollama/deepseek-r1:70b',
-    name: 'DeepSeek-R1 70B (Local)',
-    providerId: 'ollama',
-    providerName: 'Local Ollama',
-    badge: 'Private Hardware Deliberate Reasoning',
-    contextWindow: '64k',
-    category: 'Local / Private',
-  },
-  {
-    id: 'ollama/minimax-m3',
-    name: 'MiniMax M3 (Local/Cloud)',
-    providerId: 'ollama',
-    providerName: 'Local Ollama',
-    badge: '4M Context Agentic Long-Horizon',
-    contextWindow: '4M',
-    category: 'Local / Private',
-  },
-  {
-    id: 'ollama/kimi-k2.7',
-    name: 'Kimi K2.7 (Local/Cloud)',
-    providerId: 'ollama',
-    providerName: 'Local Ollama',
-    badge: 'Multi-Step Agentic Reasoning',
+    badge: 'Ultra-High Throughput MoE Architecture',
     contextWindow: '256k',
-    category: 'Local / Private',
-  },
-
-  // Groq Cloud
-  {
-    id: 'groq/llama-3.3-70b-versatile',
-    name: 'Llama 3.3 70B (Groq LPU)',
-    providerId: 'groq',
-    providerName: 'Groq Cloud',
-    badge: '500+ tok/s Ultra Fast',
-    contextWindow: '128k',
     category: 'Ultra Fast',
+    promptPer1M: 0.1,
+    completionPer1M: 0.25,
   },
   {
-    id: 'groq/deepseek-r1-distill-llama-70b',
-    name: 'DeepSeek R1 70B (Groq LPU)',
-    providerId: 'groq',
-    providerName: 'Groq Cloud',
-    badge: 'High-Speed LPU Reasoning',
-    contextWindow: '128k',
+    id: 'deepseek/deepseek-v4-pro',
+    name: 'DeepSeek-V4 Pro',
+    providerId: 'deepseek',
+    providerName: 'DeepSeek',
+    badge: '1M Context MoE Reasoning Leader',
+    contextWindow: '1M+',
     category: 'Reasoning',
+    promptPer1M: 0.45,
+    completionPer1M: 1.8,
   },
 
-  // OpenRouter Gateway
+  // xAI (Grok)
   {
-    id: 'openrouter/anthropic/claude-3.7-sonnet',
-    name: 'Claude 3.7 Sonnet (OpenRouter)',
+    id: 'grok/grok-4.3',
+    name: 'Grok 4.3',
+    providerId: 'grok',
+    providerName: 'xAI (Grok)',
+    badge: 'Real-Time Knowledge & Rapid Tool Use',
+    contextWindow: '256k',
+    category: 'Ultra Fast',
+    promptPer1M: 1.5,
+    completionPer1M: 6.0,
+  },
+  {
+    id: 'grok/grok-4.5',
+    name: 'Grok 4.5',
+    providerId: 'grok',
+    providerName: 'xAI (Grok)',
+    badge: 'Deep Cognitive Reasoning & Coding',
+    contextWindow: '512k',
+    category: 'Reasoning',
+    promptPer1M: 3.0,
+    completionPer1M: 12.0,
+  },
+  {
+    id: 'grok/grok-4.6',
+    name: 'Grok 4.6',
+    providerId: 'grok',
+    providerName: 'xAI (Grok)',
+    badge: 'Peak Frontier Realtime Intelligence',
+    contextWindow: '1M+',
+    category: 'Cloud Frontier',
+    promptPer1M: 4.5,
+    completionPer1M: 18.0,
+  },
+
+  // OpenRouter
+  {
+    id: 'openrouter/anthropic/claude-sonnet-5',
+    name: 'Claude Sonnet 5 (OpenRouter)',
     providerId: 'openrouter',
     providerName: 'OpenRouter',
-    badge: 'Aggregated Gateway',
-    contextWindow: '200k',
+    badge: 'Frontier Claude via OpenRouter',
+    contextWindow: '1M+',
     category: 'Aggregator',
+    promptPer1M: 3.5,
+    completionPer1M: 17.5,
+  },
+  {
+    id: 'openrouter/anthropic/claude-opus-5',
+    name: 'Claude Opus 5 (OpenRouter)',
+    providerId: 'openrouter',
+    providerName: 'OpenRouter',
+    badge: 'Superintelligence via OpenRouter',
+    contextWindow: '2M+',
+    category: 'Aggregator',
+    promptPer1M: 20.0,
+    completionPer1M: 80.0,
+  },
+  {
+    id: 'openrouter/anthropic/claude-sonnet-4-6',
+    name: 'Claude Sonnet 4.6 (OpenRouter)',
+    providerId: 'openrouter',
+    providerName: 'OpenRouter',
+    badge: 'Frontier Coding via OpenRouter',
+    contextWindow: '512k',
+    category: 'Aggregator',
+    promptPer1M: 3.0,
+    completionPer1M: 15.0,
+  },
+  {
+    id: 'openrouter/openai/gpt-5.6-sol',
+    name: 'GPT-5.6 Sol (OpenRouter)',
+    providerId: 'openrouter',
+    providerName: 'OpenRouter',
+    badge: 'GPT-5.6 Flagship via OpenRouter',
+    contextWindow: '2M+',
+    category: 'Aggregator',
+    promptPer1M: 5.0,
+    completionPer1M: 20.0,
   },
   {
     id: 'openrouter/openai/gpt-5.5',
     name: 'GPT-5.5 (OpenRouter)',
     providerId: 'openrouter',
     providerName: 'OpenRouter',
-    badge: 'Aggregated Gateway',
-    contextWindow: '256k',
+    badge: 'GPT-5.5 via OpenRouter',
+    contextWindow: '1M+',
     category: 'Aggregator',
+    promptPer1M: 3.5,
+    completionPer1M: 14.0,
   },
   {
-    id: 'openrouter/deepseek/deepseek-r1',
-    name: 'DeepSeek-R1 (OpenRouter)',
+    id: 'openrouter/openai/gpt-5',
+    name: 'GPT-5 (OpenRouter)',
     providerId: 'openrouter',
     providerName: 'OpenRouter',
-    badge: 'Aggregated Gateway',
-    contextWindow: '128k',
+    badge: 'GPT-5 Standard via OpenRouter',
+    contextWindow: '256k',
     category: 'Aggregator',
+    promptPer1M: 2.0,
+    completionPer1M: 8.0,
+  },
+  {
+    id: 'openrouter/deepseek/deepseek-v4-pro',
+    name: 'DeepSeek-V4 Pro (OpenRouter)',
+    providerId: 'openrouter',
+    providerName: 'OpenRouter',
+    badge: 'DeepSeek-V4 via OpenRouter',
+    contextWindow: '1M+',
+    category: 'Aggregator',
+    promptPer1M: 0.45,
+    completionPer1M: 1.8,
+  },
+  {
+    id: 'openrouter/x-ai/grok-4.6',
+    name: 'Grok 4.6 (OpenRouter)',
+    providerId: 'openrouter',
+    providerName: 'OpenRouter',
+    badge: 'xAI Grok via OpenRouter',
+    contextWindow: '1M+',
+    category: 'Aggregator',
+    promptPer1M: 4.5,
+    completionPer1M: 18.0,
+  },
+
+  // Custom OpenAI
+  {
+    id: 'custom_openai/default-model',
+    name: 'Default Model',
+    providerId: 'custom_openai',
+    providerName: 'Custom Gateway',
+    badge: 'Self-Hosted / Private',
+    contextWindow: '128k',
+    category: 'Custom',
+    promptPer1M: 0.0,
+    completionPer1M: 0.0,
+  },
+];
+
+export const PROVIDER_METAS: ProviderMeta[] = [
+  {
+    id: 'anthropic',
+    name: 'Anthropic Claude',
+    category: 'Cloud Frontier',
+    description: 'Frontier coding, hybrid reasoning, and autonomous multi-agent intelligence.',
+    defaultBaseURL: 'https://api.anthropic.com/v1',
+    modelPresets: [
+      { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (Frontier Coding Specialist)' },
+      { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5 (Ultra Fast Sub-Agent)' },
+      { id: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5' },
+      { id: 'claude-opus-4-5', label: 'Claude Opus 4.5' },
+      { id: 'claude-sonnet-5', label: 'Claude Sonnet 5 (Next-Gen Cognitive)' },
+      { id: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
+      { id: 'claude-opus-4-7', label: 'Claude Opus 4.7' },
+      { id: 'claude-opus-4-8', label: 'Claude Opus 4.8' },
+      { id: 'claude-opus-5', label: 'Claude Opus 5 (Superintelligence Flagship)' },
+    ],
+    accentColor: '#D97706',
+    icon: Sparkles,
+  },
+  {
+    id: 'openai',
+    name: 'OpenAI',
+    category: 'Cloud Frontier',
+    description: 'Industry standard GPT-5 generation reasoning and agentic execution.',
+    defaultBaseURL: 'https://api.openai.com/v1',
+    modelPresets: [
+      { id: 'gpt-5', label: 'GPT-5 (Flagship Foundation)' },
+      { id: 'gpt-5-mini', label: 'GPT-5 Mini (Ultra Fast)' },
+      { id: 'gpt-5.1', label: 'GPT-5.1 (Tool Calling Enhanced)' },
+      { id: 'gpt-5.2', label: 'GPT-5.2 (Multi-Step Reasoning)' },
+      { id: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
+      { id: 'gpt-5.4', label: 'GPT-5.4 (Enterprise Flagship)' },
+      { id: 'gpt-5.5', label: 'GPT-5.5 (1M+ Multimodal)' },
+      { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra' },
+      { id: 'gpt-5.6-sol', label: 'GPT-5.6 Sol (2M+ Peak Autonomous)' },
+    ],
+    accentColor: '#10B981',
+    icon: Zap,
+  },
+  {
+    id: 'deepseek',
+    name: 'DeepSeek',
+    category: 'Open Weights & Cloud',
+    description: 'DeepSeek-V4 generation high-performance architecture.',
+    defaultBaseURL: 'https://api.deepseek.com/v1',
+    modelPresets: [
+      { id: 'deepseek-v4-flash', label: 'DeepSeek-V4 Flash (High Throughput MoE)' },
+      { id: 'deepseek-v4-pro', label: 'DeepSeek-V4 Pro (1M MoE Architecture)' },
+    ],
+    accentColor: '#6366F1',
+    icon: Cpu,
+  },
+  {
+    id: 'grok',
+    name: 'xAI (Grok)',
+    category: 'Real-Time Intelligence',
+    description: 'xAI Grok generation real-time knowledge and frontier reasoning.',
+    defaultBaseURL: 'https://api.x.ai/v1',
+    modelPresets: [
+      { id: 'grok-4.5', label: 'Grok 4.5 (Deep Cognitive Reasoning)' },
+      { id: 'grok-4.3', label: 'Grok 4.3 (Real-Time Knowledge)' },
+      { id: 'grok-4.6', label: 'Grok 4.6 (1M+ Peak Frontier)' },
+    ],
+    accentColor: '#EC4899',
+    icon: Bot,
+  },
+  {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    category: 'Unified Aggregator',
+    description: 'Universal gateway aggregating Claude, GPT-5, DeepSeek-V4, and Grok.',
+    defaultBaseURL: 'https://openrouter.ai/api/v1',
+    modelPresets: [
+      { id: 'anthropic/claude-sonnet-5', label: 'Claude Sonnet 5 (via OpenRouter)' },
+      { id: 'anthropic/claude-opus-5', label: 'Claude Opus 5 (via OpenRouter)' },
+      { id: 'anthropic/claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (via OpenRouter)' },
+      { id: 'openai/gpt-5.6-sol', label: 'GPT-5.6 Sol (via OpenRouter)' },
+      { id: 'openai/gpt-5.5', label: 'GPT-5.5 (via OpenRouter)' },
+      { id: 'openai/gpt-5', label: 'GPT-5 (via OpenRouter)' },
+      { id: 'deepseek/deepseek-v4-pro', label: 'DeepSeek-V4 Pro (via OpenRouter)' },
+      { id: 'x-ai/grok-4.6', label: 'Grok 4.6 (via OpenRouter)' },
+    ],
+    accentColor: '#8B5CF6',
+    icon: Server,
+  },
+  {
+    id: 'custom_openai',
+    name: 'Custom OpenAI-Compatible',
+    category: 'Self-Hosted / Gateway',
+    description: 'Connect LM Studio, vLLM, LocalAI, Azure OpenAI, or enterprise gateway.',
+    defaultBaseURL: 'http://localhost:8000/v1',
+    modelPresets: [
+      { id: 'default-model', label: 'Default Model' },
+      { id: 'custom-model', label: 'Custom Model Tag' },
+    ],
+    accentColor: '#0EA5E9',
+    icon: Server,
   },
 ];
 
 /**
+ * Dynamically synchronizes models and providers from backend /api/models.
+ */
+export async function fetchModelCatalog(): Promise<ModelOption[]> {
+  try {
+    const res = await api.getModelsCatalog();
+    if (res?.models && res.models.length > 0) {
+      const mapped: ModelOption[] = res.models.map((m: ModelSpec) => ({
+        id: m.id,
+        name: m.name,
+        providerId: m.provider_id,
+        providerName: m.provider_name,
+        badge: m.badge,
+        contextWindow: m.context_window,
+        category: (m.category as ModelOption['category']) || 'Cloud Frontier',
+        promptPer1M: m.prompt_per_1m,
+        completionPer1M: m.completion_per_1m,
+      }));
+      return mapped;
+    }
+  } catch (err) {
+    console.debug('Failed fetching live model catalog from backend, using canonical snapshot:', err);
+  }
+  return LATEST_MODEL_CATALOG;
+}
+
+/**
  * Returns models grouped by category or filtered by active configured API keys.
  */
-export function getCategorizedModels(configuredProviders?: any[]) {
+export function getCategorizedModels(configuredProviders?: any[], catalog: ModelOption[] = LATEST_MODEL_CATALOG) {
   const activeProviderIds = new Set<string>();
   configuredProviders?.forEach((p) => {
     if (p.is_configured || p.configured) {
       const pid = p.provider || p.id || '';
       activeProviderIds.add(pid);
-      if (pid === 'gemini') activeProviderIds.add('google');
-      if (pid === 'google') activeProviderIds.add('gemini');
     }
   });
 
@@ -381,15 +545,14 @@ export function getCategorizedModels(configuredProviders?: any[]) {
     'Cloud Frontier': [],
     Reasoning: [],
     'Ultra Fast': [],
-    'Local / Private': [],
     Aggregator: [],
+    Custom: [],
   };
 
-  LATEST_MODEL_CATALOG.forEach((model) => {
+  catalog.forEach((model) => {
     const isReady =
       activeProviderIds.has(model.providerId) ||
-      model.providerId === 'ollama' ||
-      model.providerId === 'groq';
+      model.providerId === 'custom_openai';
 
     if (isReady) {
       readyModels.push(model);
@@ -403,4 +566,12 @@ export function getCategorizedModels(configuredProviders?: any[]) {
   });
 
   return { readyModels, otherModels, categories };
+}
+
+export function getModelInfo(modelId: string, catalog: ModelOption[] = LATEST_MODEL_CATALOG): ModelOption | undefined {
+  return (
+    catalog.find((m) => m.id === modelId) ||
+    catalog.find((m) => m.id.endsWith('/' + modelId)) ||
+    catalog.find((m) => modelId.includes(m.id))
+  );
 }
