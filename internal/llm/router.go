@@ -113,6 +113,7 @@ func (r *ModelCascadeRouter) CompleteWithCascade(
 	messages []Message,
 	opts CompletionOptions,
 ) (*Response, error) {
+	messages = SanitizeMessages(messages)
 	if len(cascadeOrder) == 0 {
 		r.mu.RLock()
 		if r.defaultID != "" {
@@ -158,6 +159,7 @@ func (r *ModelCascadeRouter) StreamCompleteWithCascade(
 	messages []Message,
 	opts CompletionOptions,
 ) (<-chan StreamChunk, error) {
+	messages = SanitizeMessages(messages)
 	if len(cascadeOrder) == 0 {
 		r.mu.RLock()
 		if r.defaultID != "" {

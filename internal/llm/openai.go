@@ -70,6 +70,7 @@ type openAIChatResponse struct {
 }
 
 func (p *OpenAIProvider) Complete(ctx context.Context, messages []Message, opts CompletionOptions) (*Response, error) {
+	messages = SanitizeMessages(messages)
 	model := p.Model
 	if opts.Model != "" {
 		model = opts.Model
@@ -141,6 +142,7 @@ func (p *OpenAIProvider) Complete(ctx context.Context, messages []Message, opts 
 }
 
 func (p *OpenAIProvider) StreamComplete(ctx context.Context, messages []Message, opts CompletionOptions) (<-chan StreamChunk, error) {
+	messages = SanitizeMessages(messages)
 	model := p.Model
 	if opts.Model != "" {
 		model = opts.Model

@@ -132,7 +132,7 @@ func (c *ContextManager) PruneMessages(messages []llm.Message, maxTokens int) []
 			Content: "[Context checkpoint: older dialogue was compacted to stay within the model token budget. Use durable run state and retrieved memory for earlier decisions.]",
 		})
 	}
-	return append(result, retained...)
+	return llm.SanitizeMessages(append(result, retained...))
 }
 
 func estimateMessagesTokens(messages []llm.Message) int {
