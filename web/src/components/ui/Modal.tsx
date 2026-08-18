@@ -21,11 +21,14 @@ export function Modal({
   const titleID = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const wasOpenRef = useRef(false);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key === 'Tab' && isOpen && dialogRef.current) {
@@ -44,22 +47,51 @@ export function Modal({
         }
       }
     };
+
     if (isOpen) {
-      previousFocus.current = document.activeElement as HTMLElement | null;
-      document.body.style.overflow = 'hidden';
-      window.setTimeout(() => {
-        dialogRef.current?.querySelector<HTMLElement>(
-          'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href]'
-        )?.focus();
-      });
+      // Only perform initial focus and body overflow lock when transitioning from closed to open
+      if (!wasOpenRef.current) {
+        wasOpenRef.current = true;
+        previousFocus.current = document.activeElement as HTMLElement | null;
+        document.body.style.overflow = 'hidden';
+
+        window.setTimeout(() => {
+          if (!dialogRef.current) return;
+          // If focus is already inside the dialog (user clicked or started typing), do NOT steal focus!
+          if (dialogRef.current.contains(document.activeElement)) {
+            return;
+          }
+          // Prioritize auto-focusing the first input, textarea, select, or [autofocus] element instead of the close button
+          const formInput = dialogRef.current.querySelector<HTMLElement>(
+            '[autofocus], input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), select:not([disabled])'
+          );
+          if (formInput) {
+            formInput.focus();
+            return;
+          }
+          // Fallback to any focusable element inside the modal
+          dialogRef.current.querySelector<HTMLElement>(
+            'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href]'
+          )?.focus();
+        });
+      }
+    } else if (wasOpenRef.current) {
+      wasOpenRef.current = false;
+      document.body.style.overflow = '';
+      previousFocus.current?.focus();
     }
+
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
-      previousFocus.current?.focus();
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
+
+  useEffect(() => {
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, []);
 
   if (!isOpen) return null;
 

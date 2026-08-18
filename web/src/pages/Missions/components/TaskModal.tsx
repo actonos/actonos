@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
@@ -33,8 +33,17 @@ export function TaskModal({ isOpen, onClose, onSave, task }: TaskModalProps) {
   const [channelAccounts, setChannelAccounts] = useState<ChannelAccount[]>([]);
   const [saving, setSaving] = useState(false);
 
+  const prevOpenRef = useRef(false);
+  const prevTaskIdRef = useRef<string | undefined>(undefined);
+
   useEffect(() => {
-    if (isOpen) {
+    const isOpening = isOpen && !prevOpenRef.current;
+    const isTaskChanged = task?.id !== prevTaskIdRef.current;
+
+    prevOpenRef.current = isOpen;
+    prevTaskIdRef.current = task?.id;
+
+    if (isOpen && (isOpening || isTaskChanged)) {
       if (task) {
         setTitle(task.title || '');
         setDescription(task.description || '');
