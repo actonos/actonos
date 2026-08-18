@@ -222,7 +222,7 @@ export function Sidebar({
                         >
                           <Icon className="w-4 h-4" />
                           {collapsed && !showLangOverlay && item.id === 'notifications' && unreadCount > 0 && (
-                            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-crimson ring-2 ring-soft-meadow" />
+                            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-soft-meadow" />
                           )}
                         </div>
 
@@ -233,7 +233,7 @@ export function Sidebar({
                         )}
 
                         {(!collapsed || showLangOverlay) && item.id === 'notifications' && unreadCount > 0 && (
-                          <span className="px-1.5 py-0.5 rounded-full bg-crimson text-white text-[10px] font-mono font-bold">
+                          <span className="px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-mono font-bold">
                             {unreadCount > 99 ? '99+' : unreadCount}
                           </span>
                         )}

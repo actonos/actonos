@@ -86,7 +86,7 @@ export function NotificationBell({ onNavigateTab }: NotificationBellProps) {
             prev.map((n) => (n.id === item.id ? { ...n, is_read: true } : n))
           );
         });
-      } catch {}
+      } catch { }
     }
     setIsOpen(false);
     if (item.link) {
@@ -141,17 +141,16 @@ export function NotificationBell({ onNavigateTab }: NotificationBellProps) {
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className={`relative p-2 rounded-full border transition-all cursor-pointer ${
-          isOpen
+        className={`relative p-2 rounded-full border transition-all cursor-pointer ${isOpen
             ? 'bg-soft-meadow border-onyx/20 text-deep-ink shadow-xs'
             : 'bg-soft-meadow border-onyx/10 text-slate hover:bg-canvas hover:text-deep-ink'
-        }`}
+          }`}
         aria-label={t('title', 'Notifications')}
         title={t('title', 'Notifications')}
       >
         <Bell className="w-4 h-4" />
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-crimson text-[10px] font-mono font-bold text-white shadow-xs animate-pulse">
+          <span className="absolute -top-1 -right-1 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-red-500 text-[10px] font-mono font-bold text-white shadow-xs animate-pulse">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
@@ -167,7 +166,7 @@ export function NotificationBell({ onNavigateTab }: NotificationBellProps) {
                 {t('title', 'Notifications')}
               </span>
               {unreadCount > 0 && (
-                <span className="px-2 py-0.5 rounded-full bg-crimson/10 text-crimson text-[11px] font-mono font-semibold">
+                <span className="px-2 py-0.5 rounded-full bg-red-500/10 text-crimson text-[11px] font-mono font-semibold">
                   {unreadCount}
                 </span>
               )}
@@ -224,9 +223,8 @@ export function NotificationBell({ onNavigateTab }: NotificationBellProps) {
                 <div
                   key={notif.id}
                   onClick={() => handleItemClick(notif)}
-                  className={`p-3.5 flex items-start gap-3 hover:bg-soft-meadow/60 transition-colors cursor-pointer ${
-                    !notif.is_read ? 'bg-soft-meadow/25' : ''
-                  }`}
+                  className={`p-3.5 flex items-start gap-3 hover:bg-soft-meadow/60 transition-colors cursor-pointer ${!notif.is_read ? 'bg-soft-meadow/25' : ''
+                    }`}
                 >
                   <div className="mt-0.5 p-1.5 rounded-xl bg-canvas border border-onyx/10 shrink-0 shadow-2xs">
                     {getIcon(notif.type)}
@@ -235,9 +233,8 @@ export function NotificationBell({ onNavigateTab }: NotificationBellProps) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-1 mb-0.5">
                       <h4
-                        className={`text-caption font-medium truncate ${
-                          !notif.is_read ? 'text-deep-ink font-semibold' : 'text-slate'
-                        }`}
+                        className={`text-caption font-medium truncate ${!notif.is_read ? 'text-deep-ink font-semibold' : 'text-slate'
+                          }`}
                       >
                         {notif.title}
                       </h4>
