@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -690,6 +692,12 @@ func (t *WebSearchTool) ParametersSchema() json.RawMessage {
 	}`)
 }
 
+type SearchItem struct {
+	Title   string `json:"title"`
+	Snippet string `json:"snippet"`
+	URL     string `json:"url"`
+}
+
 func (t *WebSearchTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {
 	inputJSON = NormalizeToolInput(inputJSON)
 	var input struct {
@@ -703,55 +711,17 @@ func (t *WebSearchTool) Execute(ctx context.Context, inputJSON json.RawMessage) 
 		input.MaxResults = 5
 	}
 
-	// Use DuckDuckGo Instant Answer / HTML Search API
-	searchURL := fmt.Sprintf("https://html.duckduckgo.com/html/?q=%s", strings.ReplaceAll(input.Query, " ", "+"))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
-	if err != nil {
-		return nil, err
+	results := t.searchDDGLite(ctx, input.Query, input.MaxResults)
+	if len(results) == 0 {
+		results = t.searchDDGHTML(ctx, input.Query, input.MaxResults)
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-
-	resp, err := t.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("web search request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 512*1024))
-	bodyStr := string(bodyBytes)
-
-	// Clean basic snippet extraction from DDG HTML
-	type SearchItem struct {
-		Title   string `json:"title"`
-		Snippet string `json:"snippet"`
-		URL     string `json:"url"`
-	}
-	var results []SearchItem
-
-	snippets := strings.Split(bodyStr, "class=\"result__snippet\"")
-	for i := 1; i < len(snippets) && len(results) < input.MaxResults; i++ {
-		chunk := snippets[i]
-		if closeTag := strings.Index(chunk, ">"); closeTag != -1 {
-			chunk = chunk[closeTag+1:]
-		}
-		if endTag := strings.Index(chunk, "</a>"); endTag != -1 {
-			snippet := strings.TrimSpace(chunk[:endTag])
-			// Strip simple html tags
-			snippet = strings.ReplaceAll(snippet, "<b>", "")
-			snippet = strings.ReplaceAll(snippet, "</b>", "")
-			if len(snippet) > 10 {
-				results = append(results, SearchItem{
-					Title:   fmt.Sprintf("Result #%d for %s", len(results)+1, input.Query),
-					Snippet: snippet,
-					URL:     "https://duckduckgo.com/?q=" + strings.ReplaceAll(input.Query, " ", "+"),
-				})
-			}
-		}
+	if len(results) == 0 {
+		results = t.searchDDGAPI(ctx, input.Query, input.MaxResults)
 	}
 
 	if len(results) == 0 {
 		return &ToolResult{
-			Content: fmt.Sprintf("Search completed for query '%s', but no structured snippet results were extracted.", input.Query),
+			Content: fmt.Sprintf("Search for '%s' completed without extracting structured external snippets. Synthesize the answer using your knowledge base or clarify the query.", input.Query),
 			Data:    map[string]any{"query": input.Query, "count": 0},
 		}, nil
 	}
@@ -761,6 +731,159 @@ func (t *WebSearchTool) Execute(ctx context.Context, inputJSON json.RawMessage) 
 		Content: fmt.Sprintf("Web Search Results for '%s':\n%s", input.Query, string(rawJSON)),
 		Data:    map[string]any{"query": input.Query, "count": len(results), "results": results},
 	}, nil
+}
+
+func cleanHTMLTags(s string) string {
+	s = html.UnescapeString(s)
+	for {
+		start := strings.Index(s, "<")
+		if start == -1 {
+			break
+		}
+		end := strings.Index(s[start:], ">")
+		if end == -1 {
+			break
+		}
+		s = s[:start] + s[start+end+1:]
+	}
+	return strings.TrimSpace(s)
+}
+
+func (t *WebSearchTool) searchDDGLite(ctx context.Context, query string, maxResults int) []SearchItem {
+	formData := url.Values{"q": {query}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://lite.duckduckgo.com/lite/", strings.NewReader(formData.Encode()))
+	if err != nil {
+		return nil
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+
+	resp, err := t.client.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, 512*1024))
+	if err != nil {
+		return nil
+	}
+	bodyStr := string(bodyBytes)
+
+	var results []SearchItem
+	snippets := strings.Split(bodyStr, "class=\"result-snippet\"")
+	if len(snippets) <= 1 {
+		snippets = strings.Split(bodyStr, "class='result-snippet'")
+	}
+	for i := 1; i < len(snippets) && len(results) < maxResults; i++ {
+		chunk := snippets[i]
+		if closeTag := strings.Index(chunk, ">"); closeTag != -1 {
+			chunk = chunk[closeTag+1:]
+		}
+		if endTag := strings.Index(chunk, "</td>"); endTag != -1 {
+			snippet := cleanHTMLTags(chunk[:endTag])
+			if len(snippet) > 15 {
+				results = append(results, SearchItem{
+					Title:   fmt.Sprintf("Web Result #%d", len(results)+1),
+					Snippet: snippet,
+					URL:     "https://duckduckgo.com/?q=" + url.QueryEscape(query),
+				})
+			}
+		}
+	}
+	return results
+}
+
+func (t *WebSearchTool) searchDDGHTML(ctx context.Context, query string, maxResults int) []SearchItem {
+	formData := url.Values{"q": {query}, "b": {""}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://html.duckduckgo.com/html/", strings.NewReader(formData.Encode()))
+	if err != nil {
+		return nil
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+
+	resp, err := t.client.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, 512*1024))
+	if err != nil {
+		return nil
+	}
+	bodyStr := string(bodyBytes)
+
+	var results []SearchItem
+	snippets := strings.Split(bodyStr, "class=\"result__snippet\"")
+	for i := 1; i < len(snippets) && len(results) < maxResults; i++ {
+		chunk := snippets[i]
+		if closeTag := strings.Index(chunk, ">"); closeTag != -1 {
+			chunk = chunk[closeTag+1:]
+		}
+		if endTag := strings.Index(chunk, "</a>"); endTag != -1 {
+			snippet := cleanHTMLTags(chunk[:endTag])
+			if len(snippet) > 15 {
+				results = append(results, SearchItem{
+					Title:   fmt.Sprintf("Result #%d", len(results)+1),
+					Snippet: snippet,
+					URL:     "https://duckduckgo.com/?q=" + url.QueryEscape(query),
+				})
+			}
+		}
+	}
+	return results
+}
+
+func (t *WebSearchTool) searchDDGAPI(ctx context.Context, query string, maxResults int) []SearchItem {
+	apiURL := fmt.Sprintf("https://api.duckduckgo.com/?q=%s&format=json&no_html=1&skip_disambig=1", url.QueryEscape(query))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil
+	}
+	req.Header.Set("User-Agent", "ActonOS/1.0")
+
+	resp, err := t.client.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+
+	var data struct {
+		AbstractText string `json:"AbstractText"`
+		AbstractURL  string `json:"AbstractURL"`
+		Heading      string `json:"Heading"`
+		RelatedTopics []struct {
+			Text     string `json:"Text"`
+			FirstURL string `json:"FirstURL"`
+		} `json:"RelatedTopics"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return nil
+	}
+
+	var results []SearchItem
+	if data.AbstractText != "" {
+		results = append(results, SearchItem{
+			Title:   data.Heading,
+			Snippet: data.AbstractText,
+			URL:     data.AbstractURL,
+		})
+	}
+	for _, topic := range data.RelatedTopics {
+		if len(results) >= maxResults {
+			break
+		}
+		if topic.Text != "" {
+			results = append(results, SearchItem{
+				Title:   fmt.Sprintf("Topic #%d", len(results)+1),
+				Snippet: topic.Text,
+				URL:     topic.FirstURL,
+			})
+		}
+	}
+	return results
 }
 
 // -----------------------------------------------------------------------------

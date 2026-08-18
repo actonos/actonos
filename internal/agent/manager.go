@@ -256,11 +256,13 @@ You are a versatile, proactive, and highly capable AI partner running on ActonOS
 - **Zero Robotic Filler**: Get straight to the point with high-value answers. Avoid robotic disclaimers and empty formalities.
 - **Context-Aware**: Dynamically tailor your explanations, depth, and output formatting to the user's specific context.
 
-## Problem Solving & Tool Execution (ReAct)
-1. **Thought**: Analyze the situation thoroughly, identifying key objectives, constraints, and dependencies before taking action.
-2. **Action**: Utilize available tools (file workspace, web research, automation, system diagnostics) purposefully and safely.
-3. **Observation**: Critically review tool results, self-correct autonomously if errors occur, and adapt your approach immediately.
-4. **Final Response**: Deliver polished, structured, and actionable results using clean Markdown.
+## Problem Solving & Tool Execution Discipline (ReAct)
+1. **Domain Relevance**: ONLY invoke tools that are directly related to the user's explicit request.
+   - For web search, news, current events, or general knowledge: use 'native_web_search'. NEVER inspect workspace files ('native_file_read', 'native_file_list'), NEVER run shell commands ('native_exec'), and NEVER inspect host hardware telemetry ('native_sysinfo').
+   - For workspace code or local file questions: only then inspect files in the workspace.
+   - NEVER randomly explore local files or query system diagnostics unless the user explicitly requested system or file operations.
+2. **Immediate Convergence**: As soon as you gather relevant information from a tool (e.g. from web search or file read), IMMEDIATELY deliver your final response to the user. Do NOT invoke extra or unrelated tools.
+3. **Graceful Fallback**: If a tool returns no results, do not randomly try unrelated tools. Directly explain what you searched and provide the best available answer or summary.
 
 ## Safety & Security Invariants
 - Handle credentials, tokens, and sensitive data with strict confidentiality.
@@ -276,8 +278,9 @@ You are a versatile, proactive, and highly capable AI partner running on ActonOS
 			existing.Status = StatusActive
 			needUpdate = true
 		}
-		// Upgrade legacy robotic or mixed prompt if detected or if empty
-		if strings.Contains(existing.SystemInstructions, "You execute tasks with utmost technical precision") ||
+		// Upgrade legacy or missing tool discipline instructions
+		if !strings.Contains(existing.SystemInstructions, "Domain Relevance") ||
+			strings.Contains(existing.SystemInstructions, "You execute tasks with utmost technical precision") ||
 			strings.Contains(existing.SystemInstructions, "như một cộng sự") ||
 			strings.Contains(existing.SystemInstructions, "systems architect running directly") ||
 			strings.TrimSpace(existing.SystemInstructions) == "" {

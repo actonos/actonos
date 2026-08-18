@@ -199,7 +199,16 @@ func (e *Engine) buildCognitivePrompt(ctx context.Context, agentID string, agent
 	sb.WriteString("- **Zero Robotic Clichés**: NEVER produce canned AI disclaimers ('As an AI...', 'I am just a language model...'), generic filler, or repetitive apologies. Dive straight into meaningful, high-value assistance.\n")
 	sb.WriteString("- **Clarity & Actionable Insight**: Deliver structured, clear, and beautifully formatted Markdown responses. Provide decisive recommendations, thorough analysis, or precise actions tailored to the user's specific domain.\n\n")
 
-	// 6. Layer 4: Episodic Memory (Past interactions & learned facts)
+	// 7. Tool Selection & Execution Discipline
+	sb.WriteString("## Tool Selection & Execution Discipline\n")
+	sb.WriteString("- **Domain Relevance**: ONLY invoke tools that are directly related to the user's explicit request.\n")
+	sb.WriteString("  - For web search, news, current events, or general knowledge: use `native_web_search`. NEVER explore workspace files (`native_file_read`, `native_file_list`), NEVER run shell commands (`native_exec`), and NEVER inspect host hardware telemetry (`native_sysinfo`).\n")
+	sb.WriteString("  - For workspace code or local file questions: only then inspect files in the workspace.\n")
+	sb.WriteString("  - NEVER randomly read filesystem files or query system diagnostics unless the user explicitly requested system or file operations.\n")
+	sb.WriteString("- **Immediate Convergence**: As soon as relevant information is gathered (e.g. from web search or file read), IMMEDIATELY deliver your final response to the user. Do NOT invoke extra or unrelated tools.\n")
+	sb.WriteString("- **Graceful Fallback**: If a tool returns no results, do not randomly try unrelated tools. Directly explain what you searched and provide the best available answer or summary.\n\n")
+
+	// 8. Layer 4: Episodic Memory (Past interactions & learned facts)
 	// Heartbeat mission execution sets "suppress_episodic_memory" to prevent
 	// stale memories from deleted tasks from contaminating the current context.
 	episodicCount := 0
@@ -321,7 +330,7 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 		}))
 	}
 
-	// 1. Build unified 4-layer cognitive system prompt
+	// 1. Build unified cognitive system prompt
 	fullSystemPrompt, _ := e.buildCognitivePrompt(ctx, agentID, agent, userMessage)
 
 	messages := []llm.Message{
@@ -357,7 +366,7 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 	startTime := time.Now()
 	var finalResp *llm.Response
 	totalUsage := llm.Usage{}
-	maxIterations := 8
+	maxIterations := 10
 	consecutiveFailures := 0
 	lastObservation := ""
 	repeatedObservations := 0
@@ -366,6 +375,15 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 
 	for iter := range maxIterations {
 		iterationsCompleted = iter + 1
+		currentOpts := opts
+		// On the final iteration, force convergence by omitting tools
+		if iter == maxIterations-1 {
+			currentOpts.Tools = nil
+			messages = append(messages, llm.Message{
+				Role:    llm.RoleSystem,
+				Content: "Iteration limit reached. Do not call any more tools. Synthesize all observations gathered above into your final comprehensive response to the user.",
+			})
+		}
 		if e.contextManager != nil {
 			runID := ""
 			if run != nil {
@@ -373,7 +391,7 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 			}
 			messages = e.contextManager.PruneAndSnapshot(ctx, runID, messages, e.contextBudget(agent))
 		}
-		resp, err := e.llm.CompleteWithCascade(ctx, cascadeOrder, messages, opts)
+		resp, err := e.llm.CompleteWithCascade(ctx, cascadeOrder, messages, currentOpts)
 		if err != nil {
 			if e.bus != nil {
 				e.bus.Publish(bus.NewEvent(bus.EventAgentActionFailed, agentID, err.Error()))
@@ -392,7 +410,7 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 		finalResp = resp
 
 		// If no tool calls requested, we reached the final response
-		if len(resp.ToolCalls) == 0 || e.tools == nil {
+		if len(resp.ToolCalls) == 0 || e.tools == nil || currentOpts.Tools == nil {
 			converged = true
 			break
 		}
@@ -609,7 +627,7 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 
 	var finalResp *llm.Response
 	totalUsage := llm.Usage{}
-	maxIterations := 8
+	maxIterations := 10
 	converged := false
 	iterationsCompleted := 0
 	consecutiveFailures := 0
@@ -621,6 +639,15 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 		targetModel := agent.ModelConfig.PrimaryModel
 		if targetModel == "" {
 			targetModel = "cascade-llm"
+		}
+
+		currentOpts := opts
+		if iter == maxIterations-1 {
+			currentOpts.Tools = nil
+			messages = append(messages, llm.Message{
+				Role:    llm.RoleSystem,
+				Content: "Iteration limit reached. Do not call any more tools. Synthesize all observations gathered above into your final comprehensive response to the user.",
+			})
 		}
 
 		eventChan <- AgentStreamEvent{
@@ -635,7 +662,7 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 			}
 			messages = e.contextManager.PruneAndSnapshot(ctx, runID, messages, e.contextBudget(agent))
 		}
-		resp, err := e.completeStreamIteration(ctx, cascadeOrder, messages, opts, eventChan)
+		resp, err := e.completeStreamIteration(ctx, cascadeOrder, messages, currentOpts, eventChan)
 		if err != nil {
 			if e.bus != nil {
 				e.bus.Publish(bus.NewEvent(bus.EventAgentActionFailed, agentID, err.Error()))
@@ -658,7 +685,7 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 		finalResp = resp
 
 		// If no tool calls requested, stream tokens preserving exact whitespace and newlines
-		if len(resp.ToolCalls) == 0 || e.tools == nil {
+		if len(resp.ToolCalls) == 0 || e.tools == nil || currentOpts.Tools == nil {
 			converged = true
 			eventChan <- AgentStreamEvent{
 				Type: EventStreamAudit,
@@ -1002,20 +1029,28 @@ func (e *Engine) ResumeApproved(ctx context.Context, approval tools.ApprovalRequ
 	// enough room to process the approved tool result and converge. The
 	// previous approach of continuing from checkpoint.Iteration left too few
 	// iterations and almost always exhausted the budget.
-	const resumeMaxIterations = 8
+	const resumeMaxIterations = 10
 	for iteration := 0; iteration < resumeMaxIterations; iteration++ {
 		// Track absolute step for run events (checkpoint iterations + resumed iterations).
 		absoluteStep := checkpoint.Iteration + iteration + 1
+		currentOpts := opts
+		if iteration == resumeMaxIterations-1 {
+			currentOpts.Tools = nil
+			messages = append(messages, llm.Message{
+				Role:    llm.RoleSystem,
+				Content: "Iteration limit reached. Do not call any more tools. Synthesize all observations gathered above into your final comprehensive response to the user.",
+			})
+		}
 		if e.contextManager != nil {
 			messages = e.contextManager.PruneAndSnapshot(execCtx, run.ID, messages, e.contextBudget(manifest))
 		}
-		response, callErr := e.llm.CompleteWithCascade(execCtx, cascade, messages, opts)
+		response, callErr := e.llm.CompleteWithCascade(execCtx, cascade, messages, currentOpts)
 		if callErr != nil {
 			e.finishRun(execCtx, run, RunFailed, "infrastructure_failure", absoluteStep, usage)
 			return nil, callErr
 		}
 		usage = addUsage(usage, response.Usage)
-		if len(response.ToolCalls) == 0 {
+		if len(response.ToolCalls) == 0 || currentOpts.Tools == nil {
 			if !e.verifier.VerifySemanticConsistency(execCtx, checkpoint.Goal, response.Content) {
 				e.finishRun(execCtx, run, RunFailed, "verification_failed", absoluteStep, usage)
 				return nil, errors.New("resumed response failed verification")
