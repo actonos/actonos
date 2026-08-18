@@ -39,6 +39,7 @@ type SessionHistoryProvider interface {
 // HeartbeatDaemon monitors proactive trigger rules, executes cognitive self-driving checks, and manages autonomous agent pulse.
 type HeartbeatDaemon struct {
 	mu           sync.RWMutex
+	executionMu  sync.Mutex
 	agentMgr     *AgentManager
 	engine       *Engine
 	eventBus     *bus.EventBus
@@ -131,6 +132,9 @@ func (h *HeartbeatDaemon) TriggerManualPulse(ctx context.Context) (*HeartbeatRun
 
 // checkCycle runs the autonomous cognitive heartbeat iteration.
 func (h *HeartbeatDaemon) checkCycle(ctx context.Context) *HeartbeatRun {
+	h.executionMu.Lock()
+	defer h.executionMu.Unlock()
+
 	h.mu.Lock()
 	h.lastRun = time.Now().UTC()
 	h.mu.Unlock()
@@ -225,7 +229,7 @@ CRITICAL INSTRUCTIONS:
 			activeTask.Description, standingDirectives, activeTask.TargetChannel,
 		)
 
-		resp, execErr := h.engine.ExecuteStepWithHistory(ctx, assignedAgent, prompt, history)
+		resp, execErr := h.engine.ExecuteAutonomousGoal(ctx, assignedAgent, prompt, history)
 		if execErr != nil {
 			run.Status = "error"
 			run.Summary = fmt.Sprintf("Failed executing task '%s': %v", activeTask.Title, execErr)
@@ -243,12 +247,17 @@ CRITICAL INSTRUCTIONS:
 			shortLog := shortSummary(content, 250)
 
 			// Parse Task status transitions
-			if strings.Contains(content, "[TASK_COMPLETED]") {
+			if strings.Contains(content, "[TASK_COMPLETED]") && h.engine.verifier.VerifyTaskCompletion(activeTask.Description, content, resp.ToolCalls) {
 				activeTask.Status = "completed"
 				activeTask.Progress = 100
 				activeTask.ExecutionLog = shortLog
 				run.Status = "action_taken"
 				run.Summary = fmt.Sprintf("Completed mission: '%s'. %s", activeTask.Title, shortLog)
+			} else if strings.Contains(content, "[TASK_COMPLETED]") {
+				activeTask.Status = "in_progress"
+				activeTask.ExecutionLog = "Completion claim rejected by deterministic verification. " + shortLog
+				run.Status = "action_taken"
+				run.Summary = fmt.Sprintf("Mission '%s' requires additional verification.", activeTask.Title)
 			} else if strings.Contains(content, "[TASK_BLOCKED") {
 				activeTask.Status = "blocked"
 				activeTask.ExecutionLog = shortLog

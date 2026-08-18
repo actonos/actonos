@@ -2,13 +2,19 @@ package tools
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
+	"os"
 	"os/exec"
+	"regexp"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,14 +37,27 @@ type MCPServerConfig struct {
 
 // MCPClient handles JSON-RPC 2.0 communication with an MCP server process or endpoint.
 type MCPClient struct {
-	config    MCPServerConfig
-	cmd       *exec.Cmd
-	stdin     io.WriteCloser
-	stdout    *bufio.Reader
-	reqID     atomic.Int64
-	mu        sync.Mutex
-	pending   map[int64]chan mcpResponse
-	closed    bool
+	config  MCPServerConfig
+	cmd     *exec.Cmd
+	stdin   io.WriteCloser
+	stdout  *bufio.Reader
+	reqID   atomic.Int64
+	mu      sync.Mutex
+	pending map[int64]chan mcpResponse
+	closed  bool
+	http    *http.Client
+}
+
+// NewHTTPMCPClient creates a remote JSON-RPC MCP client over streamable HTTP.
+func NewHTTPMCPClient(cfg MCPServerConfig) (*MCPClient, error) {
+	if cfg.URL == "" {
+		return nil, errors.New("mcp URL is required for HTTP transport")
+	}
+	return &MCPClient{
+		config:  cfg,
+		http:    &http.Client{Timeout: 30 * time.Second},
+		pending: make(map[int64]chan mcpResponse),
+	}, nil
 }
 
 type mcpRequest struct {
@@ -64,8 +83,35 @@ func NewStdioMCPClient(cfg MCPServerConfig) (*MCPClient, error) {
 		return nil, errors.New("mcp command is required for stdio transport")
 	}
 
-	cmd := exec.Command(cfg.Command, cfg.Args...)
+	var cmd *exec.Cmd
+	if runtime.GOOS == "linux" && os.Getenv("RUNTIME_MODE") != "docker" {
+		if _, err := exec.LookPath("bwrap"); err != nil {
+			return nil, fmt.Errorf("%w: bubblewrap is required for MCP stdio", ErrMCPConnectionFailed)
+		}
+		args := []string{
+			"--ro-bind", "/usr", "/usr",
+			"--ro-bind", "/bin", "/bin",
+			"--ro-bind", "/lib", "/lib",
+			"--proc", "/proc",
+			"--dev", "/dev",
+			"--tmpfs", "/tmp",
+			"--unshare-all",
+			"--new-session",
+			"--die-with-parent",
+			"--cap-drop", "ALL",
+			"--",
+			cfg.Command,
+		}
+		args = append(args, cfg.Args...)
+		cmd = exec.Command("bwrap", args...)
+	} else {
+		if os.Getenv("RUNTIME_MODE") != "docker" && os.Getenv("ACTONOS_ALLOW_UNSANDBOXED_MCP") != "1" {
+			return nil, fmt.Errorf("%w: MCP stdio requires Docker, bubblewrap, or explicit development override", ErrMCPConnectionFailed)
+		}
+		cmd = exec.Command(cfg.Command, cfg.Args...)
+	}
 	if len(cfg.Env) > 0 {
+		cmd.Env = os.Environ()
 		for k, v := range cfg.Env {
 			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 		}
@@ -79,6 +125,10 @@ func NewStdioMCPClient(cfg MCPServerConfig) (*MCPClient, error) {
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("getting stdout pipe: %w", err)
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("getting stderr pipe: %w", err)
 	}
 
 	if err := cmd.Start(); err != nil {
@@ -94,6 +144,12 @@ func NewStdioMCPClient(cfg MCPServerConfig) (*MCPClient, error) {
 	}
 
 	go client.readLoop()
+	go func() {
+		scanner := bufio.NewScanner(io.LimitReader(stderr, 1<<20))
+		for scanner.Scan() {
+			slog.Warn("mcp server stderr", "server", cfg.ID, "message", scanner.Text())
+		}
+	}()
 
 	return client, nil
 }
@@ -109,6 +165,11 @@ func (c *MCPClient) readLoop() {
 			}
 			c.pending = make(map[int64]chan mcpResponse)
 			c.mu.Unlock()
+			return
+		}
+		if len(line) > 4<<20 {
+			slog.Warn("mcp response exceeded size limit", "server", c.config.ID, "bytes", len(line))
+			_ = c.Close()
 			return
 		}
 
@@ -129,6 +190,48 @@ func (c *MCPClient) readLoop() {
 }
 
 func (c *MCPClient) sendRequest(ctx context.Context, method string, params any) (json.RawMessage, error) {
+	if c.http != nil {
+		id := c.reqID.Add(1)
+		payload, err := json.Marshal(mcpRequest{JSONRPC: "2.0", ID: id, Method: method, Params: params})
+		if err != nil {
+			return nil, fmt.Errorf("marshalling HTTP MCP request: %w", err)
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.config.URL, bytes.NewReader(payload))
+		if err != nil {
+			return nil, fmt.Errorf("creating HTTP MCP request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json, text/event-stream")
+		resp, err := c.http.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("sending HTTP MCP request: %w", err)
+		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+		if err != nil {
+			return nil, fmt.Errorf("reading HTTP MCP response: %w", err)
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return nil, fmt.Errorf("HTTP MCP status %d: %s", resp.StatusCode, string(body))
+		}
+		if bytes.HasPrefix(bytes.TrimSpace(body), []byte("data:")) {
+			for _, line := range bytes.Split(body, []byte{'\n'}) {
+				line = bytes.TrimSpace(line)
+				if bytes.HasPrefix(line, []byte("data:")) {
+					body = bytes.TrimSpace(bytes.TrimPrefix(line, []byte("data:")))
+					break
+				}
+			}
+		}
+		var response mcpResponse
+		if err := json.Unmarshal(body, &response); err != nil {
+			return nil, fmt.Errorf("decoding HTTP MCP response: %w", err)
+		}
+		if response.Error != nil {
+			return nil, fmt.Errorf("mcp error (%d): %s", response.Error.Code, response.Error.Message)
+		}
+		return response.Result, nil
+	}
 	c.mu.Lock()
 	if c.closed {
 		c.mu.Unlock()
@@ -189,8 +292,50 @@ func (c *MCPClient) Initialize(ctx context.Context) error {
 		},
 	}
 
-	_, err := c.sendRequest(ctx, "initialize", params)
-	return err
+	if _, err := c.sendRequest(ctx, "initialize", params); err != nil {
+		return err
+	}
+	return c.sendNotification("notifications/initialized", map[string]any{})
+}
+
+func (c *MCPClient) sendNotification(method string, params any) error {
+	if c.http != nil {
+		// Streamable HTTP servers do not require a response for notifications.
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		payload, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "method": method, "params": params})
+		if err != nil {
+			return err
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.config.URL, bytes.NewReader(payload))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := c.http.Do(req)
+		if err != nil {
+			return err
+		}
+		return resp.Body.Close()
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return errors.New("mcp client connection closed")
+	}
+	data, err := json.Marshal(map[string]any{
+		"jsonrpc": "2.0",
+		"method":  method,
+		"params":  params,
+	})
+	if err != nil {
+		return fmt.Errorf("marshalling MCP notification: %w", err)
+	}
+	data = append(data, '\n')
+	if _, err := c.stdin.Write(data); err != nil {
+		return fmt.Errorf("writing MCP notification: %w", err)
+	}
+	return nil
 }
 
 // ListTools queries the MCP server for available tools.
@@ -242,10 +387,7 @@ func (c *MCPClient) CallTool(ctx context.Context, name string, args json.RawMess
 	}
 
 	if resp.IsError {
-		return &ToolResult{
-			Error:   textContent,
-			Content: textContent,
-		}, nil
+		return nil, fmt.Errorf("%w: %s", ErrMCPToolCallFailed, textContent)
 	}
 
 	return &ToolResult{
@@ -306,6 +448,14 @@ type MCPHostEngine struct {
 	mu       sync.RWMutex
 	registry *ToolRegistry
 	clients  map[string]*MCPClient
+	db       *sql.DB
+	secrets  MCPSecretStore
+}
+
+// MCPSecretStore stores MCP environment secrets encrypted at rest.
+type MCPSecretStore interface {
+	SetSecret(ctx context.Context, keyName, secretValue string) error
+	GetSecret(ctx context.Context, keyName string) (string, error)
 }
 
 // NewMCPHostEngine creates a new MCP host engine.
@@ -313,6 +463,62 @@ func NewMCPHostEngine(registry *ToolRegistry) *MCPHostEngine {
 	return &MCPHostEngine{
 		registry: registry,
 		clients:  make(map[string]*MCPClient),
+	}
+}
+
+// SetPersistence configures durable MCP server definitions and encrypted environments.
+func (h *MCPHostEngine) SetPersistence(db *sql.DB, secrets MCPSecretStore) error {
+	h.db = db
+	h.secrets = secrets
+	if db == nil {
+		return nil
+	}
+	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS mcp_servers (
+			id TEXT PRIMARY KEY,
+			config_json TEXT NOT NULL,
+			enabled INTEGER NOT NULL DEFAULT 1,
+			updated_at TIMESTAMP NOT NULL
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("creating mcp server registry: %w", err)
+	}
+	return nil
+}
+
+// RestoreServers reconnects enabled MCP servers after daemon restart.
+func (h *MCPHostEngine) RestoreServers(ctx context.Context) {
+	if h.db == nil {
+		return
+	}
+	rows, err := h.db.QueryContext(ctx, "SELECT id, config_json FROM mcp_servers WHERE enabled = 1")
+	if err != nil {
+		slog.Warn("failed to restore mcp servers", "error", err)
+		return
+	}
+	var configs []MCPServerConfig
+	for rows.Next() {
+		var id, raw string
+		if err := rows.Scan(&id, &raw); err != nil {
+			continue
+		}
+		var cfg MCPServerConfig
+		if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+			continue
+		}
+		if h.secrets != nil {
+			if envJSON, secretErr := h.secrets.GetSecret(ctx, "mcp.env."+id); secretErr == nil {
+				_ = json.Unmarshal([]byte(envJSON), &cfg.Env)
+			}
+		}
+		configs = append(configs, cfg)
+	}
+	_ = rows.Close()
+	for _, cfg := range configs {
+		if err := h.ConnectServer(ctx, cfg); err != nil {
+			slog.Warn("mcp server restore failed", "server", cfg.ID, "error", err)
+		}
 	}
 }
 
@@ -324,8 +530,20 @@ func (h *MCPHostEngine) ConnectServer(ctx context.Context, cfg MCPServerConfig) 
 	if _, exists := h.clients[cfg.ID]; exists {
 		return fmt.Errorf("mcp server %s already connected", cfg.ID)
 	}
+	if !regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`).MatchString(cfg.ID) {
+		return errors.New("mcp server id must contain only letters, digits, underscore, or hyphen")
+	}
+	if cfg.Transport != "" && cfg.Transport != "stdio" && cfg.Transport != "http" && cfg.Transport != "sse" {
+		return fmt.Errorf("unsupported mcp transport %q", cfg.Transport)
+	}
 
-	client, err := NewStdioMCPClient(cfg)
+	var client *MCPClient
+	var err error
+	if cfg.Transport == "http" || cfg.Transport == "sse" {
+		client, err = NewHTTPMCPClient(cfg)
+	} else {
+		client, err = NewStdioMCPClient(cfg)
+	}
 	if err != nil {
 		return fmt.Errorf("connecting to mcp server %s: %w", cfg.ID, err)
 	}
@@ -344,16 +562,38 @@ func (h *MCPHostEngine) ConnectServer(ctx context.Context, cfg MCPServerConfig) 
 		return fmt.Errorf("listing mcp tools for %s: %w", cfg.ID, err)
 	}
 
-	h.clients[cfg.ID] = client
-
+	var registered []string
 	for _, toolInfo := range tools {
 		adapter := &MCPToolAdapter{
 			serverID: cfg.ID,
 			client:   client,
 			info:     toolInfo,
 		}
-		_ = h.registry.Register(adapter)
+		if err := h.registry.Register(adapter); err != nil {
+			for _, name := range registered {
+				h.registry.Unregister(name)
+			}
+			_ = client.Close()
+			return fmt.Errorf("registering mcp tool %s: %w", adapter.Name(), err)
+		}
+		registered = append(registered, adapter.Name())
 		slog.Info("registered mcp tool", "server", cfg.ID, "tool", adapter.Name())
+	}
+	h.clients[cfg.ID] = client
+	if h.db != nil {
+		persisted := cfg
+		persisted.Env = nil
+		raw, _ := json.Marshal(persisted)
+		_, _ = h.db.ExecContext(ctx, `
+			INSERT INTO mcp_servers (id, config_json, enabled, updated_at)
+			VALUES (?, ?, 1, ?)
+			ON CONFLICT(id) DO UPDATE SET config_json = excluded.config_json,
+				enabled = 1, updated_at = excluded.updated_at
+		`, cfg.ID, string(raw), time.Now().UTC())
+		if h.secrets != nil && len(cfg.Env) > 0 {
+			envJSON, _ := json.Marshal(cfg.Env)
+			_ = h.secrets.SetSecret(ctx, "mcp.env."+cfg.ID, string(envJSON))
+		}
 	}
 
 	return nil
@@ -371,6 +611,9 @@ func (h *MCPHostEngine) DisconnectServer(serverID string) error {
 
 	_ = client.Close()
 	delete(h.clients, serverID)
+	if h.db != nil {
+		_, _ = h.db.Exec("UPDATE mcp_servers SET enabled = 0, updated_at = ? WHERE id = ?", time.Now().UTC(), serverID)
+	}
 
 	// Unregister associated tools
 	prefix := fmt.Sprintf("mcp_%s_", serverID)

@@ -1,10 +1,13 @@
 package server
 
 import (
+	"encoding/base64"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
+
+	"github.com/actonos/actonos/internal/security"
 )
 
 type WorkspaceFile struct {
@@ -16,17 +19,16 @@ type WorkspaceFile struct {
 }
 
 func (s *Server) handleListWorkspaceFiles(w http.ResponseWriter, r *http.Request) {
-	workspaceDir := "./data/workspace"
+	workspaceDir := s.workspaceDir
 	_ = os.MkdirAll(workspaceDir, 0755)
 
 	relDir := r.URL.Query().Get("dir")
-	cleanRel := filepath.Clean(relDir)
-	if strings.HasPrefix(cleanRel, "..") {
+	targetDir, err := security.ResolvePath(workspaceDir, relDir, true)
+	if err != nil {
 		s.respondError(w, http.StatusForbidden, "ACCESS_DENIED", "path escapes workspace")
 		return
 	}
-
-	targetDir := filepath.Join(workspaceDir, cleanRel)
+	cleanRel := filepath.Clean(relDir)
 	entries, err := os.ReadDir(targetDir)
 	if err != nil {
 		s.respondError(w, http.StatusInternalServerError, "READ_DIR_FAILED", err.Error())
@@ -56,15 +58,14 @@ func (s *Server) handleListWorkspaceFiles(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleGetWorkspaceFile(w http.ResponseWriter, r *http.Request) {
-	workspaceDir := "./data/workspace"
+	workspaceDir := s.workspaceDir
 	filePath := r.URL.Query().Get("path")
-	cleanRel := filepath.Clean(filePath)
-	if strings.HasPrefix(cleanRel, "..") {
+	targetFile, err := security.ResolvePath(workspaceDir, filePath, false)
+	if err != nil {
 		s.respondError(w, http.StatusForbidden, "ACCESS_DENIED", "path escapes workspace")
 		return
 	}
-
-	targetFile := filepath.Join(workspaceDir, cleanRel)
+	cleanRel := filepath.Clean(filePath)
 	data, err := os.ReadFile(targetFile)
 	if err != nil {
 		s.respondError(w, http.StatusNotFound, "FILE_NOT_FOUND", err.Error())
@@ -79,7 +80,6 @@ func (s *Server) handleGetWorkspaceFile(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) handleSaveWorkspaceFile(w http.ResponseWriter, r *http.Request) {
-	workspaceDir := "./data/workspace"
 	var req struct {
 		Path    string `json:"path"`
 		Content string `json:"content"`
@@ -89,46 +89,30 @@ func (s *Server) handleSaveWorkspaceFile(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	cleanRel := filepath.Clean(req.Path)
-	if strings.HasPrefix(cleanRel, "..") {
-		s.respondError(w, http.StatusForbidden, "ACCESS_DENIED", "path escapes workspace")
+	approval, err := s.requestAdminAction(r.Context(), "workspace_write", req)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "APPROVAL_REQUEST_FAILED", err.Error())
 		return
 	}
-
-	targetFile := filepath.Join(workspaceDir, cleanRel)
-	_ = os.MkdirAll(filepath.Dir(targetFile), 0755)
-
-	if err := os.WriteFile(targetFile, []byte(req.Content), 0644); err != nil {
-		s.respondError(w, http.StatusInternalServerError, "WRITE_FAILED", err.Error())
-		return
-	}
-
-	s.respondJSON(w, http.StatusOK, map[string]any{
-		"path":    cleanRel,
-		"written": len(req.Content),
-	})
+	s.respondJSON(w, http.StatusAccepted, map[string]any{"status": "approval_required", "approval": approval})
 }
 
 func (s *Server) handleDeleteWorkspaceFile(w http.ResponseWriter, r *http.Request) {
-	workspaceDir := "./data/workspace"
 	filePath := r.URL.Query().Get("path")
 	cleanRel := filepath.Clean(filePath)
-	if strings.HasPrefix(cleanRel, "..") {
-		s.respondError(w, http.StatusForbidden, "ACCESS_DENIED", "path escapes workspace")
+	if cleanRel == "." || cleanRel == "" {
+		s.respondError(w, http.StatusForbidden, "ACCESS_DENIED", "workspace root cannot be deleted")
 		return
 	}
-
-	targetFile := filepath.Join(workspaceDir, cleanRel)
-	if err := os.RemoveAll(targetFile); err != nil {
-		s.respondError(w, http.StatusInternalServerError, "DELETE_FAILED", err.Error())
+	approval, err := s.requestAdminAction(r.Context(), "workspace_delete", map[string]string{"path": filePath})
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "APPROVAL_REQUEST_FAILED", err.Error())
 		return
 	}
-
-	s.respondJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	s.respondJSON(w, http.StatusAccepted, map[string]any{"status": "approval_required", "approval": approval})
 }
 
 func (s *Server) handleMkdirWorkspace(w http.ResponseWriter, r *http.Request) {
-	workspaceDir := "./data/workspace"
 	var req struct {
 		Path string `json:"path"`
 	}
@@ -137,23 +121,16 @@ func (s *Server) handleMkdirWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cleanRel := filepath.Clean(req.Path)
-	if strings.HasPrefix(cleanRel, "..") {
-		s.respondError(w, http.StatusForbidden, "ACCESS_DENIED", "path escapes workspace")
+	approval, err := s.requestAdminAction(r.Context(), "workspace_mkdir", req)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "APPROVAL_REQUEST_FAILED", err.Error())
 		return
 	}
-
-	targetDir := filepath.Join(workspaceDir, cleanRel)
-	if err := os.MkdirAll(targetDir, 0755); err != nil {
-		s.respondError(w, http.StatusInternalServerError, "MKDIR_FAILED", err.Error())
-		return
-	}
-
-	s.respondJSON(w, http.StatusOK, map[string]string{"status": "created", "path": cleanRel})
+	s.respondJSON(w, http.StatusAccepted, map[string]any{"status": "approval_required", "approval": approval})
 }
 
 func (s *Server) handleUploadWorkspaceFile(w http.ResponseWriter, r *http.Request) {
-	workspaceDir := "./data/workspace"
+	workspaceDir := s.workspaceDir
 	_ = os.MkdirAll(workspaceDir, 0755)
 
 	err := r.ParseMultipartForm(32 << 20) // 32MB max
@@ -163,11 +140,12 @@ func (s *Server) handleUploadWorkspaceFile(w http.ResponseWriter, r *http.Reques
 	}
 
 	relDir := r.FormValue("dir")
-	cleanRel := filepath.Clean(relDir)
-	if strings.HasPrefix(cleanRel, "..") {
+	_, err = security.ResolvePath(workspaceDir, relDir, true)
+	if err != nil {
 		s.respondError(w, http.StatusForbidden, "ACCESS_DENIED", "path escapes workspace")
 		return
 	}
+	cleanRel := filepath.Clean(relDir)
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
@@ -176,31 +154,23 @@ func (s *Server) handleUploadWorkspaceFile(w http.ResponseWriter, r *http.Reques
 	}
 	defer file.Close()
 
-	destDir := filepath.Join(workspaceDir, cleanRel)
-	_ = os.MkdirAll(destDir, 0755)
-	destPath := filepath.Join(destDir, header.Filename)
-
-	out, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-	if err != nil {
-		s.respondError(w, http.StatusInternalServerError, "WRITE_FAILED", err.Error())
+	fileName := filepath.Base(header.Filename)
+	if fileName == "." || fileName == string(filepath.Separator) || fileName == "" {
+		s.respondError(w, http.StatusBadRequest, "INVALID_FILENAME", "invalid upload filename")
 		return
 	}
-	defer out.Close()
-
-	var buf [4096]byte
-	for {
-		n, err := file.Read(buf[:])
-		if n > 0 {
-			_, _ = out.Write(buf[:n])
-		}
-		if err != nil {
-			break
-		}
+	data, err := io.ReadAll(io.LimitReader(file, 8<<20))
+	if err != nil {
+		s.respondError(w, http.StatusBadRequest, "READ_FAILED", err.Error())
+		return
 	}
-
-	s.respondJSON(w, http.StatusOK, map[string]any{
-		"status":   "uploaded",
-		"filename": header.Filename,
-		"path":     filepath.ToSlash(filepath.Join(cleanRel, header.Filename)),
+	approval, err := s.requestAdminAction(r.Context(), "workspace_upload", map[string]string{
+		"path": filepath.ToSlash(filepath.Join(cleanRel, fileName)),
+		"data": base64.StdEncoding.EncodeToString(data),
 	})
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "APPROVAL_REQUEST_FAILED", err.Error())
+		return
+	}
+	s.respondJSON(w, http.StatusAccepted, map[string]any{"status": "approval_required", "approval": approval})
 }

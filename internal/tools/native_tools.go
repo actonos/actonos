@@ -15,6 +15,7 @@ import (
 
 	"github.com/actonos/actonos/internal/bus"
 	"github.com/actonos/actonos/internal/sandbox"
+	"github.com/actonos/actonos/internal/security"
 )
 
 var (
@@ -70,13 +71,23 @@ type HTTPFetchTool struct {
 
 func NewHTTPFetchTool() *HTTPFetchTool {
 	return &HTTPFetchTool{
-		client: &http.Client{Timeout: 30 * time.Second},
+		client: &http.Client{
+			Timeout: 30 * time.Second,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if len(via) >= 5 {
+					return errors.New("too many redirects")
+				}
+				return security.ValidateOutboundURL(req.Context(), req.URL.String())
+			},
+		},
 	}
 }
 
-func (t *HTTPFetchTool) Name() string        { return "native_http_fetch" }
-func (t *HTTPFetchTool) Description() string { return "Fetch content or JSON from an external URL via HTTP GET." }
-func (t *HTTPFetchTool) Category() string    { return "native" }
+func (t *HTTPFetchTool) Name() string { return "native_http_fetch" }
+func (t *HTTPFetchTool) Description() string {
+	return "Fetch content or JSON from an external URL via HTTP GET."
+}
+func (t *HTTPFetchTool) Category() string { return "native" }
 
 func (t *HTTPFetchTool) ParametersSchema() json.RawMessage {
 	return json.RawMessage(`{
@@ -115,6 +126,9 @@ func (t *HTTPFetchTool) Execute(ctx context.Context, inputJSON json.RawMessage) 
 
 	if !strings.HasPrefix(input.URL, "http://") && !strings.HasPrefix(input.URL, "https://") {
 		input.URL = "https://" + input.URL
+	}
+	if err := security.ValidateOutboundURL(ctx, input.URL); err != nil {
+		return nil, fmt.Errorf("validating outbound URL: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, input.URL, nil)
@@ -156,9 +170,11 @@ func NewFileReadTool(workspaceDir string) *FileReadTool {
 	return &FileReadTool{workspaceDir: workspaceDir}
 }
 
-func (t *FileReadTool) Name() string        { return "native_file_read" }
-func (t *FileReadTool) Description() string { return "Read contents of a file within the authorized workspace." }
-func (t *FileReadTool) Category() string    { return "native" }
+func (t *FileReadTool) Name() string { return "native_file_read" }
+func (t *FileReadTool) Description() string {
+	return "Read contents of a file within the authorized workspace."
+}
+func (t *FileReadTool) Category() string { return "native" }
 
 func (t *FileReadTool) ParametersSchema() json.RawMessage {
 	return json.RawMessage(`{
@@ -171,14 +187,9 @@ func (t *FileReadTool) ParametersSchema() json.RawMessage {
 }
 
 func (t *FileReadTool) validatePath(relPath string) (string, error) {
-	cleanRel := filepath.Clean(relPath)
-	if strings.HasPrefix(cleanRel, "..") || filepath.IsAbs(relPath) {
-		return "", ErrPathEscape
-	}
-	absWorkspace, _ := filepath.Abs(t.workspaceDir)
-	targetPath := filepath.Join(absWorkspace, cleanRel)
-	if !strings.HasPrefix(targetPath, absWorkspace) {
-		return "", ErrPathEscape
+	targetPath, err := security.ResolvePath(t.workspaceDir, relPath, false)
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrPathEscape, err)
 	}
 	return targetPath, nil
 }
@@ -237,9 +248,11 @@ func NewFileWriteTool(workspaceDir string) *FileWriteTool {
 	return &FileWriteTool{workspaceDir: workspaceDir}
 }
 
-func (t *FileWriteTool) Name() string        { return "native_file_write" }
-func (t *FileWriteTool) Description() string { return "Write or overwrite a file within the authorized workspace." }
-func (t *FileWriteTool) Category() string    { return "native" }
+func (t *FileWriteTool) Name() string { return "native_file_write" }
+func (t *FileWriteTool) Description() string {
+	return "Write or overwrite a file within the authorized workspace."
+}
+func (t *FileWriteTool) Category() string { return "native" }
 
 func (t *FileWriteTool) ParametersSchema() json.RawMessage {
 	return json.RawMessage(`{
@@ -274,15 +287,9 @@ func (t *FileWriteTool) Execute(ctx context.Context, inputJSON json.RawMessage) 
 		return nil, errors.New("path parameter is required")
 	}
 
-	cleanRel := filepath.Clean(input.Path)
-	if strings.HasPrefix(cleanRel, "..") || filepath.IsAbs(input.Path) {
-		return nil, ErrPathEscape
-	}
-
-	absWorkspace, _ := filepath.Abs(t.workspaceDir)
-	targetPath := filepath.Join(absWorkspace, cleanRel)
-	if !strings.HasPrefix(targetPath, absWorkspace) {
-		return nil, ErrPathEscape
+	targetPath, err := security.ResolvePath(t.workspaceDir, input.Path, true)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrPathEscape, err)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
@@ -314,9 +321,11 @@ func NewFileListTool(workspaceDir string) *FileListTool {
 	return &FileListTool{workspaceDir: workspaceDir}
 }
 
-func (t *FileListTool) Name() string        { return "native_file_list" }
-func (t *FileListTool) Description() string { return "List files and directories within the authorized workspace." }
-func (t *FileListTool) Category() string    { return "native" }
+func (t *FileListTool) Name() string { return "native_file_list" }
+func (t *FileListTool) Description() string {
+	return "List files and directories within the authorized workspace."
+}
+func (t *FileListTool) Category() string { return "native" }
 
 func (t *FileListTool) ParametersSchema() json.RawMessage {
 	return json.RawMessage(`{
@@ -336,16 +345,11 @@ func (t *FileListTool) Execute(ctx context.Context, inputJSON json.RawMessage) (
 	}
 	_ = json.Unmarshal(inputJSON, &input)
 
-	cleanRel := filepath.Clean(input.Path)
-	if strings.HasPrefix(cleanRel, "..") || filepath.IsAbs(input.Path) {
-		return nil, ErrPathEscape
+	targetDir, err := security.ResolvePath(t.workspaceDir, input.Path, true)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrPathEscape, err)
 	}
-
 	absWorkspace, _ := filepath.Abs(t.workspaceDir)
-	targetDir := filepath.Join(absWorkspace, cleanRel)
-	if !strings.HasPrefix(targetDir, absWorkspace) {
-		return nil, ErrPathEscape
-	}
 
 	_ = os.MkdirAll(targetDir, 0755)
 
@@ -422,9 +426,11 @@ func NewFileDeleteTool(workspaceDir string) *FileDeleteTool {
 	return &FileDeleteTool{workspaceDir: workspaceDir}
 }
 
-func (t *FileDeleteTool) Name() string        { return "native_file_delete" }
-func (t *FileDeleteTool) Description() string { return "Delete a file or empty directory in the authorized workspace." }
-func (t *FileDeleteTool) Category() string    { return "native" }
+func (t *FileDeleteTool) Name() string { return "native_file_delete" }
+func (t *FileDeleteTool) Description() string {
+	return "Delete a file or empty directory in the authorized workspace."
+}
+func (t *FileDeleteTool) Category() string { return "native" }
 
 func (t *FileDeleteTool) ParametersSchema() json.RawMessage {
 	return json.RawMessage(`{
@@ -446,14 +452,12 @@ func (t *FileDeleteTool) Execute(ctx context.Context, inputJSON json.RawMessage)
 	}
 
 	cleanRel := filepath.Clean(input.Path)
-	if strings.HasPrefix(cleanRel, "..") || filepath.IsAbs(input.Path) || cleanRel == "." || cleanRel == "" {
+	if cleanRel == "." || cleanRel == "" {
 		return nil, ErrPathEscape
 	}
-
-	absWorkspace, _ := filepath.Abs(t.workspaceDir)
-	targetPath := filepath.Join(absWorkspace, cleanRel)
-	if !strings.HasPrefix(targetPath, absWorkspace) {
-		return nil, ErrPathEscape
+	targetPath, err := security.ResolvePath(t.workspaceDir, input.Path, false)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrPathEscape, err)
 	}
 
 	if err := os.Remove(targetPath); err != nil {
@@ -478,9 +482,11 @@ func NewFileSearchTool(workspaceDir string) *FileSearchTool {
 	return &FileSearchTool{workspaceDir: workspaceDir}
 }
 
-func (t *FileSearchTool) Name() string        { return "native_file_search" }
-func (t *FileSearchTool) Description() string { return "Search for text patterns or filenames inside the workspace." }
-func (t *FileSearchTool) Category() string    { return "native" }
+func (t *FileSearchTool) Name() string { return "native_file_search" }
+func (t *FileSearchTool) Description() string {
+	return "Search for text patterns or filenames inside the workspace."
+}
+func (t *FileSearchTool) Category() string { return "native" }
 
 func (t *FileSearchTool) ParametersSchema() json.RawMessage {
 	return json.RawMessage(`{
@@ -618,6 +624,18 @@ func (t *ExecTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*Too
 	if err != nil {
 		return nil, fmt.Errorf("sandbox execution error: %w", err)
 	}
+	if result.ExitCode != 0 {
+		return &ToolResult{
+			Content: result.Stdout,
+			Data: map[string]any{
+				"exit_code":      result.ExitCode,
+				"stderr":         result.Stderr,
+				"execution_time": result.ExecutionTime.String(),
+				"killed":         result.Killed,
+			},
+			Error: result.Stderr,
+		}, fmt.Errorf("command exited with code %d: %s", result.ExitCode, strings.TrimSpace(result.Stderr))
+	}
 
 	output := result.Stdout
 	if result.Stderr != "" {
@@ -655,9 +673,11 @@ func NewWebSearchTool() *WebSearchTool {
 	}
 }
 
-func (t *WebSearchTool) Name() string        { return "native_web_search" }
-func (t *WebSearchTool) Description() string { return "Search the web for real-time information, documentation, news, or solutions." }
-func (t *WebSearchTool) Category() string    { return "native" }
+func (t *WebSearchTool) Name() string { return "native_web_search" }
+func (t *WebSearchTool) Description() string {
+	return "Search the web for real-time information, documentation, news, or solutions."
+}
+func (t *WebSearchTool) Category() string { return "native" }
 
 func (t *WebSearchTool) ParametersSchema() json.RawMessage {
 	return json.RawMessage(`{
@@ -893,9 +913,9 @@ func (t *SysInfoTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*
 				"size_kb": walSize / 1024,
 			},
 			"vector_memory_indexes": map[string]any{
-				"status":  vectorStatus,
-				"engine":  "chromem-go",
-				"path":    vectorsPath,
+				"status": vectorStatus,
+				"engine": "chromem-go",
+				"path":   vectorsPath,
 			},
 			"workspace": map[string]any{
 				"status": "online",

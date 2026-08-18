@@ -175,11 +175,76 @@ func (d *DB) migrate() error {
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_heartbeat_runs_executed ON heartbeat_runs(executed_at);
+
+	CREATE TABLE IF NOT EXISTS approvals (
+		id TEXT PRIMARY KEY,
+		trace_id TEXT NOT NULL,
+		agent_id TEXT NOT NULL,
+		tool_name TEXT NOT NULL,
+		risk_level TEXT NOT NULL,
+		action_hash TEXT NOT NULL,
+		input_json TEXT NOT NULL,
+		status TEXT NOT NULL,
+		reason TEXT,
+		requested_at TIMESTAMP NOT NULL,
+		expires_at TIMESTAMP NOT NULL,
+		decided_at TIMESTAMP,
+		decided_by TEXT
+	);
+	CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status, requested_at);
+	CREATE INDEX IF NOT EXISTS idx_approvals_action_hash ON approvals(action_hash);
+
+	CREATE TABLE IF NOT EXISTS agent_runs (
+		id TEXT PRIMARY KEY,
+		trace_id TEXT NOT NULL,
+		agent_id TEXT NOT NULL,
+		goal TEXT NOT NULL,
+		source TEXT NOT NULL,
+		status TEXT NOT NULL,
+		termination_reason TEXT NOT NULL DEFAULT '',
+		iterations INTEGER NOT NULL DEFAULT 0,
+		prompt_tokens INTEGER NOT NULL DEFAULT 0,
+		completion_tokens INTEGER NOT NULL DEFAULT 0,
+		total_tokens INTEGER NOT NULL DEFAULT 0,
+		started_at TIMESTAMP NOT NULL,
+		updated_at TIMESTAMP NOT NULL,
+		completed_at TIMESTAMP,
+		checkpoint_json TEXT
+	);
+	CREATE INDEX IF NOT EXISTS idx_agent_runs_trace ON agent_runs(trace_id);
+	CREATE INDEX IF NOT EXISTS idx_agent_runs_started ON agent_runs(started_at);
+
+	CREATE TABLE IF NOT EXISTS run_events (
+		id TEXT PRIMARY KEY,
+		run_id TEXT NOT NULL,
+		trace_id TEXT NOT NULL,
+		step INTEGER NOT NULL,
+		type TEXT NOT NULL,
+		status TEXT NOT NULL,
+		tool_name TEXT,
+		data_json TEXT,
+		duration_ms INTEGER NOT NULL DEFAULT 0,
+		created_at TIMESTAMP NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_run_events_run ON run_events(run_id, created_at);
+
+	CREATE TABLE IF NOT EXISTS context_snapshots (
+		id TEXT PRIMARY KEY,
+		run_id TEXT NOT NULL,
+		summary TEXT NOT NULL,
+		source_message_count INTEGER NOT NULL,
+		retained_message_count INTEGER NOT NULL,
+		created_at TIMESTAMP NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_context_snapshots_run ON context_snapshots(run_id, created_at);
 	`
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	_, err := d.db.ExecContext(ctx, schema)
+	if err == nil {
+		_, _ = d.db.ExecContext(ctx, "ALTER TABLE agent_runs ADD COLUMN checkpoint_json TEXT")
+	}
 	return err
 }

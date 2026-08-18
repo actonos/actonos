@@ -1,26 +1,43 @@
 {
   "title": "Nhiệm vụ & Điều phối Heartbeat",
-  "subtitle": "Quản lý công việc tự hành, chỉ thị định kỳ và nhịp đập nhận thức của Agent.",
+  "subtitle": "Quản lý công việc tự hành, chỉ thị định kỳ và nhịp nhận thức của Agent.",
   "modal": {
-    "createTitle": "Tạo Nhiệm Vụ Mới",
-    "editTitle": "Chỉnh Sửa Nhiệm Vụ",
-    "taskTitle": "Tên Nhiệm Vụ *",
-    "directive": "Chỉ Thị & Tiêu Chí Thực Thi",
-    "priority": "Mức Độ Ưu Tiên",
-    "assignedAgent": "Agent Phụ Trách",
-    "status": "Trạng Thái",
-    "progress": "Tiến Độ",
-    "channel": "Kênh Thông Báo Đẩy",
-    "account": "Tài Khoản Đích"
+    "createTitle": "Tạo nhiệm vụ mới",
+    "editTitle": "Chỉnh sửa nhiệm vụ",
+    "taskTitle": "Tên nhiệm vụ *",
+    "directive": "Chỉ thị & tiêu chí",
+    "priority": "Mức độ ưu tiên",
+    "assignedAgent": "Agent phụ trách",
+    "status": "Trạng thái",
+    "progress": "Tiến độ",
+    "channel": "Kênh thông báo",
+    "account": "Tài khoản đích"
   },
   "toast": {
-    "taskCreated": "Đã Tạo Nhiệm Vụ",
-    "taskUpdated": "Đã Cập Nhật Nhiệm Vụ",
-    "taskDeleted": "Đã Xoá Nhiệm Vụ",
-    "directivesSaved": "Đã Lưu Chỉ Thị"
+    "taskCreated": "Đã tạo nhiệm vụ",
+    "taskUpdated": "Đã cập nhật nhiệm vụ",
+    "taskDeleted": "Đã xoá nhiệm vụ",
+    "directivesSaved": "Đã lưu chỉ thị"
   },
   "pulse": {
-    "triggering": "Đang Kích Hoạt Nhịp Đập",
-    "triggeredSuccess": "Nhịp Đập Hoàn Tất"
+    "triggering": "Đang kích hoạt nhịp",
+    "triggeredSuccess": "Nhịp đã hoàn tất"
+  },
+  "governance": {
+    "tab": "Phê duyệt & Luồng chạy ({{count}})",
+    "approvalsTitle": "Hàng đợi phê duyệt",
+    "approvalsDescription": "Kiểm tra hành động rủi ro cao trước khi thực thi.",
+    "noApprovals": "Không có hành động nào đang chờ phê duyệt.",
+    "pending": "Đang chờ",
+    "approve": "Phê duyệt & Thực thi",
+    "reject": "Từ chối",
+    "approvedTitle": "Đã phê duyệt hành động",
+    "rejectedTitle": "Đã từ chối hành động",
+    "decisionFailed": "Không thể xử lý phê duyệt",
+    "reviewedReason": "Đã kiểm tra và phê duyệt trong Mission Control",
+    "rejectedReason": "Đã từ chối trong Mission Control",
+    "runsTitle": "Luồng chạy Agent bền vững",
+    "runsDescription": "Dấu vết thực thi và nguyên nhân kết thúc gần đây.",
+    "runMetrics": "{{iterations}} vòng · {{tokens}} token · {{reason}}"
   }
 }

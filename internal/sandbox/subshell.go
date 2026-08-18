@@ -69,11 +69,11 @@ func (s *SubshellSandbox) Execute(ctx context.Context, req CommandRequest) (*Com
 	}
 
 	if err != nil {
+		result.Killed = execCtx.Err() == context.DeadlineExceeded || execCtx.Err() == context.Canceled
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			result.ExitCode = exitErr.ExitCode()
 		} else {
 			result.ExitCode = -1
-			result.Killed = execCtx.Err() == context.DeadlineExceeded
 		}
 	}
 
@@ -82,10 +82,11 @@ func (s *SubshellSandbox) Execute(ctx context.Context, req CommandRequest) (*Com
 
 // AutoDetectSandbox selects Bubblewrap on Linux if available, or Subshell runner for container / dev.
 func AutoDetectSandbox() Sandbox {
-	if runtime.GOOS == "linux" && os.Getenv("RUNTIME_MODE") != "docker" {
-		if _, err := exec.LookPath("bwrap"); err == nil {
-			return NewSubshellSandbox() // or NewBubblewrapSandbox() when on linux
-		}
+	if strongSandboxAvailable() {
+		return newStrongSandbox()
 	}
-	return NewSubshellSandbox()
+	if os.Getenv("RUNTIME_MODE") == "docker" || os.Getenv("ACTONOS_ALLOW_INSECURE_EXEC") == "1" {
+		return NewSubshellSandbox()
+	}
+	return &unavailableSandbox{}
 }

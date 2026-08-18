@@ -8,6 +8,7 @@
 #   make lint          Run Go and TypeScript linters
 #   make test          Run all tests (Go unit + integration)
 #   make test-unit     Run Go unit tests only
+#   make test-race     Run Go race detector (Linux/CGO)
 #   make test-integ    Run Go integration tests only
 #   make build-web     Build the React frontend (production)
 #   make build         Build the actond binary (production)
@@ -22,7 +23,7 @@
 #   make help          Show this help message
 # ==============================================================================
 
-.PHONY: all deps dev lint test test-unit test-integ build-web build docker iso \
+.PHONY: all deps dev lint test test-unit test-race test-integ build-web build docker iso \
         clean version bump-patch bump-minor bump-major release help
 
 # ------------------------------------------------------------------------------
@@ -85,6 +86,11 @@ test-unit:
 	@mkdir -p $(BUILD_DIR)
 	$(GO) test -count=1 -coverprofile=$(BUILD_DIR)/coverage.out ./internal/...
 	@echo "==> Unit tests passed."
+
+test-race:
+	@echo "==> Running Linux/CGO race detector..."
+	CGO_ENABLED=1 go test -race -count=1 ./internal/...
+	@echo "==> Race detector passed."
 
 test-integ:
 	@echo "==> Running integration tests..."
@@ -177,6 +183,7 @@ help:
 	@echo "  make lint          Run all linters (Go + TypeScript)"
 	@echo "  make test          Run all tests"
 	@echo "  make test-unit     Run Go unit tests only"
+	@echo "  make test-race     Run Linux/CGO race detector"
 	@echo "  make test-integ    Run integration tests only"
 	@echo "  make build-web     Build frontend only"
 	@echo "  make build         Build full production binary (web + Go)"

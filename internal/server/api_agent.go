@@ -18,16 +18,16 @@ import (
 )
 
 type createAgentRequest struct {
-	Name                string                `json:"name"`
-	Description         string                `json:"description"`
-	AvatarIcon          string                `json:"avatar_icon"`
-	Status              agent.AgentStatus     `json:"status,omitempty"`
-	ModelConfig         llm.ModelConfig       `json:"model_config"`
+	Name               string                `json:"name"`
+	Description        string                `json:"description"`
+	AvatarIcon         string                `json:"avatar_icon"`
+	Status             agent.AgentStatus     `json:"status,omitempty"`
+	ModelConfig        llm.ModelConfig       `json:"model_config"`
 	SystemInstructions string                `json:"system_instructions"`
-	AuthorizedTools     []string              `json:"authorized_tools"`
-	ListenChannels      []string              `json:"listen_channels"`
-	DelegationScope     agent.DelegationScope `json:"delegation_scope"`
-	TriggerRules        []agent.TriggerRule   `json:"trigger_rules"`
+	AuthorizedTools    []string              `json:"authorized_tools"`
+	ListenChannels     []string              `json:"listen_channels"`
+	DelegationScope    agent.DelegationScope `json:"delegation_scope"`
+	TriggerRules       []agent.TriggerRule   `json:"trigger_rules"`
 }
 
 func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
@@ -55,16 +55,16 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	manifest := agent.AgentManifest{
-		Name:                req.Name,
-		Description:         req.Description,
-		AvatarIcon:          req.AvatarIcon,
-		Status:              status,
-		ModelConfig:         req.ModelConfig,
+		Name:               req.Name,
+		Description:        req.Description,
+		AvatarIcon:         req.AvatarIcon,
+		Status:             status,
+		ModelConfig:        req.ModelConfig,
 		SystemInstructions: req.SystemInstructions,
-		AuthorizedTools:     req.AuthorizedTools,
-		ListenChannels:      req.ListenChannels,
-		DelegationScope:     req.DelegationScope,
-		TriggerRules:        req.TriggerRules,
+		AuthorizedTools:    req.AuthorizedTools,
+		ListenChannels:     req.ListenChannels,
+		DelegationScope:    req.DelegationScope,
+		TriggerRules:       req.TriggerRules,
 	}
 
 	created, err := s.agentMgr.Create(r.Context(), manifest)
@@ -104,17 +104,17 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	manifest := agent.AgentManifest{
-		AgentID:             agentID,
-		Name:                req.Name,
-		Description:         req.Description,
-		AvatarIcon:          req.AvatarIcon,
-		Status:              status,
-		ModelConfig:         req.ModelConfig,
+		AgentID:            agentID,
+		Name:               req.Name,
+		Description:        req.Description,
+		AvatarIcon:         req.AvatarIcon,
+		Status:             status,
+		ModelConfig:        req.ModelConfig,
 		SystemInstructions: req.SystemInstructions,
-		AuthorizedTools:     req.AuthorizedTools,
-		ListenChannels:      req.ListenChannels,
-		DelegationScope:     req.DelegationScope,
-		TriggerRules:        req.TriggerRules,
+		AuthorizedTools:    req.AuthorizedTools,
+		ListenChannels:     req.ListenChannels,
+		DelegationScope:    req.DelegationScope,
+		TriggerRules:       req.TriggerRules,
 	}
 
 	updated, err := s.agentMgr.Update(r.Context(), manifest)
@@ -684,8 +684,99 @@ func (s *Server) handleGetMemoryMD(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
-	// Re-route to handleChat with streaming forced
-	s.handleChat(w, r)
+	agentID := chi.URLParam(r, "agentID")
+	if agentID == "" || agentID == "default" {
+		agentID = agent.DefaultSystemAgentID
+	}
+	var req struct {
+		ConversationID string `json:"conversation_id"`
+		Message        string `json:"message"`
+	}
+	if err := s.decodeJSON(r, &req); err != nil {
+		s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
+	if strings.TrimSpace(req.Message) == "" {
+		s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", "message cannot be empty")
+		return
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		s.respondError(w, http.StatusInternalServerError, "STREAMING_UNSUPPORTED", "response writer does not support streaming")
+		return
+	}
+
+	convID := req.ConversationID
+	now := time.Now().UTC()
+	title := generateConversationTitle(req.Message)
+	var history []llm.Message
+	if s.memory != nil {
+		if convID == "" {
+			convID = "conv_" + uuid.NewString()
+		}
+		rows, queryErr := s.memory.DB().SQLDB().QueryContext(r.Context(), `
+			SELECT role, content FROM messages
+			WHERE conversation_id = ? AND role IN ('user', 'assistant')
+			ORDER BY created_at DESC LIMIT 8
+		`, convID)
+		if queryErr == nil {
+			var reversed []llm.Message
+			for rows.Next() {
+				var role, content string
+				if scanErr := rows.Scan(&role, &content); scanErr == nil {
+					reversed = append(reversed, llm.Message{Role: llm.Role(role), Content: content})
+				}
+			}
+			_ = rows.Close()
+			for index := len(reversed) - 1; index >= 0; index-- {
+				history = append(history, reversed[index])
+			}
+		}
+		_, _ = s.memory.DB().SQLDB().ExecContext(r.Context(), `
+			INSERT INTO conversations (id, agent_id, title, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?)
+			ON CONFLICT(id) DO UPDATE SET updated_at = excluded.updated_at
+		`, convID, agentID, title, now, now)
+		_, _ = s.memory.DB().SQLDB().ExecContext(r.Context(), `
+			INSERT INTO messages (id, conversation_id, agent_id, role, content, created_at)
+			VALUES (?, ?, ?, 'user', ?, ?)
+		`, "msg_"+uuid.NewString(), convID, agentID, req.Message, now)
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+
+	events := make(chan agent.AgentStreamEvent, 64)
+	type streamResult struct {
+		response *llm.Response
+		err      error
+	}
+	resultCh := make(chan streamResult, 1)
+	go func() {
+		response, err := s.engine.ExecuteStepStreamWithHistory(r.Context(), agentID, req.Message, history, events)
+		resultCh <- streamResult{response: response, err: err}
+	}()
+	for event := range events {
+		event.ConversationID = convID
+		event.Title = title
+		payload, err := json.Marshal(event)
+		if err != nil {
+			continue
+		}
+		_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event.Type, payload)
+		flusher.Flush()
+	}
+	result := <-resultCh
+	if result.err == nil && result.response != nil && s.memory != nil {
+		toolCalls, _ := json.Marshal(result.response.ToolCalls)
+		_, _ = s.memory.DB().SQLDB().ExecContext(context.Background(), `
+			INSERT INTO messages (id, conversation_id, agent_id, role, content, tool_calls_json, created_at)
+			VALUES (?, ?, ?, 'assistant', ?, ?, ?)
+		`, "msg_"+uuid.NewString(), convID, agentID, result.response.Content, string(toolCalls), time.Now().UTC())
+	}
 }
 
 func (s *Server) handleListAllCronHistory(w http.ResponseWriter, r *http.Request) {
@@ -724,4 +815,3 @@ func (s *Server) handleGetCronJobHistory(w http.ResponseWriter, r *http.Request)
 	}
 	s.respondJSON(w, http.StatusOK, history)
 }
-

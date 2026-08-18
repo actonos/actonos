@@ -96,3 +96,11 @@ Channels support multiple concurrently configured accounts (e.g. multiple distin
 4. Update `web/src/pages/Channels/ChannelsPage.tsx` and `web/src/locales/{en,vi}/channels.json`.
 5. Implement message chunking for platform length limits (e.g. 4096 for Telegram, 2000 for Discord).
 6. Add unit tests verifying `SendMessage` and inbound message normalization.
+
+## 6. Agent Execution Boundary
+
+- Channel adapters may publish normalized messages but must never execute tools directly.
+- Tool authorization, approvals, trace IDs, monthly budgets, and sandbox policy
+  are inherited from the bound agent through `ToolRegistry.Execute`.
+- Approval-required actions remain pending; never silently retry with broader permissions.
+- Preserve deterministic conversation IDs so a later turn can continue after approval.

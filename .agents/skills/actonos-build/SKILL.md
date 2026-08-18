@@ -10,7 +10,7 @@ Use this skill when building ActonOS artifacts: the frontend, Go binary, Docker 
 ## Build Pipeline Overview
 
 ```
-make deps → make lint → make test → make build-web → make build → make docker → make iso
+make deps → make lint → make test → make test-race (Linux CI) → make build-web → make build → make docker → make iso
 ```
 
 | Target | What It Does | Output |
@@ -18,6 +18,7 @@ make deps → make lint → make test → make build-web → make build → make
 | `make deps` | Install Go + Node dependencies | — |
 | `make lint` | Run Go vet, gofmt, golangci-lint, ESLint | — |
 | `make test` | Run all tests (unit + integration) | `build/coverage.out` |
+| `make test-race` | Run the Linux CGO race detector | Required CI gate |
 | `make build-web` | Build React frontend (Vite production) | `web/dist/` |
 | `make build` | Build full `actond` binary (includes web) | `build/actond` |
 | `make build-only` | Build Go binary only (skip web rebuild) | `build/actond` |

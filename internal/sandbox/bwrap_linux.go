@@ -6,8 +6,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"time"
 )
 
@@ -44,6 +46,7 @@ func (s *BubblewrapSandbox) Execute(ctx context.Context, req CommandRequest) (*C
 		"--proc", "/proc",
 		"--dev", "/dev",
 		"--unshare-all",
+		"--new-session",
 		"--die-with-parent",
 		"--cap-drop", "ALL",
 		"--bind", workspace, "/workspace",
@@ -53,13 +56,28 @@ func (s *BubblewrapSandbox) Execute(ctx context.Context, req CommandRequest) (*C
 	}
 
 	cmd := exec.CommandContext(execCtx, "bwrap", args...)
+	if len(req.Env) > 0 {
+		for key, value := range req.Env {
+			cmd.Env = append(cmd.Environ(), key+"="+value)
+		}
+	}
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
 	startTime := time.Now()
-	err = cmd.Run()
+	if err = cmd.Start(); err != nil {
+		return nil, fmt.Errorf("starting bubblewrap: %w", err)
+	}
+	cgroupPath, err := attachCgroup(cmd.Process.Pid, req)
+	if err != nil {
+		_ = cmd.Process.Kill()
+		_, _ = cmd.Process.Wait()
+		return nil, err
+	}
+	defer cleanupCgroup(cgroupPath)
+	err = cmd.Wait()
 	duration := time.Since(startTime)
 
 	result := &CommandResult{
@@ -78,4 +96,41 @@ func (s *BubblewrapSandbox) Execute(ctx context.Context, req CommandRequest) (*C
 	}
 
 	return result, nil
+}
+
+func attachCgroup(pid int, req CommandRequest) (string, error) {
+	if req.MaxMemoryMB <= 0 {
+		req.MaxMemoryMB = 512
+	}
+	if req.MaxProcesses <= 0 {
+		req.MaxProcesses = 30
+	}
+	base := "/sys/fs/cgroup"
+	if _, err := os.Stat(filepath.Join(base, "cgroup.controllers")); err != nil {
+		return "", fmt.Errorf("cgroup v2 is required for bare-metal sandboxing: %w", err)
+	}
+	group := filepath.Join(base, fmt.Sprintf("actonos-%d", pid))
+	if err := os.Mkdir(group, 0755); err != nil {
+		return "", fmt.Errorf("creating execution cgroup: %w", err)
+	}
+	writes := map[string]string{
+		"memory.max":   strconv.FormatInt(int64(req.MaxMemoryMB)*1024*1024, 10),
+		"pids.max":     strconv.Itoa(req.MaxProcesses),
+		"cpu.max":      "50000 100000",
+		"cgroup.procs": strconv.Itoa(pid),
+	}
+	for name, value := range writes {
+		if err := os.WriteFile(filepath.Join(group, name), []byte(value), 0644); err != nil {
+			cleanupCgroup(group)
+			return "", fmt.Errorf("configuring cgroup %s: %w", name, err)
+		}
+	}
+	return group, nil
+}
+
+func cleanupCgroup(group string) {
+	if group == "" || filepath.Dir(group) != "/sys/fs/cgroup" || filepath.Base(group)[:8] != "actonos-" {
+		return
+	}
+	_ = os.Remove(group)
 }

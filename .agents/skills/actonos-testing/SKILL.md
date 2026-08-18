@@ -245,6 +245,38 @@ internal/
 │   └── decay_test.go             ← Unit tests
 ```
 
+## Mandatory Security Cases
+
+Changes touching tools, agents, workspace APIs, MCP, or sandboxing must test:
+
+1. Unauthorized tools are rejected at execution time.
+2. Medium/High actions pause with a durable approval.
+3. Approval hashes reject modified arguments and expired/rejected decisions.
+4. Lexical and symlink path escapes are rejected.
+5. Loopback, private, link-local, metadata, and redirect SSRF targets are rejected.
+6. Destructive commands are denied before process startup.
+7. Non-zero command exits are classified as failures.
+8. Repeated observations/failures terminate rather than loop forever.
+9. Trace IDs correlate run, tool, approval, and audit records.
+10. Linux sandbox builds compile with cgroup v2 attachment enabled.
+11. Streaming tests cover token deltas and fragmented tool-call reconstruction.
+12. Audit tests validate hash-chain integrity and tamper detection.
+13. Durable resume tests prove the approved tool executes once and the original
+    run continues from its saved state.
+14. MCP HTTP tests cover JSON and `data:` SSE JSON-RPC responses.
+15. Provider streaming tests cover OpenAI-compatible, Anthropic, and Gemini.
+
+Security package target: `internal/security/` must maintain at least 90% coverage.
+
+The autonomous-kernel baseline established on 2026-08-18 is: agent 71.5%,
+server 60.6%, tools 60.3%, sandbox 87.8%, security 92.3%, and memory 83.3%.
+Changes must not reduce a package below its target.
+
+Linux CI must run `CGO_ENABLED=1 go test -race -count=1 ./internal/...`.
+Provider-storage tests must prove secrets are absent from metadata files,
+legacy plaintext is migrated and removed, and Vault deletion works. Backup
+tests must query committed WAL data from the downloaded snapshot.
+
 ## Reference Files
 
 - [docs/DEVELOPMENT.md](../../../docs/DEVELOPMENT.md) — Testing section

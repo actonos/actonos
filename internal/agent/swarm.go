@@ -14,8 +14,8 @@ import (
 )
 
 var (
-	ErrScopeExceeded      = errors.New("sub-agent requested tool or resource beyond parent delegation scope")
-	ErrSubTaskTimeout     = errors.New("sub-task execution timed out")
+	ErrScopeExceeded     = errors.New("sub-agent requested tool or resource beyond parent delegation scope")
+	ErrSubTaskTimeout    = errors.New("sub-task execution timed out")
 	ErrSubAgentExecution = errors.New("sub-agent execution failed")
 )
 
@@ -25,7 +25,13 @@ type SwarmManager struct {
 	bus         *bus.EventBus
 	llmRouter   *llm.ModelCascadeRouter
 	memory      *memory.HybridEngine
+	engine      *Engine
 	concurrency int
+}
+
+// SetEngine routes delegated work through the same durable execution kernel as parent agents.
+func (s *SwarmManager) SetEngine(engine *Engine) {
+	s.engine = engine
 }
 
 // NewSwarmManager creates a new SwarmManager.
@@ -127,8 +133,21 @@ func (s *SwarmManager) SpawnSubAgent(ctx context.Context, parentID string, task 
 			cascadeOrder = append(cascadeOrder, parent.ModelConfig.FallbackModel)
 		}
 
-		// Execute completion
-		resp, err := s.llmRouter.CompleteWithCascade(taskCtx, cascadeOrder, messages, llm.CompletionOptions{})
+		var resp *llm.Response
+		var err error
+		if s.engine != nil {
+			executionAgentID := result.AgentID
+			if _, lookupErr := s.agentMgr.Get(taskCtx, executionAgentID); lookupErr != nil {
+				executionAgentID = parentID
+			}
+			resp, err = s.engine.ExecuteStep(
+				taskCtx,
+				executionAgentID,
+				fmt.Sprintf("[AUTONOMOUS DELEGATED SUBTASK]\nRole: %s\nTask: %s\n\n%s", task.Title, systemPrompt, task.Prompt),
+			)
+		} else {
+			resp, err = s.llmRouter.CompleteWithCascade(taskCtx, cascadeOrder, messages, llm.CompletionOptions{})
+		}
 		result.ExecutionTime = time.Since(startTime)
 
 		if err != nil {

@@ -22,5 +22,22 @@
   "pulse": {
     "triggering": "Heartbeat Triggered",
     "triggeredSuccess": "Pulse Completed"
+  },
+  "governance": {
+    "tab": "Approvals & Runs ({{count}})",
+    "approvalsTitle": "Human Approval Queue",
+    "approvalsDescription": "Review exact high-risk actions before execution.",
+    "noApprovals": "No actions are waiting for approval.",
+    "pending": "Pending",
+    "approve": "Approve & Execute",
+    "reject": "Reject",
+    "approvedTitle": "Action approved",
+    "rejectedTitle": "Action rejected",
+    "decisionFailed": "Approval decision failed",
+    "reviewedReason": "Reviewed and approved in Mission Control",
+    "rejectedReason": "Rejected in Mission Control",
+    "runsTitle": "Durable Agent Runs",
+    "runsDescription": "Recent execution traces and termination reasons.",
+    "runMetrics": "{{iterations}} iterations · {{tokens}} tokens · {{reason}}"
   }
 }

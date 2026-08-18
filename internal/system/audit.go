@@ -2,6 +2,7 @@ package system
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -21,13 +22,16 @@ type AuditLogEntry struct {
 	ExecutionTimeMS int64  `json:"execution_time_ms"`
 	Status          string `json:"status"` // "Success", "Failed", "Blocked"
 	Error           string `json:"error,omitempty"`
+	PreviousHash    string `json:"previous_hash,omitempty"`
+	EntryHash       string `json:"entry_hash"`
 }
 
 // AuditLogger writes structured JSON-lines logs to `/data/logs/audit.jsonl`.
 type AuditLogger struct {
-	mu      sync.Mutex
-	logPath string
-	file    *os.File
+	mu       sync.Mutex
+	logPath  string
+	file     *os.File
+	lastHash string
 }
 
 // NewAuditLogger creates a new AuditLogger instance.
@@ -46,6 +50,9 @@ func NewAuditLogger(dataDir string) (*AuditLogger, error) {
 	al := &AuditLogger{
 		logPath: logPath,
 		file:    f,
+	}
+	if entries, readErr := al.ReadRecentEntries(1); readErr == nil && len(entries) > 0 {
+		al.lastHash = entries[0].EntryHash
 	}
 
 	// Check if file is empty and seed initial bootstrap entry
@@ -103,6 +110,14 @@ func (l *AuditLogger) Log(entry AuditLogEntry) error {
 	if entry.TraceID == "" {
 		entry.TraceID = GenerateTraceID()
 	}
+	entry.PreviousHash = l.lastHash
+	entry.EntryHash = ""
+	canonical, err := json.Marshal(entry)
+	if err != nil {
+		return fmt.Errorf("marshalling canonical audit entry: %w", err)
+	}
+	sum := sha256.Sum256(canonical)
+	entry.EntryHash = hex.EncodeToString(sum[:])
 
 	data, err := json.Marshal(entry)
 	if err != nil {
@@ -111,7 +126,42 @@ func (l *AuditLogger) Log(entry AuditLogEntry) error {
 
 	data = append(data, '\n')
 	_, err = l.file.Write(data)
+	if err == nil {
+		l.lastHash = entry.EntryHash
+	}
 	return err
+}
+
+// VerifyChain validates the tamper-evident hash chain in the audit file.
+func (l *AuditLogger) VerifyChain() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	data, err := os.ReadFile(l.logPath)
+	if err != nil {
+		return fmt.Errorf("reading audit chain: %w", err)
+	}
+	previous := ""
+	for index, line := range splitLines(string(data)) {
+		if line == "" {
+			continue
+		}
+		var entry AuditLogEntry
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			return fmt.Errorf("decoding audit entry %d: %w", index, err)
+		}
+		recorded := entry.EntryHash
+		entry.EntryHash = ""
+		canonical, err := json.Marshal(entry)
+		if err != nil {
+			return fmt.Errorf("canonicalizing audit entry %d: %w", index, err)
+		}
+		sum := sha256.Sum256(canonical)
+		if entry.PreviousHash != previous || recorded != hex.EncodeToString(sum[:]) {
+			return fmt.Errorf("audit chain verification failed at entry %d", index)
+		}
+		previous = recorded
+	}
+	return nil
 }
 
 // ReadRecentEntries reads the last N audit log entries.

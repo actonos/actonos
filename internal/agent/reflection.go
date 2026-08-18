@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"strings"
 	"time"
 
@@ -62,6 +63,29 @@ func (r *ReflectionEngine) reflectionLoop(ctx context.Context) {
 // RunReflectionCycle processes recent conversation episodes and consolidates memory.
 func (r *ReflectionEngine) RunReflectionCycle(ctx context.Context) {
 	slog.Debug("running periodic memory reflection cycle...")
+	if r.hybridMem == nil || r.hybridMem.DB() == nil {
+		return
+	}
+	db := r.hybridMem.DB().SQLDB()
+	// Keep the newest copy of identical episodic memories per agent.
+	if _, err := db.ExecContext(ctx, `
+		DELETE FROM memories
+		WHERE rowid NOT IN (
+			SELECT MAX(rowid) FROM memories
+			WHERE layer = ? GROUP BY agent_id, content
+		) AND layer = ?
+	`, memory.LayerEpisodic, memory.LayerEpisodic); err != nil {
+		slog.Warn("memory reflection deduplication failed", "error", err)
+	}
+	// Remove stale, low-value episodes while preserving frequently accessed facts.
+	cutoff := time.Now().UTC().AddDate(0, -6, 0)
+	if _, err := db.ExecContext(ctx, `
+		DELETE FROM memories
+		WHERE layer = ? AND importance_weight < 0.35
+		  AND access_count = 0 AND created_at < ?
+	`, memory.LayerEpisodic, cutoff); err != nil {
+		slog.Warn("memory reflection retention cleanup failed", "error", err)
+	}
 }
 
 // ReflectOnConversation extracts user preferences and episodic memory reflections after an agent session.
@@ -73,6 +97,14 @@ func (r *ReflectionEngine) ReflectOnConversation(ctx context.Context, agentID, u
 	}
 	if agentID == "" {
 		agentID = DefaultSystemAgentID
+	}
+	userMsg = redactReflectionSecrets(userMsg)
+	asstResp = redactReflectionSecrets(asstResp)
+	if len(userMsg) > 12000 {
+		userMsg = userMsg[:12000]
+	}
+	if len(asstResp) > 12000 {
+		asstResp = asstResp[:12000]
 	}
 
 	// Skip trivial zero-noise pulses
@@ -162,6 +194,20 @@ Respond STRICTLY with valid JSON:
 			}
 		}
 	}()
+}
+
+var reflectionSecretPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)(api[_-]?key|access[_-]?token|secret|password)\s*[:=]\s*["']?[^\s"',;]+`),
+	regexp.MustCompile(`(?i)bearer\s+[a-z0-9._~+/=-]{12,}`),
+	regexp.MustCompile(`\bsk-[A-Za-z0-9_-]{16,}\b`),
+}
+
+func redactReflectionSecrets(value string) string {
+	redacted := value
+	for _, pattern := range reflectionSecretPatterns {
+		redacted = pattern.ReplaceAllString(redacted, "[REDACTED_SECRET]")
+	}
+	return redacted
 }
 
 // Stop terminates the reflection engine.

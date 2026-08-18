@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -25,6 +26,67 @@ type TaskPlan struct {
 	Goal      string     `json:"goal"`
 	Steps     []PlanStep `json:"steps"`
 	CreatedAt time.Time  `json:"created_at"`
+}
+
+// ExecutePlan runs dependency-ready steps in deterministic topological order.
+func (p *Planner) ExecutePlan(
+	ctx context.Context,
+	plan *TaskPlan,
+	execute func(context.Context, PlanStep) (string, error),
+) error {
+	if plan == nil || len(plan.Steps) == 0 {
+		return errors.New("plan has no executable steps")
+	}
+	known := make(map[string]bool, len(plan.Steps))
+	for _, step := range plan.Steps {
+		if step.ID == "" || known[step.ID] {
+			return fmt.Errorf("plan contains an empty or duplicate step id %q", step.ID)
+		}
+		known[step.ID] = true
+	}
+	for _, step := range plan.Steps {
+		for _, dependency := range step.Dependencies {
+			if !known[dependency] {
+				return fmt.Errorf("step %s references unknown dependency %s", step.ID, dependency)
+			}
+		}
+	}
+
+	completed := map[string]bool{}
+	for len(completed) < len(plan.Steps) {
+		progressed := false
+		for index := range plan.Steps {
+			step := &plan.Steps[index]
+			if completed[step.ID] {
+				continue
+			}
+			ready := true
+			for _, dependency := range step.Dependencies {
+				if !completed[dependency] {
+					ready = false
+					break
+				}
+			}
+			if !ready {
+				continue
+			}
+			progressed = true
+			step.Status = "in_progress"
+			result, err := execute(ctx, *step)
+			if err != nil {
+				step.Status = "failed"
+				step.Result = err.Error()
+				return fmt.Errorf("executing plan step %s: %w", step.ID, err)
+			}
+			step.Status = "completed"
+			step.Result = result
+			completed[step.ID] = true
+		}
+		if !progressed {
+			return errors.New("plan dependency graph contains a cycle")
+		}
+	}
+	return nil
 }
 
 // Planner handles goal decomposition and multi-agent execution planning.

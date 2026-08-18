@@ -2,6 +2,10 @@ package agent
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -27,6 +31,9 @@ type Engine struct {
 	verifier         *Verifier
 	tokenTracker     *memory.TokenTracker
 	reflectionEngine *ReflectionEngine
+	contextManager   *ContextManager
+	runStore         *RunStore
+	planner          *Planner
 	theta            float64 // Entropy threshold
 }
 
@@ -38,13 +45,29 @@ func NewEngine(
 	mem *memory.HybridEngine,
 ) *Engine {
 	return &Engine{
-		agentMgr: agentMgr,
-		bus:      eventBus,
-		llm:      llmRouter,
-		memory:   mem,
-		verifier: NewVerifier(),
-		theta:    DefaultEntropyThreshold,
+		agentMgr:       agentMgr,
+		bus:            eventBus,
+		llm:            llmRouter,
+		memory:         mem,
+		verifier:       NewVerifier(),
+		contextManager: NewContextManager(8192),
+		theta:          DefaultEntropyThreshold,
 	}
+}
+
+// SetRunStore attaches durable run and event persistence.
+func (e *Engine) SetRunStore(store *RunStore) {
+	e.runStore = store
+}
+
+// SetPlanner attaches goal decomposition for autonomous missions.
+func (e *Engine) SetPlanner(planner *Planner) {
+	e.planner = planner
+}
+
+// SetContextManager overrides context budgeting behavior.
+func (e *Engine) SetContextManager(manager *ContextManager) {
+	e.contextManager = manager
 }
 
 // SetProfileManager attaches the user profile & soul manager.
@@ -186,6 +209,49 @@ func (e *Engine) ExecuteStep(ctx context.Context, agentID string, userMessage st
 	return e.ExecuteStepWithHistory(ctx, agentID, userMessage, nil)
 }
 
+// ExecuteAutonomousGoal decomposes and executes a dependency-aware plan before returning.
+func (e *Engine) ExecuteAutonomousGoal(ctx context.Context, agentID, goal string, history []llm.Message) (*llm.Response, error) {
+	if e.planner == nil || len(history) > 0 {
+		return e.ExecuteStepWithHistory(ctx, agentID, goal, history)
+	}
+	agents, err := e.agentMgr.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("listing agents for planning: %w", err)
+	}
+	plan, err := e.planner.DecomposeGoal(ctx, goal, agents)
+	if err != nil {
+		return nil, fmt.Errorf("decomposing autonomous goal: %w", err)
+	}
+	var total llm.Usage
+	var last *llm.Response
+	var accumulated []llm.Message
+	err = e.planner.ExecutePlan(ctx, plan, func(stepCtx context.Context, step PlanStep) (string, error) {
+		prompt := fmt.Sprintf(
+			"[PLAN STEP %s]\nGoal: %s\nStep: %s\nRole: %s\nAcceptance: complete this step with tool evidence and explicit verification.",
+			step.ID, goal, step.Description, step.AgentRole,
+		)
+		response, stepErr := e.ExecuteStepWithHistory(stepCtx, agentID, prompt, append(history, accumulated...))
+		if stepErr != nil {
+			return "", stepErr
+		}
+		last = response
+		total = addUsage(total, response.Usage)
+		accumulated = append(accumulated,
+			llm.Message{Role: llm.RoleUser, Content: prompt},
+			llm.Message{Role: llm.RoleAssistant, Content: response.Content, ToolCalls: response.ToolCalls},
+		)
+		return response.Content, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if last == nil {
+		return nil, errors.New("autonomous plan produced no response")
+	}
+	last.Usage = total
+	return last, nil
+}
+
 // ExecuteStepWithHistory runs a cognitive iteration of the ReAct state machine with short-term dialogue history.
 func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, userMessage string, history []llm.Message) (*llm.Response, error) {
 	agent, err := e.agentMgr.Get(ctx, agentID)
@@ -199,6 +265,14 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 	if agent.Status != StatusActive {
 		return nil, fmt.Errorf("agent %s is not active (status=%s)", agentID, agent.Status)
 	}
+	if err := e.checkBudget(ctx, agent); err != nil {
+		return nil, err
+	}
+
+	traceID := generateTraceID()
+	ctx = tools.WithTraceID(ctx, traceID)
+	source := sourceFromMessage(userMessage, "chat")
+	run := e.startRun(ctx, traceID, agentID, userMessage, source)
 
 	if e.bus != nil {
 		e.bus.Publish(bus.NewEvent(bus.EventAgentActionStarted, agentID, map[string]string{
@@ -216,6 +290,7 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 		messages = append(messages, history...)
 	}
 	messages = append(messages, llm.Message{Role: llm.RoleUser, Content: userMessage})
+	messages = e.attachAutonomousPlan(ctx, messages, userMessage, history)
 
 	// 3. Model cascade
 	var cascadeOrder []string
@@ -229,6 +304,9 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 	opts := llm.CompletionOptions{
 		Temperature: &agent.ModelConfig.Temperature,
 	}
+	if agent.ModelConfig.MaxTokens > 0 {
+		opts.MaxTokens = &agent.ModelConfig.MaxTokens
+	}
 
 	// 3. Attach authorized tools if registry available
 	if e.tools != nil && len(agent.AuthorizedTools) > 0 {
@@ -237,21 +315,44 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 
 	startTime := time.Now()
 	var finalResp *llm.Response
-	maxIterations := 5
+	totalUsage := llm.Usage{}
+	maxIterations := 8
+	consecutiveFailures := 0
+	lastObservation := ""
+	repeatedObservations := 0
+	converged := false
+	iterationsCompleted := 0
 
 	for iter := 0; iter < maxIterations; iter++ {
+		iterationsCompleted = iter + 1
+		if e.contextManager != nil {
+			runID := ""
+			if run != nil {
+				runID = run.ID
+			}
+			messages = e.contextManager.PruneAndSnapshot(ctx, runID, messages, e.contextBudget(agent))
+		}
 		resp, err := e.llm.CompleteWithCascade(ctx, cascadeOrder, messages, opts)
 		if err != nil {
 			if e.bus != nil {
 				e.bus.Publish(bus.NewEvent(bus.EventAgentActionFailed, agentID, err.Error()))
 			}
+			e.finishRun(ctx, run, RunFailed, "infrastructure_failure", iter+1, totalUsage)
 			return nil, fmt.Errorf("llm completion: %w", err)
+		}
+		totalUsage = addUsage(totalUsage, resp.Usage)
+		if run != nil {
+			_ = e.runStore.AppendEvent(ctx, RunEvent{
+				RunID: run.ID, TraceID: traceID, Step: iter + 1, Type: "llm",
+				Status: "success", Data: map[string]any{"model": resp.Model, "tool_calls": len(resp.ToolCalls)},
+			})
 		}
 
 		finalResp = resp
 
 		// If no tool calls requested, we reached the final response
 		if len(resp.ToolCalls) == 0 || e.tools == nil {
+			converged = true
 			break
 		}
 
@@ -268,8 +369,33 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 			resultStr := ""
 			if execErr != nil {
 				resultStr = fmt.Sprintf("Error executing tool %s: %v", tc.Function.Name, execErr)
+				consecutiveFailures++
+				var approvalErr *tools.ApprovalRequiredError
+				if errors.As(execErr, &approvalErr) {
+					e.saveApprovalCheckpoint(ctx, run, agentID, userMessage, source, messages, iter+1, totalUsage, tc)
+					e.finishRun(ctx, run, RunApprovalPending, "approval_required", iter+1, totalUsage)
+					return nil, execErr
+				}
 			} else if toolResult != nil {
 				resultStr = toolResult.Content
+				consecutiveFailures = 0
+			}
+			if resultStr == lastObservation {
+				repeatedObservations++
+			} else {
+				repeatedObservations = 0
+				lastObservation = resultStr
+			}
+			if run != nil {
+				status := "success"
+				if execErr != nil {
+					status = "error"
+				}
+				_ = e.runStore.AppendEvent(ctx, RunEvent{
+					RunID: run.ID, TraceID: traceID, Step: iter + 1, Type: "tool",
+					Status: status, ToolName: tc.Function.Name,
+					Data: map[string]any{"tool_call_id": tc.ID, "observation": truncateRunData(resultStr, 4096)},
+				})
 			}
 
 			messages = append(messages, llm.Message{
@@ -278,8 +404,21 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 				ToolCallID: tc.ID,
 				Content:    resultStr,
 			})
+			if consecutiveFailures >= 3 || repeatedObservations >= 2 {
+				e.finishRun(ctx, run, RunBlocked, "no_progress", iter+1, totalUsage)
+				return nil, fmt.Errorf("agent %s stopped after repeated tool failures or observations", agentID)
+			}
 		}
 	}
+	if !converged {
+		e.finishRun(ctx, run, RunBlocked, "iteration_budget_exhausted", maxIterations, totalUsage)
+		return nil, fmt.Errorf("agent %s reached the maximum of %d ReAct iterations without convergence", agentID, maxIterations)
+	}
+	if finalResp == nil || !e.verifier.VerifySemanticConsistency(ctx, userMessage, finalResp.Content) {
+		e.finishRun(ctx, run, RunFailed, "verification_failed", maxIterations, totalUsage)
+		return nil, fmt.Errorf("agent %s final response failed semantic verification", agentID)
+	}
+	finalResp.Usage = totalUsage
 
 	// 4. Trigger reflection daemon asynchronously (updates MEMORY.md, preferences, and episodic memory)
 	if finalResp != nil && finalResp.Content != "" {
@@ -308,8 +447,9 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 	}
 
 	if finalResp != nil {
-		e.RecordTokenUsage(ctx, agentID, finalResp.Model, finalResp.Model, "chat", "", finalResp.Usage)
+		e.RecordTokenUsage(ctx, agentID, finalResp.Model, finalResp.Model, source, "", finalResp.Usage)
 	}
+	e.finishRun(ctx, run, RunCompleted, "goal_completed", iterationsCompleted, totalUsage)
 
 	return finalResp, nil
 }
@@ -346,6 +486,15 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 		}
 		return nil, err
 	}
+	if err := e.checkBudget(ctx, agent); err != nil {
+		eventChan <- AgentStreamEvent{Type: EventStreamError, Error: err.Error()}
+		return nil, err
+	}
+
+	traceID := generateTraceID()
+	ctx = tools.WithTraceID(ctx, traceID)
+	source := sourceFromMessage(userMessage, "stream")
+	run := e.startRun(ctx, traceID, agentID, userMessage, source)
 
 	eventChan <- AgentStreamEvent{
 		Type:    EventStreamThought,
@@ -388,6 +537,7 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 		messages = append(messages, history...)
 	}
 	messages = append(messages, llm.Message{Role: llm.RoleUser, Content: userMessage})
+	messages = e.attachAutonomousPlan(ctx, messages, userMessage, history)
 
 	// 3. Model cascade
 	var cascadeOrder []string
@@ -401,15 +551,25 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 	opts := llm.CompletionOptions{
 		Temperature: &agent.ModelConfig.Temperature,
 	}
+	if agent.ModelConfig.MaxTokens > 0 {
+		opts.MaxTokens = &agent.ModelConfig.MaxTokens
+	}
 
 	if e.tools != nil && len(agent.AuthorizedTools) > 0 {
 		opts.Tools = e.tools.ToLLMToolDefinitions(agent.AuthorizedTools)
 	}
 
 	var finalResp *llm.Response
-	maxIterations := 5
+	totalUsage := llm.Usage{}
+	maxIterations := 8
+	converged := false
+	iterationsCompleted := 0
+	consecutiveFailures := 0
+	lastObservation := ""
+	repeatedObservations := 0
 
 	for iter := 0; iter < maxIterations; iter++ {
+		iterationsCompleted = iter + 1
 		targetModel := agent.ModelConfig.PrimaryModel
 		if targetModel == "" {
 			targetModel = "cascade-llm"
@@ -420,7 +580,14 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 			Thought: fmt.Sprintf("Deliberating with %s (ReAct iteration %d)...", targetModel, iter+1),
 		}
 
-		resp, err := e.llm.CompleteWithCascade(ctx, cascadeOrder, messages, opts)
+		if e.contextManager != nil {
+			runID := ""
+			if run != nil {
+				runID = run.ID
+			}
+			messages = e.contextManager.PruneAndSnapshot(ctx, runID, messages, e.contextBudget(agent))
+		}
+		resp, err := e.completeStreamIteration(ctx, cascadeOrder, messages, opts, eventChan)
 		if err != nil {
 			if e.bus != nil {
 				e.bus.Publish(bus.NewEvent(bus.EventAgentActionFailed, agentID, err.Error()))
@@ -429,34 +596,22 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 				Type:  EventStreamError,
 				Error: err.Error(),
 			}
+			e.finishRun(ctx, run, RunFailed, "infrastructure_failure", iterationsCompleted, totalUsage)
 			return nil, fmt.Errorf("llm completion: %w", err)
+		}
+		totalUsage = addUsage(totalUsage, resp.Usage)
+		if run != nil {
+			_ = e.runStore.AppendEvent(ctx, RunEvent{
+				RunID: run.ID, TraceID: traceID, Step: iterationsCompleted, Type: "llm",
+				Status: "success", Data: map[string]any{"model": resp.Model, "tool_calls": len(resp.ToolCalls)},
+			})
 		}
 
 		finalResp = resp
 
 		// If no tool calls requested, stream tokens preserving exact whitespace and newlines
 		if len(resp.ToolCalls) == 0 || e.tools == nil {
-			runes := []rune(resp.Content)
-			if len(runes) > 0 {
-				chunkSize := 12
-				for i := 0; i < len(runes); i += chunkSize {
-					end := i + chunkSize
-					if end > len(runes) {
-						end = len(runes)
-					}
-					eventChan <- AgentStreamEvent{
-						Type:    EventStreamToken,
-						Content: string(runes[i:end]),
-					}
-					time.Sleep(10 * time.Millisecond)
-				}
-			} else if resp.Content != "" {
-				eventChan <- AgentStreamEvent{
-					Type:    EventStreamToken,
-					Content: resp.Content,
-				}
-			}
-
+			converged = true
 			eventChan <- AgentStreamEvent{
 				Type: EventStreamAudit,
 				AuditLog: &AuditLogEntry{
@@ -495,17 +650,18 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 				Thought: fmt.Sprintf("Running Tier-1 AST & security policy verification for tool '%s'...", toolName),
 			}
 
-			// Perform Tier-1 Security Verification
+			// Perform Tier-1 Security Verification. A failed policy check is terminal
+			// for this call and must never degrade into a warning.
 			var verifyErr error
 			if e.verifier != nil {
-				if toolName == "native_run_command" || toolName == "bash" {
-					verifyErr = e.verifier.VerifyCommand(toolArgs)
+				if toolName == "native_exec" {
+					verifyErr = e.verifier.VerifyToolCommand(tc.Function.Arguments)
 				}
 			}
 
 			verificationStatus := "Tier-1 AST Clean & Safe"
 			if verifyErr != nil {
-				verificationStatus = fmt.Sprintf("Verification Warning: %v", verifyErr)
+				verificationStatus = fmt.Sprintf("Blocked: %v", verifyErr)
 			}
 
 			eventChan <- AgentStreamEvent{
@@ -516,10 +672,22 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 					Action:       "tool_security_check",
 					ToolName:     toolName,
 					Parameters:   toolArgs,
-					Status:       "verified",
+					Status:       map[bool]string{true: "blocked", false: "verified"}[verifyErr != nil],
 					Verification: verificationStatus,
 					DurationMs:   0,
 				},
+			}
+			if verifyErr != nil {
+				resultStr := fmt.Sprintf("Tool execution blocked by policy: %v", verifyErr)
+				eventChan <- AgentStreamEvent{
+					Type: EventStreamToolResult, Tool: toolName, ToolCallID: tc.ID,
+					Result: resultStr, Status: "blocked",
+				}
+				messages = append(messages, llm.Message{
+					Role: llm.RoleTool, Name: toolName, ToolCallID: tc.ID, Content: resultStr,
+				})
+				consecutiveFailures++
+				continue
 			}
 
 			eventChan <- AgentStreamEvent{
@@ -536,8 +704,38 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 			if execErr != nil {
 				statusStr = "error"
 				resultStr = fmt.Sprintf("Error executing tool %s: %v", toolName, execErr)
+				consecutiveFailures++
+				var approvalErr *tools.ApprovalRequiredError
+				if errors.As(execErr, &approvalErr) {
+					e.saveApprovalCheckpoint(ctx, run, agentID, userMessage, source, messages, iterationsCompleted, totalUsage, tc)
+					eventChan <- AgentStreamEvent{
+						Type: EventStreamAudit,
+						AuditLog: &AuditLogEntry{
+							Timestamp: time.Now().UTC(), AgentID: agentID,
+							Action: "approval_required", ToolName: toolName, Status: "pending",
+							Verification: approvalErr.Approval.ID,
+						},
+					}
+					e.finishRun(ctx, run, RunApprovalPending, "approval_required", iterationsCompleted, totalUsage)
+					eventChan <- AgentStreamEvent{Type: EventStreamError, Error: execErr.Error()}
+					return nil, execErr
+				}
 			} else if toolResult != nil {
 				resultStr = toolResult.Content
+				consecutiveFailures = 0
+			}
+			if resultStr == lastObservation {
+				repeatedObservations++
+			} else {
+				repeatedObservations = 0
+				lastObservation = resultStr
+			}
+			if run != nil {
+				_ = e.runStore.AppendEvent(ctx, RunEvent{
+					RunID: run.ID, TraceID: traceID, Step: iterationsCompleted, Type: "tool",
+					Status: statusStr, ToolName: toolName, DurationMS: latency,
+					Data: map[string]any{"tool_call_id": tc.ID, "observation": truncateRunData(resultStr, 4096)},
+				})
 			}
 
 			eventChan <- AgentStreamEvent{
@@ -574,8 +772,27 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 				ToolCallID: tc.ID,
 				Content:    resultStr,
 			})
+			if consecutiveFailures >= 3 || repeatedObservations >= 2 {
+				e.finishRun(ctx, run, RunBlocked, "no_progress", iterationsCompleted, totalUsage)
+				err := fmt.Errorf("agent %s stopped after repeated tool failures or observations", agentID)
+				eventChan <- AgentStreamEvent{Type: EventStreamError, Error: err.Error()}
+				return nil, err
+			}
 		}
 	}
+	if !converged {
+		e.finishRun(ctx, run, RunBlocked, "iteration_budget_exhausted", iterationsCompleted, totalUsage)
+		err := fmt.Errorf("agent %s reached the maximum of %d ReAct iterations without convergence", agentID, maxIterations)
+		eventChan <- AgentStreamEvent{Type: EventStreamError, Error: err.Error()}
+		return nil, err
+	}
+	if finalResp == nil || !e.verifier.VerifySemanticConsistency(ctx, userMessage, finalResp.Content) {
+		e.finishRun(ctx, run, RunFailed, "verification_failed", iterationsCompleted, totalUsage)
+		err := fmt.Errorf("agent %s final response failed semantic verification", agentID)
+		eventChan <- AgentStreamEvent{Type: EventStreamError, Error: err.Error()}
+		return nil, err
+	}
+	finalResp.Usage = totalUsage
 
 	// 4. Trigger reflection daemon asynchronously (updates MEMORY.md, preferences, and episodic memory)
 	if finalResp != nil && finalResp.Content != "" {
@@ -604,7 +821,7 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 	}
 
 	if finalResp != nil {
-		e.RecordTokenUsage(ctx, agentID, finalResp.Model, finalResp.Model, "stream", "", finalResp.Usage)
+		e.RecordTokenUsage(ctx, agentID, finalResp.Model, finalResp.Model, source, "", finalResp.Usage)
 	}
 
 	eventChan <- AgentStreamEvent{
@@ -613,6 +830,280 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 		Model:   finalResp.Model,
 		Usage:   &finalResp.Usage,
 	}
+	e.finishRun(ctx, run, RunCompleted, "goal_completed", iterationsCompleted, totalUsage)
 
 	return finalResp, nil
+}
+
+// ResumeApproved continues an approval-paused run from its exact persisted ReAct state.
+func (e *Engine) ResumeApproved(ctx context.Context, approval tools.ApprovalRequest) (*llm.Response, error) {
+	if e.runStore == nil || e.tools == nil {
+		return nil, errors.New("durable resume is not configured")
+	}
+	checkpoint, run, err := e.runStore.LoadCheckpointByTrace(ctx, approval.TraceID)
+	if err != nil {
+		return nil, err
+	}
+	if checkpoint.AgentID != approval.AgentID ||
+		checkpoint.PendingTool.Function.Name != approval.ToolName ||
+		tools.ActionHash(approval.AgentID, approval.ToolName, checkpoint.PendingTool.Function.Arguments) != approval.ActionHash {
+		return nil, tools.ErrApprovalInvalid
+	}
+	manifest, err := e.agentMgr.Get(ctx, checkpoint.AgentID)
+	if err != nil {
+		return nil, fmt.Errorf("loading resumed agent: %w", err)
+	}
+	ctx = tools.WithTraceID(ctx, checkpoint.TraceID)
+	ctx = tools.WithApprovalID(ctx, approval.ID)
+	result, err := e.tools.Execute(
+		ctx, checkpoint.AgentID, checkpoint.PendingTool.Function.Name,
+		checkpoint.PendingTool.Function.Arguments,
+	)
+	if err != nil {
+		e.finishRun(ctx, run, RunFailed, "approved_execution_failed", checkpoint.Iteration, checkpoint.Usage)
+		return nil, err
+	}
+	observation := ""
+	if result != nil {
+		observation = result.Content
+	}
+	messages := append(checkpoint.Messages, llm.Message{
+		Role: llm.RoleTool, Name: checkpoint.PendingTool.Function.Name,
+		ToolCallID: checkpoint.PendingTool.ID, Content: observation,
+	})
+	_ = e.runStore.AppendEvent(ctx, RunEvent{
+		RunID: run.ID, TraceID: run.TraceID, Step: checkpoint.Iteration,
+		Type: "approval_execution", Status: "success",
+		ToolName: approval.ToolName, Data: map[string]any{"observation": truncateRunData(observation, 4096)},
+	})
+
+	var cascade []string
+	if manifest.ModelConfig.PrimaryModel != "" {
+		cascade = append(cascade, manifest.ModelConfig.PrimaryModel)
+	}
+	if manifest.ModelConfig.FallbackModel != "" {
+		cascade = append(cascade, manifest.ModelConfig.FallbackModel)
+	}
+	opts := llm.CompletionOptions{Temperature: &manifest.ModelConfig.Temperature}
+	if manifest.ModelConfig.MaxTokens > 0 {
+		opts.MaxTokens = &manifest.ModelConfig.MaxTokens
+	}
+	opts.Tools = e.tools.ToLLMToolDefinitions(manifest.AuthorizedTools)
+	usage := checkpoint.Usage
+
+	for iteration := checkpoint.Iteration; iteration < 8; iteration++ {
+		if e.contextManager != nil {
+			messages = e.contextManager.PruneAndSnapshot(ctx, run.ID, messages, e.contextBudget(manifest))
+		}
+		response, callErr := e.llm.CompleteWithCascade(ctx, cascade, messages, opts)
+		if callErr != nil {
+			e.finishRun(ctx, run, RunFailed, "infrastructure_failure", iteration+1, usage)
+			return nil, callErr
+		}
+		usage = addUsage(usage, response.Usage)
+		if len(response.ToolCalls) == 0 {
+			if !e.verifier.VerifySemanticConsistency(ctx, checkpoint.Goal, response.Content) {
+				e.finishRun(ctx, run, RunFailed, "verification_failed", iteration+1, usage)
+				return nil, errors.New("resumed response failed verification")
+			}
+			response.Usage = usage
+			e.finishRun(ctx, run, RunCompleted, "goal_completed", iteration+1, usage)
+			e.RecordTokenUsage(ctx, checkpoint.AgentID, response.Model, response.Model, checkpoint.Source, "", usage)
+			return response, nil
+		}
+		messages = append(messages, llm.Message{
+			Role: llm.RoleAssistant, Content: response.Content, ToolCalls: response.ToolCalls,
+		})
+		for _, call := range response.ToolCalls {
+			toolResult, toolErr := e.tools.Execute(ctx, checkpoint.AgentID, call.Function.Name, call.Function.Arguments)
+			if toolErr != nil {
+				var approvalErr *tools.ApprovalRequiredError
+				if errors.As(toolErr, &approvalErr) {
+					e.saveApprovalCheckpoint(ctx, run, checkpoint.AgentID, checkpoint.Goal, checkpoint.Source, messages, iteration+1, usage, call)
+					e.finishRun(ctx, run, RunApprovalPending, "approval_required", iteration+1, usage)
+					return nil, toolErr
+				}
+			}
+			content := ""
+			if toolErr != nil {
+				content = toolErr.Error()
+			} else if toolResult != nil {
+				content = toolResult.Content
+			}
+			messages = append(messages, llm.Message{
+				Role: llm.RoleTool, Name: call.Function.Name, ToolCallID: call.ID, Content: content,
+			})
+		}
+	}
+	e.finishRun(ctx, run, RunBlocked, "iteration_budget_exhausted", 8, usage)
+	return nil, errors.New("resumed run exhausted iteration budget")
+}
+
+func (e *Engine) contextBudget(agent *AgentManifest) int {
+	max := 8192
+	if agent != nil && agent.ModelConfig.MaxTokens > 0 && agent.ModelConfig.MaxTokens < max-1024 {
+		return max - agent.ModelConfig.MaxTokens
+	}
+	return 6144
+}
+
+func (e *Engine) startRun(ctx context.Context, traceID, agentID, goal, source string) *AgentRun {
+	if e.runStore == nil {
+		return nil
+	}
+	run, err := e.runStore.Start(ctx, traceID, agentID, goal, source)
+	if err != nil {
+		return nil
+	}
+	return run
+}
+
+func (e *Engine) finishRun(ctx context.Context, run *AgentRun, status RunStatus, reason string, iterations int, usage llm.Usage) {
+	if run == nil || e.runStore == nil {
+		return
+	}
+	run.Status = status
+	run.TerminationReason = reason
+	run.Iterations = iterations
+	run.PromptTokens = usage.PromptTokens
+	run.CompletionTokens = usage.CompletionTokens
+	run.TotalTokens = usage.TotalTokens
+	_ = e.runStore.Finish(ctx, run)
+}
+
+func (e *Engine) saveApprovalCheckpoint(
+	ctx context.Context,
+	run *AgentRun,
+	agentID, goal, source string,
+	messages []llm.Message,
+	iteration int,
+	usage llm.Usage,
+	pending llm.ToolCall,
+) {
+	if run == nil || e.runStore == nil {
+		return
+	}
+	_ = e.runStore.SaveCheckpoint(ctx, RunCheckpoint{
+		RunID: run.ID, TraceID: run.TraceID, AgentID: agentID, Goal: goal,
+		Source: source, Messages: messages, Iteration: iteration,
+		Usage: usage, PendingTool: pending,
+	})
+}
+
+func addUsage(total, current llm.Usage) llm.Usage {
+	total.PromptTokens += current.PromptTokens
+	total.CompletionTokens += current.CompletionTokens
+	total.TotalTokens += current.TotalTokens
+	return total
+}
+
+func generateTraceID() string {
+	buffer := make([]byte, 16)
+	if _, err := rand.Read(buffer); err != nil {
+		return fmt.Sprintf("%032x", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(buffer)
+}
+
+func truncateRunData(value string, limit int) string {
+	if len(value) <= limit {
+		return value
+	}
+	return value[:limit] + "...[truncated]"
+}
+
+func (e *Engine) checkBudget(ctx context.Context, manifest *AgentManifest) error {
+	if e.tokenTracker == nil || manifest == nil || manifest.DelegationScope.MaxMonthlyBudgetUSD <= 0 {
+		return nil
+	}
+	cost, err := e.tokenTracker.GetAgentMonthlyCost(ctx, manifest.AgentID)
+	if err != nil {
+		return fmt.Errorf("checking monthly agent budget: %w", err)
+	}
+	if cost >= manifest.DelegationScope.MaxMonthlyBudgetUSD {
+		return fmt.Errorf(
+			"agent %s monthly budget exhausted: spent %.4f USD of %.4f USD",
+			manifest.AgentID, cost, manifest.DelegationScope.MaxMonthlyBudgetUSD,
+		)
+	}
+	return nil
+}
+
+func (e *Engine) attachAutonomousPlan(ctx context.Context, messages []llm.Message, goal string, history []llm.Message) []llm.Message {
+	if e.planner == nil || len(history) > 0 || !strings.Contains(goal, "[AUTONOMOUS") {
+		return messages
+	}
+	agents, err := e.agentMgr.List(ctx)
+	if err != nil {
+		return messages
+	}
+	plan, err := e.planner.DecomposeGoal(ctx, goal, agents)
+	if err != nil || plan == nil {
+		return messages
+	}
+	encoded, err := json.Marshal(plan)
+	if err != nil {
+		return messages
+	}
+	planMessage := llm.Message{
+		Role:    llm.RoleSystem,
+		Content: "Durable execution plan. Execute only dependency-ready steps and verify each result before advancing:\n" + string(encoded),
+	}
+	return append(messages[:len(messages)-1], planMessage, messages[len(messages)-1])
+}
+
+func sourceFromMessage(message, fallback string) string {
+	switch {
+	case strings.Contains(message, "[AUTONOMOUS MISSION"):
+		return "heartbeat"
+	case strings.Contains(message, "[AUTONOMOUS PROACTIVE"):
+		return "cron"
+	case strings.Contains(message, "[Channel Metadata]"):
+		return "channel"
+	default:
+		return fallback
+	}
+}
+
+func (e *Engine) completeStreamIteration(
+	ctx context.Context,
+	cascadeOrder []string,
+	messages []llm.Message,
+	opts llm.CompletionOptions,
+	eventChan chan<- AgentStreamEvent,
+) (*llm.Response, error) {
+	stream, err := e.llm.StreamCompleteWithCascade(ctx, cascadeOrder, messages, opts)
+	if err != nil {
+		return nil, err
+	}
+	response := &llm.Response{}
+	if len(cascadeOrder) > 0 {
+		response.Model = cascadeOrder[0]
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case chunk, ok := <-stream:
+			if !ok {
+				return response, nil
+			}
+			if chunk.Error != nil {
+				return nil, chunk.Error
+			}
+			if chunk.DeltaContent != "" {
+				response.Content += chunk.DeltaContent
+				eventChan <- AgentStreamEvent{Type: EventStreamToken, Content: chunk.DeltaContent}
+			}
+			if len(chunk.ToolCalls) > 0 {
+				response.ToolCalls = append(response.ToolCalls, chunk.ToolCalls...)
+			}
+			if chunk.Usage != nil {
+				response.Usage = *chunk.Usage
+			}
+			if chunk.Done {
+				return response, nil
+			}
+		}
+	}
 }

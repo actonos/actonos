@@ -164,7 +164,7 @@ r.Route("/agents", func(r chi.Router) {
 For streaming LLM tokens, reasoning thoughts, and tool call progress:
 
 ```go
-func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
     flusher, ok := w.(http.Flusher)
     if !ok {
         s.respondError(w, http.StatusInternalServerError, "STREAMING_UNSUPPORTED", "streaming not supported")
@@ -175,11 +175,12 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
     w.Header().Set("Cache-Control", "no-cache")
     w.Header().Set("Connection", "keep-alive")
 
-    eventChan, err := s.engine.StreamChat(r.Context(), agentID, msg)
-    if err != nil {
-        s.respondError(w, http.StatusInternalServerError, "STREAM_FAILED", err.Error())
-        return
-    }
+    eventChan := make(chan agent.AgentStreamEvent, 64)
+    go func() {
+        _, _ = s.engine.ExecuteStepStreamWithHistory(
+            r.Context(), agentID, msg, history, eventChan,
+        )
+    }()
 
     for ev := range eventChan {
         data, _ := json.Marshal(ev)
@@ -188,6 +189,11 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
     }
 }
 ```
+
+The stream endpoint must flush live `thought`, `token`, `tool_call`,
+`tool_result`, `audit`, `done`, and `error` events. It must not proxy to the
+non-streaming JSON handler. Conversation messages are persisted before and
+after the stream.
 
 ---
 
@@ -199,3 +205,26 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 - [ ] TypeScript types in `web/src/lib/types.ts` and `api.ts` are synced
 - [ ] `docs/API.md` and `.agents/rules/source-registry.md` are updated
 - [ ] `go test ./internal/server/...` passes
+
+---
+
+## 7. Approval and Run APIs
+
+- `api_approvals.go` owns durable exact-action approval decisions.
+- `api_runs.go` exposes durable run summaries and ordered execution events.
+- Authentication is not tool authorization. Execution handlers MUST call
+  `ToolRegistry.Execute` and return HTTP 202 for `ApprovalRequiredError`.
+- MCP connection is a High-risk administrative action and requires approval.
+- Preserve trace IDs through handler, engine, registry, approval, and audit calls.
+- Workspace, skill, WASM, Hub, and restart mutations must use
+  `requestAdminApproval` and exact dispatch from `api_approvals.go`.
+- `GET /api/system/audit/verify` is the canonical audit-chain integrity check.
+- Checkpointed approvals resume the same durable run; do not create a replacement.
+- All server filesystem paths must derive from `Config.DataDir`,
+  `Config.WorkspaceDir`, `Config.SkillsDir`, or `Config.WASMDir`; handlers must
+  not assume the process working directory is the data root.
+- Provider credentials must use `Server.vault`; never write API keys into JSON
+  or `.key` files. Preserve automatic legacy migration and fail closed without
+  Vault.
+- SQLite backups must use `VACUUM INTO` through the live database connection;
+  never copy the main database file while WAL mode is active.

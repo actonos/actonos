@@ -333,6 +333,32 @@ go test -coverprofile=build/coverage.out ./internal/...
 go tool cover -html=build/coverage.out -o build/coverage.html
 ```
 
+Current autonomous-kernel verification baseline:
+
+| Package | Verified coverage |
+|:---|---:|
+| `internal/agent` | 71.5% |
+| `internal/server` | 60.6% |
+| `internal/tools` | 60.3% |
+| `internal/sandbox` | 87.8% |
+| `internal/security` | 92.3% |
+| `internal/memory` | 83.3% |
+
+Keep `CGO_ENABLED=0`. On Windows, the Go race detector is unavailable in this
+configuration; run the regular suite locally and the race suite in Linux CI.
+
+```bash
+# Linux only; requires CGO toolchain
+make test-race
+```
+
+The `.github/workflows/backend-race.yml` workflow runs this gate on every pull
+request and push to `main`.
+
+The race baseline was verified locally on Windows with MSYS2 UCRT64 GCC on
+August 18, 2026. Keep the Linux CI gate enabled because it is the canonical,
+reproducible environment.
+
 ### Writing Tests
 
 **Naming convention:**
@@ -490,6 +516,7 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/):
 | `memory` | `internal/memory/` |
 | `system` | `internal/system/` |
 | `server` | `internal/server/` |
+| `security` | `internal/security/` |
 | `web` | `web/` |
 | `deploy` | `deploy/` |
 
@@ -536,3 +563,14 @@ git commit -m "test(auth): add token refresh daemon expiry edge cases"
 2. Add migration logic in `internal/memory/db.go`
 3. Update the Web UI agent form
 4. Update `docs/ARCHITECTURE.md` with the new schema fields
+
+### Adding or Changing a Tool
+
+1. Register the tool in `internal/tools/`.
+2. Add its deterministic risk class in `ToolRiskLevel`.
+3. Ensure execution goes through `ToolRegistry.Execute`; never call the tool
+   implementation directly from an API, cron, heartbeat, or channel path.
+4. Add execution-time authorization, approval, path/network validation, and
+   structured failure tests as applicable.
+5. If the tool starts a process, require Docker/Bubblewrap and fail closed when
+   strong isolation is unavailable.

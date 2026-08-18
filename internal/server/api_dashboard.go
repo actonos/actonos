@@ -11,19 +11,19 @@ import (
 
 // DashboardSummary represents the live aggregated statistics payload.
 type DashboardSummary struct {
-	Metrics      *system.SystemMetrics  `json:"metrics"`
+	Metrics      *system.SystemMetrics   `json:"metrics"`
 	Tailscale    *system.TailscaleStatus `json:"tailscale"`
-	AgentsCount  int                    `json:"agents_count"`
-	AgentsActive int                    `json:"agents_active"`
-	ToolsCount   int                    `json:"tools_count"`
-	ToolsNative  int                    `json:"tools_native"`
-	ToolsMCP     int                    `json:"tools_mcp"`
-	ToolsSkills  int                    `json:"tools_skills"`
-	ToolsWASM    int                    `json:"tools_wasm"`
-	CronCount    int                    `json:"cron_count"`
-	Storage      map[string]int64       `json:"storage"`
-	RecentAudit  []AuditLogResponse     `json:"recent_audit"`
-	Timestamp    time.Time              `json:"timestamp"`
+	AgentsCount  int                     `json:"agents_count"`
+	AgentsActive int                     `json:"agents_active"`
+	ToolsCount   int                     `json:"tools_count"`
+	ToolsNative  int                     `json:"tools_native"`
+	ToolsMCP     int                     `json:"tools_mcp"`
+	ToolsSkills  int                     `json:"tools_skills"`
+	ToolsWASM    int                     `json:"tools_wasm"`
+	CronCount    int                     `json:"cron_count"`
+	Storage      map[string]int64        `json:"storage"`
+	RecentAudit  []AuditLogResponse      `json:"recent_audit"`
+	Timestamp    time.Time               `json:"timestamp"`
 }
 
 type AuditLogResponse struct {
@@ -99,7 +99,7 @@ func (s *Server) handleDashboardSummary(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// 6. Storage usage breakdown
-	dataDir := "./data"
+	dataDir := s.dataDir
 	storageSize := getDirSize(filepath.Join(dataDir, "storage"))
 	vectorsSize := getDirSize(filepath.Join(dataDir, "vectors"))
 	workspaceSize := getDirSize(filepath.Join(dataDir, "workspace"))

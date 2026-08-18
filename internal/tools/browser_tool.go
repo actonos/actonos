@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/actonos/actonos/internal/security"
 	"github.com/chromedp/chromedp"
 )
 
@@ -72,6 +73,9 @@ func (t *BrowserNavigateTool) Execute(ctx context.Context, inputJSON json.RawMes
 
 	if !strings.HasPrefix(input.URL, "http://") && !strings.HasPrefix(input.URL, "https://") {
 		input.URL = "https://" + input.URL
+	}
+	if err := security.ValidateOutboundURL(ctx, input.URL); err != nil {
+		return nil, fmt.Errorf("validating browser URL: %w", err)
 	}
 
 	if input.WaitSeconds <= 0 || input.WaitSeconds > 10 {
@@ -195,6 +199,9 @@ func (t *BrowserScreenshotTool) Execute(ctx context.Context, inputJSON json.RawM
 	if !strings.HasPrefix(input.URL, "http://") && !strings.HasPrefix(input.URL, "https://") {
 		input.URL = "https://" + input.URL
 	}
+	if err := security.ValidateOutboundURL(ctx, input.URL); err != nil {
+		return nil, fmt.Errorf("validating screenshot URL: %w", err)
+	}
 
 	if input.OutputPath == "" {
 		input.OutputPath = fmt.Sprintf("screenshot_%d.png", time.Now().Unix())
@@ -227,8 +234,10 @@ func (t *BrowserScreenshotTool) Execute(ctx context.Context, inputJSON json.RawM
 	}
 
 	// Save to workspace
-	cleanRel := filepath.Clean(input.OutputPath)
-	targetPath := filepath.Join(t.workspaceDir, cleanRel)
+	targetPath, err := security.ResolvePath(t.workspaceDir, input.OutputPath, true)
+	if err != nil {
+		return nil, fmt.Errorf("validating screenshot path: %w", err)
+	}
 	_ = os.MkdirAll(filepath.Dir(targetPath), 0755)
 
 	if err := os.WriteFile(targetPath, buf, 0644); err != nil {
@@ -252,13 +261,24 @@ func (t *BrowserScreenshotTool) Execute(ctx context.Context, inputJSON json.RawM
 }
 
 func fallbackHTTPFetch(ctx context.Context, targetURL string) (string, error) {
+	if err := security.ValidateOutboundURL(ctx, targetURL); err != nil {
+		return "", fmt.Errorf("validating fallback URL: %w", err)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return errors.New("too many redirects")
+			}
+			return security.ValidateOutboundURL(req.Context(), req.URL.String())
+		},
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", err

@@ -2,8 +2,12 @@ package sandbox
 
 import (
 	"context"
+	"errors"
 	"time"
 )
+
+// ErrSandboxUnavailable is returned when strong isolation is required but unavailable.
+var ErrSandboxUnavailable = errors.New("strong command sandbox is unavailable")
 
 // CommandRequest represents a shell command to be executed in the sandbox.
 type CommandRequest struct {
@@ -31,4 +35,12 @@ type Sandbox interface {
 
 	// Execute runs a command inside the isolated sandbox.
 	Execute(ctx context.Context, req CommandRequest) (*CommandResult, error)
+}
+
+type unavailableSandbox struct{}
+
+func (s *unavailableSandbox) Name() string { return "unavailable" }
+
+func (s *unavailableSandbox) Execute(context.Context, CommandRequest) (*CommandResult, error) {
+	return nil, ErrSandboxUnavailable
 }

@@ -17,8 +17,8 @@ import (
 type UserProfile struct {
 	UserName           string            `json:"user_name"`
 	UserRole           string            `json:"user_role"`
-	Language           string            `json:"language"` // "vi", "en"
-	Timezone           string            `json:"timezone"` // "Asia/Ho_Chi_Minh", "UTC"
+	Language           string            `json:"language"`            // "vi", "en"
+	Timezone           string            `json:"timezone"`            // "Asia/Ho_Chi_Minh", "UTC"
 	CommunicationStyle string            `json:"communication_style"` // "concise", "detailed", "technical"
 	Bio                string            `json:"bio"`
 	CustomInstructions string            `json:"custom_instructions"`
@@ -160,7 +160,7 @@ func (m *UserProfileManager) loadFromDisk() {
 func (m *UserProfileManager) GetProfile() UserProfile {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.profile
+	return cloneUserProfile(m.profile)
 }
 
 // UpdateProfile updates user profile in memory, disk, and SQLite.
@@ -169,6 +169,7 @@ func (m *UserProfileManager) UpdateProfile(ctx context.Context, p UserProfile) e
 	defer m.mu.Unlock()
 
 	p.UpdatedAt = time.Now().UTC()
+	p = cloneUserProfile(p)
 	m.profile = p
 
 	// Save to JSON
@@ -183,6 +184,18 @@ func (m *UserProfileManager) UpdateProfile(ctx context.Context, p UserProfile) e
 	`, string(data), p.UpdatedAt)
 
 	return err
+}
+
+func cloneUserProfile(profile UserProfile) UserProfile {
+	if profile.Preferences == nil {
+		return profile
+	}
+	preferences := make(map[string]string, len(profile.Preferences))
+	for key, value := range profile.Preferences {
+		preferences[key] = value
+	}
+	profile.Preferences = preferences
+	return profile
 }
 
 // StoreProceduralPattern saves an optimized workflow pattern.
@@ -341,4 +354,3 @@ func (m *UserProfileManager) GetMemoryMD() string {
 func (m *UserProfileManager) AppendMemoryMD(ctx context.Context, entry string) error {
 	return m.AppendAgentMemoryMD(ctx, DefaultSystemAgentID, entry)
 }
-

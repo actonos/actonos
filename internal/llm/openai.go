@@ -1,12 +1,15 @@
 package llm
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -37,12 +40,12 @@ func NewOpenAIProvider(apiKey, model, baseURL string) *OpenAIProvider {
 }
 
 type openAIChatRequest struct {
-	Model       string            `json:"model"`
-	Messages    []Message         `json:"messages"`
-	Temperature *float64          `json:"temperature,omitempty"`
-	MaxTokens   *int              `json:"max_tokens,omitempty"`
-	Tools       []ToolDefinition  `json:"tools,omitempty"`
-	Stream      bool              `json:"stream,omitempty"`
+	Model       string           `json:"model"`
+	Messages    []Message        `json:"messages"`
+	Temperature *float64         `json:"temperature,omitempty"`
+	MaxTokens   *int             `json:"max_tokens,omitempty"`
+	Tools       []ToolDefinition `json:"tools,omitempty"`
+	Stream      bool             `json:"stream,omitempty"`
 }
 
 type openAIChatResponse struct {
@@ -138,17 +141,143 @@ func (p *OpenAIProvider) Complete(ctx context.Context, messages []Message, opts 
 }
 
 func (p *OpenAIProvider) StreamComplete(ctx context.Context, messages []Message, opts CompletionOptions) (<-chan StreamChunk, error) {
-	// For streaming, can stream SSE tokens
+	model := p.Model
+	if opts.Model != "" {
+		model = opts.Model
+	}
+	reqBody := openAIChatRequest{
+		Model: model, Messages: messages, Temperature: opts.Temperature,
+		MaxTokens: opts.MaxTokens, Tools: opts.Tools, Stream: true,
+	}
+	payload, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("marshalling streaming request: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.BaseURL+"/chat/completions", bytes.NewReader(payload))
+	if err != nil {
+		return nil, fmt.Errorf("creating streaming request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream")
+	if p.APIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+p.APIKey)
+	}
+	resp, err := p.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("openai streaming request failed: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		return nil, fmt.Errorf("openai streaming api error (status %d): %s", resp.StatusCode, string(body))
+	}
+
 	ch := make(chan StreamChunk, 16)
 	go func() {
 		defer close(ch)
-		resp, err := p.Complete(ctx, messages, opts)
-		if err != nil {
-			ch <- StreamChunk{Error: err}
+		defer resp.Body.Close()
+		type pendingCall struct {
+			id        string
+			callType  string
+			name      string
+			arguments strings.Builder
+		}
+		pending := map[int]*pendingCall{}
+		emitPending := func() {
+			if len(pending) == 0 {
+				return
+			}
+			calls := make([]ToolCall, 0, len(pending))
+			indexes := make([]int, 0, len(pending))
+			for index := range pending {
+				indexes = append(indexes, index)
+			}
+			sort.Ints(indexes)
+			for _, index := range indexes {
+				call := pending[index]
+				if call == nil {
+					continue
+				}
+				calls = append(calls, ToolCall{
+					ID: call.id, Type: call.callType,
+					Function: FunctionCall{Name: call.name, Arguments: json.RawMessage(call.arguments.String())},
+				})
+			}
+			ch <- StreamChunk{ToolCalls: calls}
+		}
+		scanner := bufio.NewScanner(resp.Body)
+		scanner.Buffer(make([]byte, 64*1024), 4<<20)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if !strings.HasPrefix(line, "data:") {
+				continue
+			}
+			data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+			if data == "[DONE]" {
+				emitPending()
+				ch <- StreamChunk{Done: true}
+				return
+			}
+			var event struct {
+				Choices []struct {
+					Delta struct {
+						Content   string `json:"content"`
+						ToolCalls []struct {
+							Index    int    `json:"index"`
+							ID       string `json:"id"`
+							Type     string `json:"type"`
+							Function struct {
+								Name      string `json:"name"`
+								Arguments string `json:"arguments"`
+							} `json:"function"`
+						} `json:"tool_calls"`
+					} `json:"delta"`
+				} `json:"choices"`
+				Usage *Usage `json:"usage"`
+				Error *struct {
+					Message string `json:"message"`
+				} `json:"error"`
+			}
+			if err := json.Unmarshal([]byte(data), &event); err != nil {
+				ch <- StreamChunk{Error: fmt.Errorf("decoding openai stream event: %w", err)}
+				return
+			}
+			if event.Error != nil {
+				ch <- StreamChunk{Error: fmt.Errorf("openai stream error: %s", event.Error.Message)}
+				return
+			}
+			if len(event.Choices) > 0 {
+				for _, delta := range event.Choices[0].Delta.ToolCalls {
+					call := pending[delta.Index]
+					if call == nil {
+						call = &pendingCall{}
+						pending[delta.Index] = call
+					}
+					if delta.ID != "" {
+						call.id = delta.ID
+					}
+					if delta.Type != "" {
+						call.callType = delta.Type
+					}
+					if delta.Function.Name != "" {
+						call.name = delta.Function.Name
+					}
+					call.arguments.WriteString(delta.Function.Arguments)
+				}
+				ch <- StreamChunk{
+					DeltaContent: event.Choices[0].Delta.Content,
+					Usage:        event.Usage,
+				}
+			} else if event.Usage != nil {
+				ch <- StreamChunk{Usage: event.Usage}
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			ch <- StreamChunk{Error: fmt.Errorf("reading openai stream: %w", err)}
 			return
 		}
-		ch <- StreamChunk{DeltaContent: resp.Content, ToolCalls: resp.ToolCalls, Done: false}
-		ch <- StreamChunk{Done: true, Usage: &resp.Usage}
+		emitPending()
+		ch <- StreamChunk{Done: true}
 	}()
 	return ch, nil
 }

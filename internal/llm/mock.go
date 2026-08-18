@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sync"
 )
 
 // MockLLMProvider is a mock implementation of LLMProvider for unit and integration testing.
 type MockLLMProvider struct {
+	mu sync.Mutex
+
 	Model              string
 	CompleteFunc       func(ctx context.Context, messages []Message, opts CompletionOptions) (*Response, error)
 	StreamCompleteFunc func(ctx context.Context, messages []Message, opts CompletionOptions) (<-chan StreamChunk, error)
@@ -60,6 +63,8 @@ func NewMockProvider(model string, defaultResponse string) *MockLLMProvider {
 }
 
 func (m *MockLLMProvider) Complete(ctx context.Context, messages []Message, opts CompletionOptions) (*Response, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.CompleteCalls++
 	if m.CompleteFunc != nil {
 		return m.CompleteFunc(ctx, messages, opts)
@@ -68,6 +73,8 @@ func (m *MockLLMProvider) Complete(ctx context.Context, messages []Message, opts
 }
 
 func (m *MockLLMProvider) StreamComplete(ctx context.Context, messages []Message, opts CompletionOptions) (<-chan StreamChunk, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.StreamCompleteCalls++
 	if m.StreamCompleteFunc != nil {
 		return m.StreamCompleteFunc(ctx, messages, opts)
@@ -83,6 +90,8 @@ func (m *MockLLMProvider) StreamComplete(ctx context.Context, messages []Message
 }
 
 func (m *MockLLMProvider) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.EmbedCalls++
 	if m.EmbedFunc != nil {
 		return m.EmbedFunc(ctx, texts)

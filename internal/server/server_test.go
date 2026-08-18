@@ -2,9 +2,15 @@ package server
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -13,6 +19,7 @@ import (
 	"github.com/actonos/actonos/internal/agent"
 	"github.com/actonos/actonos/internal/auth"
 	"github.com/actonos/actonos/internal/bus"
+	"github.com/actonos/actonos/internal/channels"
 	"github.com/actonos/actonos/internal/llm"
 	"github.com/actonos/actonos/internal/memory"
 	"github.com/actonos/actonos/internal/system"
@@ -34,23 +41,92 @@ func newTestServer(t *testing.T) *Server {
 	agentMgr, _ := agent.NewAgentManager(db, eventBus)
 	toolReg := tools.NewToolRegistry(eventBus)
 	tools.RegisterNativeTools(toolReg, filepath.Join(tempDir, "workspace"))
+	approvalMgr := tools.NewApprovalManager(db.SQLDB())
+	toolReg.SetApprovalManager(approvalMgr)
+	toolReg.SetPolicyResolver(func(ctx context.Context, agentID string) (tools.AgentToolPolicy, error) {
+		manifest, policyErr := agentMgr.Get(ctx, agentID)
+		if policyErr != nil {
+			return tools.AgentToolPolicy{}, policyErr
+		}
+		return tools.AgentToolPolicy{
+			AuthorizedTools:   manifest.AuthorizedTools,
+			ApprovalThreshold: string(manifest.DelegationScope.RequireHumanApproval),
+			AllowedPaths:      manifest.DelegationScope.AllowedWorkspacePaths,
+		}, nil
+	})
 
 	llmRouter := llm.NewModelCascadeRouter()
 	mockLLM := llm.NewMockProvider("test-model", "Test response")
 	llmRouter.RegisterProvider("test-model", mockLLM)
 
-	engine := agent.NewEngine(agentMgr, eventBus, llmRouter, nil)
+	vectorStore, err := memory.NewVectorStore(filepath.Join(tempDir, "vectors"))
+	if err != nil {
+		t.Fatalf("creating vector store: %v", err)
+	}
+	hybrid := memory.NewHybridEngine(db, vectorStore, nil)
+	engine := agent.NewEngine(agentMgr, eventBus, llmRouter, hybrid)
+	engine.SetToolRegistry(toolReg)
+	runStore := agent.NewRunStore(db.SQLDB())
+	engine.SetRunStore(runStore)
+	taskMgr, err := agent.NewTaskManager(db.SQLDB(), filepath.Join(tempDir, "workspace"))
+	if err != nil {
+		t.Fatalf("creating task manager: %v", err)
+	}
+	auditLogger, err := system.NewAuditLogger(filepath.Join(tempDir, "audit"))
+	if err != nil {
+		t.Fatalf("creating audit logger: %v", err)
+	}
+	t.Cleanup(func() { _ = auditLogger.Close() })
+	profileMgr, err := agent.NewUserProfileManager(db, tempDir)
+	if err != nil {
+		t.Fatalf("creating profile manager: %v", err)
+	}
+	tokenTracker := memory.NewTokenTracker(db.SQLDB())
+	vault, err := memory.NewVault(db, "server-test-master-secret", nil)
+	if err != nil {
+		t.Fatalf("creating test vault: %v", err)
+	}
+	cronScheduler := agent.NewCronScheduler(engine, eventBus, db.SQLDB())
+	hubManager := tools.NewHubManager(filepath.Join(tempDir, "skills"))
+	mcpHost := tools.NewMCPHostEngine(toolReg)
+	if err := mcpHost.SetPersistence(db.SQLDB(), nil); err != nil {
+		t.Fatalf("configuring MCP persistence: %v", err)
+	}
+	pairingManager, err := channels.NewPairingManager(db.SQLDB())
+	if err != nil {
+		t.Fatalf("creating pairing manager: %v", err)
+	}
+	channelManager := channels.NewChannelManager(eventBus, pairingManager)
+	heartbeat := agent.NewHeartbeatDaemon(agentMgr, engine, eventBus, db.SQLDB(), filepath.Join(tempDir, "workspace"), time.Hour)
 	hal := system.NewDockerHAL(tempDir)
 	tailscale := system.NewTailscaleManager(tempDir, "test-node", "")
 
 	cfg := Config{
-		AgentManager: agentMgr,
-		Engine:       engine,
-		LLMRouter:    llmRouter,
-		ToolRegistry: toolReg,
-		HAL:          hal,
-		Tailscale:    tailscale,
-		EventBus:     eventBus,
+		AgentManager:    agentMgr,
+		Engine:          engine,
+		LLMRouter:       llmRouter,
+		ToolRegistry:    toolReg,
+		ApprovalManager: approvalMgr,
+		RunStore:        runStore,
+		TaskManager:     taskMgr,
+		AuditLogger:     auditLogger,
+		Vault:           vault,
+		ProfileManager:  profileMgr,
+		TokenTracker:    tokenTracker,
+		Memory:          hybrid,
+		CronScheduler:   cronScheduler,
+		HubManager:      hubManager,
+		MCPHost:         mcpHost,
+		PairingManager:  pairingManager,
+		ChannelManager:  channelManager,
+		HeartbeatDaemon: heartbeat,
+		HAL:             hal,
+		Tailscale:       tailscale,
+		EventBus:        eventBus,
+		WorkspaceDir:    filepath.Join(tempDir, "workspace"),
+		SkillsDir:       filepath.Join(tempDir, "skills"),
+		WASMDir:         filepath.Join(tempDir, "tools", "wasm"),
+		DataDir:         tempDir,
 	}
 
 	return NewServer(cfg)
@@ -160,6 +236,721 @@ func TestServer_ToolsAndSystem(t *testing.T) {
 
 	if wMetrics.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK, got %d", wMetrics.Code)
+	}
+}
+
+func TestServer_WorkspaceMutationRequiresAndExecutesExactApproval(t *testing.T) {
+	srv := newTestServer(t)
+	body := `{"path":"notes/result.txt","content":"approved content"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/workspace/file", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.Router().ServeHTTP(w, req)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202 approval request, got %d: %s", w.Code, w.Body.String())
+	}
+	var pending struct {
+		Data struct {
+			Status   string                `json:"status"`
+			Approval tools.ApprovalRequest `json:"approval"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&pending); err != nil {
+		t.Fatal(err)
+	}
+	if pending.Data.Status != "approval_required" ||
+		pending.Data.Approval.ToolName != "admin_workspace_write" ||
+		pending.Data.Approval.ID == "" {
+		t.Fatalf("unexpected approval response: %+v", pending)
+	}
+	if _, err := os.Stat(filepath.Join(srv.workspaceDir, "notes", "result.txt")); !os.IsNotExist(err) {
+		t.Fatalf("file must not exist before approval, stat err=%v", err)
+	}
+
+	approve := httptest.NewRequest(http.MethodPost, "/api/approvals/"+pending.Data.Approval.ID+"/approve", nil)
+	approved := httptest.NewRecorder()
+	srv.Router().ServeHTTP(approved, approve)
+	if approved.Code != http.StatusOK {
+		t.Fatalf("expected approval execution success, got %d: %s", approved.Code, approved.Body.String())
+	}
+	data, err := os.ReadFile(filepath.Join(srv.workspaceDir, "notes", "result.txt"))
+	if err != nil || string(data) != "approved content" {
+		t.Fatalf("approved mutation not executed exactly: content=%q err=%v", data, err)
+	}
+
+	reuse := httptest.NewRequest(http.MethodPost, "/api/approvals/"+pending.Data.Approval.ID+"/approve", nil)
+	reused := httptest.NewRecorder()
+	srv.Router().ServeHTTP(reused, reuse)
+	if reused.Code != http.StatusConflict {
+		t.Fatalf("approved action must be single-decision, got %d: %s", reused.Code, reused.Body.String())
+	}
+
+	read := httptest.NewRequest(http.MethodGet, "/api/workspace/file?path=notes/result.txt", nil)
+	readResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(readResult, read)
+	if readResult.Code != http.StatusOK || !strings.Contains(readResult.Body.String(), "approved content") {
+		t.Fatalf("workspace read failed: %d %s", readResult.Code, readResult.Body.String())
+	}
+}
+
+func TestServer_TaskRunApprovalAndAuditEndpoints(t *testing.T) {
+	srv := newTestServer(t)
+
+	create := httptest.NewRequest(http.MethodPost, "/api/tasks/", strings.NewReader(`{"title":"API lifecycle","priority":"p1_high"}`))
+	create.Header.Set("Content-Type", "application/json")
+	created := httptest.NewRecorder()
+	srv.Router().ServeHTTP(created, create)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create task failed: %d %s", created.Code, created.Body.String())
+	}
+	var taskResponse struct {
+		Data agent.AutonomousTask `json:"data"`
+	}
+	if err := json.NewDecoder(created.Body).Decode(&taskResponse); err != nil {
+		t.Fatal(err)
+	}
+	taskID := taskResponse.Data.ID
+
+	for _, endpoint := range []string{
+		"/api/tasks/?status=pending&priority=p1_high",
+		"/api/tasks/" + taskID,
+		"/api/heartbeat/config",
+		"/api/heartbeat/runs",
+		"/api/runs/?limit=5",
+		"/api/approvals/?status=pending",
+		"/api/system/audit/verify",
+	} {
+		req := httptest.NewRequest(http.MethodGet, endpoint, nil)
+		w := httptest.NewRecorder()
+		srv.Router().ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET %s failed: %d %s", endpoint, w.Code, w.Body.String())
+		}
+		if (strings.Contains(endpoint, "/approvals/") || strings.Contains(endpoint, "/runs/")) &&
+			strings.Contains(w.Body.String(), ":null") {
+			t.Fatalf("collection endpoint %s returned null instead of []: %s", endpoint, w.Body.String())
+		}
+	}
+
+	update := httptest.NewRequest(http.MethodPut, "/api/tasks/"+taskID, strings.NewReader(`{"title":"API lifecycle","status":"completed","priority":"p1_high"}`))
+	update.Header.Set("Content-Type", "application/json")
+	updated := httptest.NewRecorder()
+	srv.Router().ServeHTTP(updated, update)
+	if updated.Code != http.StatusOK || !strings.Contains(updated.Body.String(), `"progress":100`) {
+		t.Fatalf("update task failed: %d %s", updated.Code, updated.Body.String())
+	}
+
+	config := httptest.NewRequest(http.MethodPut, "/api/heartbeat/config", strings.NewReader(`{"enabled":true,"interval_minutes":2,"directives":"verify continuously"}`))
+	config.Header.Set("Content-Type", "application/json")
+	configured := httptest.NewRecorder()
+	srv.Router().ServeHTTP(configured, config)
+	if configured.Code != http.StatusOK {
+		t.Fatalf("save heartbeat config failed: %d %s", configured.Code, configured.Body.String())
+	}
+
+	events := httptest.NewRequest(http.MethodGet, "/api/runs/nonexistent/events", nil)
+	eventResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(eventResult, events)
+	if eventResult.Code != http.StatusOK {
+		t.Fatalf("empty run events failed: %d %s", eventResult.Code, eventResult.Body.String())
+	}
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/tasks/"+taskID, nil)
+	deleted := httptest.NewRecorder()
+	srv.Router().ServeHTTP(deleted, deleteReq)
+	if deleted.Code != http.StatusOK {
+		t.Fatalf("delete task failed: %d %s", deleted.Code, deleted.Body.String())
+	}
+}
+
+func TestServer_ConversationIdentityMetricsAndCatalogLifecycle(t *testing.T) {
+	srv := newTestServer(t)
+	create := httptest.NewRequest(http.MethodPost, "/api/conversations/", strings.NewReader(`{"agent_id":"agent_system_core","title":"Integration session"}`))
+	create.Header.Set("Content-Type", "application/json")
+	created := httptest.NewRecorder()
+	srv.Router().ServeHTTP(created, create)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("conversation create failed: %d %s", created.Code, created.Body.String())
+	}
+	var response struct {
+		Data Conversation `json:"data"`
+	}
+	if err := json.NewDecoder(created.Body).Decode(&response); err != nil {
+		t.Fatal(err)
+	}
+	convID := response.Data.ID
+	for _, endpoint := range []string{
+		"/api/conversations/",
+		"/api/conversations/?agent_id=agent_system_core",
+		"/api/conversations/" + convID,
+		"/api/system/metrics/prometheus",
+		"/api/system/token-usage",
+		"/api/system/token-usage/history?agent_id=all&source=all",
+		"/api/system/heartbeat/history",
+		"/api/system/identity",
+		"/api/system/profile",
+		"/api/system/models",
+		"/api/models",
+		"/api/system/storage",
+	} {
+		req := httptest.NewRequest(http.MethodGet, endpoint, nil)
+		w := httptest.NewRecorder()
+		srv.Router().ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET %s failed: %d %s", endpoint, w.Code, w.Body.String())
+		}
+	}
+	if generateConversationTitle("   ") != "New Session" ||
+		!strings.HasSuffix(generateConversationTitle(strings.Repeat("x", 50)), "...") {
+		t.Fatal("conversation title generation failed")
+	}
+	update := httptest.NewRequest(http.MethodPut, "/api/conversations/"+convID, strings.NewReader(`{"title":"Renamed"}`))
+	update.Header.Set("Content-Type", "application/json")
+	updated := httptest.NewRecorder()
+	srv.Router().ServeHTTP(updated, update)
+	if updated.Code != http.StatusOK {
+		t.Fatalf("conversation update failed: %d %s", updated.Code, updated.Body.String())
+	}
+	identity := httptest.NewRequest(http.MethodPut, "/api/system/identity", strings.NewReader(`{"user_name":"Tester","language":"vi","soul":"Test soul"}`))
+	identity.Header.Set("Content-Type", "application/json")
+	saved := httptest.NewRecorder()
+	srv.Router().ServeHTTP(saved, identity)
+	if saved.Code != http.StatusOK {
+		t.Fatalf("identity save failed: %d %s", saved.Code, saved.Body.String())
+	}
+	remove := httptest.NewRequest(http.MethodDelete, "/api/conversations/"+convID, nil)
+	removed := httptest.NewRecorder()
+	srv.Router().ServeHTTP(removed, remove)
+	if removed.Code != http.StatusOK {
+		t.Fatalf("conversation delete failed: %d %s", removed.Code, removed.Body.String())
+	}
+	missing := httptest.NewRequest(http.MethodGet, "/api/conversations/"+convID, nil)
+	notFound := httptest.NewRecorder()
+	srv.Router().ServeHTTP(notFound, missing)
+	if notFound.Code != http.StatusNotFound {
+		t.Fatalf("deleted conversation still available: %d", notFound.Code)
+	}
+}
+
+func TestServer_WorkspaceDirectoryUploadDeleteApprovalLifecycle(t *testing.T) {
+	srv := newTestServer(t)
+	requestApproval := func(method, target, body string) tools.ApprovalRequest {
+		t.Helper()
+		req := httptest.NewRequest(method, target, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		srv.Router().ServeHTTP(w, req)
+		if w.Code != http.StatusAccepted {
+			t.Fatalf("%s %s expected 202, got %d: %s", method, target, w.Code, w.Body.String())
+		}
+		var response struct {
+			Data struct {
+				Approval tools.ApprovalRequest `json:"approval"`
+			} `json:"data"`
+		}
+		if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+			t.Fatal(err)
+		}
+		return response.Data.Approval
+	}
+	approve := func(item tools.ApprovalRequest) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/api/approvals/"+item.ID+"/approve", nil)
+		w := httptest.NewRecorder()
+		srv.Router().ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("approval failed: %d %s", w.Code, w.Body.String())
+		}
+	}
+
+	dirApproval := requestApproval(http.MethodPost, "/api/workspace/mkdir", `{"path":"uploads"}`)
+	approve(dirApproval)
+	fileBody := &bytes.Buffer{}
+	writer := multipart.NewWriter(fileBody)
+	part, err := writer.CreateFormFile("file", "sample.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = part.Write([]byte("uploaded"))
+	_ = writer.WriteField("dir", "uploads")
+	_ = writer.Close()
+	uploadReq := httptest.NewRequest(http.MethodPost, "/api/workspace/upload", fileBody)
+	uploadReq.Header.Set("Content-Type", writer.FormDataContentType())
+	uploadResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(uploadResult, uploadReq)
+	if uploadResult.Code != http.StatusAccepted {
+		t.Fatalf("upload approval failed: %d %s", uploadResult.Code, uploadResult.Body.String())
+	}
+	var uploadResponse struct {
+		Data struct {
+			Approval tools.ApprovalRequest `json:"approval"`
+		} `json:"data"`
+	}
+	_ = json.NewDecoder(uploadResult.Body).Decode(&uploadResponse)
+	approve(uploadResponse.Data.Approval)
+
+	list := httptest.NewRequest(http.MethodGet, "/api/workspace/files?dir=uploads", nil)
+	listed := httptest.NewRecorder()
+	srv.Router().ServeHTTP(listed, list)
+	if listed.Code != http.StatusOK || !strings.Contains(listed.Body.String(), "sample.txt") {
+		t.Fatalf("workspace list failed: %d %s", listed.Code, listed.Body.String())
+	}
+	deleteApproval := requestApproval(http.MethodDelete, "/api/workspace/file?path=uploads/sample.txt", "")
+	approve(deleteApproval)
+	if _, err := os.Stat(filepath.Join(srv.workspaceDir, "uploads", "sample.txt")); !os.IsNotExist(err) {
+		t.Fatalf("approved delete did not remove file: %v", err)
+	}
+	rootDelete := httptest.NewRequest(http.MethodDelete, "/api/workspace/file?path=.", nil)
+	rootResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(rootResult, rootDelete)
+	if rootResult.Code != http.StatusForbidden {
+		t.Fatalf("workspace root delete was accepted: %d", rootResult.Code)
+	}
+}
+
+func TestServer_AgentLifecycleChatStreamingSoulAndCron(t *testing.T) {
+	srv := newTestServer(t)
+	createBody := `{
+		"name":"Streaming API Agent",
+		"model_config":{"primary_model":"test-model"},
+		"system_instructions":"Answer directly.",
+		"authorized_tools":[]
+	}`
+	create := httptest.NewRequest(http.MethodPost, "/api/agents/", strings.NewReader(createBody))
+	create.Header.Set("Content-Type", "application/json")
+	created := httptest.NewRecorder()
+	srv.Router().ServeHTTP(created, create)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("agent create failed: %d %s", created.Code, created.Body.String())
+	}
+	var agentResponse struct {
+		Data agent.AgentManifest `json:"data"`
+	}
+	_ = json.NewDecoder(created.Body).Decode(&agentResponse)
+	agentID := agentResponse.Data.AgentID
+
+	update := httptest.NewRequest(http.MethodPut, "/api/agents/"+agentID+"/", strings.NewReader(`{"name":"Updated Agent","model_config":{"primary_model":"test-model"}}`))
+	update.Header.Set("Content-Type", "application/json")
+	updated := httptest.NewRecorder()
+	srv.Router().ServeHTTP(updated, update)
+	if updated.Code != http.StatusOK {
+		t.Fatalf("agent update failed: %d %s", updated.Code, updated.Body.String())
+	}
+	for _, action := range []string{"stop", "start"} {
+		req := httptest.NewRequest(http.MethodPost, "/api/agents/"+agentID+"/"+action, nil)
+		w := httptest.NewRecorder()
+		srv.Router().ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("agent %s failed: %d %s", action, w.Code, w.Body.String())
+		}
+	}
+
+	saveSoul := httptest.NewRequest(http.MethodPut, "/api/agents/"+agentID+"/soul", strings.NewReader(`{"content":"API-specific soul"}`))
+	saveSoul.Header.Set("Content-Type", "application/json")
+	soulSaved := httptest.NewRecorder()
+	srv.Router().ServeHTTP(soulSaved, saveSoul)
+	if soulSaved.Code != http.StatusOK {
+		t.Fatalf("soul save failed: %d %s", soulSaved.Code, soulSaved.Body.String())
+	}
+	for _, endpoint := range []string{
+		"/api/agents/" + agentID + "/soul",
+		"/api/agents/" + agentID + "/memory-md",
+		"/api/agents/soul?agent_id=" + agentID,
+		"/api/agents/memory-md?agent_id=" + agentID,
+	} {
+		req := httptest.NewRequest(http.MethodGet, endpoint, nil)
+		w := httptest.NewRecorder()
+		srv.Router().ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET %s failed: %d %s", endpoint, w.Code, w.Body.String())
+		}
+	}
+
+	chat := httptest.NewRequest(http.MethodPost, "/api/agents/"+agentID+"/chat", strings.NewReader(`{"message":"normal chat"}`))
+	chat.Header.Set("Content-Type", "application/json")
+	chatResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(chatResult, chat)
+	if chatResult.Code != http.StatusOK || !strings.Contains(chatResult.Body.String(), "Test response") {
+		t.Fatalf("chat failed: %d %s", chatResult.Code, chatResult.Body.String())
+	}
+
+	stream := httptest.NewRequest(http.MethodPost, "/api/agents/"+agentID+"/chat/stream", strings.NewReader(`{"message":"stream chat"}`))
+	stream.Header.Set("Content-Type", "application/json")
+	streamResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(streamResult, stream)
+	if streamResult.Code != http.StatusOK ||
+		streamResult.Header().Get("Content-Type") != "text/event-stream" ||
+		!strings.Contains(streamResult.Body.String(), "event: token") ||
+		!strings.Contains(streamResult.Body.String(), "event: done") {
+		t.Fatalf("true SSE stream failed: status=%d headers=%v body=%s", streamResult.Code, streamResult.Header(), streamResult.Body.String())
+	}
+
+	cronBody := `{"id":"api_cron","name":"API Cron","cron_expr":"0 8 * * *","prompt":"status","enabled":true}`
+	saveCron := httptest.NewRequest(http.MethodPost, "/api/cron/", strings.NewReader(cronBody))
+	saveCron.Header.Set("Content-Type", "application/json")
+	cronSaved := httptest.NewRecorder()
+	srv.Router().ServeHTTP(cronSaved, saveCron)
+	if cronSaved.Code != http.StatusOK {
+		t.Fatalf("cron save failed: %d %s", cronSaved.Code, cronSaved.Body.String())
+	}
+	for _, endpoint := range []string{"/api/cron/", "/api/agents/cron", "/api/cron/history", "/api/cron/api_cron/history"} {
+		req := httptest.NewRequest(http.MethodGet, endpoint, nil)
+		w := httptest.NewRecorder()
+		srv.Router().ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET %s failed: %d %s", endpoint, w.Code, w.Body.String())
+		}
+	}
+	runCron := httptest.NewRequest(http.MethodPost, "/api/cron/api_cron/run", nil)
+	runResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(runResult, runCron)
+	if runResult.Code != http.StatusOK {
+		t.Fatalf("cron run failed: %d %s", runResult.Code, runResult.Body.String())
+	}
+	deleteCron := httptest.NewRequest(http.MethodDelete, "/api/cron/api_cron", nil)
+	deleteResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(deleteResult, deleteCron)
+	if deleteResult.Code != http.StatusOK {
+		t.Fatalf("cron delete failed: %d %s", deleteResult.Code, deleteResult.Body.String())
+	}
+}
+
+func TestServer_SystemSetupKeysDashboardAndAdministrativeTools(t *testing.T) {
+	srv := newTestServer(t)
+	for _, endpoint := range []string{
+		"/api/dashboard/summary",
+		"/api/setup/status",
+		"/api/system/keys",
+		"/api/system/audit",
+		"/api/system/storage",
+		"/api/system/tailscale",
+		"/api/tools/?category=native",
+		"/api/tools/hub/catalog",
+	} {
+		req := httptest.NewRequest(http.MethodGet, endpoint, nil)
+		w := httptest.NewRecorder()
+		srv.Router().ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET %s failed: %d %s", endpoint, w.Code, w.Body.String())
+		}
+	}
+	ota := httptest.NewRequest(http.MethodPost, "/api/system/ota/check", nil)
+	otaResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(otaResult, ota)
+	if otaResult.Code != http.StatusOK {
+		t.Fatalf("OTA check failed: %d %s", otaResult.Code, otaResult.Body.String())
+	}
+	if _, err := srv.memory.DB().SQLDB().Exec(`CREATE TABLE backup_probe (value TEXT); INSERT INTO backup_probe VALUES ('committed-wal-data')`); err != nil {
+		t.Fatal(err)
+	}
+	backup := httptest.NewRequest(http.MethodGet, "/api/system/backup", nil)
+	backupResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(backupResult, backup)
+	if backupResult.Code != http.StatusOK || backupResult.Header().Get("Content-Type") != "application/x-sqlite3" {
+		t.Fatalf("backup failed: %d %s", backupResult.Code, backupResult.Body.String())
+	}
+	backupPath := filepath.Join(t.TempDir(), "backup.db")
+	if err := os.WriteFile(backupPath, backupResult.Body.Bytes(), 0600); err != nil {
+		t.Fatal(err)
+	}
+	backupDB, err := sql.Open("sqlite", backupPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer backupDB.Close()
+	var probe string
+	if err := backupDB.QueryRow(`SELECT value FROM backup_probe`).Scan(&probe); err != nil || probe != "committed-wal-data" {
+		t.Fatalf("backup omitted committed WAL data: probe=%q err=%v", probe, err)
+	}
+	setup := httptest.NewRequest(http.MethodPost, "/api/setup/wizard", strings.NewReader(`{"openai_key":"setup-key"}`))
+	setup.Header.Set("Content-Type", "application/json")
+	setupResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(setupResult, setup)
+	if setupResult.Code != http.StatusOK {
+		t.Fatalf("setup wizard failed: %d %s", setupResult.Code, setupResult.Body.String())
+	}
+	setupSecret, err := srv.vault.GetSecret(context.Background(), providerSecretName("openai"))
+	if err != nil || setupSecret != "setup-key" {
+		t.Fatalf("setup key was not stored in Vault: secret=%q err=%v", setupSecret, err)
+	}
+	if _, err := os.Stat(filepath.Join(srv.dataDir, "config", "openai.key")); !os.IsNotExist(err) {
+		t.Fatalf("setup wrote a plaintext key file: %v", err)
+	}
+	keys := httptest.NewRequest(http.MethodPost, "/api/system/keys", strings.NewReader(`{"provider":"custom_openai","api_key":"custom-secret-key","base_url":"https://example.com/v1","default_model":"custom","enabled":true}`))
+	keys.Header.Set("Content-Type", "application/json")
+	keysResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(keysResult, keys)
+	if keysResult.Code != http.StatusOK {
+		t.Fatalf("provider save failed: %d %s", keysResult.Code, keysResult.Body.String())
+	}
+	providerFile, err := os.ReadFile(filepath.Join(srv.dataDir, "config", "llm_providers.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(providerFile), "custom-secret-key") {
+		t.Fatal("provider secret leaked into plaintext metadata")
+	}
+	secret, err := srv.vault.GetSecret(context.Background(), providerSecretName("custom_openai"))
+	if err != nil || secret != "custom-secret-key" {
+		t.Fatalf("provider secret was not encrypted in Vault: secret=%q err=%v", secret, err)
+	}
+	if maskKey("") != "" || maskKey("short") == "short" || !strings.Contains(maskKey("123456789012"), "1234") {
+		t.Fatal("API key masking failed")
+	}
+	missingKey := httptest.NewRequest(http.MethodPost, "/api/system/keys/test", strings.NewReader(`{"provider":"missing_provider"}`))
+	missingKey.Header.Set("Content-Type", "application/json")
+	missingResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(missingResult, missingKey)
+	if missingResult.Code != http.StatusBadRequest {
+		t.Fatalf("missing provider key was accepted: %d %s", missingResult.Code, missingResult.Body.String())
+	}
+	deleteKey := httptest.NewRequest(http.MethodDelete, "/api/system/keys/custom_openai", nil)
+	deleteResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(deleteResult, deleteKey)
+	if deleteResult.Code != http.StatusOK {
+		t.Fatalf("provider delete failed: %d %s", deleteResult.Code, deleteResult.Body.String())
+	}
+	if _, err := srv.vault.GetSecret(context.Background(), providerSecretName("custom_openai")); !errors.Is(err, memory.ErrSecretNotFound) {
+		t.Fatalf("deleted provider secret remains in Vault: %v", err)
+	}
+
+	type approvalEnvelope struct {
+		Data struct {
+			Approval tools.ApprovalRequest `json:"approval"`
+		} `json:"data"`
+	}
+	requestApproval := func(method, endpoint, contentType string, body *bytes.Buffer) tools.ApprovalRequest {
+		t.Helper()
+		req := httptest.NewRequest(method, endpoint, body)
+		req.Header.Set("Content-Type", contentType)
+		w := httptest.NewRecorder()
+		srv.Router().ServeHTTP(w, req)
+		if w.Code != http.StatusAccepted {
+			t.Fatalf("%s %s failed: %d %s", method, endpoint, w.Code, w.Body.String())
+		}
+		var envelope approvalEnvelope
+		if err := json.NewDecoder(w.Body).Decode(&envelope); err != nil {
+			t.Fatal(err)
+		}
+		return envelope.Data.Approval
+	}
+	approve := func(item tools.ApprovalRequest, expected int) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/api/approvals/"+item.ID+"/approve", nil)
+		w := httptest.NewRecorder()
+		srv.Router().ServeHTTP(w, req)
+		if w.Code != expected {
+			t.Fatalf("approval %s expected %d, got %d: %s", item.ToolName, expected, w.Code, w.Body.String())
+		}
+	}
+
+	skillApproval := requestApproval(
+		http.MethodPost, "/api/tools/skill", "application/json",
+		bytes.NewBufferString(`{"name":"api_skill","description":"API skill","content":"Instructions"}`),
+	)
+	approve(skillApproval, http.StatusOK)
+	if _, err := os.Stat(filepath.Join(srv.skillsDir, "api_skill", "SKILL.md")); err != nil {
+		t.Fatalf("approved skill was not created: %v", err)
+	}
+
+	wasmBody := &bytes.Buffer{}
+	wasmWriter := multipart.NewWriter(wasmBody)
+	wasmPart, _ := wasmWriter.CreateFormFile("file", "plugin.wasm")
+	_, _ = wasmPart.Write([]byte("wasm bytes"))
+	_ = wasmWriter.Close()
+	wasmApproval := requestApproval(http.MethodPost, "/api/tools/wasm", wasmWriter.FormDataContentType(), wasmBody)
+	approve(wasmApproval, http.StatusOK)
+	if _, err := os.Stat(filepath.Join(srv.wasmDir, "plugin.wasm")); err != nil {
+		t.Fatalf("approved WASM was not stored: %v", err)
+	}
+
+	catalog := srv.hubMgr.ListCatalog()
+	if len(catalog) == 0 {
+		t.Fatal("hub catalog is empty")
+	}
+	skillID := catalog[0].ID
+	installApproval := requestApproval(
+		http.MethodPost, "/api/tools/hub/install", "application/json",
+		bytes.NewBufferString(`{"skill_id":"`+skillID+`"}`),
+	)
+	approve(installApproval, http.StatusOK)
+	uninstallApproval := requestApproval(
+		http.MethodPost, "/api/tools/hub/uninstall", "application/json",
+		bytes.NewBufferString(`{"skill_id":"`+skillID+`"}`),
+	)
+	approve(uninstallApproval, http.StatusOK)
+
+	restartApproval := requestApproval(
+		http.MethodPost, "/api/system/restart", "application/json", bytes.NewBuffer(nil),
+	)
+	if restartApproval.ToolName != "admin_system_restart" {
+		t.Fatalf("unexpected restart approval: %+v", restartApproval)
+	}
+	reject := httptest.NewRequest(http.MethodPost, "/api/approvals/"+restartApproval.ID+"/reject", strings.NewReader(`{"reason":"not now"}`))
+	reject.Header.Set("Content-Type", "application/json")
+	rejected := httptest.NewRecorder()
+	srv.Router().ServeHTTP(rejected, reject)
+	if rejected.Code != http.StatusOK {
+		t.Fatalf("restart rejection failed: %d %s", rejected.Code, rejected.Body.String())
+	}
+}
+
+func TestProviderKeyLegacyMigrationToVault(t *testing.T) {
+	srv := newTestServer(t)
+	configDir := filepath.Join(srv.dataDir, "config")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	legacyJSON := `{"openai":{"id":"openai","name":"OpenAI","api_key":"legacy-json-secret","enabled":true}}`
+	if err := os.WriteFile(filepath.Join(configDir, "llm_providers.json"), []byte(legacyJSON), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(configDir, "anthropic.key"), []byte("legacy-file-secret"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	stored := loadStoredProvidersWithVault(context.Background(), configDir, srv.vault)
+	if stored["openai"].APIKey != "legacy-json-secret" || stored["anthropic"].APIKey != "legacy-file-secret" {
+		t.Fatalf("legacy keys were not loaded during migration: %+v", stored)
+	}
+	for provider, expected := range map[string]string{
+		"openai": "legacy-json-secret", "anthropic": "legacy-file-secret",
+	} {
+		secret, err := srv.vault.GetSecret(context.Background(), providerSecretName(provider))
+		if err != nil || secret != expected {
+			t.Fatalf("legacy %s key was not migrated: secret=%q err=%v", provider, secret, err)
+		}
+	}
+	metadata, err := os.ReadFile(filepath.Join(configDir, "llm_providers.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(metadata), "legacy-json-secret") {
+		t.Fatal("legacy JSON secret remained after migration")
+	}
+	if _, err := os.Stat(filepath.Join(configDir, "anthropic.key")); !os.IsNotExist(err) {
+		t.Fatalf("legacy key file remained after migration: %v", err)
+	}
+}
+
+func TestServer_IntegrationsChannelsPairingAndWebhookValidation(t *testing.T) {
+	srv := newTestServer(t)
+	for _, endpoint := range []string{
+		"/api/integrations/",
+		"/api/integrations/channels",
+		"/api/integrations/channels/accounts",
+		"/api/integrations/authorizations",
+	} {
+		req := httptest.NewRequest(http.MethodGet, endpoint, nil)
+		w := httptest.NewRecorder()
+		srv.Router().ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET %s failed: %d %s", endpoint, w.Code, w.Body.String())
+		}
+	}
+	config := httptest.NewRequest(http.MethodPost, "/api/integrations/custom/config", strings.NewReader(`{"client_id":"client","client_secret":"secret"}`))
+	config.Header.Set("Content-Type", "application/json")
+	configResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(configResult, config)
+	if configResult.Code != http.StatusOK {
+		t.Fatalf("connector config failed: %d %s", configResult.Code, configResult.Body.String())
+	}
+	token := httptest.NewRequest(http.MethodPost, "/api/integrations/custom/token", strings.NewReader(`{"token":"direct-token"}`))
+	token.Header.Set("Content-Type", "application/json")
+	tokenResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(tokenResult, token)
+	if tokenResult.Code != http.StatusOK {
+		t.Fatalf("custom connector token failed: %d %s", tokenResult.Code, tokenResult.Body.String())
+	}
+	testConnector := httptest.NewRequest(http.MethodPost, "/api/integrations/custom/test", nil)
+	testResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(testResult, testConnector)
+	if testResult.Code != http.StatusOK {
+		t.Fatalf("custom connector test failed: %d %s", testResult.Code, testResult.Body.String())
+	}
+	for _, action := range []string{"toggle", "disconnect"} {
+		req := httptest.NewRequest(http.MethodPost, "/api/integrations/custom/"+action, nil)
+		w := httptest.NewRecorder()
+		srv.Router().ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("connector %s failed: %d %s", action, w.Code, w.Body.String())
+		}
+	}
+	authURL := httptest.NewRequest(http.MethodPost, "/api/integrations/github/auth-url", strings.NewReader(`{}`))
+	authURL.Header.Set("Content-Type", "application/json")
+	authResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(authResult, authURL)
+	if authResult.Code != http.StatusInternalServerError {
+		t.Fatalf("unconfigured OAuth should fail cleanly: %d %s", authResult.Code, authResult.Body.String())
+	}
+	callback := httptest.NewRequest(http.MethodGet, "/api/integrations/oauth/callback?error=denied&error_description=no", nil)
+	callbackResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(callbackResult, callback)
+	if callbackResult.Code != http.StatusFound {
+		t.Fatalf("OAuth error callback did not redirect: %d", callbackResult.Code)
+	}
+
+	channelBody := `{
+		"webhook_secret":"integration-secret",
+		"telegram_accounts":[{"id":"tg_test","name":"Test Bot","channel":"telegram","token":"tg-token","enabled":true,"bound_agent_ids":["*"]}],
+		"discord_accounts":[{"id":"dc_test","name":"Discord","channel":"discord","token":"dc-token","enabled":false}],
+		"whatsapp_accounts":[{"id":"wa_test","name":"WhatsApp","channel":"whatsapp","token":"wa-token","phone_id":"phone","enabled":true}]
+	}`
+	saveChannels := httptest.NewRequest(http.MethodPost, "/api/integrations/channels", strings.NewReader(channelBody))
+	saveChannels.Header.Set("Content-Type", "application/json")
+	channelResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(channelResult, saveChannels)
+	if channelResult.Code != http.StatusOK {
+		t.Fatalf("channel save failed: %d %s", channelResult.Code, channelResult.Body.String())
+	}
+	accounts := httptest.NewRequest(http.MethodGet, "/api/integrations/channels/accounts", nil)
+	accountsResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(accountsResult, accounts)
+	if accountsResult.Code != http.StatusOK || !strings.Contains(accountsResult.Body.String(), "tg_test") ||
+		strings.Contains(accountsResult.Body.String(), "tg-token") {
+		t.Fatalf("channel accounts were not returned safely: %d %s", accountsResult.Code, accountsResult.Body.String())
+	}
+
+	pair := httptest.NewRequest(http.MethodPost, "/api/integrations/pairing/code", strings.NewReader(`{"channel_id":"telegram"}`))
+	pair.Header.Set("Content-Type", "application/json")
+	pairResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(pairResult, pair)
+	if pairResult.Code != http.StatusOK {
+		t.Fatalf("pairing code failed: %d %s", pairResult.Code, pairResult.Body.String())
+	}
+	var pairEnvelope struct {
+		Data struct {
+			Code string `json:"code"`
+		} `json:"data"`
+	}
+	_ = json.NewDecoder(pairResult.Body).Decode(&pairEnvelope)
+	verifyBody := fmt.Sprintf(`{"channel_id":"telegram","code":%q,"sender_id":"user-1","sender_name":"Tester"}`, pairEnvelope.Data.Code)
+	verify := httptest.NewRequest(http.MethodPost, "/api/integrations/pairing/verify", strings.NewReader(verifyBody))
+	verify.Header.Set("Content-Type", "application/json")
+	verifyResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(verifyResult, verify)
+	if verifyResult.Code != http.StatusOK {
+		t.Fatalf("pairing verification failed: %d %s", verifyResult.Code, verifyResult.Body.String())
+	}
+	revoke := httptest.NewRequest(http.MethodDelete, "/api/integrations/authorizations", strings.NewReader(`{"channel_id":"telegram","sender_id":"user-1"}`))
+	revoke.Header.Set("Content-Type", "application/json")
+	revokeResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(revokeResult, revoke)
+	if revokeResult.Code != http.StatusOK {
+		t.Fatalf("authorization revoke failed: %d %s", revokeResult.Code, revokeResult.Body.String())
+	}
+	for _, webhook := range []struct {
+		method string
+		path   string
+	}{
+		{http.MethodGet, "/api/webhooks/whatsapp"},
+		{http.MethodPost, "/api/webhooks/whatsapp"},
+	} {
+		req := httptest.NewRequest(webhook.method, webhook.path, nil)
+		w := httptest.NewRecorder()
+		srv.Router().ServeHTTP(w, req)
+		if w.Code != http.StatusNotImplemented {
+			t.Fatalf("unconfigured webhook expected 501, got %d", w.Code)
+		}
 	}
 }
 
@@ -319,4 +1110,50 @@ func TestServer_ProductionEndpoints(t *testing.T) {
 	}
 }
 
+func TestServer_ApprovalAndRunEndpoints(t *testing.T) {
+	srv := newTestServer(t)
 
+	body := bytes.NewBufferString(`{
+		"name":"native_file_write",
+		"agent_id":"agent_system_core",
+		"input":{"path":"approval.txt","content":"approved"}
+	}`)
+	request := httptest.NewRequest(http.MethodPost, "/api/tools/execute", body)
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	srv.Router().ServeHTTP(response, request)
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("expected approval-required 202, got %d: %s", response.Code, response.Body.String())
+	}
+
+	var pending struct {
+		Data struct {
+			Approval tools.ApprovalRequest `json:"approval"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&pending); err != nil {
+		t.Fatalf("decoding approval response: %v", err)
+	}
+	if pending.Data.Approval.ID == "" {
+		t.Fatal("expected durable approval id")
+	}
+
+	approve := httptest.NewRequest(
+		http.MethodPost,
+		"/api/approvals/"+pending.Data.Approval.ID+"/approve",
+		bytes.NewBufferString(`{"reason":"test approval"}`),
+	)
+	approve.Header.Set("Content-Type", "application/json")
+	approveResponse := httptest.NewRecorder()
+	srv.Router().ServeHTTP(approveResponse, approve)
+	if approveResponse.Code != http.StatusOK {
+		t.Fatalf("expected approval execution 200, got %d: %s", approveResponse.Code, approveResponse.Body.String())
+	}
+
+	runsRequest := httptest.NewRequest(http.MethodGet, "/api/runs", nil)
+	runsResponse := httptest.NewRecorder()
+	srv.Router().ServeHTTP(runsResponse, runsRequest)
+	if runsResponse.Code != http.StatusOK {
+		t.Fatalf("expected runs endpoint 200, got %d: %s", runsResponse.Code, runsResponse.Body.String())
+	}
+}

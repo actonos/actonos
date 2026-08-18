@@ -2,9 +2,11 @@ package tools
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -17,7 +19,25 @@ var (
 	ErrToolNotFound      = errors.New("tool not found in registry")
 	ErrToolAlreadyExists = errors.New("tool already registered")
 	ErrExecutionFailed   = errors.New("tool execution failed")
+	ErrToolUnauthorized  = errors.New("tool is not authorized for agent")
 )
+
+type executionContextKey string
+
+const (
+	traceIDContextKey  executionContextKey = "trace_id"
+	approvalContextKey executionContextKey = "approval_id"
+)
+
+// AgentToolPolicy is the execution-boundary projection of an agent manifest.
+type AgentToolPolicy struct {
+	AuthorizedTools   []string
+	ApprovalThreshold string
+	AllowedPaths      []string
+}
+
+// PolicyResolver resolves an agent's current execution policy.
+type PolicyResolver func(ctx context.Context, agentID string) (AgentToolPolicy, error)
 
 // ToolResult represents the output from executing a tool.
 type ToolResult struct {
@@ -50,10 +70,42 @@ type ToolAuditLogger interface {
 
 // ToolRegistry manages all registered tools (Native, MCP, WASM, Skills).
 type ToolRegistry struct {
-	mu          sync.RWMutex
-	tools       map[string]Tool
-	bus         *bus.EventBus
-	auditLogger ToolAuditLogger
+	mu             sync.RWMutex
+	tools          map[string]Tool
+	bus            *bus.EventBus
+	auditLogger    ToolAuditLogger
+	policyResolver PolicyResolver
+	approvals      *ApprovalManager
+}
+
+// SetPolicyResolver enables authoritative execution-time permission checks.
+func (r *ToolRegistry) SetPolicyResolver(resolver PolicyResolver) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.policyResolver = resolver
+}
+
+// SetApprovalManager enables durable human approval gates.
+func (r *ToolRegistry) SetApprovalManager(manager *ApprovalManager) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.approvals = manager
+}
+
+// WithTraceID propagates an end-to-end trace identifier into tool execution.
+func WithTraceID(ctx context.Context, traceID string) context.Context {
+	return context.WithValue(ctx, traceIDContextKey, traceID)
+}
+
+// WithApprovalID binds a previously approved exact action to execution.
+func WithApprovalID(ctx context.Context, approvalID string) context.Context {
+	return context.WithValue(ctx, approvalContextKey, approvalID)
+}
+
+// TraceIDFromContext retrieves the current trace identifier.
+func TraceIDFromContext(ctx context.Context) string {
+	value, _ := ctx.Value(traceIDContextKey).(string)
+	return value
 }
 
 // NewToolRegistry creates a new ToolRegistry instance.
@@ -228,6 +280,32 @@ func (r *ToolRegistry) Execute(ctx context.Context, agentID, name string, inputJ
 
 	// Normalize input to handle string-encoded or malformed LLM tool arguments
 	normalizedInput := NormalizeToolInput(inputJSON)
+	if name == "native_exec" {
+		if err := validateCommandToolInput(normalizedInput); err != nil {
+			return nil, fmt.Errorf("verifying command: %w", err)
+		}
+	}
+
+	r.mu.RLock()
+	resolver := r.policyResolver
+	approvalManager := r.approvals
+	r.mu.RUnlock()
+
+	var policy AgentToolPolicy
+	if resolver != nil {
+		policy, err = resolver(ctx, agentID)
+		if err != nil {
+			return nil, fmt.Errorf("resolving tool policy for agent %s: %w", agentID, err)
+		}
+		if !toolAllowed(policy.AuthorizedTools, name) {
+			return nil, fmt.Errorf("%w: agent=%s tool=%s", ErrToolUnauthorized, agentID, name)
+		}
+		if strings.HasPrefix(name, "native_file_") {
+			if err := validateAllowedPath(policy.AllowedPaths, normalizedInput); err != nil {
+				return nil, fmt.Errorf("%w: %v", ErrToolUnauthorized, err)
+			}
+		}
+	}
 
 	if r.bus != nil {
 		r.bus.Publish(bus.NewEvent(bus.EventToolExecutionStarted, agentID, map[string]any{
@@ -236,13 +314,31 @@ func (r *ToolRegistry) Execute(ctx context.Context, agentID, name string, inputJ
 		}))
 	}
 
-	// Determine risk level
-	riskLevel := "Low"
-	switch name {
-	case "native_file_write", "native_cron_schedule", "native_browser_screenshot":
-		riskLevel = "High"
-	case "native_browser_navigate", "native_http_fetch":
-		riskLevel = "Medium"
+	riskLevel := ToolRiskLevel(name)
+	traceID := TraceIDFromContext(ctx)
+	if traceID == "" {
+		traceID = newTraceID()
+		ctx = WithTraceID(ctx, traceID)
+	}
+
+	if resolver != nil && approvalRequired(policy.ApprovalThreshold, riskLevel) {
+		approvalID, _ := ctx.Value(approvalContextKey).(string)
+		if approvalID == "" {
+			request, requestErr := approvalManager.Request(ctx, traceID, agentID, name, riskLevel, normalizedInput)
+			if requestErr != nil {
+				return nil, fmt.Errorf("requesting approval: %w", requestErr)
+			}
+			if r.auditLogger != nil {
+				r.auditLogger.LogAudit(traceID, agentID, name, riskLevel, "Blocked", ErrApprovalRequired.Error(), 0)
+			}
+			return nil, &ApprovalRequiredError{Approval: *request}
+		}
+		if approvalManager == nil {
+			return nil, errors.New("approval manager is unavailable")
+		}
+		if err := approvalManager.ValidateApproved(ctx, approvalID, agentID, name, normalizedInput); err != nil {
+			return nil, fmt.Errorf("validating approval: %w", err)
+		}
 	}
 
 	startTime := time.Now()
@@ -251,7 +347,7 @@ func (r *ToolRegistry) Execute(ctx context.Context, agentID, name string, inputJ
 	duration := time.Since(startTime)
 	if err != nil {
 		if r.auditLogger != nil {
-			r.auditLogger.LogAudit("", agentID, name, riskLevel, "Failed", err.Error(), duration.Milliseconds())
+			r.auditLogger.LogAudit(traceID, agentID, name, riskLevel, "Failed", err.Error(), duration.Milliseconds())
 		}
 		if r.bus != nil {
 			r.bus.Publish(bus.NewEvent(bus.EventToolExecutionError, agentID, map[string]any{
@@ -264,7 +360,7 @@ func (r *ToolRegistry) Execute(ctx context.Context, agentID, name string, inputJ
 	}
 
 	if r.auditLogger != nil {
-		r.auditLogger.LogAudit("", agentID, name, riskLevel, "Success", "", duration.Milliseconds())
+		r.auditLogger.LogAudit(traceID, agentID, name, riskLevel, "Success", "", duration.Milliseconds())
 	}
 	if r.bus != nil {
 		r.bus.Publish(bus.NewEvent(bus.EventToolExecutionResult, agentID, map[string]any{
@@ -275,4 +371,67 @@ func (r *ToolRegistry) Execute(ctx context.Context, agentID, name string, inputJ
 	}
 
 	return res, nil
+}
+
+// ToolRiskLevel returns the deterministic risk class for a tool.
+func ToolRiskLevel(name string) string {
+	switch name {
+	case "native_exec", "native_file_delete", "native_file_write", "native_cron_schedule":
+		return "High"
+	case "native_browser_navigate", "native_browser_screenshot", "native_http_fetch", "native_channel_notify":
+		return "Medium"
+	}
+	if strings.HasPrefix(name, "mcp_") || strings.HasPrefix(name, "wasm_") {
+		return "High"
+	}
+	return "Low"
+}
+
+func toolAllowed(authorized []string, name string) bool {
+	for _, allowed := range authorized {
+		if allowed == "*" || allowed == name {
+			return true
+		}
+	}
+	return false
+}
+
+func approvalRequired(threshold, risk string) bool {
+	order := map[string]int{"Low": 1, "Medium": 2, "High": 3}
+	requiredAt, ok := order[threshold]
+	if !ok {
+		requiredAt = order["Medium"]
+	}
+	return order[risk] >= requiredAt
+}
+
+func validateAllowedPath(allowedPaths []string, input json.RawMessage) error {
+	for _, allowed := range allowedPaths {
+		if allowed == "*" {
+			return nil
+		}
+	}
+	var request struct {
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal(input, &request); err != nil {
+		return fmt.Errorf("decoding file path: %w", err)
+	}
+	requested := filepath.Clean(request.Path)
+	for _, allowed := range allowedPaths {
+		cleanAllowed := filepath.Clean(allowed)
+		rel, err := filepath.Rel(cleanAllowed, requested)
+		if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return nil
+		}
+	}
+	return fmt.Errorf("path %q is outside the agent's allowed workspace paths", request.Path)
+}
+
+func newTraceID() string {
+	buffer := make([]byte, 16)
+	if _, err := rand.Read(buffer); err != nil {
+		return fmt.Sprintf("%032x", time.Now().UnixNano())
+	}
+	return fmt.Sprintf("%x", buffer)
 }

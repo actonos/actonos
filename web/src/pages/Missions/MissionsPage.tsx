@@ -22,7 +22,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { api } from '@/lib/api';
-import type { AutonomousTask, HeartbeatConfigData, HeartbeatRun, TaskPriority, TaskStatus } from '@/lib/types';
+import type { AgentRun, ApprovalRequest, AutonomousTask, HeartbeatConfigData, HeartbeatRun, TaskPriority, TaskStatus } from '@/lib/types';
 import { TaskModal } from './components/TaskModal';
 
 export interface MissionsPageProps {
@@ -33,7 +33,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
   const { t } = useTranslation('missions');
   const { success, error, info } = useToast();
 
-  const [activeTab, setActiveTab] = useState<'tasks' | 'directives' | 'audit'>('tasks');
+  const [activeTab, setActiveTab] = useState<'tasks' | 'directives' | 'audit' | 'governance'>('tasks');
   const [tasks, setTasks] = useState<AutonomousTask[]>([]);
   const [heartbeatConfig, setHeartbeatConfig] = useState<HeartbeatConfigData>({
     enabled: true,
@@ -45,6 +45,8 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
     zero_noise: true,
   });
   const [heartbeatRuns, setHeartbeatRuns] = useState<HeartbeatRun[]>([]);
+  const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
+  const [agentRuns, setAgentRuns] = useState<AgentRun[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
 
@@ -60,18 +62,22 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [tasksRes, cfgRes, runsRes] = await Promise.all([
+      const [tasksRes, cfgRes, runsRes, approvalsRes, agentRunsRes] = await Promise.all([
         api.listTasks({
           status: statusFilter !== 'all' ? statusFilter : undefined,
           priority: priorityFilter !== 'all' ? priorityFilter : undefined,
         }).catch(() => ({ tasks: [], count: 0 })),
         api.getHeartbeatConfig().catch(() => null),
         api.listHeartbeatRuns().catch(() => []),
+        api.listApprovals('pending').catch(() => ({ approvals: [] })),
+        api.listAgentRuns(30).catch(() => ({ runs: [] })),
       ]);
 
       if (tasksRes && tasksRes.tasks) setTasks(tasksRes.tasks);
       if (cfgRes) setHeartbeatConfig(cfgRes);
       if (runsRes) setHeartbeatRuns(runsRes);
+      setApprovals(approvalsRes.approvals);
+      setAgentRuns(agentRunsRes.runs);
     } catch (err: any) {
       error('Failed to load mission data', err.message);
     } finally {
@@ -153,6 +159,21 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
       error('Failed to save directives', err.message);
     } finally {
       setSavingDirectives(false);
+    }
+  };
+
+  const handleApproval = async (approval: ApprovalRequest, approved: boolean) => {
+    try {
+      if (approved) {
+        await api.approveAction(approval.id, t('governance.reviewedReason'));
+        success(t('governance.approvedTitle'), approval.tool_name);
+      } else {
+        await api.rejectAction(approval.id, t('governance.rejectedReason'));
+        info(t('governance.rejectedTitle'), approval.tool_name);
+      }
+      await loadData();
+    } catch (err: unknown) {
+      error(t('governance.decisionFailed'), err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -319,6 +340,15 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
             }`}
           >
             🛡️ Pulse Audit Ledger ({heartbeatRuns.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('governance')}
+            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer ${
+              activeTab === 'governance' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
+            }`}
+          >
+            {t('governance.tab', { count: approvals.length })}
           </button>
         </div>
 
@@ -638,6 +668,61 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                   </tbody>
                 </table>
               </div>
+            </Card>
+          </div>
+        )}
+
+        {activeTab === 'governance' && (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+            <Card className="p-6 border border-onyx/10 bg-canvas space-y-4">
+              <h3 className="font-serif text-heading-sm text-deep-ink">{t('governance.approvalsTitle')}</h3>
+              <p className="text-caption text-slate">{t('governance.approvalsDescription')}</p>
+              {approvals.length === 0 ? (
+                <p className="p-6 text-center text-caption text-slate">{t('governance.noApprovals')}</p>
+              ) : approvals.map((approval) => (
+                <div key={approval.id} className="p-4 rounded-[24px] border border-onyx/10 bg-soft-meadow space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-mono text-body-sm font-semibold text-deep-ink truncate">{approval.tool_name}</p>
+                      <p className="text-caption text-slate">{approval.agent_id} · {approval.risk_level}</p>
+                    </div>
+                    <Badge variant="stopped">{t('governance.pending')}</Badge>
+                  </div>
+                  <pre className="max-h-32 overflow-auto rounded-2xl bg-canvas p-3 text-[11px] text-slate">
+                    {JSON.stringify(approval.input, null, 2)}
+                  </pre>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => handleApproval(approval, false)}>
+                      {t('governance.reject')}
+                    </Button>
+                    <Button variant="primary" size="sm" onClick={() => handleApproval(approval, true)}>
+                      {t('governance.approve')}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </Card>
+            <Card className="p-6 border border-onyx/10 bg-canvas space-y-4">
+              <h3 className="font-serif text-heading-sm text-deep-ink">{t('governance.runsTitle')}</h3>
+              <p className="text-caption text-slate">{t('governance.runsDescription')}</p>
+              {agentRuns.map((run) => (
+                <div key={run.id} className="p-3 rounded-2xl border border-onyx/10 bg-soft-meadow">
+                  <div className="flex justify-between gap-3">
+                    <span className="font-mono text-[11px] text-deep-ink truncate">{run.id}</span>
+                    <Badge variant={run.status === 'completed' ? 'active' : run.status === 'failed' ? 'stopped' : 'neutral'}>
+                      {run.status}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-caption text-slate line-clamp-2">{run.goal}</p>
+                  <p className="mt-1 font-mono text-[10px] text-slate">
+                    {t('governance.runMetrics', {
+                      iterations: run.iterations,
+                      tokens: run.total_tokens,
+                      reason: run.termination_reason || '-',
+                    })}
+                  </p>
+                </div>
+              ))}
             </Card>
           </div>
         )}

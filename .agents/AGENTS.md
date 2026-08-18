@@ -14,6 +14,9 @@ ActonOS is an Extensible AI Agent Operating System Kernel written in **Go** with
 4. **Interface-driven design**: Core abstractions (`LLMProvider`, `ChannelAdapter`, `Sandbox`, `HAL`) are defined as Go interfaces.
 5. **Event-driven**: Components communicate through the `internal/bus/` event bus using Go channels.
 6. **Dual-runtime**: The HAL layer abstracts bare-metal vs Docker differences. Use build tags for platform-specific code (`_linux.go`).
+7. **Single execution boundary**: All agent/API/cron/channel tool calls MUST go
+   through `tools.ToolRegistry.Execute` so authorization, approvals, tracing,
+   sandboxing, and audit behavior cannot be bypassed.
 
 ## Canonical Source Registry
 

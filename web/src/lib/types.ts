@@ -289,3 +289,58 @@ export interface HeartbeatRun {
   tokens_used: number;
 }
 
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'expired';
+
+export interface ApprovalRequest {
+  id: string;
+  trace_id: string;
+  agent_id: string;
+  tool_name: string;
+  risk_level: 'Low' | 'Medium' | 'High';
+  action_hash: string;
+  input: Record<string, unknown>;
+  status: ApprovalStatus;
+  reason?: string;
+  requested_at: string;
+  expires_at: string;
+  decided_at?: string;
+  decided_by?: string;
+}
+
+export type AgentRunStatus =
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'approval_pending'
+  | 'blocked'
+  | 'cancelled';
+
+export interface AgentRun {
+  id: string;
+  trace_id: string;
+  agent_id: string;
+  goal: string;
+  source: string;
+  status: AgentRunStatus;
+  termination_reason?: string;
+  iterations: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  started_at: string;
+  updated_at: string;
+  completed_at?: string;
+}
+
+export interface RunEvent {
+  id: string;
+  run_id: string;
+  trace_id: string;
+  step: number;
+  type: string;
+  status: string;
+  tool_name?: string;
+  data?: Record<string, unknown>;
+  duration_ms?: number;
+  created_at: string;
+}

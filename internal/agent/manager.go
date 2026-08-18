@@ -137,6 +137,9 @@ func (m *AgentManager) Create(ctx context.Context, manifest AgentManifest) (*Age
 	if manifest.DelegationScope.RequireHumanApproval == "" {
 		manifest.DelegationScope.RequireHumanApproval = ApprovalMedium
 	}
+	if len(manifest.DelegationScope.AllowedWorkspacePaths) == 0 {
+		manifest.DelegationScope.AllowedWorkspacePaths = []string{"."}
+	}
 
 	manifestJSON, err := json.Marshal(manifest)
 	if err != nil {

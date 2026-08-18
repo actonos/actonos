@@ -8,6 +8,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Secure Autonomous Execution Kernel**:
+  - Durable `agent_runs`, `run_events`, and exact-action `approvals` ledgers with correlated trace IDs and termination reasons.
+  - Execution-time tool authorization, workspace path scopes, monthly agent budget enforcement, bounded retries, no-progress detection, and deterministic completion verification.
+  - Human approval REST workflow (`/api/approvals`) and run tracing APIs (`/api/runs`).
+  - Fail-closed Bubblewrap/Docker command isolation, MCP process isolation policy, SSRF protection, symlink-safe workspace resolution, and non-zero exit classification.
+  - Context token budgeting, autonomous plan injection, reflection secret redaction, heartbeat execution locking, and EventBus dropped-event metrics.
+  - Real OpenAI-compatible SSE streaming with fragmented tool-call reconstruction.
+  - Real Anthropic and Gemini SSE streaming with tool-use and usage reconstruction.
+  - Linux cgroup v2 CPU, memory, and process enforcement for Bubblewrap executions.
+  - SHA-256 chained audit records, shared swarm execution kernel, periodic memory deduplication/retention, and Mission Control approval/run governance UI.
+  - Durable checkpoint resume for approval-paused runs and dependency-aware DAG plan execution.
+  - Persistent MCP lifecycle with encrypted environments, startup restore, and HTTP/SSE JSON-RPC.
+  - Unified exact-action approval for workspace, skill, WASM, Tool Hub, and restart mutations.
+  - Provenance-bearing context snapshots and online audit-chain verification.
+  - True HTTP SSE chat endpoint with event flushing and conversation persistence.
+  - Configured data-root propagation across workspace, provider, integration, audit, storage, backup, skill, and WASM handlers.
+  - Integration coverage gates reached for agent, server, tools, sandbox, security, and memory packages.
+  - Encrypted Vault-only LLM provider keys with automatic plaintext migration and deletion API.
+  - Transactionally consistent SQLite `VACUUM INTO` backups including committed WAL content.
+  - Removed the legacy approval “resume next cycle” fallback; checkpointed runs resume directly.
+  - Linux GitHub Actions race-detector gate and `make test-race` target.
+  - Fixed concurrent profile preference mutation and synchronized mock-provider calls discovered by the race detector.
 - **Autonomous Mission Control & Task Backlog Matrix**:
   - Dedicated Sidebar page `Missions` (`web/src/pages/Missions/MissionsPage.tsx`) for visual task management, standing directives editor, and real-time pulse audit ledger.
   - SQLite table `autonomous_tasks` with priority queues (P0 Critical -> P3 Low), progress (0-100%), and automatic bi-directional sync with `data/workspace/TASKS.md` and `data/workspace/HEARTBEAT.md`.

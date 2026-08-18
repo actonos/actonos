@@ -150,6 +150,13 @@ Retrieve and update user identity & preferences.
 ### `GET /api/system/keys` | `POST /api/system/keys`
 Retrieve masked API keys or store encrypted provider keys (Anthropic, OpenAI, Google, OpenRouter).
 
+Provider keys are encrypted in Vault and never persisted in
+`llm_providers.json`. Legacy plaintext key files are migrated automatically.
+
+### `DELETE /api/system/keys/{provider}`
+
+Remove a provider key from Vault and clear its configured status.
+
 ### `POST /api/system/keys/test`
 Test connectivity for a specific LLM provider API key.
 
@@ -236,7 +243,20 @@ Create a new agent manifest.
 Retrieve single agent manifest.
 
 ### `POST /api/agents/{agentID}/chat/stream`
-Send user prompt and stream real-time Server-Sent Events (SSE) token stream with tool invocation badges.
+Send a user prompt over a true Server-Sent Events stream. The server flushes
+live `thought`, `token`, `tool_call`, `tool_result`, `audit`, `done`, and
+`error` events while preserving the conversation and assistant result.
+
+Request:
+
+```json
+{
+  "conversation_id": "conv_optional",
+  "message": "Inspect and fix the project"
+}
+```
+
+Response content type: `text/event-stream`.
 
 ### `PUT /api/agents/{agentID}`
 Update agent manifest.
@@ -389,16 +409,90 @@ List and revoke authorized external chat senders.
 List all registered native tools, MCP servers, and WASM plugins.
 
 ### `POST /api/tools/mcp` | `DELETE /api/tools/mcp/{serverID}`
-Register or disconnect an MCP server.
+Register or disconnect an MCP server. Connecting is a High-risk operation:
+
+1. Call `POST /api/tools/mcp` with the MCP configuration.
+2. The server returns `202` with a durable approval request.
+3. Approve through `POST /api/approvals/{id}/approve`; the approved MCP process is started automatically.
+
+MCP stdio processes require Docker, Bubblewrap, or the explicit development-only
+`ACTONOS_ALLOW_UNSANDBOXED_MCP=1` override.
 
 ### `POST /api/tools/execute`
-Directly execute a tool.
+Execute a tool through the same authorization, risk, approval, audit, and sandbox
+boundary used by agents. Medium/High actions may return:
+
+```json
+{
+  "data": {
+    "status": "approval_required",
+    "approval": {
+      "id": "apr_...",
+      "trace_id": "...",
+      "tool_name": "native_file_write",
+      "risk_level": "High",
+      "status": "pending"
+    }
+  }
+}
+```
+
+An approved exact action can also be submitted with `approval_id`. Approval hashes
+bind the decision to the agent, tool name, and normalized arguments.
 
 ### `GET /api/tools/hub/catalog`
 Browse online Tool Hub & Skill marketplace catalog.
 
 ### `POST /api/tools/hub/install` | `POST /api/tools/hub/uninstall`
 Install or remove a skill from the Tool Hub catalog.
+
+---
+
+## Human Approval & Durable Runs
+
+### `GET /api/approvals?status=pending`
+List durable approval requests. Supported filters include `pending`, `approved`,
+`rejected`, `expired`, and `all`.
+
+### `POST /api/approvals/{id}/approve`
+Approve and execute the exact action recorded by the request. Optional body:
+
+```json
+{ "reason": "Reviewed by the system administrator" }
+```
+
+### `POST /api/approvals/{id}/reject`
+Reject a pending action without executing it.
+
+### `GET /api/runs?limit=100`
+List durable agent executions with trace ID, source, status, aggregate token usage,
+iteration count, and termination reason.
+
+### `GET /api/runs/{id}/events`
+Return the ordered LLM/tool/approval event sequence for a run.
+
+Common termination reasons include `goal_completed`, `approval_required`,
+`verification_failed`, `no_progress`, `iteration_budget_exhausted`,
+and `infrastructure_failure`. Approving a paused autonomous run resumes the same
+run from its persisted checkpoint.
+
+### Administrative mutations
+
+Workspace write/upload/delete/mkdir, skill creation, WASM upload, Tool Hub
+install/uninstall, and system restart use the same exact-action approval ledger.
+The initial request returns `202 Accepted`; approval dispatches only the
+normalized action recorded in that request.
+
+### `GET /api/system/audit/verify`
+
+Verify the audit log SHA-256 chain and report corruption caused by deletion,
+reordering, or modification.
+
+### `GET /api/system/backup`
+
+Download a transactionally consistent SQLite snapshot created with
+`VACUUM INTO`. The snapshot includes committed WAL content and is a standalone
+database file.
 
 ---
 

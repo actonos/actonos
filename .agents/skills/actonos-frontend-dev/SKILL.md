@@ -188,3 +188,10 @@ cd web && npx tsc --noEmit
 # 2. Build Check
 cd web && npm run build
 ```
+
+### Governance UI
+
+Mission Control owns the human approval queue and durable run ledger. Approval
+cards must preview exact arguments, show risk and agent identity, and expose
+explicit approve/reject actions. All labels belong to the `missions` namespace
+in both English and Vietnamese.

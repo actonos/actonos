@@ -20,32 +20,40 @@ import (
 
 // Server holds all subsystem references and handles HTTP routing.
 type Server struct {
-	router         chi.Router
-	agentMgr       *agent.AgentManager
-	swarmMgr       *agent.SwarmManager
-	engine         *agent.Engine
-	cronSched      *agent.CronScheduler
-	heartbeat      *agent.HeartbeatDaemon
-	taskMgr        *agent.TaskManager
-	tokenTracker   *memory.TokenTracker
-	profileMgr     *agent.UserProfileManager
-	llmRouter      *llm.ModelCascadeRouter
-	toolReg        *tools.ToolRegistry
-	mcpHost        *tools.MCPHostEngine
-	hubMgr         *tools.HubManager
-	memory         *memory.HybridEngine
-	hal            system.HAL
-	tailscale      *system.TailscaleManager
-	tokenDaemon    *auth.TokenRefreshDaemon
-	oauthEngine    *auth.OAuthEngine
-	stateStore     *auth.StateStore
-	sysAuth        *auth.SystemAuthManager
-	bus            *bus.EventBus
-	pairingMgr     *channels.PairingManager
-	channelMgr     *channels.ChannelManager
-	tgAdapter      *channels.TelegramAdapter
-	waAdapter      *channels.WhatsAppAdapter
-	startTime      time.Time
+	router       chi.Router
+	agentMgr     *agent.AgentManager
+	swarmMgr     *agent.SwarmManager
+	engine       *agent.Engine
+	cronSched    *agent.CronScheduler
+	heartbeat    *agent.HeartbeatDaemon
+	taskMgr      *agent.TaskManager
+	tokenTracker *memory.TokenTracker
+	profileMgr   *agent.UserProfileManager
+	llmRouter    *llm.ModelCascadeRouter
+	toolReg      *tools.ToolRegistry
+	mcpHost      *tools.MCPHostEngine
+	approvalMgr  *tools.ApprovalManager
+	runStore     *agent.RunStore
+	hubMgr       *tools.HubManager
+	memory       *memory.HybridEngine
+	hal          system.HAL
+	tailscale    *system.TailscaleManager
+	tokenDaemon  *auth.TokenRefreshDaemon
+	oauthEngine  *auth.OAuthEngine
+	stateStore   *auth.StateStore
+	sysAuth      *auth.SystemAuthManager
+	bus          *bus.EventBus
+	auditLogger  *system.AuditLogger
+	vault        *memory.Vault
+	pairingMgr   *channels.PairingManager
+	channelMgr   *channels.ChannelManager
+	tgAdapter    *channels.TelegramAdapter
+	waAdapter    *channels.WhatsAppAdapter
+	startTime    time.Time
+	dataDir      string
+	workspaceDir string
+	skillsDir    string
+	wasmDir      string
 }
 
 // Config holds configuration parameters for the HTTP server.
@@ -61,6 +69,8 @@ type Config struct {
 	LLMRouter          *llm.ModelCascadeRouter
 	ToolRegistry       *tools.ToolRegistry
 	MCPHost            *tools.MCPHostEngine
+	ApprovalManager    *tools.ApprovalManager
+	RunStore           *agent.RunStore
 	HubManager         *tools.HubManager
 	Memory             *memory.HybridEngine
 	HAL                system.HAL
@@ -70,14 +80,36 @@ type Config struct {
 	StateStore         *auth.StateStore
 	SystemAuth         *auth.SystemAuthManager
 	EventBus           *bus.EventBus
+	AuditLogger        *system.AuditLogger
+	Vault              *memory.Vault
 	PairingManager     *channels.PairingManager
 	ChannelManager     *channels.ChannelManager
 	TelegramAdapter    *channels.TelegramAdapter
 	WhatsAppAdapter    *channels.WhatsAppAdapter
+	WorkspaceDir       string
+	SkillsDir          string
+	WASMDir            string
+	DataDir            string
 }
 
 // NewServer initializes the HTTP API Server with all endpoints and middlewares.
 func NewServer(cfg Config) *Server {
+	dataDir := cfg.DataDir
+	if dataDir == "" {
+		dataDir = "./data"
+	}
+	workspaceDir := cfg.WorkspaceDir
+	if workspaceDir == "" {
+		workspaceDir = "./data/workspace"
+	}
+	skillsDir := cfg.SkillsDir
+	if skillsDir == "" {
+		skillsDir = "./data/skills"
+	}
+	wasmDir := cfg.WASMDir
+	if wasmDir == "" {
+		wasmDir = "./data/tools/wasm"
+	}
 	s := &Server{
 		agentMgr:     cfg.AgentManager,
 		swarmMgr:     cfg.SwarmManager,
@@ -90,6 +122,8 @@ func NewServer(cfg Config) *Server {
 		llmRouter:    cfg.LLMRouter,
 		toolReg:      cfg.ToolRegistry,
 		mcpHost:      cfg.MCPHost,
+		approvalMgr:  cfg.ApprovalManager,
+		runStore:     cfg.RunStore,
 		hubMgr:       cfg.HubManager,
 		memory:       cfg.Memory,
 		hal:          cfg.HAL,
@@ -99,11 +133,17 @@ func NewServer(cfg Config) *Server {
 		stateStore:   cfg.StateStore,
 		sysAuth:      cfg.SystemAuth,
 		bus:          cfg.EventBus,
+		auditLogger:  cfg.AuditLogger,
+		vault:        cfg.Vault,
 		pairingMgr:   cfg.PairingManager,
 		channelMgr:   cfg.ChannelManager,
 		tgAdapter:    cfg.TelegramAdapter,
 		waAdapter:    cfg.WhatsAppAdapter,
 		startTime:    time.Now(),
+		dataDir:      dataDir,
+		workspaceDir: workspaceDir,
+		skillsDir:    skillsDir,
+		wasmDir:      wasmDir,
 	}
 
 	s.setupRoutes()
@@ -137,7 +177,7 @@ func (s *Server) setupRoutes() {
 
 	// CORS for development and cross-origin Web UI
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"*"},
+		AllowedOrigins:   []string{"http://localhost:*", "http://127.0.0.1:*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
@@ -235,6 +275,17 @@ func (s *Server) setupRoutes() {
 				r.Post("/hub/uninstall", s.handleUninstallHubSkill)
 			})
 
+			r.Route("/approvals", func(r chi.Router) {
+				r.Get("/", s.handleListApprovals)
+				r.Post("/{id}/approve", s.handleApproveAction)
+				r.Post("/{id}/reject", s.handleRejectAction)
+			})
+
+			r.Route("/runs", func(r chi.Router) {
+				r.Get("/", s.handleListAgentRuns)
+				r.Get("/{id}/events", s.handleListRunEvents)
+			})
+
 			// Onboarding & Setup
 			r.Route("/setup", func(r chi.Router) {
 				r.Get("/status", s.handleGetSetupStatus)
@@ -301,8 +352,10 @@ func (s *Server) setupRoutes() {
 				r.Put("/profile", s.handleSaveIdentity)
 				r.Get("/keys", s.handleGetAPIKeys)
 				r.Post("/keys", s.handleSaveAPIKeys)
+				r.Delete("/keys/{provider}", s.handleDeleteAPIKey)
 				r.Post("/keys/test", s.handleTestAPIKey)
 				r.Get("/audit", s.handleGetAuditLogs)
+				r.Get("/audit/verify", s.handleVerifyAuditChain)
 				r.Get("/storage", s.handleGetStorageInfo)
 				r.Get("/backup", s.handleGetBackup)
 				r.Post("/ota/check", s.handleCheckOTA)

@@ -48,23 +48,31 @@ We gratefully acknowledge security researchers who practice responsible disclosu
 
 ActonOS isolates agent-executed commands using a multi-layered sandbox:
 
-#### Bare-metal Mode (Bubblewrap + Cgroups v2)
+#### Bare-metal Mode
 
 | Control | Configuration |
 |:---|:---|
 | **Filesystem** | Read-only bind mounts for `/usr`, `/bin`, `/lib`; writable only within `/workspace` |
-| **Memory** | `memory.max = 512 MB` per execution |
-| **CPU** | `cpu.max = 50000/100000` (50% of 1 core) |
-| **Processes** | `pids.max = 30` child processes |
 | **Capabilities** | All capabilities dropped (`--cap-drop ALL`) |
-| **Namespaces** | Full unsharing (`--unshare-all`), user namespaces disabled |
+| **Namespaces** | Full unsharing (`--unshare-all`) with a new session |
 | **Lifecycle** | `--die-with-parent` (killed when parent terminates) |
+
+Bubblewrap is mandatory on Linux bare-metal. ActonOS does not silently fall back
+to a host subshell. Memory/process fields remain in the sandbox interface for
+deployment-specific cgroup enforcement.
+Each bare-metal command receives a dedicated cgroup v2 enforcing 512 MB memory,
+30 processes, and 50% of one CPU by default. Failure to attach the process to the
+cgroup terminates the process and rejects the action.
 
 #### Docker Mode
 
 - WASM plugins run in `wazero` (in-memory, no filesystem access)
-- Shell commands execute in a jailed subprocess with limited PATH
+- Shell commands execute inside the existing container boundary
 - No host filesystem access beyond the `/data` volume
+
+On Windows/macOS development hosts, command execution is disabled by default.
+`ACTONOS_ALLOW_INSECURE_EXEC=1` is an explicit unsafe development override and
+must not be enabled in production.
 
 ### Vault Encryption
 
@@ -84,9 +92,24 @@ All tool executions pass through a risk assessment filter:
 
 | Risk Level | Actions | Policy |
 |:---|:---|:---|
-| **Low** | Read-only operations (search, fetch, view) | Auto-execute |
-| **Medium** | Scoped writes (create files, write docs) | Auto-execute within authorized workspace |
-| **High** | Destructive/financial (push to main, send email, modify DB) | Human approval required (Telegram/Web UI confirmation) |
+| **Low** | Local read-only operations | Auto-execute when authorized |
+| **Medium** | Network access and external notifications | Approval at Medium threshold |
+| **High** | Shell, write/delete, schedule mutation, MCP/WASM | Exact-action approval |
+
+Approvals are persisted in SQLite, expire after 30 minutes, and are bound to a
+SHA-256 hash of agent ID, tool name, and normalized arguments. Approval of one
+action cannot authorize modified arguments.
+
+### Execution Boundary
+
+- `AuthorizedTools` is enforced again inside `ToolRegistry.Execute`.
+- `AllowedWorkspacePaths` is enforced for every native file tool.
+- Destructive command patterns are denied before sandbox startup.
+- Non-zero command exit codes are execution failures and become ReAct observations.
+- HTTP fetch blocks SSRF to localhost, private, link-local, multicast, and cloud
+  metadata address ranges, including redirect targets.
+- MCP stdio requires Docker/Bubblewrap or the explicit
+  `ACTONOS_ALLOW_UNSANDBOXED_MCP=1` development override.
 
 ### Audit Logging
 
@@ -104,6 +127,16 @@ All agent actions are logged in OpenTelemetry-compatible structured JSON at `/da
 }
 ```
 
+Every record contains `previous_hash` and `entry_hash`. The SHA-256 chain covers
+the canonical entry payload, making deletion, reordering, and modification
+detectable. Administrators can verify it through
+`GET /api/system/audit/verify`.
+
+Approval checkpoints include the exact pending tool call and full execution
+state. Resume consumes the approved action once and continues the original run;
+changed arguments require a new approval. The same gate protects workspace,
+skill, WASM, Tool Hub, and restart mutations.
+
 ### Network Security
 
 | Feature | Implementation |
@@ -113,6 +146,21 @@ All agent actions are logged in OpenTelemetry-compatible structured JSON at `/da
 | **OAuth 2.1** | PKCE with S256 challenge; no implicit grant flow |
 | **Token Management** | Automatic refresh daemon; tokens encrypted at rest |
 | **mDNS** | Local network discovery only (`acton.local`) |
+
+### Provider Secret Storage
+
+LLM API keys are stored only in the AES-256-GCM Vault under
+`llm.provider.<provider>.api_key`. Provider JSON contains non-secret metadata
+only. On startup or first access, legacy plaintext `llm_providers.json` values
+and `<provider>.key` files are migrated into Vault and removed after successful
+encryption. Saving keys fails closed when Vault is unavailable.
+
+### Durable Run Guardrails
+
+Agent runs stop on eight iterations, three consecutive tool failures, repeated
+identical observations, context cancellation, budget exhaustion, approval wait,
+or final verification failure. Run and event records are available through
+`/api/runs` for incident analysis.
 
 ---
 

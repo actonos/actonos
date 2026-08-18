@@ -15,7 +15,7 @@ import (
 
 	"github.com/actonos/actonos/internal/agent"
 	"github.com/actonos/actonos/internal/llm"
-	"github.com/actonos/actonos/internal/system"
+	"github.com/actonos/actonos/internal/memory"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -107,12 +107,12 @@ func (s *Server) handleRestart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go func() {
-		time.Sleep(1 * time.Second)
-		_ = s.hal.RestartDaemon(context.Background())
-	}()
-
-	s.respondJSON(w, http.StatusOK, map[string]string{"status": "restarting"})
+	approval, err := s.requestAdminAction(r.Context(), "system_restart", map[string]any{})
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "APPROVAL_REQUEST_FAILED", err.Error())
+		return
+	}
+	s.respondJSON(w, http.StatusAccepted, map[string]any{"status": "approval_required", "approval": approval})
 }
 
 // ==============================================================================
@@ -123,7 +123,7 @@ func (s *Server) handleRestart(w http.ResponseWriter, r *http.Request) {
 type LLMProviderRecord struct {
 	ID           string `json:"id"`            // "anthropic", "openai", "gemini", "deepseek", "groq", "openrouter", "mistral", "ollama", "custom_openai"
 	Name         string `json:"name"`          // e.g. "Anthropic Claude"
-	APIKey       string `json:"api_key"`       // Stored raw, masked on output
+	APIKey       string `json:"api_key"`       // Runtime-only Vault secret; stripped from persisted metadata
 	BaseURL      string `json:"base_url"`      // Custom API endpoint URL
 	DefaultModel string `json:"default_model"` // e.g. "claude-3-7-sonnet"
 	Enabled      bool   `json:"enabled"`       // Whether active in cascade
@@ -252,12 +252,68 @@ func loadStoredProviders(configDir string) map[string]LLMProviderRecord {
 	return result
 }
 
-// Helper: save stored LLM providers to disk
+func providerSecretName(providerID string) string {
+	return "llm.provider." + providerID + ".api_key"
+}
+
+// loadStoredProvidersWithVault overlays encrypted secrets and migrates legacy
+// plaintext JSON/key files into Vault.
+func loadStoredProvidersWithVault(
+	ctx context.Context,
+	configDir string,
+	vault *memory.Vault,
+) map[string]LLMProviderRecord {
+	stored := loadStoredProviders(configDir)
+	if vault == nil {
+		for id, record := range stored {
+			record.APIKey = ""
+			stored[id] = record
+		}
+		return stored
+	}
+
+	metadataChanged := false
+	for id, record := range stored {
+		plaintextOnDisk := record.APIKey != ""
+		secret, err := vault.GetSecret(ctx, providerSecretName(id))
+		if err == nil {
+			record.APIKey = secret
+			stored[id] = record
+			_ = os.Remove(filepath.Join(configDir, id+".key"))
+			metadataChanged = metadataChanged || plaintextOnDisk
+			continue
+		}
+		if record.APIKey == "" {
+			continue
+		}
+		if err := vault.SetSecret(ctx, providerSecretName(id), record.APIKey); err == nil {
+			_ = os.Remove(filepath.Join(configDir, id+".key"))
+			metadataChanged = true
+		} else {
+			// Never activate a provider from plaintext when migration cannot
+			// establish encrypted storage. Leave the legacy file intact for a
+			// later retry, but fail closed for this process.
+			record.APIKey = ""
+			stored[id] = record
+		}
+	}
+	if metadataChanged {
+		_ = saveStoredProviders(configDir, stored)
+	}
+	return stored
+}
+
+// Helper: save non-secret LLM provider metadata to disk.
 func saveStoredProviders(configDir string, providers map[string]LLMProviderRecord) error {
 	_ = os.MkdirAll(configDir, 0755)
 	filePath := filepath.Join(configDir, "llm_providers.json")
 
-	data, err := json.MarshalIndent(providers, "", "  ")
+	sanitized := make(map[string]LLMProviderRecord, len(providers))
+	for id, record := range providers {
+		record.APIKey = ""
+		sanitized[id] = record
+	}
+	data, err := json.MarshalIndent(sanitized, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -303,10 +359,10 @@ type ComprehensiveKeysResponse struct {
 }
 
 func (s *Server) handleGetAPIKeys(w http.ResponseWriter, r *http.Request) {
-	configDir := "./data/config"
-	providersMu.RLock()
-	stored := loadStoredProviders(configDir)
-	providersMu.RUnlock()
+	configDir := filepath.Join(s.dataDir, "config")
+	providersMu.Lock()
+	stored := loadStoredProvidersWithVault(r.Context(), configDir, s.vault)
+	providersMu.Unlock()
 
 	// Provider ordering
 	order := []string{"anthropic", "openai", "gemini", "deepseek", "groq", "openrouter", "mistral", "ollama", "custom_openai"}
@@ -364,7 +420,7 @@ func (s *Server) handleGetAPIKeys(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSaveAPIKeys(w http.ResponseWriter, r *http.Request) {
-	configDir := "./data/config"
+	configDir := filepath.Join(s.dataDir, "config")
 
 	var req struct {
 		// Single provider direct save
@@ -390,7 +446,7 @@ func (s *Server) handleSaveAPIKeys(w http.ResponseWriter, r *http.Request) {
 	providersMu.Lock()
 	defer providersMu.Unlock()
 
-	stored := loadStoredProviders(configDir)
+	stored := loadStoredProvidersWithVault(r.Context(), configDir, s.vault)
 
 	// Direct single provider save
 	if req.Provider != "" {
@@ -404,7 +460,15 @@ func (s *Server) handleSaveAPIKeys(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if req.APIKey != "" {
+			if s.vault == nil {
+				s.respondError(w, http.StatusServiceUnavailable, "VAULT_UNAVAILABLE", "encrypted vault is required to store provider keys")
+				return
+			}
 			p.APIKey = strings.TrimSpace(req.APIKey)
+			if err := s.vault.SetSecret(r.Context(), providerSecretName(req.Provider), p.APIKey); err != nil {
+				s.respondError(w, http.StatusInternalServerError, "VAULT_WRITE_FAILED", err.Error())
+				return
+			}
 		}
 		if req.BaseURL != "" {
 			p.BaseURL = strings.TrimSpace(req.BaseURL)
@@ -425,30 +489,62 @@ func (s *Server) handleSaveAPIKeys(w http.ResponseWriter, r *http.Request) {
 	if req.AnthropicKey != "" {
 		p := stored["anthropic"]
 		p.APIKey = strings.TrimSpace(req.AnthropicKey)
+		if s.vault == nil {
+			s.respondError(w, http.StatusServiceUnavailable, "VAULT_UNAVAILABLE", "encrypted vault is required to store provider keys")
+			return
+		}
+		if err := s.vault.SetSecret(r.Context(), providerSecretName("anthropic"), p.APIKey); err != nil {
+			s.respondError(w, http.StatusInternalServerError, "VAULT_WRITE_FAILED", err.Error())
+			return
+		}
 		stored["anthropic"] = p
 		s.registerProviderInRouter(p)
-		_ = os.WriteFile(filepath.Join(configDir, "anthropic.key"), []byte(p.APIKey), 0600)
+		_ = os.Remove(filepath.Join(configDir, "anthropic.key"))
 	}
 	if req.GeminiKey != "" {
 		p := stored["gemini"]
 		p.APIKey = strings.TrimSpace(req.GeminiKey)
+		if s.vault == nil {
+			s.respondError(w, http.StatusServiceUnavailable, "VAULT_UNAVAILABLE", "encrypted vault is required to store provider keys")
+			return
+		}
+		if err := s.vault.SetSecret(r.Context(), providerSecretName("gemini"), p.APIKey); err != nil {
+			s.respondError(w, http.StatusInternalServerError, "VAULT_WRITE_FAILED", err.Error())
+			return
+		}
 		stored["gemini"] = p
 		s.registerProviderInRouter(p)
-		_ = os.WriteFile(filepath.Join(configDir, "gemini.key"), []byte(p.APIKey), 0600)
+		_ = os.Remove(filepath.Join(configDir, "gemini.key"))
 	}
 	if req.OpenAIKey != "" {
 		p := stored["openai"]
 		p.APIKey = strings.TrimSpace(req.OpenAIKey)
+		if s.vault == nil {
+			s.respondError(w, http.StatusServiceUnavailable, "VAULT_UNAVAILABLE", "encrypted vault is required to store provider keys")
+			return
+		}
+		if err := s.vault.SetSecret(r.Context(), providerSecretName("openai"), p.APIKey); err != nil {
+			s.respondError(w, http.StatusInternalServerError, "VAULT_WRITE_FAILED", err.Error())
+			return
+		}
 		stored["openai"] = p
 		s.registerProviderInRouter(p)
-		_ = os.WriteFile(filepath.Join(configDir, "openai.key"), []byte(p.APIKey), 0600)
+		_ = os.Remove(filepath.Join(configDir, "openai.key"))
 	}
 	if req.DeepSeekKey != "" {
 		p := stored["deepseek"]
 		p.APIKey = strings.TrimSpace(req.DeepSeekKey)
+		if s.vault == nil {
+			s.respondError(w, http.StatusServiceUnavailable, "VAULT_UNAVAILABLE", "encrypted vault is required to store provider keys")
+			return
+		}
+		if err := s.vault.SetSecret(r.Context(), providerSecretName("deepseek"), p.APIKey); err != nil {
+			s.respondError(w, http.StatusInternalServerError, "VAULT_WRITE_FAILED", err.Error())
+			return
+		}
 		stored["deepseek"] = p
 		s.registerProviderInRouter(p)
-		_ = os.WriteFile(filepath.Join(configDir, "deepseek.key"), []byte(p.APIKey), 0600)
+		_ = os.Remove(filepath.Join(configDir, "deepseek.key"))
 	}
 	if req.OllamaURL != "" {
 		p := stored["ollama"]
@@ -472,14 +568,17 @@ func (s *Server) handleDeleteAPIKey(w http.ResponseWriter, r *http.Request) {
 	providersMu.Lock()
 	defer providersMu.Unlock()
 
-	configDir := "./data/config"
-	stored := loadStoredProviders(configDir)
+	configDir := filepath.Join(s.dataDir, "config")
+	stored := loadStoredProvidersWithVault(r.Context(), configDir, s.vault)
 
 	if p, ok := stored[provider]; ok {
 		p.APIKey = ""
 		p.Status = "not_configured"
 		stored[provider] = p
 		_ = saveStoredProviders(configDir, stored)
+	}
+	if s.vault != nil {
+		_ = s.vault.DeleteSecret(r.Context(), providerSecretName(provider))
 	}
 
 	// Remove legacy key file if exists
@@ -490,10 +589,20 @@ func (s *Server) handleDeleteAPIKey(w http.ResponseWriter, r *http.Request) {
 
 // RegisterAllStoredProviders loads all configured providers from disk and registers them into router.
 func RegisterAllStoredProviders(router *llm.ModelCascadeRouter, configDir string) {
+	RegisterAllStoredProvidersWithVault(context.Background(), router, configDir, nil)
+}
+
+// RegisterAllStoredProvidersWithVault registers providers using encrypted keys.
+func RegisterAllStoredProvidersWithVault(
+	ctx context.Context,
+	router *llm.ModelCascadeRouter,
+	configDir string,
+	vault *memory.Vault,
+) {
 	if router == nil {
 		return
 	}
-	stored := loadStoredProviders(configDir)
+	stored := loadStoredProvidersWithVault(ctx, configDir, vault)
 	for _, rec := range stored {
 		if rec.Enabled && (rec.APIKey != "" || rec.ID == "ollama" || rec.ID == "custom_openai") {
 			RegisterProviderInRouter(router, rec)
@@ -581,10 +690,10 @@ func (s *Server) handleTestAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	configDir := "./data/config"
-	providersMu.RLock()
-	stored := loadStoredProviders(configDir)
-	providersMu.RUnlock()
+	configDir := filepath.Join(s.dataDir, "config")
+	providersMu.Lock()
+	stored := loadStoredProvidersWithVault(r.Context(), configDir, s.vault)
+	providersMu.Unlock()
 
 	rec := stored[req.Provider]
 	key := req.Key
@@ -665,14 +774,11 @@ func (s *Server) handleTestAPIKey(w http.ResponseWriter, r *http.Request) {
 // ==============================================================================
 
 func (s *Server) handleGetAuditLogs(w http.ResponseWriter, r *http.Request) {
-	auditLogger, err := system.NewAuditLogger("./data")
-	if err != nil {
+	if s.auditLogger == nil {
 		s.respondJSON(w, http.StatusOK, map[string]any{"entries": []any{}, "count": 0})
 		return
 	}
-	defer auditLogger.Close()
-
-	entries, err := auditLogger.ReadRecentEntries(100)
+	entries, err := s.auditLogger.ReadRecentEntries(100)
 	if err != nil {
 		s.respondJSON(w, http.StatusOK, map[string]any{"entries": []any{}, "count": 0})
 		return
@@ -681,6 +787,21 @@ func (s *Server) handleGetAuditLogs(w http.ResponseWriter, r *http.Request) {
 	s.respondJSON(w, http.StatusOK, map[string]any{
 		"entries": entries,
 		"count":   len(entries),
+	})
+}
+
+func (s *Server) handleVerifyAuditChain(w http.ResponseWriter, r *http.Request) {
+	if s.auditLogger == nil {
+		s.respondError(w, http.StatusNotImplemented, "AUDIT_NOT_CONFIGURED", "audit logger is not configured")
+		return
+	}
+	if err := s.auditLogger.VerifyChain(); err != nil {
+		s.respondError(w, http.StatusConflict, "AUDIT_CHAIN_INVALID", err.Error())
+		return
+	}
+	s.respondJSON(w, http.StatusOK, map[string]any{
+		"status":      "valid",
+		"verified_at": time.Now().UTC().Format(time.RFC3339),
 	})
 }
 
@@ -696,7 +817,7 @@ func getDirSize(path string) int64 {
 }
 
 func (s *Server) handleGetStorageInfo(w http.ResponseWriter, r *http.Request) {
-	dataDir := "./data"
+	dataDir := s.dataDir
 	storageSize := getDirSize(filepath.Join(dataDir, "storage"))
 	vectorsSize := getDirSize(filepath.Join(dataDir, "vectors"))
 	workspaceSize := getDirSize(filepath.Join(dataDir, "workspace"))
@@ -723,15 +844,25 @@ func (s *Server) handleCheckOTA(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetBackup(w http.ResponseWriter, r *http.Request) {
-	tempBackupFile := filepath.Join(os.TempDir(), fmt.Sprintf("acton_backup_%d.db", time.Now().UnixNano()))
-	defer os.Remove(tempBackupFile)
-
-	// Use SQLite VACUUM INTO for 100% safe, transactional snapshot with WAL mode
-	if s.tokenDaemon != nil { // or any db accessor
-		// Try DB vacuum if db is available
+	if s.memory == nil || s.memory.DB() == nil || s.memory.DB().SQLDB() == nil {
+		s.respondError(w, http.StatusServiceUnavailable, "BACKUP_UNAVAILABLE", "database is not configured")
+		return
 	}
-	dbPath := filepath.Join("./data/storage", "acton.db")
-	data, err := os.ReadFile(dbPath)
+	tempDir, err := os.MkdirTemp("", "actonos-backup-*")
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "BACKUP_FAILED", err.Error())
+		return
+	}
+	defer os.RemoveAll(tempDir)
+	tempBackupFile := filepath.Join(tempDir, "actonos-backup.db")
+
+	// VACUUM INTO creates a transactionally consistent standalone database,
+	// including committed WAL content, without blocking normal readers.
+	if _, err := s.memory.DB().SQLDB().ExecContext(r.Context(), `VACUUM INTO ?`, tempBackupFile); err != nil {
+		s.respondError(w, http.StatusInternalServerError, "BACKUP_FAILED", err.Error())
+		return
+	}
+	data, err := os.ReadFile(tempBackupFile)
 	if err != nil {
 		s.respondError(w, http.StatusInternalServerError, "BACKUP_FAILED", err.Error())
 		return
@@ -850,6 +981,14 @@ func (s *Server) handlePrometheusMetrics(w http.ResponseWriter, r *http.Request)
 	out.WriteString("# HELP actonos_cost_usd_total Total estimated LLM cost in USD\n")
 	out.WriteString("# TYPE actonos_cost_usd_total counter\n")
 	out.WriteString(fmt.Sprintf("actonos_cost_usd_total %f\n", totalCost))
+
+	var droppedEvents uint64
+	if s.bus != nil {
+		droppedEvents = s.bus.DroppedEvents()
+	}
+	out.WriteString("# HELP actonos_eventbus_dropped_total Subscriber event deliveries dropped due to backpressure\n")
+	out.WriteString("# TYPE actonos_eventbus_dropped_total counter\n")
+	out.WriteString(fmt.Sprintf("actonos_eventbus_dropped_total %d\n", droppedEvents))
 
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
 	w.WriteHeader(http.StatusOK)

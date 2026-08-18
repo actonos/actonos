@@ -2,6 +2,7 @@ package bus
 
 import (
 	"sync"
+	"sync/atomic"
 )
 
 // DefaultChannelBufferSize is the default buffer size for subscriber channels.
@@ -12,6 +13,7 @@ type EventBus struct {
 	mu          sync.RWMutex
 	subscribers map[string][]chan Event
 	closed      bool
+	dropped     atomic.Uint64
 }
 
 // NewEventBus instantiates a new EventBus.
@@ -38,6 +40,7 @@ func (b *EventBus) Publish(event Event) {
 			case ch <- event:
 			default:
 				// Buffer full; drop to prevent system deadlock
+				b.dropped.Add(1)
 			}
 		}
 	}
@@ -48,9 +51,15 @@ func (b *EventBus) Publish(event Event) {
 			select {
 			case ch <- event:
 			default:
+				b.dropped.Add(1)
 			}
 		}
 	}
+}
+
+// DroppedEvents returns the number of subscriber deliveries dropped due to backpressure.
+func (b *EventBus) DroppedEvents() uint64 {
+	return b.dropped.Load()
 }
 
 // Subscribe creates and returns a read-only channel listening for a specific event type or "*" (all events).

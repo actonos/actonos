@@ -1,12 +1,15 @@
 package llm
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -51,6 +54,7 @@ type anthropicRequest struct {
 	MaxTokens   int                `json:"max_tokens"`
 	Temperature *float64           `json:"temperature,omitempty"`
 	Tools       []anthropicTool    `json:"tools,omitempty"`
+	Stream      bool               `json:"stream,omitempty"`
 }
 
 type anthropicResponse struct {
@@ -191,16 +195,146 @@ func (p *AnthropicProvider) Complete(ctx context.Context, messages []Message, op
 }
 
 func (p *AnthropicProvider) StreamComplete(ctx context.Context, messages []Message, opts CompletionOptions) (<-chan StreamChunk, error) {
+	model := p.Model
+	if opts.Model != "" {
+		model = opts.Model
+	}
+	maxTokens := 4096
+	if opts.MaxTokens != nil && *opts.MaxTokens > 0 {
+		maxTokens = *opts.MaxTokens
+	}
+	var systemPrompt string
+	var anthropicMsgs []anthropicMessage
+	for _, message := range messages {
+		if message.Role == RoleSystem {
+			systemPrompt += message.Content + "\n"
+			continue
+		}
+		role := "user"
+		if message.Role == RoleAssistant {
+			role = "assistant"
+		}
+		anthropicMsgs = append(anthropicMsgs, anthropicMessage{Role: role, Content: message.Content})
+	}
+	var anthropicTools []anthropicTool
+	for _, tool := range opts.Tools {
+		anthropicTools = append(anthropicTools, anthropicTool{
+			Name: tool.Function.Name, Description: tool.Function.Description,
+			InputSchema: tool.Function.Parameters,
+		})
+	}
+	payload, err := json.Marshal(anthropicRequest{
+		Model: model, Messages: anthropicMsgs, System: strings.TrimSpace(systemPrompt),
+		MaxTokens: maxTokens, Temperature: opts.Temperature, Tools: anthropicTools, Stream: true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("marshalling anthropic stream request: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.BaseURL+"/messages", bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("x-api-key", p.APIKey)
+	req.Header.Set("anthropic-version", "2023-06-01")
+	resp, err := p.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("anthropic stream request failed: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		return nil, fmt.Errorf("anthropic stream error (status %d): %s", resp.StatusCode, string(body))
+	}
 	ch := make(chan StreamChunk, 16)
 	go func() {
 		defer close(ch)
-		resp, err := p.Complete(ctx, messages, opts)
-		if err != nil {
+		defer resp.Body.Close()
+		type pendingTool struct {
+			id, name string
+			args     strings.Builder
+		}
+		pending := map[int]*pendingTool{}
+		usage := Usage{}
+		scanner := bufio.NewScanner(resp.Body)
+		scanner.Buffer(make([]byte, 64*1024), 4<<20)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if !strings.HasPrefix(line, "data:") {
+				continue
+			}
+			var event struct {
+				Type    string `json:"type"`
+				Index   int    `json:"index"`
+				Message struct {
+					Model string `json:"model"`
+					Usage struct {
+						InputTokens int `json:"input_tokens"`
+					} `json:"usage"`
+				} `json:"message"`
+				ContentBlock struct {
+					Type string `json:"type"`
+					ID   string `json:"id"`
+					Name string `json:"name"`
+				} `json:"content_block"`
+				Delta struct {
+					Type        string `json:"type"`
+					Text        string `json:"text"`
+					PartialJSON string `json:"partial_json"`
+				} `json:"delta"`
+				Usage struct {
+					OutputTokens int `json:"output_tokens"`
+				} `json:"usage"`
+			}
+			if err := json.Unmarshal([]byte(strings.TrimSpace(strings.TrimPrefix(line, "data:"))), &event); err != nil {
+				ch <- StreamChunk{Error: err}
+				return
+			}
+			switch event.Type {
+			case "message_start":
+				usage.PromptTokens = event.Message.Usage.InputTokens
+			case "content_block_start":
+				if event.ContentBlock.Type == "tool_use" {
+					pending[event.Index] = &pendingTool{id: event.ContentBlock.ID, name: event.ContentBlock.Name}
+				}
+			case "content_block_delta":
+				if event.Delta.Text != "" {
+					ch <- StreamChunk{DeltaContent: event.Delta.Text}
+				}
+				if tool := pending[event.Index]; tool != nil {
+					tool.args.WriteString(event.Delta.PartialJSON)
+				}
+			case "message_delta":
+				usage.CompletionTokens = event.Usage.OutputTokens
+				usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens
+			case "message_stop":
+				var calls []ToolCall
+				indexes := make([]int, 0, len(pending))
+				for index := range pending {
+					indexes = append(indexes, index)
+				}
+				sort.Ints(indexes)
+				for _, index := range indexes {
+					tool := pending[index]
+					if tool != nil {
+						calls = append(calls, ToolCall{ID: tool.id, Type: "function", Function: FunctionCall{
+							Name: tool.name, Arguments: json.RawMessage(tool.args.String()),
+						}})
+					}
+				}
+				if len(calls) > 0 {
+					ch <- StreamChunk{ToolCalls: calls}
+				}
+				ch <- StreamChunk{Done: true, Usage: &usage}
+				return
+			}
+		}
+		if err := scanner.Err(); err != nil {
 			ch <- StreamChunk{Error: err}
 			return
 		}
-		ch <- StreamChunk{DeltaContent: resp.Content, Done: false}
-		ch <- StreamChunk{Done: true, Usage: &resp.Usage}
+		ch <- StreamChunk{Done: true, Usage: &usage}
 	}()
 	return ch, nil
 }

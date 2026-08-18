@@ -20,23 +20,23 @@ import (
 
 // ConnectorAccount holds identity information for a connected SaaS service.
 type ConnectorAccount struct {
-	ID           string    `json:"id"`            // e.g. "google_workspace", "github", "notion", "slack"
-	Name         string    `json:"name"`          // Display name
-	Category     string    `json:"category"`      // "Productivity", "Development", "Knowledge", "Messaging"
-	Icon         string    `json:"icon"`          // "mail", "github", "book-open", "message-circle"
-	RiskLevel    string    `json:"risk_level"`    // "Low", "Medium", "High"
-	Description  string    `json:"description"`   // Brief explanation
-	Connected    bool      `json:"connected"`     // Whether currently authenticated
-	AuthType     string    `json:"auth_type"`     // "oauth" or "token"
-	AccountName  string    `json:"account_name"`  // e.g. "@octocat", "user@gmail.com", "Acme Team"
-	AccountEmail string    `json:"account_email"` // e.g. "user@example.com"
-	AvatarURL    string    `json:"avatar_url"`    // User avatar URL
-	ConnectedAt  string    `json:"connected_at"`  // RFC3339 timestamp
-	Scopes       []string  `json:"scopes"`        // Granted scopes
-	ExpiresAt    string    `json:"expires_at"`    // Token expiry if OAuth
-	ClientID     string    `json:"client_id"`     // Custom OAuth Client ID (masked)
-	ClientSecret string    `json:"client_secret"` // Custom OAuth Secret (masked)
-	DirectToken  string    `json:"direct_token"`  // Saved direct token (masked)
+	ID           string   `json:"id"`            // e.g. "google_workspace", "github", "notion", "slack"
+	Name         string   `json:"name"`          // Display name
+	Category     string   `json:"category"`      // "Productivity", "Development", "Knowledge", "Messaging"
+	Icon         string   `json:"icon"`          // "mail", "github", "book-open", "message-circle"
+	RiskLevel    string   `json:"risk_level"`    // "Low", "Medium", "High"
+	Description  string   `json:"description"`   // Brief explanation
+	Connected    bool     `json:"connected"`     // Whether currently authenticated
+	AuthType     string   `json:"auth_type"`     // "oauth" or "token"
+	AccountName  string   `json:"account_name"`  // e.g. "@octocat", "user@gmail.com", "Acme Team"
+	AccountEmail string   `json:"account_email"` // e.g. "user@example.com"
+	AvatarURL    string   `json:"avatar_url"`    // User avatar URL
+	ConnectedAt  string   `json:"connected_at"`  // RFC3339 timestamp
+	Scopes       []string `json:"scopes"`        // Granted scopes
+	ExpiresAt    string   `json:"expires_at"`    // Token expiry if OAuth
+	ClientID     string   `json:"client_id"`     // Custom OAuth Client ID (masked)
+	ClientSecret string   `json:"client_secret"` // Custom OAuth Secret (masked)
+	DirectToken  string   `json:"direct_token"`  // Saved direct token (masked)
 }
 
 // Default standard SaaS Connectors definitions
@@ -104,7 +104,7 @@ var (
 
 // Helper: load stored connectors metadata from disk
 func (s *Server) loadStoredConnectors() map[string]ConnectorAccount {
-	configDir := "./data/config"
+	configDir := filepath.Join(s.dataDir, "config")
 	filePath := filepath.Join(configDir, "connectors.json")
 
 	result := make(map[string]ConnectorAccount)
@@ -143,7 +143,7 @@ func (s *Server) loadStoredConnectors() map[string]ConnectorAccount {
 
 // Helper: save connectors metadata to disk
 func (s *Server) saveStoredConnectors(connectors map[string]ConnectorAccount) error {
-	configDir := "./data/config"
+	configDir := filepath.Join(s.dataDir, "config")
 	_ = os.MkdirAll(configDir, 0755)
 	filePath := filepath.Join(configDir, "connectors.json")
 
@@ -694,7 +694,7 @@ type ChannelConfigResponse struct {
 }
 
 func (s *Server) handleGetChannels(w http.ResponseWriter, r *http.Request) {
-	configDir := "./data/config"
+	configDir := filepath.Join(s.dataDir, "config")
 	readKey := func(filename string) string {
 		data, err := os.ReadFile(filepath.Join(configDir, filename))
 		if err != nil {
@@ -750,7 +750,7 @@ func (s *Server) handleGetChannels(w http.ResponseWriter, r *http.Request) {
 
 // handleListAllChannelAccounts returns a flat list of all channel accounts across all channels.
 func (s *Server) handleListAllChannelAccounts(w http.ResponseWriter, r *http.Request) {
-	configDir := "./data/config"
+	configDir := filepath.Join(s.dataDir, "config")
 	var all []channels.ChannelAccount
 
 	tg := loadChannelAccounts(configDir, "telegram")
@@ -823,7 +823,7 @@ func loadRawChannelAccounts(configDir, channelType string) []channels.ChannelAcc
 }
 
 func (s *Server) handleSaveChannels(w http.ResponseWriter, r *http.Request) {
-	configDir := "./data/config"
+	configDir := filepath.Join(s.dataDir, "config")
 	_ = os.MkdirAll(configDir, 0755)
 
 	var req struct {

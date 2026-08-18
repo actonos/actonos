@@ -90,6 +90,16 @@
 | `POST` | `/api/tools/hub/install` | `handleInstallHubSkill` | `api_tools.go` |
 | `POST` | `/api/tools/hub/uninstall` | `handleUninstallHubSkill` | `api_tools.go` |
 
+#### Human Approval & Agent Runs
+
+| Method | Path | Handler | File |
+|:---|:---|:---|:---|
+| `GET` | `/api/approvals` | `handleListApprovals` | `api_approvals.go` |
+| `POST` | `/api/approvals/{id}/approve` | `handleApproveAction` | `api_approvals.go` |
+| `POST` | `/api/approvals/{id}/reject` | `handleRejectAction` | `api_approvals.go` |
+| `GET` | `/api/runs` | `handleListAgentRuns` | `api_runs.go` |
+| `GET` | `/api/runs/{id}/events` | `handleListRunEvents` | `api_runs.go` |
+
 #### Setup & Onboarding
 
 | Method | Path | Handler | File |
@@ -160,6 +170,7 @@
 | `PUT` | `/api/system/profile` | `handleSaveIdentity` | `api_system.go` |
 | `GET` | `/api/system/keys` | `handleGetAPIKeys` | `api_system.go` |
 | `POST` | `/api/system/keys` | `handleSaveAPIKeys` | `api_system.go` |
+| `DELETE` | `/api/system/keys/{provider}` | `handleDeleteAPIKey` | `api_system.go` |
 | `POST` | `/api/system/keys/test` | `handleTestAPIKey` | `api_system.go` |
 | `GET` | `/api/system/audit` | `handleGetAuditLogs` | `api_system.go` |
 | `GET` | `/api/system/storage` | `handleGetStorageInfo` | `api_system.go` |
@@ -176,16 +187,17 @@
 
 | Package | Purpose | Key Files |
 |:---|:---|:---|
-| `agent` | Agent engine, manifests, tasks, cron, swarm, profile | `engine.go`, `manager.go`, `types.go`, `tasks.go`, `swarm.go`, `planner.go`, `verifier.go`, `reflection.go`, `profile.go`, `heartbeat.go`, `context.go`, `cron_scheduler.go` |
+| `agent` | Agent engine, durable runs, manifests, tasks, cron, swarm, profile | `engine.go`, `runs.go`, `manager.go`, `types.go`, `tasks.go`, `swarm.go`, `planner.go`, `verifier.go`, `reflection.go`, `profile.go`, `heartbeat.go`, `context.go`, `cron_scheduler.go` |
 | `auth` | System auth, OAuth 2.1, token refresh, delegation | `system_auth.go`, `oauth2.go`, `token_refresher.go`, `delegation.go`, `state.go`, `dcr.go` |
 | `bus` | Event bus (Go channels) | `eventbus.go` |
 | `channels` | Multi-platform messaging adapters | `adapter.go`, `telegram.go`, `whatsapp.go`, `discord.go`, `pairing.go`, `session.go`, `webhook.go` |
-| `llm` | LLM provider abstraction, model cascading | `provider.go`, `router.go`, `openai_compat.go` |
+| `llm` | LLM provider abstraction, cascading, and true SSE streaming | `provider.go`, `router.go`, `openai.go`, `anthropic.go`, `gemini.go`, `deepseek.go` |
 | `memory` | Hybrid RAG, vector search, FTS5, token ledger, vault | `hybrid.go`, `vector.go`, `fts.go`, `decay.go`, `tokens.go`, `vault.go`, `db.go` |
-| `sandbox` | Command execution isolation | `sandbox.go`, `bwrap_linux.go`, `jail_docker.go` |
-| `server` | HTTP router, API handlers, static assets | `router.go`, `api_*.go`, `static.go`, `layered_fs.go` |
-| `system` | HAL, hardware metrics, Tailscale, Wi-Fi | `hal.go`, `hal_linux.go`, `hal_docker.go`, `tailscale.go`, `metrics.go` |
-| `tools` | Tool registry, MCP, WASM, skill watcher, hub | `registry.go`, `mcp_client.go`, `wasm_runner.go`, `native_tools.go`, `skill_watcher.go`, `hub.go`, `browser_tool.go` |
+| `sandbox` | Fail-closed command isolation and Linux cgroup enforcement | `executor.go`, `strong_linux.go`, `strong_other.go`, `bwrap_linux.go`, `jail_docker.go`, `subshell.go` |
+| `security` | Canonical workspace path containment and outbound SSRF protection | `path.go`, `network.go` |
+| `server` | HTTP router, configured data roots, durable approval/run APIs, administrative action dispatch, true SSE, static assets | `router.go`, `api_approvals.go`, `api_runs.go`, `admin_actions.go`, `api_*.go`, `static.go`, `layered_fs.go` |
+| `system` | HAL, hardware metrics, Tailscale, Wi-Fi, tamper-evident audit | `hal.go`, `hal_linux.go`, `hal_docker.go`, `tailscale.go`, `metrics.go`, `audit.go` |
+| `tools` | Authorized execution boundary, approvals, MCP, WASM, skill watcher, hub | `registry.go`, `approval.go`, `command_policy.go`, `mcp_client.go`, `wasm_runner.go`, `native_tools.go`, `skill_watcher.go`, `hub.go`, `browser_tool.go` |
 
 ---
 
@@ -196,7 +208,7 @@
 | `Dashboard/` | `dashboard` | `DashboardPage` | System overview, agent summaries, token launcher |
 | `Agents/` | `agents` | `AgentsPage` | Agent list (responsive table) |
 | `Agents/` | `agent-studio` | `AgentStudioPage` | Agent detail editor (config, soul, memory) |
-| `Missions/` | `missions` | `MissionsPage` | Autonomous task matrix, standing directives, pulse audit |
+| `Missions/` | `missions` | `MissionsPage` | Autonomous task matrix, standing directives, pulse audit, approval queue, durable run governance |
 | `Chat/` | `chat` | `ChatPage` | Conversational interface |
 | `Automations/` | `automations` | `AutomationsPage` | Cron jobs, scheduled tasks |
 | `Channels/` | `channels` | `ChannelsPage` | Telegram, WhatsApp, Discord multi-account config |
@@ -265,6 +277,8 @@ Both `en/` and `vi/` contain the following 15 namespace files:
 | `SubTask` / `SubTaskResult` | — | Not exposed to frontend (internal only) |
 | `AgentStreamEvent` | — | Consumed via SSE, not a REST type |
 | `AuditLogEntry` | — | Future: needs TS type for audit log UI |
+| `ApprovalRequest` (`internal/tools/approval.go`) | `ApprovalRequest` | Durable exact-action human approval |
+| `AgentRun` / `RunEvent` (`internal/agent/runs.go`) | `AgentRun` / `RunEvent` | Durable execution and tracing contracts |
 | — | `ConversationItem` | Defined in both `types.ts` and `api.ts` (duplicate) |
 | — | `ChatMessageRecord` | TS only |
 | — | `ToolInfo` | TS only |

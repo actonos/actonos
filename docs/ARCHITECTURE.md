@@ -269,6 +269,19 @@ graph TD
 - **Working Memory Continuity**: Automatically preserves dialogue and intermediate thoughts inside SQLite `chat_sessions` per task ID (`conv_task_<id>`), allowing multi-step task execution without losing progress across pulses.
 - **Bi-directional Synchronization**: Changes in the Web UI, REST API, or Agent ReAct steps automatically synchronize between SQLite and `data/workspace/TASKS.md` and `data/workspace/HEARTBEAT.md`.
 - **Zero-Noise Guarantee**: If all systems are nominal and no task needs human escalation, the kernel records the run in SQLite and remains completely silent without sending spam to external messaging channels.
+- **Durable Execution State**: Every engine invocation creates an `agent_runs` record
+  and append-only `run_events`. A W3C-sized trace ID correlates LLM attempts, tool
+  observations, approval pauses, token totals, and termination reasons.
+- **Bounded Self-Healing**: Tool failures are returned as structured observations.
+  The ReAct loop can repair and retry, but stops after repeated identical observations,
+  three consecutive tool failures, eight iterations, cancellation, budget exhaustion,
+  or deterministic verification failure.
+- **Verified Completion**: Heartbeat completion markers are advisory. The verifier
+  rejects completion claims containing failed/blocked observations or action-oriented
+  missions that produced no tool evidence.
+- **Unified Delegation Kernel**: Swarm sub-tasks are routed through the same Engine
+  whenever available, inheriting durable runs, context budgets, approvals, tools,
+  verification, and termination guards.
 
 ---
 
@@ -296,14 +309,19 @@ All SaaS connections (Gmail, Notion, Figma, GitHub) authenticate via OAuth 2.1 w
 
 ## 6. Security, Sandboxing & Audit Logging
 
-### A. Command Execution Sandbox (Bubblewrap + Cgroups v2)
+### A. Command Execution Sandbox
 
 When an agent executes shell commands on bare-metal:
 
-**Resource Limits (Cgroups v2):**
-- `memory.max`: **512 MB**
-- `cpu.max`: **50000 100000** (50% of 1 core)
-- `pids.max`: **30** child processes
+Execution is fail-closed:
+
+- Linux bare-metal requires Bubblewrap.
+- Docker mode may use the container boundary and a restricted subprocess.
+- Other platforms reject `native_exec` unless the operator explicitly enables
+  `ACTONOS_ALLOW_INSECURE_EXEC=1` for local development.
+- Linux bare-metal executions are attached to a dedicated cgroup v2 with
+  `memory.max`, `pids.max`, and `cpu.max`; inability to create or configure the
+  cgroup blocks execution.
 
 **Namespace Isolation (Bubblewrap):**
 ```bash
@@ -317,23 +335,30 @@ bwrap \
   --unshare-all \
   --die-with-parent \
   --cap-drop ALL \
-  --disable-userns \
   --bind /data/workspace /workspace \
   --setenv PATH "/usr/bin:/bin:/data/bin" \
   --chdir /workspace \
-  --uid 1000 --gid 1000 \
   bash -c "<agent_command>"
 ```
+
+File operations use canonical path resolution, `filepath.Rel` containment, and
+symlink escape prevention. HTTP fetch validates DNS results and blocks loopback,
+private, link-local, multicast, and metadata-network targets on every redirect.
 
 ### B. Risk-Based Approval Matrix
 
 | Risk Level | Example Actions | Handling |
 |:---|:---|:---|
-| **Low (Read-Only)** | Search Notion, Read Gmail, Web fetch, View workspace files | **Auto-execute 100%** |
-| **Medium (Scoped Write)** | Create code files, Write Notion pages, Edit Gmail drafts | **Auto-execute** within authorized workspace boundaries |
-| **High (Destructive/Finance)** | Push to main, Modify production DB, Transfer funds, Send email | **Human-in-the-Loop**: Confirmation card sent to Telegram/Web UI |
+| **Low** | Workspace read/list/search, system information | Auto-execute when authorized |
+| **Medium** | Network fetch/navigation, external notification | Approval when agent threshold is `Medium` or stricter |
+| **High** | Command execution, file write/delete, cron mutation, MCP/WASM actions | Durable exact-action approval |
 
-### C. Audit Logging (OpenTelemetry)
+`RequireHumanApproval` is a threshold: `Low` approves every action, `Medium`
+auto-runs Low only, and `High` approves High actions only. Authorization and
+`AllowedWorkspacePaths` are re-evaluated at execution time, not merely when tool
+definitions are sent to the model.
+
+### C. Audit Logging and Run Tracing
 
 All execution history is recorded in structured JSON-lines at `/data/logs/audit.jsonl`:
 
@@ -348,6 +373,16 @@ All execution history is recorded in structured JSON-lines at `/data/logs/audit.
   "status": "Success"
 }
 ```
+
+SQLite `agent_runs` and `run_events` provide queryable end-to-end traces through
+`GET /api/runs` and `GET /api/runs/{id}/events`. Prometheus metrics include total
+token cost and `actonos_eventbus_dropped_total` for backpressure visibility.
+Audit JSONL entries also form a SHA-256 hash chain through `previous_hash` and
+`entry_hash`, allowing tampering to be detected with `AuditLogger.VerifyChain`.
+
+OpenAI-compatible chat providers use real upstream SSE streaming. Deltas are
+forwarded immediately while fragmented tool-call arguments are reassembled before
+execution.
 
 ---
 
@@ -435,6 +470,27 @@ sequenceDiagram
 ```
 
 ---
+
+## 10. Durable Autonomous Execution
+
+- `Planner.ExecutePlan` validates dependency-aware DAG plans and rejects duplicate nodes, unknown dependencies, and cycles.
+- `agent_runs.checkpoint_json` stores messages, aggregate usage, iteration, and the pending tool call whenever approval pauses execution.
+- `Engine.ResumeApproved` resumes the same run from its checkpoint without repeating completed actions.
+- Context compaction writes provenance-bearing records to `context_snapshots`.
+- OpenAI-compatible, Anthropic, and Gemini providers stream live SSE deltas and reconstruct fragmented tool arguments.
+
+## 11. MCP Lifecycle
+
+MCP definitions are persisted in `mcp_servers`; environment values are encrypted in Vault under `mcp.env.<id>`. Enabled servers are restored at startup. Supported transports are isolated `stdio` and remote `http`/`sse` JSON-RPC. Tool-name collisions roll back registration.
+
+All persistent server paths originate from the configured data root. `main`
+passes `DataDir`, `WorkspaceDir`, `SkillsDir`, and `WASMDir` into the HTTP
+server, so API operations remain scoped correctly when `--data-dir` is changed.
+
+LLM provider credentials are resolved from the encrypted Vault before provider
+registration. Only provider metadata is stored on disk. Backup generation uses
+SQLite `VACUUM INTO`, producing a consistent snapshot that includes committed
+WAL transactions.
 
 ## References
 

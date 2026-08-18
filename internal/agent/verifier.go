@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/actonos/actonos/internal/llm"
+	"github.com/actonos/actonos/internal/tools"
 )
 
 var (
@@ -18,6 +21,20 @@ var (
 // Verifier implements multi-tier deterministic and semantic verification.
 type Verifier struct {
 	forbiddenPatterns []string
+}
+
+// VerifyToolCommand parses a native_exec argument object before applying command policy.
+func (v *Verifier) VerifyToolCommand(input json.RawMessage) error {
+	var request struct {
+		Command string `json:"command"`
+	}
+	if err := json.Unmarshal(tools.NormalizeToolInput(input), &request); err != nil {
+		return fmt.Errorf("decoding command arguments: %w", err)
+	}
+	if strings.TrimSpace(request.Command) == "" {
+		return errors.New("command is required")
+	}
+	return v.VerifyCommand(request.Command)
 }
 
 // NewVerifier creates a new Verifier instance.
@@ -96,4 +113,30 @@ func (v *Verifier) VerifySemanticConsistency(ctx context.Context, originalGoal, 
 		return false
 	}
 	return true
+}
+
+// VerifyTaskCompletion rejects unsupported completion claims and obvious failed observations.
+func (v *Verifier) VerifyTaskCompletion(originalGoal, agentOutput string, toolCalls []llm.ToolCall) bool {
+	if !v.VerifySemanticConsistency(context.Background(), originalGoal, agentOutput) {
+		return false
+	}
+	lowerOutput := strings.ToLower(agentOutput)
+	for _, marker := range []string{
+		"error executing tool",
+		"tool execution blocked",
+		"approval required",
+		"failed:",
+		"tests failed",
+	} {
+		if strings.Contains(lowerOutput, marker) {
+			return false
+		}
+	}
+	lowerGoal := strings.ToLower(originalGoal)
+	actionRequired := strings.Contains(lowerGoal, "code") ||
+		strings.Contains(lowerGoal, "file") ||
+		strings.Contains(lowerGoal, "execute") ||
+		strings.Contains(lowerGoal, "implement") ||
+		strings.Contains(lowerGoal, "fix")
+	return !actionRequired || len(toolCalls) > 0
 }

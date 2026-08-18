@@ -121,3 +121,25 @@ Manages cron expressions (e.g. `0 9 * * *`), dispatches autonomous prompt trigge
 2. Wrap all error returns with context: `fmt.Errorf("agent %s step failed: %w", agentID, err)`.
 3. Keep Goroutines governed by `context.Context` cancellation.
 4. When modifying `AgentManifest` or `DelegationScope`, update `web/src/lib/types.ts` immediately.
+
+---
+
+## 6. Secure Durable Execution
+
+- `runs.go` persists `agent_runs` and append-only `run_events`.
+- Autonomous prompts receive planner decomposition on their first step.
+- `ContextManager` budgets messages before every LLM attempt.
+- All tools MUST execute through `ToolRegistry.Execute`.
+- The engine stops after 8 iterations, 3 consecutive tool failures, repeated
+  equivalent observations, cancellation, budget exhaustion, or verification failure.
+- `[TASK_COMPLETED]` is advisory until `Verifier.VerifyTaskCompletion` accepts it.
+- Aggregate token usage covers every LLM attempt in the ReAct loop.
+- Swarm sub-tasks must use the shared Engine when configured; direct LLM fallback
+  exists only for isolated unit construction.
+- Periodic reflection deduplicates episodic memories and removes stale,
+  never-accessed low-importance entries after six months.
+- Use `Planner.ExecutePlan` for dependency-aware DAG execution; reject duplicate
+  IDs, unknown dependencies, and cycles.
+- Approval pauses must persist `RunCheckpoint` and resume through
+  `Engine.ResumeApproved`; never restart the original goal.
+- Context pruning must use `PruneAndSnapshot` to persist compaction provenance.

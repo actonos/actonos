@@ -547,6 +547,26 @@ export const api = {
   listHeartbeatRuns: () =>
     fetchJSON<import('./types').HeartbeatRun[]>('/heartbeat/runs'),
 
+  // Human approvals and durable autonomous run tracing
+  listApprovals: (status: string = 'pending') =>
+    fetchJSON<{ approvals: import('./types').ApprovalRequest[] }>(
+      `/approvals?status=${encodeURIComponent(status)}`
+    ),
+  approveAction: (id: string, reason: string = '') =>
+    fetchJSON<{ approval: import('./types').ApprovalRequest; result: unknown }>(
+      `/approvals/${id}/approve`,
+      { method: 'POST', body: JSON.stringify({ reason }) }
+    ),
+  rejectAction: (id: string, reason: string = '') =>
+    fetchJSON<import('./types').ApprovalRequest>(`/approvals/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+  listAgentRuns: (limit: number = 100) =>
+    fetchJSON<{ runs: import('./types').AgentRun[] }>(`/runs?limit=${limit}`),
+  listRunEvents: (runID: string) =>
+    fetchJSON<{ events: import('./types').RunEvent[] }>(`/runs/${runID}/events`),
+
   // Observability, Tokens & History
   getTokenUsage: () => fetchJSON<import('./types').TokenUsageSummary>('/system/token-usage'),
   getTokenHistory: (params?: { agent_id?: string; source?: string }) => {

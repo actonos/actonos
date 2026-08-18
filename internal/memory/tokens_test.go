@@ -76,4 +76,22 @@ func TestTokenTracker_RecordAndSummary(t *testing.T) {
 	if cost <= 0 {
 		t.Errorf("expected positive agent cost, got %f", cost)
 	}
+
+	history, err := tracker.GetHistory(ctx, 10, "agent_system_core", "chat")
+	if err != nil {
+		t.Fatalf("getting filtered history: %v", err)
+	}
+	if len(history) != 1 || history[0].AgentID != "agent_system_core" || history[0].Source != "chat" {
+		t.Fatalf("unexpected filtered history: %+v", history)
+	}
+	all, err := tracker.GetHistory(ctx, 0, "all", "all")
+	if err != nil || len(all) != 2 {
+		t.Fatalf("unexpected full history: %+v err=%v", all, err)
+	}
+
+	nilTracker := NewTokenTracker(nil)
+	empty, err := nilTracker.GetHistory(ctx, 10, "", "")
+	if err != nil || len(empty) != 0 {
+		t.Fatalf("nil tracker history should be empty: %+v err=%v", empty, err)
+	}
 }

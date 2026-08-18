@@ -154,7 +154,7 @@ func main() {
 		return strings.TrimSpace(string(data))
 	}
 
-	server.RegisterAllStoredProviders(llmRouter, configDir)
+	server.RegisterAllStoredProvidersWithVault(ctx, llmRouter, configDir, vault)
 
 	// Fallback mock only if no real providers are configured
 	if llmRouter.Count() == 0 {
@@ -177,6 +177,10 @@ func main() {
 	}
 	tools.RegisterNativeTools(toolReg, workspaceDir)
 	mcpHost := tools.NewMCPHostEngine(toolReg)
+	if err := mcpHost.SetPersistence(db.SQLDB(), vault); err != nil {
+		slog.Warn("failed to initialize persistent MCP registry", "error", err)
+	}
+	mcpHost.RestoreServers(ctx)
 	wasmManager := tools.NewWASMPluginManager(toolReg, pluginsDir)
 	_ = wasmManager.ScanAndRegisterPlugins(ctx)
 
@@ -197,6 +201,20 @@ func main() {
 	agentsList, _ := agentMgr.List(ctx)
 	slog.Info("agent manager loaded", "agents_registered", len(agentsList))
 
+	approvalMgr := tools.NewApprovalManager(db.SQLDB())
+	toolReg.SetApprovalManager(approvalMgr)
+	toolReg.SetPolicyResolver(func(ctx context.Context, agentID string) (tools.AgentToolPolicy, error) {
+		manifest, resolveErr := agentMgr.Get(ctx, agentID)
+		if resolveErr != nil {
+			return tools.AgentToolPolicy{}, resolveErr
+		}
+		return tools.AgentToolPolicy{
+			AuthorizedTools:   manifest.AuthorizedTools,
+			ApprovalThreshold: string(manifest.DelegationScope.RequireHumanApproval),
+			AllowedPaths:      manifest.DelegationScope.AllowedWorkspacePaths,
+		}, nil
+	})
+
 	profileMgr, err := agent.NewUserProfileManager(db, *dataDir)
 	if err != nil {
 		slog.Warn("failed to initialize user profile manager", "error", err)
@@ -205,7 +223,14 @@ func main() {
 	// 9. Initialize Swarm Manager, ReAct Engine & Proactive Cron Scheduler
 	swarmMgr := agent.NewSwarmManager(agentMgr, eventBus, llmRouter, hybridEngine, 8)
 	engine := agent.NewEngine(agentMgr, eventBus, llmRouter, hybridEngine)
+	contextMgr := agent.NewContextManager(8192)
+	contextMgr.SetDB(db.SQLDB())
+	engine.SetContextManager(contextMgr)
 	engine.SetToolRegistry(toolReg)
+	runStore := agent.NewRunStore(db.SQLDB())
+	engine.SetRunStore(runStore)
+	engine.SetPlanner(agent.NewPlanner(llmRouter))
+	swarmMgr.SetEngine(engine)
 	if profileMgr != nil {
 		engine.SetProfileManager(profileMgr)
 	}
@@ -421,6 +446,8 @@ func main() {
 		LLMRouter:          llmRouter,
 		ToolRegistry:       toolReg,
 		MCPHost:            mcpHost,
+		ApprovalManager:    approvalMgr,
+		RunStore:           runStore,
 		HubManager:         hubMgr,
 		Memory:             hybridEngine,
 		HAL:                hal,
@@ -430,10 +457,16 @@ func main() {
 		StateStore:         stateStore,
 		SystemAuth:         sysAuth,
 		EventBus:           eventBus,
+		AuditLogger:        auditLogger,
+		Vault:              vault,
 		PairingManager:     pairingMgr,
 		ChannelManager:     channelMgr,
 		TelegramAdapter:    nil,
 		WhatsAppAdapter:    nil,
+		WorkspaceDir:       workspaceDir,
+		SkillsDir:          skillsDir,
+		WASMDir:            pluginsDir,
+		DataDir:            *dataDir,
 	}
 
 	apiServer := server.NewServer(srvConfig)

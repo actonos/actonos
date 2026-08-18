@@ -22,9 +22,9 @@ var (
 
 // Vault provides AES-256-GCM hardware/passphrase bound encryption for sensitive credentials.
 type Vault struct {
-	db        *DB
+	db         *DB
 	derivedKey []byte
-	salt      []byte
+	salt       []byte
 }
 
 // NewVault derives a 256-bit AES key from a master passphrase and salt using Argon2id.
@@ -139,4 +139,15 @@ func (v *Vault) GetSecret(ctx context.Context, keyName string) (string, error) {
 	}
 
 	return string(plaintextBytes), nil
+}
+
+// DeleteSecret permanently removes a named secret from the encrypted vault.
+func (v *Vault) DeleteSecret(ctx context.Context, keyName string) error {
+	if v == nil || v.db == nil || v.db.db == nil {
+		return errors.New("vault is unavailable")
+	}
+	if _, err := v.db.db.ExecContext(ctx, `DELETE FROM vault_entries WHERE key_name = ?`, keyName); err != nil {
+		return fmt.Errorf("deleting secret %s: %w", keyName, err)
+	}
+	return nil
 }

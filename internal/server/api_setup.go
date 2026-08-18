@@ -2,8 +2,6 @@ package server
 
 import (
 	"net/http"
-	"os"
-	"path/filepath"
 )
 
 type setupWizardRequest struct {
@@ -44,18 +42,24 @@ func (s *Server) handleSetupWizard(w http.ResponseWriter, r *http.Request) {
 		_ = s.hal.ConnectWifi(r.Context(), req.WifiSSID, req.WifiPassword)
 	}
 
-	// 2. Save keys into config file or vault
-	configDir := "./data/config"
-	_ = os.MkdirAll(configDir, 0755)
-
-	if req.AnthropicKey != "" {
-		_ = os.WriteFile(filepath.Join(configDir, "anthropic.key"), []byte(req.AnthropicKey), 0600)
+	// 2. Persist provider keys only in the encrypted Vault.
+	keys := map[string]string{
+		"anthropic": req.AnthropicKey,
+		"gemini":    req.GeminiKey,
+		"openai":    req.OpenAIKey,
 	}
-	if req.GeminiKey != "" {
-		_ = os.WriteFile(filepath.Join(configDir, "gemini.key"), []byte(req.GeminiKey), 0600)
-	}
-	if req.OpenAIKey != "" {
-		_ = os.WriteFile(filepath.Join(configDir, "openai.key"), []byte(req.OpenAIKey), 0600)
+	for provider, key := range keys {
+		if key == "" {
+			continue
+		}
+		if s.vault == nil {
+			s.respondError(w, http.StatusServiceUnavailable, "VAULT_UNAVAILABLE", "encrypted vault is required to store provider keys")
+			return
+		}
+		if err := s.vault.SetSecret(r.Context(), providerSecretName(provider), key); err != nil {
+			s.respondError(w, http.StatusInternalServerError, "VAULT_WRITE_FAILED", err.Error())
+			return
+		}
 	}
 
 	s.respondJSON(w, http.StatusOK, map[string]any{

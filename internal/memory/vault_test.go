@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 )
@@ -34,6 +35,12 @@ func TestVault_EncryptionDecryption(t *testing.T) {
 
 	if retrieved != secretVal {
 		t.Fatalf("expected '%s', got '%s'", secretVal, retrieved)
+	}
+	if err := vault.DeleteSecret(ctx, secretKey); err != nil {
+		t.Fatalf("failed to delete secret: %v", err)
+	}
+	if _, err := vault.GetSecret(ctx, secretKey); !errors.Is(err, ErrSecretNotFound) {
+		t.Fatalf("expected deleted secret to be absent, got %v", err)
 	}
 }
 

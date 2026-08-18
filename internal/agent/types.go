@@ -19,21 +19,21 @@ const (
 type ApprovalLevel string
 
 const (
-	ApprovalLow    ApprovalLevel = "Low"    // Read-only / auto-execute 100%
-	ApprovalMedium ApprovalLevel = "Medium" // Scoped write in /workspace
-	ApprovalHigh   ApprovalLevel = "High"   // Critical/financial/destructive -> confirmation card
+	ApprovalLow    ApprovalLevel = "Low"    // Require approval for every tool action.
+	ApprovalMedium ApprovalLevel = "Medium" // Auto-run read-only actions; approve network/write/destructive actions.
+	ApprovalHigh   ApprovalLevel = "High"   // Auto-run Low/Medium actions; approve only destructive or privileged actions.
 )
 
 // DelegationScope restricts sub-agents and tool execution.
 type DelegationScope struct {
-	MaxMonthlyBudgetUSD     float64       `json:"max_monthly_budget_usd"`
-	AllowedWorkspacePaths   []string      `json:"allowed_workspace_paths"`
-	RequireHumanApproval    ApprovalLevel `json:"require_human_approval_level"`
+	MaxMonthlyBudgetUSD   float64       `json:"max_monthly_budget_usd"`
+	AllowedWorkspacePaths []string      `json:"allowed_workspace_paths"`
+	RequireHumanApproval  ApprovalLevel `json:"require_human_approval_level"`
 }
 
 // TriggerRule defines triggers for agent activation.
 type TriggerRule struct {
-	Type       string `json:"type"`       // "channel_mention", "cron_schedule", "webhook"
+	Type       string `json:"type"` // "channel_mention", "cron_schedule", "webhook"
 	Channel    string `json:"channel,omitempty"`
 	Filter     string `json:"filter,omitempty"`
 	Expression string `json:"expression,omitempty"`
@@ -46,36 +46,36 @@ const (
 
 // AgentManifest contains the complete declaration and configuration of an agent.
 type AgentManifest struct {
-	AgentID             string           `json:"agent_id"`
-	Name                string           `json:"name"`
-	Description         string           `json:"description"`
-	AvatarIcon          string           `json:"avatar_icon"`
-	Status              AgentStatus      `json:"status"`
-	IsSystem            bool             `json:"is_system,omitempty"`
-	ModelConfig         llm.ModelConfig  `json:"model_config"`
-	SystemInstructions string           `json:"system_instructions"`
-	AuthorizedTools     []string         `json:"authorized_tools"`
+	AgentID            string          `json:"agent_id"`
+	Name               string          `json:"name"`
+	Description        string          `json:"description"`
+	AvatarIcon         string          `json:"avatar_icon"`
+	Status             AgentStatus     `json:"status"`
+	IsSystem           bool            `json:"is_system,omitempty"`
+	ModelConfig        llm.ModelConfig `json:"model_config"`
+	SystemInstructions string          `json:"system_instructions"`
+	AuthorizedTools    []string        `json:"authorized_tools"`
 	// ListenChannels defines which chat channels this agent responds to.
 	// ["*"] means all channels (default). Specific channel IDs like
 	// ["telegram", "discord"] restrict the agent to only those channels.
-	ListenChannels      []string         `json:"listen_channels"`
-	DelegationScope     DelegationScope  `json:"delegation_scope"`
-	TriggerRules        []TriggerRule    `json:"trigger_rules"`
-	CreatedAt           time.Time        `json:"created_at"`
-	UpdatedAt           time.Time        `json:"updated_at"`
+	ListenChannels  []string        `json:"listen_channels"`
+	DelegationScope DelegationScope `json:"delegation_scope"`
+	TriggerRules    []TriggerRule   `json:"trigger_rules"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
 }
 
 // SubTask represents a decomposed work item assigned to a sub-agent.
 type SubTask struct {
-	ID              string           `json:"id"`
-	ParentAgentID   string           `json:"parent_agent_id"`
-	AssignedAgentID string           `json:"assigned_agent_id,omitempty"`
-	Title           string           `json:"title"`
-	Prompt          string           `json:"prompt"`
-	InputContext    map[string]any   `json:"input_context,omitempty"`
-	AuthorizedTools []string         `json:"authorized_tools,omitempty"`
-	Timeout         time.Duration    `json:"timeout,omitempty"`
-	MaxTokens       int              `json:"max_tokens,omitempty"`
+	ID              string         `json:"id"`
+	ParentAgentID   string         `json:"parent_agent_id"`
+	AssignedAgentID string         `json:"assigned_agent_id,omitempty"`
+	Title           string         `json:"title"`
+	Prompt          string         `json:"prompt"`
+	InputContext    map[string]any `json:"input_context,omitempty"`
+	AuthorizedTools []string       `json:"authorized_tools,omitempty"`
+	Timeout         time.Duration  `json:"timeout,omitempty"`
+	MaxTokens       int            `json:"max_tokens,omitempty"`
 }
 
 // SubTaskResult captures the output, metrics, and error of a completed sub-task.

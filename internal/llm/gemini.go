@@ -1,12 +1,14 @@
 package llm
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -154,16 +156,82 @@ func (p *GeminiProvider) Complete(ctx context.Context, messages []Message, opts 
 }
 
 func (p *GeminiProvider) StreamComplete(ctx context.Context, messages []Message, opts CompletionOptions) (<-chan StreamChunk, error) {
+	model := p.Model
+	if opts.Model != "" {
+		model = opts.Model
+	}
+	var systemInstruction *geminiContent
+	var contents []geminiContent
+	for _, message := range messages {
+		if message.Role == RoleSystem {
+			systemInstruction = &geminiContent{Role: "system", Parts: []geminiPart{{Text: message.Content}}}
+			continue
+		}
+		role := "user"
+		if message.Role == RoleAssistant {
+			role = "model"
+		}
+		contents = append(contents, geminiContent{Role: role, Parts: []geminiPart{{Text: message.Content}}})
+	}
+	payload, err := json.Marshal(geminiGenerateRequest{Contents: contents, SystemInstruction: systemInstruction})
+	if err != nil {
+		return nil, err
+	}
+	url := fmt.Sprintf("%s/models/%s:streamGenerateContent?alt=sse&key=%s", p.BaseURL, model, p.APIKey)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream")
+	resp, err := p.HTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		return nil, fmt.Errorf("gemini stream error (status %d): %s", resp.StatusCode, string(body))
+	}
 	ch := make(chan StreamChunk, 16)
 	go func() {
 		defer close(ch)
-		resp, err := p.Complete(ctx, messages, opts)
-		if err != nil {
+		defer resp.Body.Close()
+		scanner := bufio.NewScanner(resp.Body)
+		scanner.Buffer(make([]byte, 64*1024), 4<<20)
+		var usage Usage
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if !strings.HasPrefix(line, "data:") {
+				continue
+			}
+			var event geminiGenerateResponse
+			if err := json.Unmarshal([]byte(strings.TrimSpace(strings.TrimPrefix(line, "data:"))), &event); err != nil {
+				ch <- StreamChunk{Error: err}
+				return
+			}
+			if event.Error != nil {
+				ch <- StreamChunk{Error: fmt.Errorf("gemini stream error: %s", event.Error.Message)}
+				return
+			}
+			for _, candidate := range event.Candidates {
+				for _, part := range candidate.Content.Parts {
+					if part.Text != "" {
+						ch <- StreamChunk{DeltaContent: part.Text}
+					}
+				}
+			}
+			usage = Usage{
+				PromptTokens:     event.UsageMetadata.PromptTokenCount,
+				CompletionTokens: event.UsageMetadata.CandidatesTokenCount,
+				TotalTokens:      event.UsageMetadata.TotalTokenCount,
+			}
+		}
+		if err := scanner.Err(); err != nil {
 			ch <- StreamChunk{Error: err}
 			return
 		}
-		ch <- StreamChunk{DeltaContent: resp.Content, Done: false}
-		ch <- StreamChunk{Done: true, Usage: &resp.Usage}
+		ch <- StreamChunk{Done: true, Usage: &usage}
 	}()
 	return ch, nil
 }
