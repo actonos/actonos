@@ -853,9 +853,6 @@ func (s *Server) handleSaveChannels(w http.ResponseWriter, r *http.Request) {
 		for _, acc := range rawTg {
 			if acc.Enabled && acc.Token != "" {
 				_ = os.WriteFile(filepath.Join(configDir, "telegram.token"), []byte(strings.TrimSpace(acc.Token)), 0600)
-				if s.tgAdapter != nil {
-					_ = s.tgAdapter.RestartWithToken(acc.Token)
-				}
 				foundActive = true
 				break
 			}

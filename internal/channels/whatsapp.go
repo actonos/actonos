@@ -15,24 +15,26 @@ import (
 
 // WhatsAppAdapter connects ActonOS with WhatsApp Cloud API or bridge webhooks.
 type WhatsAppAdapter struct {
-	mu            sync.RWMutex
-	accessToken   string
-	phoneNumberID string
-	verifyToken   string
-	bus           *bus.EventBus
-	pairingMgr    *PairingManager
-	client        *http.Client
+	mu             sync.RWMutex
+	accessToken    string
+	phoneNumberID  string
+	verifyToken    string
+	bus            *bus.EventBus
+	pairingMgr     *PairingManager
+	client         *http.Client
+	unauthNotified map[string]time.Time
 }
 
 // NewWhatsAppAdapter creates a new WhatsAppAdapter.
 func NewWhatsAppAdapter(accessToken, phoneNumberID, verifyToken string, bus *bus.EventBus, pairingMgr *PairingManager) *WhatsAppAdapter {
 	return &WhatsAppAdapter{
-		accessToken:   accessToken,
-		phoneNumberID: phoneNumberID,
-		verifyToken:   verifyToken,
-		bus:           bus,
-		pairingMgr:    pairingMgr,
-		client:        &http.Client{Timeout: 30 * time.Second},
+		accessToken:    accessToken,
+		phoneNumberID:  phoneNumberID,
+		verifyToken:    verifyToken,
+		bus:            bus,
+		pairingMgr:     pairingMgr,
+		client:         &http.Client{Timeout: 30 * time.Second},
+		unauthNotified: make(map[string]time.Time),
 	}
 }
 
@@ -110,6 +112,19 @@ func (w *WhatsAppAdapter) HandleInboundPayload(ctx context.Context, payload []by
 							continue
 						}
 					}
+
+					w.mu.Lock()
+					if w.unauthNotified == nil {
+						w.unauthNotified = make(map[string]time.Time)
+					}
+					lastSent, exists := w.unauthNotified[senderPhone]
+					now := time.Now()
+					if exists && now.Sub(lastSent) < 15*time.Second {
+						w.mu.Unlock()
+						continue
+					}
+					w.unauthNotified[senderPhone] = now
+					w.mu.Unlock()
 
 					_ = w.SendMessage(ctx, OutboundMessage{
 						ChannelID: "whatsapp",

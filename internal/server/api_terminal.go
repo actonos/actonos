@@ -2,12 +2,11 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
-	"os/exec"
-	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/coder/websocket"
@@ -27,64 +26,35 @@ func (s *Server) handleTerminalWebSocket(w http.ResponseWriter, r *http.Request)
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	// 1. Select appropriate shell for current operating system
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.CommandContext(ctx, "powershell.exe", "-NoLogo", "-NoProfile")
-	} else {
-		// Prefer bash if available, fallback to sh
-		if _, err := exec.LookPath("bash"); err == nil {
-			cmd = exec.CommandContext(ctx, "bash", "-l")
-		} else {
-			cmd = exec.CommandContext(ctx, "sh", "-l")
-		}
+	// 1. Parse query options (shell, cols, rows)
+	requestedShell := r.URL.Query().Get("shell")
+	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
+	rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
+	if cols <= 0 {
+		cols = 120
+	}
+	if rows <= 0 {
+		rows = 30
 	}
 
-	// 2. Set working directory and environment
-	cmd.Dir = s.workspaceDir
-	if cmd.Dir == "" {
-		cmd.Dir = "."
-	}
-	cmd.Env = append(os.Environ(),
-		"TERM=xterm-256color",
-		"COLORTERM=truecolor",
-		"LANG=en_US.UTF-8",
-	)
-
-	// 3. Connect standard I/O pipes
-	stdin, err := cmd.StdinPipe()
+	// 2. Start True Pseudo-Terminal
+	ptySession, err := startPTY(requestedShell, s.workspaceDir, cols, rows)
 	if err != nil {
-		slog.Warn("terminal: failed to create stdin pipe", "error", err)
-		_ = conn.Close(websocket.StatusInternalError, "failed to create stdin pipe")
+		slog.Warn("terminal: failed to start pseudo-terminal", "error", err)
+		_ = conn.Close(websocket.StatusInternalError, "failed to start terminal PTY: "+err.Error())
 		return
 	}
-	defer stdin.Close()
+	defer ptySession.Close()
 
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		slog.Warn("terminal: failed to create stdout pipe", "error", err)
-		_ = conn.Close(websocket.StatusInternalError, "failed to create stdout pipe")
-		return
-	}
+	slog.Info("terminal: PTY session active", "pid", ptySession.Pid(), "shell", requestedShell, "cols", cols, "rows", rows)
 
-	// Merge stderr into stdout pipe
-	cmd.Stderr = cmd.Stdout
-
-	if err := cmd.Start(); err != nil {
-		slog.Warn("terminal: failed to start shell process", "error", err)
-		_ = conn.Close(websocket.StatusInternalError, "failed to start shell")
-		return
-	}
-
-	slog.Info("terminal: interactive shell session started", "pid", cmd.Process.Pid, "dir", cmd.Dir)
-
-	// 4. Goroutine: Forward shell stdout -> WebSocket client
+	// 3. Goroutine: Forward PTY output -> WebSocket client
 	go func() {
-		buf := make([]byte, 4096)
+		buf := make([]byte, 8192)
 		for {
-			n, err := stdout.Read(buf)
+			n, err := ptySession.Read(buf)
 			if n > 0 {
-				writeCtx, writeCancel := context.WithTimeout(ctx, 5*time.Second)
+				writeCtx, writeCancel := context.WithTimeout(ctx, 10*time.Second)
 				writeErr := conn.Write(writeCtx, websocket.MessageText, buf[:n])
 				writeCancel()
 				if writeErr != nil {
@@ -93,7 +63,7 @@ func (s *Server) handleTerminalWebSocket(w http.ResponseWriter, r *http.Request)
 			}
 			if err != nil {
 				if err != io.EOF {
-					slog.Debug("terminal: stdout read finished", "error", err)
+					slog.Debug("terminal: PTY read closed", "error", err)
 				}
 				break
 			}
@@ -101,27 +71,55 @@ func (s *Server) handleTerminalWebSocket(w http.ResponseWriter, r *http.Request)
 		cancel()
 	}()
 
-	// 5. Goroutine: Forward WebSocket client input -> shell stdin
+	// 4. Goroutine: Keepalive Ping
+	go func() {
+		ticker := time.NewTicker(20 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				pingCtx, pingCancel := context.WithTimeout(ctx, 5*time.Second)
+				err := conn.Ping(pingCtx)
+				pingCancel()
+				if err != nil {
+					cancel()
+					return
+				}
+			}
+		}
+	}()
+
+	// 5. Read incoming WebSocket messages -> PTY stdin / Resize
 	for {
 		msgType, data, err := conn.Read(ctx)
 		if err != nil {
 			break
 		}
 		if msgType == websocket.MessageText || msgType == websocket.MessageBinary {
-			if len(data) > 0 {
-				_, writeErr := stdin.Write(data)
-				if writeErr != nil {
-					break
+			if len(data) == 0 {
+				continue
+			}
+
+			// Check for resize command
+			if len(data) > 15 && data[0] == '{' {
+				var resizeMsg ptyResizeMessage
+				if err := json.Unmarshal(data, &resizeMsg); err == nil && resizeMsg.Type == "resize" {
+					if resizeMsg.Cols > 0 && resizeMsg.Rows > 0 {
+						_ = ptySession.Resize(resizeMsg.Cols, resizeMsg.Rows)
+					}
+					continue
 				}
+			}
+
+			// Forward raw keystrokes directly into PTY
+			_, writeErr := ptySession.Write(data)
+			if writeErr != nil {
+				break
 			}
 		}
 	}
 
-	// 6. Graceful cleanup
-	_ = stdin.Close()
-	if cmd.Process != nil {
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
-	}
-	slog.Info("terminal: interactive shell session terminated")
+	slog.Info("terminal: PTY session ended", "pid", ptySession.Pid())
 }

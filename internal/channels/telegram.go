@@ -18,28 +18,30 @@ import (
 
 // TelegramAdapter handles two-way messaging with the Telegram Bot API via Long-Polling or Outbound.
 type TelegramAdapter struct {
-	mu           sync.RWMutex
-	token        string
-	accountID    string
-	bus          *bus.EventBus
-	pairingMgr   *PairingManager
-	client       *http.Client
-	running      bool
-	stopChan     chan struct{}
-	lastUpdateID int64
-	lastChatID   string
-	chatIDs      map[string]bool
+	mu             sync.RWMutex
+	token          string
+	accountID      string
+	bus            *bus.EventBus
+	pairingMgr     *PairingManager
+	client         *http.Client
+	running        bool
+	stopChan       chan struct{}
+	lastUpdateID   int64
+	lastChatID     string
+	chatIDs        map[string]bool
+	unauthNotified map[string]time.Time
 }
 
 // NewTelegramAdapter creates a new TelegramAdapter.
 func NewTelegramAdapter(token string, bus *bus.EventBus, pairingMgr *PairingManager) *TelegramAdapter {
 	return &TelegramAdapter{
-		token:      token,
-		bus:        bus,
-		pairingMgr: pairingMgr,
-		client:     &http.Client{Timeout: 35 * time.Second},
-		stopChan:   make(chan struct{}),
-		chatIDs:    make(map[string]bool),
+		token:          token,
+		bus:            bus,
+		pairingMgr:     pairingMgr,
+		client:         &http.Client{Timeout: 35 * time.Second},
+		stopChan:       make(chan struct{}),
+		chatIDs:        make(map[string]bool),
+		unauthNotified: make(map[string]time.Time),
 	}
 }
 
@@ -263,10 +265,24 @@ func (t *TelegramAdapter) handleInboundMessage(ctx context.Context, upd tgUpdate
 			}
 		}
 
+		t.mu.Lock()
+		if t.unauthNotified == nil {
+			t.unauthNotified = make(map[string]time.Time)
+		}
+		lastSent, exists := t.unauthNotified[senderID]
+		now := time.Now()
+		if exists && now.Sub(lastSent) < 15*time.Second {
+			t.mu.Unlock()
+			return
+		}
+		t.unauthNotified[senderID] = now
+		t.mu.Unlock()
+
 		_ = t.SendMessage(ctx, OutboundMessage{
 			ChannelID: "telegram",
+			AccountID: t.GetAccountID(),
 			Recipient: chatID,
-			Content: fmt.Sprintf("🔒 Unauthorized Access to ActonOS.\n\nPlease generate a 6-digit Pairing PIN on your ActonOS Web UI (Integrations -> Channel Pairing) and send it here to authenticate.\n(Your Sender ID: %s)", senderID),
+			Content:   fmt.Sprintf("🔒 Unauthorized Access to ActonOS.\n\nPlease generate a 6-digit Pairing PIN on your ActonOS Web UI (Integrations -> Channel Pairing) and send it here to authenticate.\n(Your Sender ID: %s)", senderID),
 		})
 		return
 	}

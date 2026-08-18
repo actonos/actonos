@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -285,29 +286,45 @@ func main() {
 	channelMgr := channels.NewChannelManager(eventBus, pairingMgr)
 
 	// Load initial channel accounts from disk
-	tgToken := readKey("telegram.token")
-	waToken := readKey("whatsapp.token")
-	waPhone := readKey("whatsapp.phone_id")
-	dcToken := readKey("discord.token")
+	loadAccountsFromDisk := func(ch string) []channels.ChannelAccount {
+		data, err := os.ReadFile(filepath.Join(configDir, ch+"_accounts.json"))
+		if err != nil {
+			return nil
+		}
+		var accs []channels.ChannelAccount
+		_ = json.Unmarshal(data, &accs)
+		return accs
+	}
 
 	var initialAccounts []channels.ChannelAccount
-	if tgToken != "" {
+	tgAccs := loadAccountsFromDisk("telegram")
+	if len(tgAccs) > 0 {
+		initialAccounts = append(initialAccounts, tgAccs...)
+	} else if tgToken := readKey("telegram.token"); tgToken != "" {
 		initialAccounts = append(initialAccounts, channels.ChannelAccount{
 			ID: "tg_default", Name: "Primary Telegram Bot", Channel: "telegram", Token: tgToken, Enabled: true, BoundAgentIDs: []string{"*"},
 		})
 	}
-	if waToken != "" {
+
+	waAccs := loadAccountsFromDisk("whatsapp")
+	if len(waAccs) > 0 {
+		initialAccounts = append(initialAccounts, waAccs...)
+	} else if waToken := readKey("whatsapp.token"); waToken != "" {
 		initialAccounts = append(initialAccounts, channels.ChannelAccount{
-			ID: "wa_default", Name: "Primary WhatsApp Number", Channel: "whatsapp", Token: waToken, PhoneID: waPhone, Enabled: true, BoundAgentIDs: []string{"*"},
+			ID: "wa_default", Name: "Primary WhatsApp Number", Channel: "whatsapp", Token: waToken, PhoneID: readKey("whatsapp.phone_id"), Enabled: true, BoundAgentIDs: []string{"*"},
 		})
 	}
-	if dcToken != "" {
+
+	dcAccs := loadAccountsFromDisk("discord")
+	if len(dcAccs) > 0 {
+		initialAccounts = append(initialAccounts, dcAccs...)
+	} else if dcToken := readKey("discord.token"); dcToken != "" {
 		initialAccounts = append(initialAccounts, channels.ChannelAccount{
 			ID: "dc_default", Name: "Primary Discord Bot", Channel: "discord", Token: dcToken, Enabled: true, BoundAgentIDs: []string{"*"},
 		})
 	}
+
 	_ = channelMgr.SyncAccounts(ctx, initialAccounts)
-	_ = channelMgr.Start(ctx)
 	defer channelMgr.Stop()
 
 	// Set Default Recipient Resolver for Proactive Schedulers

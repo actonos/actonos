@@ -43,12 +43,28 @@ func (m *ChannelManager) Start(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if ctx != nil && ctx.Done() != nil {
+		m.ctx = ctx
+	}
+
 	for id, acc := range m.accounts {
 		if !acc.Enabled {
 			continue
 		}
-		m.startAccountAdapterLocked(ctx, acc)
-		slog.Info("channel account started", "channel", acc.Channel, "account_id", id, "name", acc.Name)
+		switch acc.Channel {
+		case "telegram":
+			if _, running := m.tgAdapters[id]; !running && acc.Token != "" {
+				m.startTelegramAccountLocked(ctx, acc)
+			}
+		case "whatsapp":
+			if _, running := m.waAdapters[id]; !running && acc.Token != "" {
+				m.startWhatsAppAccountLocked(ctx, acc)
+			}
+		case "discord":
+			if _, running := m.dcAdapters[id]; !running && acc.Token != "" {
+				m.startDiscordAccountLocked(ctx, acc)
+			}
+		}
 	}
 	return nil
 }
@@ -84,7 +100,7 @@ func (m *ChannelManager) SyncAccounts(ctx context.Context, accounts []ChannelAcc
 		newMap[acc.ID] = acc
 	}
 
-	// Stop removed or disabled adapters
+	// Stop removed, disabled, or token-changed adapters
 	for id, acc := range m.accounts {
 		newAcc, exists := newMap[id]
 		if !exists || !newAcc.Enabled || newAcc.Token != acc.Token {
@@ -141,27 +157,54 @@ func (m *ChannelManager) startAccountAdapterLocked(ctx context.Context, acc Chan
 }
 
 func (m *ChannelManager) startTelegramAccountLocked(_ context.Context, acc ChannelAccount) {
-	if acc.Token == "" {
+	token := strings.TrimSpace(acc.Token)
+	if token == "" {
 		return
 	}
+	// Stop existing adapter for this account if any
+	if old, exists := m.tgAdapters[acc.ID]; exists {
+		_ = old.Stop()
+		delete(m.tgAdapters, acc.ID)
+	}
+	// Also stop any other adapter sharing the same token to prevent duplicate polling loops
+	for existingID, adapter := range m.tgAdapters {
+		if adapter.token == token {
+			_ = adapter.Stop()
+			delete(m.tgAdapters, existingID)
+		}
+	}
+
 	adapterCtx := m.ctx
 	if adapterCtx == nil || adapterCtx.Err() != nil {
 		m.ctx, m.cancel = context.WithCancel(context.Background())
 		adapterCtx = m.ctx
 	}
-	adapter := NewTelegramAdapter(acc.Token, m.eventBus, m.pairingMgr)
+	adapter := NewTelegramAdapter(token, m.eventBus, m.pairingMgr)
 	adapter.SetAccountID(acc.ID)
 	if err := adapter.Start(adapterCtx); err == nil {
 		m.tgAdapters[acc.ID] = adapter
+		slog.Info("channel account started", "channel", "telegram", "account_id", acc.ID, "name", acc.Name)
 	} else {
 		slog.Warn("failed to start telegram account adapter", "account_id", acc.ID, "error", err)
 	}
 }
 
 func (m *ChannelManager) startWhatsAppAccountLocked(_ context.Context, acc ChannelAccount) {
-	if acc.Token == "" {
+	token := strings.TrimSpace(acc.Token)
+	if token == "" {
 		return
 	}
+	if old, exists := m.waAdapters[acc.ID]; exists {
+		_ = old.Stop()
+		delete(m.waAdapters, acc.ID)
+	}
+	for existingID, adapter := range m.waAdapters {
+		if adapter.accessToken == token {
+			_ = adapter.Stop()
+			delete(m.waAdapters, existingID)
+		}
+	}
+
 	adapterCtx := m.ctx
 	if adapterCtx == nil || adapterCtx.Err() != nil {
 		m.ctx, m.cancel = context.WithCancel(context.Background())
@@ -171,26 +214,40 @@ func (m *ChannelManager) startWhatsAppAccountLocked(_ context.Context, acc Chann
 	if secret == "" {
 		secret = "acton_verify_token"
 	}
-	adapter := NewWhatsAppAdapter(acc.Token, acc.PhoneID, secret, m.eventBus, m.pairingMgr)
+	adapter := NewWhatsAppAdapter(token, acc.PhoneID, secret, m.eventBus, m.pairingMgr)
 	if err := adapter.Start(adapterCtx); err == nil {
 		m.waAdapters[acc.ID] = adapter
+		slog.Info("channel account started", "channel", "whatsapp", "account_id", acc.ID, "name", acc.Name)
 	} else {
 		slog.Warn("failed to start whatsapp account adapter", "account_id", acc.ID, "error", err)
 	}
 }
 
 func (m *ChannelManager) startDiscordAccountLocked(_ context.Context, acc ChannelAccount) {
-	if acc.Token == "" {
+	token := strings.TrimSpace(acc.Token)
+	if token == "" {
 		return
 	}
+	if old, exists := m.dcAdapters[acc.ID]; exists {
+		_ = old.Stop()
+		delete(m.dcAdapters, acc.ID)
+	}
+	for existingID, adapter := range m.dcAdapters {
+		if adapter.webhookURL == token {
+			_ = adapter.Stop()
+			delete(m.dcAdapters, existingID)
+		}
+	}
+
 	adapterCtx := m.ctx
 	if adapterCtx == nil || adapterCtx.Err() != nil {
 		m.ctx, m.cancel = context.WithCancel(context.Background())
 		adapterCtx = m.ctx
 	}
-	adapter := NewDiscordAdapter(acc.Token, m.eventBus)
+	adapter := NewDiscordAdapter(token, m.eventBus)
 	if err := adapter.Start(adapterCtx); err == nil {
 		m.dcAdapters[acc.ID] = adapter
+		slog.Info("channel account started", "channel", "discord", "account_id", acc.ID, "name", acc.Name)
 	} else {
 		slog.Warn("failed to start discord account adapter", "account_id", acc.ID, "error", err)
 	}
