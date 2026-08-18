@@ -14,7 +14,7 @@ export interface ChatComposerProps {
 export function ChatComposer({ value, loading, inputRef, onChange, onSubmit }: ChatComposerProps) {
   const { t } = useTranslation('chat');
   return (
-    <form onSubmit={onSubmit} className="sticky bottom-0 border-t border-soft-meadow bg-canvas/95 pt-2 backdrop-blur-sm">
+    <form onSubmit={onSubmit} className="sticky bottom-0 border-t border-soft-meadow pt-2 backdrop-blur-sm">
       <div className="flex items-center gap-2 rounded-full border border-onyx/15 bg-white p-1.5 shadow-sm focus-within:ring-2 focus-within:ring-deep-ink">
         <input
           ref={inputRef}
