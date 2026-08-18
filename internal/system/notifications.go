@@ -307,12 +307,16 @@ func (nm *NotificationManager) StartBackgroundListener(ctx context.Context) {
 						if jobName == "" {
 							jobName = "Proactive Mission Alert"
 						}
+						link := "/automations"
+						if strings.HasPrefix(jobName, "Mission:") || strings.Contains(jobName, "Mission") || strings.Contains(jobName, "Heartbeat") {
+							link = "/missions"
+						}
 						_, _ = nm.Create(context.Background(), Notification{
 							Title:    jobName,
 							Message:  content,
 							Type:     "info",
 							Category: "task",
-							Link:     "/automations",
+							Link:     link,
 						})
 					}
 				}

@@ -478,7 +478,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
     <div className="relative flex flex-col" style={{ height: 'calc(100dvh - 64px)', overflow: 'hidden' }}>
       <BlobBackdrop />
 
-      <PageContainer className="flex-1 flex flex-col py-4 min-h-0 overflow-hidden">
+      <PageContainer maxWidth="wide" className="flex-1 flex flex-col py-4 min-h-0 overflow-hidden">
         <ChatHeader agent={activeAgent} onOpenSessions={() => setSessionsOpen(true)} />
         {/* Main 2-Column Chat Area */}
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 lg:grid-cols-12">
@@ -786,8 +786,8 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
             </div>
           </Card>
 
-          {/* Right Column: Chat History & Input Canvas (8 Cols) */}
-          <Card className="lg:col-span-8 flex flex-col justify-between p-4 sm:p-6 border border-onyx/10 h-full bg-canvas/80 min-h-0 shadow-xs overflow-hidden">
+          {/* Right Column: Chat History & Input Canvas (8/9 Cols) */}
+          <Card className="lg:col-span-8 xl:col-span-9 flex flex-col justify-between p-4 sm:p-6 border border-onyx/10 h-full bg-canvas/80 min-h-0 shadow-xs overflow-hidden">
             {/* Top Bar inside Chat Feed */}
             <div className="flex items-center justify-between pb-3 border-b border-soft-meadow">
               <div className="flex items-center gap-3 truncate">

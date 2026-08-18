@@ -41,7 +41,7 @@ export function ChatSessionRail({
   return (
     <>
     {open && <button type="button" aria-label={t('closeSessions')} onClick={onClose} className="fixed inset-0 z-40 bg-deep-ink/35 lg:hidden" />}
-    <Card className={`${open ? 'flex' : 'hidden'} fixed inset-y-3 left-3 z-50 w-[min(22rem,calc(100vw-1.5rem))] min-h-0 flex-col border border-onyx/10 bg-canvas/95 p-4 lg:static lg:inset-auto lg:z-auto lg:col-span-4 lg:flex lg:w-auto`}>
+    <Card className={`${open ? 'flex' : 'hidden'} fixed inset-y-3 left-3 z-50 w-[min(22rem,calc(100vw-1.5rem))] min-h-0 flex-col border border-onyx/10 bg-canvas/95 p-4 lg:static lg:inset-auto lg:z-auto lg:col-span-4 xl:col-span-3 lg:flex lg:w-auto`}>
       <div className="mb-2 flex items-center justify-between lg:hidden">
         <strong className="font-serif text-heading-sm text-deep-ink">{t('sessions')}</strong>
         <IconButton size="sm" label={t('closeSessions')} icon={<X className="h-4 w-4" />} onClick={onClose} />

@@ -396,7 +396,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                             className="text-[11px]"
                             icon={<MessageSquare className="w-3.5 h-3.5" />}
                           >
-                            {t('actions.chat')}
+                            {t('actions.detail', 'Detail')}
                           </Button>
                         )}
                         {tItem.status !== 'completed' && (
