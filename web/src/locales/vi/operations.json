@@ -8,7 +8,7 @@
   },
   "eyebrow": "Trung tâm điều hành thời gian thực",
   "title": "Vận hành trực tiếp",
-  "subtitle": "Theo dõi phần cứng, Docker, chuỗi suy luận, phê duyệt an toàn, môi trường thực thi, hàng đợi tác vụ và chi phí mô hình trên một giao diện thích ứng.",
+  "subtitle": "Theo dõi phần cứng, chuỗi suy luận, phê duyệt an toàn, môi trường thực thi, hàng đợi tác vụ và chi phí mô hình trên một giao diện thích ứng.",
   "refresh": "Làm mới",
   "connection": {
     "connecting": "Đang kết nối",
