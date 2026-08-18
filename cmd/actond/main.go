@@ -385,7 +385,9 @@ func main() {
 							promptWithMeta := chatMeta + msg.Content
 
 							// 5. Execute cognitive ReAct loop with multi-layer memory (Working + Episodic + Procedural + User Profile)
-							resp, err := engine.ExecuteStepWithHistory(context.Background(), target, promptWithMeta, history)
+							// Channel messages bypass approval — authenticated paired users have implicit trust.
+							channelCtx := tools.WithBypassApproval(context.Background())
+							resp, err := engine.ExecuteStepWithHistory(channelCtx, target, promptWithMeta, history)
 							if err != nil {
 								slog.Error("failed to process channel message", "channel", msg.ChannelID, "error", err)
 								return
