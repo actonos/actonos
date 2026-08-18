@@ -159,7 +159,7 @@ func TestUserProfileProceduralSoulAndMemoryLifecycle(t *testing.T) {
 		t.Fatalf("unexpected procedural patterns: %+v err=%v", patterns, err)
 	}
 
-	if got := mgr.GetAgentSoul("new-agent"); !strings.Contains(got, "ActonOS Agent Soul") {
+	if got := mgr.GetAgentSoul("new-agent"); !strings.Contains(got, "Universal Agent Soul") && !strings.Contains(got, "Agent Soul") {
 		t.Fatalf("expected default soul, got %q", got)
 	}
 	if err := mgr.SaveAgentSoul(ctx, "agent-a", "Agent A soul"); err != nil {

@@ -131,22 +131,35 @@ func (e *Engine) RecordTokenUsage(ctx context.Context, agentID, model, provider,
 func (e *Engine) buildCognitivePrompt(ctx context.Context, agentID string, agent *AgentManifest, userMessage string) (string, int) {
 	var sb strings.Builder
 
-	// 1. Base Soul Persona (isolated per agent)
+	// 1. Agent Identity, Role & Operational Profile (Multi-Purpose Foundation)
+	sb.WriteString("# Agent Identity & Operational Context\n")
+	if agent != nil {
+		if agent.Name != "" {
+			fmt.Fprintf(&sb, "- **Agent Name**: %s\n", agent.Name)
+		}
+		if agent.Description != "" {
+			fmt.Fprintf(&sb, "- **Role / Position & Scope**: %s\n", agent.Description)
+		}
+	}
+	sb.WriteString("- **Platform Environment**: ActonOS Intelligent Autonomous Multi-Agent Workspace\n\n")
+
+	// 2. Base Soul Persona (isolated per agent)
 	if e.profileMgr != nil {
 		soul := e.profileMgr.GetAgentSoul(agentID)
 		if soul != "" {
+			sb.WriteString("## Core Soul & Temperament\n")
 			sb.WriteString(soul)
 			sb.WriteString("\n\n")
 		}
 
-		// 2. Layer 2: User Profile Memory (Owner Identity & Interaction Preferences)
+		// 3. User Profile Memory (Owner Identity & Interaction Preferences)
 		profile := e.profileMgr.GetProfile()
-		sb.WriteString("## Owner Identity & Interaction Preferences\n")
+		sb.WriteString("## Collaborator Identity & Preferences\n")
 		if profile.UserName != "" {
-			fmt.Fprintf(&sb, "- **Owner Name**: %s\n", profile.UserName)
+			fmt.Fprintf(&sb, "- **Collaborator Name**: %s\n", profile.UserName)
 		}
 		if profile.UserRole != "" {
-			fmt.Fprintf(&sb, "- **Owner Role**: %s\n", profile.UserRole)
+			fmt.Fprintf(&sb, "- **Collaborator Role**: %s\n", profile.UserRole)
 		}
 		if profile.Language != "" {
 			fmt.Fprintf(&sb, "- **Preferred Language**: %s\n", profile.Language)
@@ -158,14 +171,14 @@ func (e *Engine) buildCognitivePrompt(ctx context.Context, agentID string, agent
 			fmt.Fprintf(&sb, "- **Communication Style**: %s\n", profile.CommunicationStyle)
 		}
 		if profile.CustomInstructions != "" {
-			fmt.Fprintf(&sb, "- **Owner Directives**: %s\n", profile.CustomInstructions)
+			fmt.Fprintf(&sb, "- **Collaborator Directives**: %s\n", profile.CustomInstructions)
 		}
 		sb.WriteString("\n")
 
-		// 3. Layer 3: Procedural Memory (Workflows & Execution Guidelines)
+		// 4. Procedural Memory (Workflows & Execution Guidelines)
 		patterns, _ := e.profileMgr.GetRelevantPatterns(ctx, "general")
 		if len(patterns) > 0 {
-			sb.WriteString("## Procedural Memory & Verified Workflows\n")
+			sb.WriteString("## Procedural Knowledge & Verified Workflows\n")
 			for _, pat := range patterns {
 				fmt.Fprintf(&sb, "- **%s** (%s): %s\n", pat.PatternName, pat.Domain, pat.Workflow)
 			}
@@ -173,18 +186,18 @@ func (e *Engine) buildCognitivePrompt(ctx context.Context, agentID string, agent
 		}
 	}
 
-	// 4. Agent Specific System Instructions
-	if agent.SystemInstructions != "" {
-		sb.WriteString("## Agent Directives\n")
+	// 5. Agent Specific System Instructions
+	if agent != nil && agent.SystemInstructions != "" {
+		sb.WriteString("## Role Directives & Specialized Instructions\n")
 		sb.WriteString(agent.SystemInstructions)
 		sb.WriteString("\n\n")
 	}
 
-	// 5. Conversational Demeanor & Anti-Robot Principles
-	sb.WriteString("## Conversational Standard & Tone Guidelines\n")
-	sb.WriteString("- Communicate naturally, intelligently, and empathetically with authentic personality, warmth, and sharp engineering insight.\n")
-	sb.WriteString("- Never produce clichéd robotic intros ('As an AI...', 'I am happy to help...'), stiff disclaimers, or excessive apologies.\n")
-	sb.WriteString("- Respond directly to the core of the user's intent with crisp explanations and clean, beautifully formatted markdown.\n\n")
+	// 6. Universal Conversational Standards & Anti-Robot Principles (Multi-Purpose)
+	sb.WriteString("## Universal Operating Standards & Demeanor\n")
+	sb.WriteString("- **Authentic & Empathetic Partnership**: Communicate naturally, intelligently, and respectfully. Embody your designated role and expertise with genuine dedication.\n")
+	sb.WriteString("- **Zero Robotic Clichés**: NEVER produce canned AI disclaimers ('As an AI...', 'I am just a language model...'), generic filler, or repetitive apologies. Dive straight into meaningful, high-value assistance.\n")
+	sb.WriteString("- **Clarity & Actionable Insight**: Deliver structured, clear, and beautifully formatted Markdown responses. Provide decisive recommendations, thorough analysis, or precise actions tailored to the user's specific domain.\n\n")
 
 	// 6. Layer 4: Episodic Memory (Past interactions & learned facts)
 	// Heartbeat mission execution sets "suppress_episodic_memory" to prevent
