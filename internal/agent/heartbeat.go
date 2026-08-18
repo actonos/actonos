@@ -268,18 +268,22 @@ Standing Directives: %s
 YOU ARE EXECUTING THIS MISSION AUTONOMOUSLY.
 Review your previous dialogue history for context so you do not repeat already completed actions.
 CRITICAL INSTRUCTIONS:
-1. Carry out the next logical action using your authorized tools.
-2. DO NOT call 'native_channel_notify' tool because the ActonOS Mission Coordinator will automatically deliver your summary and status updates to '%s'.
-3. At the end of your response, specify task progress:
+1. EXECUTE ONLY the current task directive above. DO NOT reference, continue, or act on any unrelated topics, previous tasks, or stale memories. If your history mentions tasks unrelated to this directive, IGNORE them completely.
+2. Carry out the next logical action using your authorized tools.
+3. DO NOT call 'native_channel_notify' tool because the ActonOS Mission Coordinator will automatically deliver your summary and status updates to '%s'.
+4. At the end of your response, specify task progress:
    - If completely finished, end with: "[TASK_COMPLETED]" followed by a concise executive summary of the result.
    - If ongoing, end with: "[PROGRESS: X%%]" (where X is an integer 1-99) followed by a short note on what was accomplished.
    - If blocked on missing requirements or errors, end with: "[TASK_BLOCKED: reason]".
-4. Keep your output professional, structured, and factual. Do not include meta-filler like "The notification has been sent".`,
+5. Keep your output professional, structured, and factual. Do not include meta-filler like "The notification has been sent".`,
 			activeTask.ID, activeTask.Title, activeTask.Priority, activeTask.Progress,
 			activeTask.Description, standingDirectives, activeTask.TargetChannel,
 		)
 
+		// Suppress episodic memory for heartbeat task execution to prevent stale
+		// memories from deleted tasks from contaminating the current task context.
 		taskCtx := context.WithValue(ctx, "task_id", activeTask.ID)
+		taskCtx = context.WithValue(taskCtx, "suppress_episodic_memory", true)
 		resp, execErr := h.engine.ExecuteAutonomousGoal(taskCtx, assignedAgent, prompt, history)
 		if execErr != nil {
 			var approvalErr *tools.ApprovalRequiredError

@@ -187,8 +187,11 @@ func (e *Engine) buildCognitivePrompt(ctx context.Context, agentID string, agent
 	sb.WriteString("- Respond directly to the core of the user's intent with crisp explanations and clean, beautifully formatted markdown.\n\n")
 
 	// 6. Layer 4: Episodic Memory (Past interactions & learned facts)
+	// Heartbeat mission execution sets "suppress_episodic_memory" to prevent
+	// stale memories from deleted tasks from contaminating the current context.
 	episodicCount := 0
-	if e.memory != nil {
+	suppressEpisodic, _ := ctx.Value("suppress_episodic_memory").(bool)
+	if e.memory != nil && !suppressEpisodic {
 		memories, err := e.memory.Search(ctx, agentID, memory.LayerEpisodic, userMessage, nil, 4)
 		if err == nil && len(memories) > 0 {
 			episodicCount = len(memories)
@@ -959,23 +962,30 @@ func (e *Engine) ResumeApproved(ctx context.Context, approval tools.ApprovalRequ
 	lastObservation := ""
 	repeatedObservations := 0
 
-	for iteration := checkpoint.Iteration; iteration < 8; iteration++ {
+	// Resume with a FRESH iteration budget (8 iterations) so the LLM has
+	// enough room to process the approved tool result and converge. The
+	// previous approach of continuing from checkpoint.Iteration left too few
+	// iterations and almost always exhausted the budget.
+	const resumeMaxIterations = 8
+	for iteration := 0; iteration < resumeMaxIterations; iteration++ {
+		// Track absolute step for run events (checkpoint iterations + resumed iterations).
+		absoluteStep := checkpoint.Iteration + iteration + 1
 		if e.contextManager != nil {
 			messages = e.contextManager.PruneAndSnapshot(execCtx, run.ID, messages, e.contextBudget(manifest))
 		}
 		response, callErr := e.llm.CompleteWithCascade(execCtx, cascade, messages, opts)
 		if callErr != nil {
-			e.finishRun(execCtx, run, RunFailed, "infrastructure_failure", iteration+1, usage)
+			e.finishRun(execCtx, run, RunFailed, "infrastructure_failure", absoluteStep, usage)
 			return nil, callErr
 		}
 		usage = addUsage(usage, response.Usage)
 		if len(response.ToolCalls) == 0 {
 			if !e.verifier.VerifySemanticConsistency(execCtx, checkpoint.Goal, response.Content) {
-				e.finishRun(execCtx, run, RunFailed, "verification_failed", iteration+1, usage)
+				e.finishRun(execCtx, run, RunFailed, "verification_failed", absoluteStep, usage)
 				return nil, errors.New("resumed response failed verification")
 			}
 			response.Usage = usage
-			e.finishRun(execCtx, run, RunCompleted, "goal_completed", iteration+1, usage)
+			e.finishRun(execCtx, run, RunCompleted, "goal_completed", absoluteStep, usage)
 			if e.bus != nil {
 				e.bus.Publish(bus.NewEvent(bus.EventAgentActionDone, checkpoint.AgentID, map[string]any{
 					"tokens": response.Usage.TotalTokens,
@@ -1041,8 +1051,8 @@ func (e *Engine) ResumeApproved(ctx context.Context, approval tools.ApprovalRequ
 			if toolErr != nil {
 				var approvalErr *tools.ApprovalRequiredError
 				if errors.As(toolErr, &approvalErr) {
-					e.saveApprovalCheckpoint(execCtx, run, checkpoint.AgentID, checkpoint.Goal, checkpoint.Source, messages, iteration+1, usage, call)
-					e.finishRun(execCtx, run, RunApprovalPending, "approval_required", iteration+1, usage)
+					e.saveApprovalCheckpoint(execCtx, run, checkpoint.AgentID, checkpoint.Goal, checkpoint.Source, messages, absoluteStep, usage, call)
+					e.finishRun(execCtx, run, RunApprovalPending, "approval_required", absoluteStep, usage)
 					return nil, toolErr
 				}
 			}
@@ -1063,7 +1073,7 @@ func (e *Engine) ResumeApproved(ctx context.Context, approval tools.ApprovalRequ
 				lastObservation = content
 			}
 			_ = e.runStore.AppendEvent(execCtx, RunEvent{
-				RunID: run.ID, TraceID: run.TraceID, Step: iteration + 1, Type: "tool",
+				RunID: run.ID, TraceID: run.TraceID, Step: absoluteStep, Type: "tool",
 				Status: statusStr, ToolName: call.Function.Name,
 				Data: map[string]any{"tool_call_id": call.ID, "observation": truncateRunData(content, 4096)},
 			})
@@ -1071,12 +1081,17 @@ func (e *Engine) ResumeApproved(ctx context.Context, approval tools.ApprovalRequ
 				Role: llm.RoleTool, Name: call.Function.Name, ToolCallID: call.ID, Content: content,
 			})
 			if consecutiveFailures >= 3 || repeatedObservations >= 2 {
-				e.finishRun(execCtx, run, RunBlocked, "no_progress", iteration+1, usage)
+				e.finishRun(execCtx, run, RunBlocked, "no_progress", absoluteStep, usage)
 				return nil, fmt.Errorf("resumed agent %s stopped after repeated tool failures or observations", checkpoint.AgentID)
 			}
 		}
 	}
-	e.finishRun(execCtx, run, RunBlocked, "iteration_budget_exhausted", 8, usage)
+
+	// Budget exhausted — mark the associated task as blocked so the heartbeat
+	// daemon does not silently re-trigger the same stalled flow.
+	totalStep := checkpoint.Iteration + resumeMaxIterations
+	e.finishRun(execCtx, run, RunFailed, "iteration_budget_exhausted", totalStep, usage)
+	e.blockTaskOnResumeFailure(execCtx, checkpoint, "agent exceeded iteration budget after approval resume")
 	return nil, errors.New("resumed run exhausted iteration budget")
 }
 
@@ -1249,6 +1264,35 @@ func (e *Engine) completeStreamIteration(
 			if chunk.Done {
 				return response, nil
 			}
+		}
+	}
+}
+
+func (e *Engine) blockTaskOnResumeFailure(ctx context.Context, checkpoint *RunCheckpoint, reason string) {
+	if checkpoint == nil || e.taskMgr == nil {
+		return
+	}
+	targetTaskID := checkpoint.TaskID
+	if targetTaskID == "" {
+		re := regexp.MustCompile(`Task ID:\s*([^\s|]+)`)
+		if match := re.FindStringSubmatch(checkpoint.Goal); len(match) > 1 {
+			targetTaskID = match[1]
+		}
+	}
+	if targetTaskID == "" {
+		return
+	}
+	if task, err := e.taskMgr.GetTask(ctx, targetTaskID); err == nil && task != nil {
+		task.Status = "blocked"
+		task.ExecutionLog = fmt.Sprintf("Blocked: %s", reason)
+		_ = e.taskMgr.UpdateTask(ctx, *task)
+		if e.bus != nil {
+			e.bus.Publish(bus.NewEvent(bus.EventAgentActionDone, checkpoint.AgentID, map[string]any{
+				"task_id":  task.ID,
+				"status":   task.Status,
+				"progress": task.Progress,
+				"summary":  task.ExecutionLog,
+			}))
 		}
 	}
 }

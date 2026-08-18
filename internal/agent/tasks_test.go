@@ -96,3 +96,70 @@ func TestTaskManagerHeartbeatAndNilDatabase(t *testing.T) {
 		t.Fatalf("unexpected heartbeat config: cfg=%+v err=%v", cfg, err)
 	}
 }
+
+func TestTaskManagerDeleteCleansUpSessionHistory(t *testing.T) {
+	manager := newTaskManagerForTest(t)
+	ctx := context.Background()
+
+	// Create a task
+	task, err := manager.CreateTask(ctx, AutonomousTask{
+		Title:       "Greek Mythology Task",
+		Description: "Write stories about Greek gods into a file",
+		Priority:    "p2_normal",
+		CreatedBy:   "user",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Insert messages for this task's session into the database
+	_, err = manager.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS messages (
+			id TEXT PRIMARY KEY,
+			conversation_id TEXT NOT NULL,
+			agent_id TEXT NOT NULL,
+			role TEXT NOT NULL,
+			content TEXT NOT NULL,
+			tool_calls_json TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+		CREATE TABLE IF NOT EXISTS conversations (
+			id TEXT PRIMARY KEY,
+			agent_id TEXT NOT NULL,
+			title TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	convID := task.SessionID
+	_, _ = manager.db.ExecContext(ctx, `INSERT INTO conversations (id, agent_id, title) VALUES (?, 'agent_system_core', 'Task Chat')`, convID)
+	_, _ = manager.db.ExecContext(ctx, `INSERT INTO messages (id, conversation_id, agent_id, role, content) VALUES ('msg_1', ?, 'agent_system_core', 'assistant', 'Here is a story of Zeus')`, convID)
+
+	// Verify messages exist before deletion
+	var count int
+	_ = manager.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM messages WHERE conversation_id = ?", convID).Scan(&count)
+	if count != 1 {
+		t.Fatalf("expected 1 message before delete, got %d", count)
+	}
+
+	// Delete task
+	if err := manager.DeleteTask(ctx, task.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify messages and conversation were purged
+	_ = manager.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM messages WHERE conversation_id = ?", convID).Scan(&count)
+	if count != 0 {
+		t.Fatalf("expected 0 messages after task deletion, got %d", count)
+	}
+
+	var convCount int
+	_ = manager.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM conversations WHERE id = ?", convID).Scan(&convCount)
+	if convCount != 0 {
+		t.Fatalf("expected 0 conversations after task deletion, got %d", convCount)
+	}
+}

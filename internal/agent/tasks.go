@@ -271,16 +271,34 @@ func (tm *TaskManager) UpdateTask(ctx context.Context, t AutonomousTask) error {
 	return nil
 }
 
-// DeleteTask removes a task by ID and syncs to TASKS.md.
+// DeleteTask removes a task by ID, purges its conversation session history, and syncs to TASKS.md.
 func (tm *TaskManager) DeleteTask(ctx context.Context, id string) error {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
 
 	if tm.db != nil {
+		// 1. Look up the task's session ID before deletion so we can clean up conversations.
+		var sessionID string
+		_ = tm.db.QueryRowContext(ctx, "SELECT session_id FROM autonomous_tasks WHERE id = ?", id).Scan(&sessionID)
+
+		// 2. Delete the task record.
 		_, err := tm.db.ExecContext(ctx, "DELETE FROM autonomous_tasks WHERE id = ?", id)
 		if err != nil {
 			return err
 		}
+
+		// 3. Purge conversation session history to prevent ghost task contamination.
+		// The session ID is deterministic: "conv_task_{taskID}" (see CreateTask).
+		convIDs := []string{fmt.Sprintf("conv_task_%s", id)}
+		if sessionID != "" && sessionID != convIDs[0] {
+			convIDs = append(convIDs, sessionID)
+		}
+		for _, cid := range convIDs {
+			_, _ = tm.db.ExecContext(ctx, "DELETE FROM messages WHERE conversation_id = ?", cid)
+			_, _ = tm.db.ExecContext(ctx, "DELETE FROM conversations WHERE id = ?", cid)
+		}
+
+		slog.Info("task deleted with session cleanup", "task_id", id, "purged_sessions", convIDs)
 	}
 
 	_ = tm.syncToMarkdownLocked()

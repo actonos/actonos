@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 
+	"github.com/actonos/actonos/internal/system"
 	"github.com/actonos/actonos/internal/tools"
 	"github.com/go-chi/chi/v5"
 )
@@ -82,7 +84,29 @@ func (s *Server) handleApproveAction(w http.ResponseWriter, r *http.Request) {
 		if _, _, checkpointErr := s.runStore.LoadCheckpointByTrace(r.Context(), item.TraceID); checkpointErr == nil {
 			// Resume the agent run in a background goroutine so the operator's HTTP request returns immediately (< 50ms)
 			go func() {
-				_, _ = s.engine.ResumeApproved(context.Background(), *item)
+				defer func() {
+					if rec := recover(); rec != nil {
+						slog.Error("panic in resumed run goroutine", "panic", rec, "approval_id", item.ID)
+					}
+				}()
+				_, resumeErr := s.engine.ResumeApproved(context.Background(), *item)
+				if resumeErr != nil {
+					var appErr *tools.ApprovalRequiredError
+					if errors.As(resumeErr, &appErr) {
+						slog.Info("resumed run paused for subsequent approval", "approval_id", appErr.Approval.ID, "tool", appErr.Approval.ToolName)
+					} else {
+						slog.Error("failed resuming approved run", "approval_id", item.ID, "trace_id", item.TraceID, "error", resumeErr)
+						if s.notifMgr != nil {
+							_, _ = s.notifMgr.Create(context.Background(), system.Notification{
+								Title:    fmt.Sprintf("Resume Failed: %s", item.ToolName),
+								Message:  fmt.Sprintf("Agent '%s' failed to complete after approval: %v", item.AgentID, resumeErr),
+								Type:     "error",
+								Category: "mission",
+								Link:     "/missions",
+							})
+						}
+					}
+				}
 			}()
 			s.respondJSON(w, http.StatusOK, map[string]any{
 				"approval": item,
