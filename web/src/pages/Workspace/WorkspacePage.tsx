@@ -152,9 +152,7 @@ export function WorkspacePage() {
     try {
       for (let i = 0; i < fileList.length; i++) {
         const file = fileList[i];
-        const content = await file.text();
-        const fullPath = currentDir ? `${currentDir}/${file.name}` : file.name;
-        await api.saveWorkspaceFile(fullPath, content);
+        await api.uploadWorkspaceFile(file, currentDir);
       }
       success('Files Uploaded', `Uploaded ${fileList.length} file(s) into workspace.`);
       await loadFiles(currentDir);

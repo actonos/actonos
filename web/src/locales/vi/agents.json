@@ -284,5 +284,9 @@
     "system": "Hệ thống",
     "active": "Hoạt động",
     "stopped": "Đã dừng"
+  },
+  "emptyState": {
+    "title": "Không có Agent nào",
+    "description": "Tạo Agent mới ngay."
   }
 }

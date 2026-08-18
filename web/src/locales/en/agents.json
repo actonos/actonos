@@ -284,5 +284,9 @@
     "system": "System",
     "active": "Active",
     "stopped": "Stopped"
+  },
+  "emptyState": {
+    "title": "No Agents found",
+    "description": "Create your first agent."
   }
 }

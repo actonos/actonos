@@ -362,6 +362,28 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ path, content }),
     }),
+  uploadWorkspaceFile: async (file: File, dir: string = ''): Promise<{ status: string; path: string; written: number }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('dir', dir);
+    const headers = getAuthHeaders();
+    delete headers['Content-Type'];
+    const response = await fetch(`${API_BASE}/workspace/upload`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    if (!response.ok) {
+      let message = `HTTP Error ${response.status}`;
+      try {
+        const body = await response.json();
+        if (body.error?.message) message = body.error.message;
+      } catch { }
+      throw new Error(message);
+    }
+    const envelope = await response.json();
+    return envelope.data !== undefined ? envelope.data : envelope;
+  },
   deleteWorkspaceFile: (path: string) =>
     fetchJSON<{ status: string; path: string }>(`/workspace/file?path=${encodeURIComponent(path)}`, { method: 'DELETE' }),
   mkdirWorkspace: (path: string) =>
