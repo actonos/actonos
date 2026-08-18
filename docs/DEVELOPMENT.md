@@ -263,6 +263,8 @@ hardcoded-visible-text audit, Vitest, production compilation, the entry-bundle
 budget, and Playwright browser tests. The browser suite includes an axe scan
 that fails on serious or critical accessibility violations. New frontend
 behavior should include a colocated `*.test.ts(x)` regression test.
+Locale parity validation also fails on common UTF-8 corruption signatures in
+Vietnamese text, including mojibake and question marks embedded inside words.
 
 Frontend production TypeScript follows a zero-explicit-`any` policy and treats
 unused variables as lint errors. Shared transport belongs in

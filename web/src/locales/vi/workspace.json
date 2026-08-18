@@ -13,12 +13,12 @@
     "save": "Lưu",
     "delete": "Xoá",
     "deleteConfirm": "Bạn có chắc muốn xoá tệp này?",
-    "upload": "T?i l?n",
-    "newFolder": "Th? m?c m?i",
-    "download": "T?i xu?ng",
-    "downloadTitle": "T?i t?p v? m?y",
-    "saving": "?ang l?u...",
-    "createFile": "T?o t?p m?i"
+    "upload": "Tải lên",
+    "newFolder": "Thư mục mới",
+    "download": "Tải xuống",
+    "downloadTitle": "Tải tập tin xuống máy cục bộ",
+    "saving": "Đang lưu...",
+    "createFile": "Tạo tập tin mới"
   },
   "table": {
     "name": "Tên tệp",
@@ -29,30 +29,30 @@
   "editor": {
     "title": "Chỉnh sửa: {{path}}",
     "placeholder": "Nội dung tệp...",
-    "stats": "D?ng: {{lines}} ? K?ch th??c: {{bytes}} byte",
-    "shortcut": "UTF-8 ? Ctrl+S ?? l?u",
-    "noSelection": "Ch?a ch?n t?p",
-    "noSelectionDescription": "Ch?n m?t t?p t? tr?nh kh?m ph? b?n tr?i ho?c t?o t?p m?i ?? b?t ??u ch?nh s?a."
+    "stats": "Dòng: {{lines}} • Kích thước: {{bytes}} byte",
+    "shortcut": "UTF-8 • Ctrl+S để lưu",
+    "noSelection": "Không có tệp nào được chọn",
+    "noSelectionDescription": "Chọn tệp từ trình khám phá ở bên trái hoặc tạo tệp mới để bắt đầu chỉnh sửa."
   },
-  "loading": "?ang t?i t?p...",
+  "loading": "Đang tải tập tin...",
   "navigation": {
-    "root": "g?c",
-    "up": "L?n"
+    "root": "gốc",
+    "up": "Hướng lên"
   },
   "deleteModal": {
-    "title": "X?a t?p Workspace",
-    "description": "B?n c? ch?c mu?n x?a v?nh vi?n \"{{path}}\" kh?i workspace c?ch ly?"
+    "title": "Xóa tệp không gian làm việc",
+    "description": "Bạn có chắc chắn muốn xóa vĩnh viễn \"{{path}}\" khỏi không gian làm việc được đóng hộp cát của mình không?"
   },
   "createFileModal": {
-    "title": "T?o t?p m?i",
-    "label": "T?n t?p v? ph?n m? r?ng",
-    "placeholder": "v? d?: main.py, data.json, script.sh",
-    "confirm": "T?o v? ch?nh s?a"
+    "title": "Tạo tập tin mới",
+    "label": "Tên tệp & phần mở rộng",
+    "placeholder": "ví dụ. main.py, data.json, script.sh",
+    "confirm": "Tạo & Chỉnh sửa"
   },
   "createFolderModal": {
-    "title": "T?o th? m?c m?i",
-    "label": "T?n th? m?c",
-    "placeholder": "v? d?: scripts, models, datasets",
-    "confirm": "T?o th? m?c"
+    "title": "Tạo thư mục mới",
+    "label": "Tên thư mục",
+    "placeholder": "ví dụ. tập lệnh, mô hình, tập dữ liệu",
+    "confirm": "Tạo thư mục"
   }
 }

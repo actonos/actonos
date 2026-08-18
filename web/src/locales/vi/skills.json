@@ -15,7 +15,7 @@
     "installing": "Đang cài...",
     "uninstall": "Gỡ cài đặt",
     "uninstalling": "Đang gỡ...",
-    "byAuthor": "B?i {{author}}"
+    "byAuthor": "Bởi {{author}}"
   },
   "actions": {
     "newSkill": "Tạo kỹ năng",
@@ -37,6 +37,6 @@
     "title": "Không tìm thấy kỹ năng",
     "subtitle": "Tạo kỹ năng mới hoặc cài đặt từ cộng đồng."
   },
-  "loading": "?ang t?i...",
-  "byAuthor": "B?i {{author}}"
+  "loading": "Đang tải...",
+  "byAuthor": "Bởi {{author}}"
 }

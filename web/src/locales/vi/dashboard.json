@@ -43,19 +43,19 @@
     "uptime": "Thời gian chạy",
     "temp": "Nhiệt độ",
     "active": "Hoạt động",
-    "cores": "{{count}} l?i",
-    "temperature": "Nhi?t ??: {{value}}?C",
+    "cores": "Lõi {{count}}",
+    "temperature": "Nhiệt độ: {{value}}°C",
     "ofMegabytes": "/ {{value}} MB",
     "daemonMemory": "Daemon: {{value}} MB",
-    "usedPercent": "?? d?ng {{value}}%",
+    "usedPercent": "{{value}}% đã sử dụng",
     "ofGigabytes": "/ {{value}} GB",
-    "dataSize": "D? li?u: {{value}} GB",
-    "allocatedPercent": "?? c?p ph?t {{value}}%",
-    "uptimeMinutes": "Tr?c tuy?n {{value}} ph?t",
+    "dataSize": "Dữ liệu: {{value}} GB",
+    "allocatedPercent": "{{value}}% được phân bổ",
+    "uptimeMinutes": "{{value}}m trực tuyến",
     "processStatus": "PID {{status}}",
-    "halRunning": "HAL ?ang ch?y",
-    "kernelStable": "Kernel ?n ??nh",
-    "sync": "??ng b?: {{time}}"
+    "halRunning": "HAL đang chạy",
+    "kernelStable": "Hạt nhân ổn định",
+    "sync": "Đồng bộ hóa: {{time}}"
   },
   "metrics": {
     "agents": "Agents",
@@ -82,30 +82,30 @@
   "tokens": {
     "title": "Lưu Lượng Token & Chi Phí",
     "subtitle": "Theo dõi thời gian thực qua ReAct loops, Cron và Heartbeat tự hành",
-    "viewLedger": "Xem to?n b? s?",
-    "today": "Token h?m nay",
-    "month": "Token th?ng",
-    "lifetime": "T?ng to?n th?i gian",
-    "models": "M? h?nh:",
-    "noUsage": "Ch?a ghi nh?n s? d?ng",
-    "inspect": "Xem s? & l?ch s? ?"
+    "viewLedger": "Xem sổ cái đầy đủ",
+    "today": "Token hôm nay",
+    "month": "Mã thông báo tháng",
+    "lifetime": "Tổng thời gian tồn tại",
+    "models": "Mô hình:",
+    "noUsage": "Không có hoạt động sử dụng nào được ghi lại",
+    "inspect": "Kiểm tra sổ cái & lịch sử"
   },
   "heartbeat": {
     "title": "Nhịp Đập Tự Hành",
     "desc": "Chu kỳ tư duy 5 phút tự động kiểm tra tác vụ nền và cảnh báo.",
-    "lastStatus": "Tr?ng th?i chu k? g?n nh?t:"
+    "lastStatus": "Trạng thái chu kỳ cuối cùng:"
   },
   "activity": {
     "title": "Hoạt động gần đây",
     "subtitle": "Nhật ký thực thi công cụ và hành động của agent theo thời gian thực.",
     "empty": "Chưa có nhật ký gần đây.",
     "viewAll": "Xem tất cả",
-    "risk": "R?i ro {{level}}",
+    "risk": "Rủi ro {{level}}",
     "statusDuration": "{{status}} ({{duration}} ms)",
-    "detail": "Agent: {{agent}} ? Trace: {{trace}}"
+    "detail": "Đặc vụ: {{agent}} • Dấu vết: {{trace}}"
   },
   "actions": {
-    "refresh": "L?m m?i"
+    "refresh": "Làm cho khỏe lại"
   },
   "units": {
     "megabytes": "{{value}} MB",
@@ -113,7 +113,7 @@
     "usd": "${{value}} USD"
   },
   "storage": {
-    "detail": "SQLite: {{sqlite}} MB ? Vector: {{vectors}} MB",
-    "total": "L?u tr?: {{value}} MB"
+    "detail": "SQLite: {{sqlite}} MB • Vectơ: {{vectors}} MB",
+    "total": "Bộ nhớ: {{value}} MB"
   }
 }

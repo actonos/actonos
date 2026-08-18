@@ -10,12 +10,12 @@
     "toggle": "Đổi Ngôn Ngữ",
     "en": "English",
     "vi": "Tiếng Việt",
-    "selectTitle": "Ch?n ng?n ng? h? th?ng",
-    "searchPlaceholder": "T?m ng?n ng? ho?c khu v?c...",
-    "fullUI": "Giao di?n ??y ??",
-    "noMatches": "Kh?ng c? ng?n ng? ph? h?p v?i \"{{search}}\"",
-    "active": "?ang d?ng: {{language}}",
-    "engine": "B? m?y i18n ActonOS"
+    "selectTitle": "Chọn ngôn ngữ hệ thống",
+    "searchPlaceholder": "Tìm kiếm ngôn ngữ hoặc khu vực...",
+    "fullUI": "Giao diện người dùng đầy đủ",
+    "noMatches": "Không có ngôn ngữ nào phù hợp với \"{{search}}\"",
+    "active": "Đang hoạt động: {{language}}",
+    "engine": "Động cơ ActonOS i18n"
   },
   "buttons": {
     "save": "Lưu Thay Đổi",
@@ -39,9 +39,9 @@
     "disconnected": "Chưa Kết Nối"
   },
   "errorBoundary": {
-    "title": "?? x?y ra l?i",
-    "description": "Giao di?n ?ng d?ng g?p l?i kh?ng mong mu?n. Kernel h? th?ng v?n an to?n.",
-    "home": "V? trang ch?nh",
-    "reload": "T?i l?i giao di?n"
+    "title": "Đã xảy ra lỗi",
+    "description": "Đã xảy ra lỗi không mong muốn trong chế độ xem ứng dụng. Hạt nhân hệ thống vẫn an toàn.",
+    "home": "Trở về nhà",
+    "reload": "Tải lại Xem"
   }
 }

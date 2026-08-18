@@ -196,6 +196,8 @@ npm run test:e2e
 The quality gate must include `audit:i18n -- --fail`; a report-only hardcoded
 text scan is not sufficient. Playwright includes `@axe-core/playwright` and
 must fail on serious or critical accessibility violations.
+`check:i18n` also rejects mojibake, Unicode replacement characters, repeated
+question marks, and question marks embedded inside Vietnamese words.
 
 Keep the REST facade small by placing shared fetch/session behavior in
 `lib/api/client.ts` and domain clients in `lib/api/`. Reusable feature panels
