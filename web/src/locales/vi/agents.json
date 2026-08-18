@@ -75,6 +75,7 @@
     "chat": "Trò chuyện"
   },
   "list": {
+    "filterLabel": "Lọc agent",
     "exportTitle": "Xuất agent dưới dạng JSON",
     "export": "Xuất",
     "importTitle": "Nhập agent từ JSON",

@@ -102,6 +102,7 @@
     "singleAgent": "Thực thi đại lý đơn lẻ"
   },
   "tabs": {
+    "label": "Các phần nhiệm vụ",
     "tasks": "Nhiệm vụ & tồn đọng ({{count}})",
     "directives": "Chỉ thị thường trực (HEARTBEAT.md)",
     "audit": "Sổ cái kiểm tra xung ({{count}})"

@@ -1,4 +1,8 @@
 ---
+
+## Frontend UX verification matrix
+
+Authenticated browser tests must cover the dashboard shell, command palette, density persistence, Operations baseline, and axe checks at 390×844, 768×1024, and 1440×900. Keep snapshots in `web/tests/authenticated.spec.ts-snapshots/`; regenerate only for intentional visual changes. Include keyboard navigation and reduced-motion assertions for newly added overlays or menus.
 name: actonos-testing
 description: "Skill for writing and running tests for ActonOS. Covers unit tests, integration tests, test patterns, mocking, and coverage."
 ---

@@ -1,9 +1,9 @@
-# ActonOS — Style Reference
-> Sunlit wildflower compliance atelier. Warm cream surfaces, vivid yellow primary action, deep navy ink, organic color shapes blooming behind the product.
+# ActonOS — UI/UX Design System
+> Controlled evolution of the ActonOS identity: calm, airy, operational, and readable at a glance.
 
 **Theme:** light
 
-ActonOS uses a sunlit, garden-inspired SaaS language: a warm cream canvas, organic decorative blobs in vivid greens, pinks, and yellows, and a confident pairing of a warm serif (Hedvig Letters) for headlines with a clean grotesque (Inter) for everything else. The deep navy-violet #130e30 carries all structural text and borders, while a single bright yellow #ffe228 powers every primary action — the contrast is so high it reads almost like a highlighter. Components stay lightweight: pill-shaped buttons (1440px radius), generously padded cards on a slightly green-tinted surface (#eff2e5), and minimal elevation. The mood is optimistic and approachable, not corporate or clinical — the floral backdrop shapes, serif headlines, and warm neutrals keep it human.
+The current product UI uses Manrope for display and Noto Sans for functional text, with warm cream surfaces, deep ink, and yellow accents retained from the ActonOS identity. New screens should use shared primitives (`PageHeader`, `Card`, `Button`, `Input`, `Badge`, `EmptyState`, `IconButton`, `SegmentedControl`) and semantic status colors. Emoji are not used in product UI; use Lucide icons with accessible labels.
 
 ## Tokens — Colors
 
@@ -55,7 +55,16 @@ ActonOS uses a sunlit, garden-inspired SaaS language: a warm cream canvas, organ
 
 **Base unit:** 8px
 
-**Density:** comfortable
+**Density:** comfortable by default; users can switch to compact mode. The preference is persisted in `localStorage` under `actonos_ui_density`. On narrow screens comfortable touch targets are enforced.
+
+### Interaction and accessibility
+
+- Minimum interactive target is 44px on touch layouts.
+- Every icon-only control has an accessible name and tooltip/title.
+- Visible focus rings use the `:focus-visible` token.
+- Respect `prefers-reduced-motion`.
+- Use responsive breakpoints tested at 390×844, 768×1024, and 1440×900.
+- Prefer workflow-oriented navigation groups and nested routes for detail views.
 
 ### Spacing Scale
 

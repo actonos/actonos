@@ -75,6 +75,7 @@
     "chat": "Chat"
   },
   "list": {
+    "filterLabel": "Filter agents",
     "exportTitle": "Export agents as JSON",
     "export": "Export",
     "importTitle": "Import agents from JSON",

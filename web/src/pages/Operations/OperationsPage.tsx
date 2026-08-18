@@ -16,6 +16,9 @@ import { useToast } from '@/components/ui/Toast';
 import { api } from '@/lib/api';
 import type { AutonomousTask, RunEvent } from '@/lib/types';
 import { useRealtime } from '@/components/providers/RealtimeProvider';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { IconButton } from '@/components/ui/IconButton';
 
 function percent(value: number) {
   return `${Math.max(0, Math.min(100, value)).toFixed(0)}%`;
@@ -127,16 +130,16 @@ export function OperationsPage() {
 
   return (
     <PageContainer>
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between mb-6">
-        <div>
-          <span className="text-caption uppercase tracking-wider text-slate font-semibold">{t('eyebrow')}</span>
-          <h1 className="font-serif text-heading-lg font-bold text-deep-ink">{t('title')}</h1>
-          <p className="text-body text-slate max-w-3xl">{t('subtitle')}</p>
-        </div>
-        <Badge variant={connection === 'online' ? 'active' : 'stopped'}>
-          <Activity className="w-3 h-3 mr-1" /> {t(`connection.${connection}`)}
-        </Badge>
-      </div>
+      <PageHeader
+        eyebrow={t('eyebrow')}
+        title={t('title')}
+        description={t('subtitle')}
+        actions={(
+          <Badge variant={connection === 'online' ? 'success' : 'stopped'}>
+            <Activity className="w-3 h-3 mr-1" /> {t(`connection.${connection}`)}
+          </Badge>
+        )}
+      />
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-6">
         {gaugeCards.map((gauge) => {
@@ -195,7 +198,7 @@ export function OperationsPage() {
             <Box className="w-5 h-5" />
           </div>
           <div className="space-y-2 max-h-[420px] overflow-y-auto">
-            {(metrics?.containers || []).length === 0 ? <p className="text-body-sm text-slate py-12 text-center">{t('containers.empty')}</p> :
+            {(metrics?.containers || []).length === 0 ? <EmptyState compact icon={<Box className="h-6 w-6" />} title={t('containers.empty')} /> :
               metrics?.containers.map((container) => (
                 <div key={container.id} className="p-3 rounded-[18px] bg-soft-meadow flex items-center gap-3">
                   {container.state === 'running' ? <CheckCircle2 className="w-5 h-5" /> : <XCircle className="w-5 h-5 text-slate" />}
@@ -242,9 +245,14 @@ export function OperationsPage() {
                 <Bot className="w-4 h-4 shrink-0" />
                 <div className="min-w-0 flex-1"><p className="font-semibold truncate">{task.title}</p><p className="text-[11px] text-slate">{task.status} · {task.progress}%</p></div>
                 <div className="flex gap-1">
-                  <Button variant="ghost" size="sm" icon={task.status === 'in_progress' ? <CirclePause className="w-3.5 h-3.5" /> : <CirclePlay className="w-3.5 h-3.5" />} onClick={() => handleTaskStatus(task, task.status === 'in_progress' ? 'blocked' : 'in_progress')} />
-                  <Button variant="ghost" size="sm" icon={<RotateCcw className="w-3.5 h-3.5" />} onClick={() => handleTaskStatus(task, 'pending')} />
-                  <Button variant="ghost" size="sm" icon={<XCircle className="w-3.5 h-3.5" />} onClick={() => handleTaskStatus(task, 'cancelled')} />
+                  <IconButton
+                    size="sm"
+                    label={task.status === 'in_progress' ? t('queue.pause') : t('queue.resume')}
+                    icon={task.status === 'in_progress' ? <CirclePause className="w-3.5 h-3.5" /> : <CirclePlay className="w-3.5 h-3.5" />}
+                    onClick={() => handleTaskStatus(task, task.status === 'in_progress' ? 'blocked' : 'in_progress')}
+                  />
+                  <IconButton size="sm" label={t('queue.retry')} icon={<RotateCcw className="w-3.5 h-3.5" />} onClick={() => handleTaskStatus(task, 'pending')} />
+                  <IconButton size="sm" tone="danger" label={t('queue.cancel')} icon={<XCircle className="w-3.5 h-3.5" />} onClick={() => handleTaskStatus(task, 'cancelled')} />
                 </div>
               </div>
             ))}

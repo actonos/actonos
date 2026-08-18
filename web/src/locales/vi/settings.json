@@ -75,6 +75,7 @@
     "restart": "Khởi động lại hạt nhân"
   },
   "tabs": {
+    "label": "Các phần cài đặt",
     "identity": "Bản sắc & Tâm hồn",
     "providers": "Nhà cung cấp LLM ({{count}})",
     "tokens": "Sổ cái Token & Chi phí",

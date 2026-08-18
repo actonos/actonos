@@ -8,7 +8,9 @@ import { LoginPage } from '@/pages/Auth/LoginPage';
 import { api } from '@/lib/api';
 import { ApprovalInterruption } from '@/components/features/governance/ApprovalInterruption';
 import { RealtimeProvider } from '@/components/providers/RealtimeProvider';
+import { DensityProvider } from '@/components/providers/DensityProvider';
 import { useTranslation } from 'react-i18next';
+import { CommandPalette } from '@/components/features/search/CommandPalette';
 
 const DashboardPage = lazy(() => import('@/pages/Dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })));
 const AgentsPage = lazy(() => import('@/pages/Agents/AgentsPage').then((m) => ({ default: m.AgentsPage })));
@@ -30,8 +32,9 @@ export const navTabs: NavTab[] = [
 ];
 
 export function tabFromLocation(): NavTab {
-  const value = window.location.hash.replace(/^#\/?/, '') as NavTab;
-  return navTabs.includes(value) ? value : 'dashboard';
+  const value = window.location.hash.replace(/^#\/?/, '');
+  if (value === 'agents/new' || value.startsWith('agents/')) return 'agent-studio';
+  return navTabs.includes(value as NavTab) ? value as NavTab : 'dashboard';
 }
 
 export function App() {
@@ -54,6 +57,7 @@ export function App() {
     return localStorage.getItem('actonos_sidebar_collapsed') === 'true';
   });
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
 
   const checkAuth = async () => {
     try {
@@ -78,9 +82,27 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    const syncLocation = () => setActiveTab(tabFromLocation());
+    const syncLocation = () => {
+      const nextTab = tabFromLocation();
+      const route = window.location.hash.replace(/^#\/?/, '');
+      if (nextTab === 'agent-studio' && route.startsWith('agents/')) {
+        setStudioAgentID(decodeURIComponent(route.slice('agents/'.length)) || 'new');
+      }
+      setActiveTab(nextTab);
+    };
     window.addEventListener('hashchange', syncLocation);
     return () => window.removeEventListener('hashchange', syncLocation);
+  }, []);
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === 'k') {
+        event.preventDefault();
+        setCommandOpen((current) => !current);
+      }
+    };
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
   }, []);
 
   const navigateTab = (tab: NavTab) => {
@@ -112,7 +134,8 @@ export function App() {
 
   const handleEditAgent = (agentID: string) => {
     setStudioAgentID(agentID);
-    navigateTab('agent-studio');
+    window.location.hash = `/agents/${encodeURIComponent(agentID)}`;
+    setActiveTab('agent-studio');
   };
 
   if (authStatus.loading) {
@@ -144,9 +167,17 @@ export function App() {
 
   return (
     <ToastProvider>
+      <DensityProvider>
       <RealtimeProvider>
       <div className="min-h-screen bg-canvas text-deep-ink selection:bg-hi-yellow selection:text-deep-ink font-sans flex">
         <ApprovalInterruption />
+        <CommandPalette
+          isOpen={commandOpen}
+          onClose={() => setCommandOpen(false)}
+          onNavigate={navigateTab}
+          onOpenChat={handleOpenChatWithAgent}
+          onEditAgent={handleEditAgent}
+        />
         {/* Sleek Collapsible Left Sidebar */}
         <Sidebar
           activeTab={activeTab}
@@ -169,6 +200,7 @@ export function App() {
             onOpenMobileSidebar={() => setMobileOpen(true)}
             collapsed={collapsed}
             onLogout={handleLogout}
+            onOpenSearch={() => setCommandOpen(true)}
           />
 
           {/* Page Views */}
@@ -222,6 +254,7 @@ export function App() {
         </div>
       </div>
       </RealtimeProvider>
+      </DensityProvider>
     </ToastProvider>
   );
 }

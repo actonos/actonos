@@ -39,7 +39,11 @@
     "title": "Background task queue",
     "subtitle": "Pause, resume, retry, or cancel autonomous work.",
     "updated": "Task status updated",
-    "updateFailed": "Could not update task"
+    "updateFailed": "Could not update task",
+    "pause": "Pause task",
+    "resume": "Resume task",
+    "retry": "Retry task",
+    "cancel": "Cancel task"
   },
   "cost": {
     "title": "Token & cost tracker",

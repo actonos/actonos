@@ -1,19 +1,23 @@
-import { Menu, Sparkles } from 'lucide-react';
+import { Menu, Rows3, Search, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { NavTab } from '@/components/layout/Sidebar';
 import { useRealtime } from '@/components/providers/RealtimeProvider';
+import { useDensity } from '@/components/providers/DensityProvider';
+import { IconButton } from '@/components/ui/IconButton';
 
 export interface HeaderProps {
   activeTab: NavTab;
   onOpenMobileSidebar: () => void;
   collapsed?: boolean;
   onLogout?: () => void;
+  onOpenSearch: () => void;
 }
 
-export function Header({ activeTab, onOpenMobileSidebar, onLogout }: HeaderProps) {
+export function Header({ activeTab, onOpenMobileSidebar, onLogout, onOpenSearch }: HeaderProps) {
   const { t } = useTranslation(['nav', 'common']);
   const { snapshot } = useRealtime();
   const metrics = snapshot?.metrics;
+  const { density, toggleDensity } = useDensity();
 
   const tabTitles: Record<NavTab, { title: string; category: string }> = {
     dashboard: { title: t('nav:links.dashboard'), category: t('nav:categories.overview') },
@@ -64,6 +68,21 @@ export function Header({ activeTab, onOpenMobileSidebar, onLogout }: HeaderProps
 
       {/* Right: Telemetry mini badges & Lock Action */}
       <div className="flex items-center gap-2.5">
+        <button
+          type="button"
+          onClick={onOpenSearch}
+          className="hidden min-h-9 items-center gap-2 rounded-full border border-onyx/10 bg-soft-meadow px-3 text-caption text-slate transition-colors hover:bg-canvas hover:text-deep-ink sm:flex"
+        >
+          <Search className="h-3.5 w-3.5" />
+          <span>{t('nav:search.trigger')}</span>
+          <kbd className="rounded-full border border-onyx/10 bg-canvas px-1.5 py-0.5 font-mono text-[10px]">{t('nav:search.shortcut')}</kbd>
+        </button>
+        <IconButton
+          label={density === 'compact' ? t('nav:density.comfortable') : t('nav:density.compact')}
+          icon={<Rows3 className="h-4 w-4" />}
+          size="sm"
+          onClick={toggleDensity}
+        />
         {metrics && (
           <div className="hidden md:flex items-center gap-3 px-3 py-1 bg-soft-meadow rounded-full border border-onyx/10 text-caption font-mono text-slate">
             <span>{t('nav:telemetry.cpu', { value: metrics.cpu?.usage_percent?.toFixed(0) || 0 })}</span>

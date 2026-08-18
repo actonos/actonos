@@ -28,6 +28,9 @@ import {
 import { api } from '@/lib/api';
 import type { AgentManifest } from '@/lib/types';
 import type { NavTab } from '@/components/layout/Sidebar';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 export interface AgentsPageProps {
   onOpenChat: (agentID: string) => void;
@@ -148,24 +151,12 @@ export function AgentsPage({
       <BlobBackdrop />
 
       <PageContainer>
-        {/* Header section */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div className="flex-1">
-            <span className="text-caption uppercase tracking-wider text-slate font-semibold block mb-1">
-              {t('eyebrow', 'Universal Agent Engine')}
-            </span>
-            <h1 className="font-serif text-heading-lg text-deep-ink tracking-tight">
-              {t('title', 'Autonomous Agents')}
-            </h1>
-            <p className="font-sans text-body text-slate mt-1 max-w-2xl">
-              {t(
-                'subtitle',
-                'Create, customize, and orchestrate autonomous AI agents with SOUL.md personality and proactive background cron automations.'
-              )}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0 self-start sm:self-center">
+        <PageHeader
+          eyebrow={t('eyebrow')}
+          title={t('title')}
+          description={t('subtitle')}
+          actions={(
+            <>
             <Button
               variant="ghost"
               size="sm"
@@ -207,14 +198,18 @@ export function AgentsPage({
             >
               {t('actions.createNew', 'Create New Agent')}
             </Button>
-          </div>
-        </div>
+            </>
+          )}
+        />
 
         {/* Filter and Search Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           {/* Pill filters */}
-          <div className="flex items-center gap-1.5 bg-canvas/80 backdrop-blur-sm p-1 rounded-full border border-onyx/10 shadow-xs self-start sm:self-auto overflow-x-auto">
-            {(['all', 'system', 'active', 'stopped'] as const).map((filter) => {
+          <SegmentedControl
+            value={activeFilter}
+            onChange={setActiveFilter}
+            label={t('list.filterLabel')}
+            options={(['all', 'system', 'active', 'stopped'] as const).map((filter) => {
               const count =
                 filter === 'all'
                   ? agents.length
@@ -222,21 +217,12 @@ export function AgentsPage({
                   ? agents.filter((a) => a.is_system || a.agent_id === 'agent_system_core').length
                   : agents.filter((a) => a.status === filter).length;
 
-              return (
-                <button
-                  key={filter}
-                  onClick={() => setActiveFilter(filter)}
-                  className={`px-3.5 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer ${
-                    activeFilter === filter
-                      ? 'bg-deep-ink text-white font-semibold shadow-xs'
-                      : 'text-slate hover:text-deep-ink hover:bg-black/5'
-                  }`}
-                >
-                  {t(`filters.${filter}`, filter.charAt(0).toUpperCase() + filter.slice(1))} ({count})
-                </button>
-              );
+              return {
+                value: filter,
+                label: `${t(`filters.${filter}`)} (${count})`,
+              };
             })}
-          </div>
+          />
 
           {/* Search box */}
           <div className="relative w-full sm:w-72">
@@ -255,25 +241,16 @@ export function AgentsPage({
         {loading ? (
           <div className="py-24 text-center text-slate font-sans text-body">{t('list.loading')}</div>
         ) : filteredAgents.length === 0 ? (
-          <Card className="p-12 text-center border-dashed border-onyx/20 bg-canvas/60">
-            <Bot className="w-12 h-12 text-slate/50 mx-auto mb-3" />
-            <h3 className="font-serif text-heading-sm text-deep-ink mb-1">
-              {t('emptyState.title', 'No agents found')}
-            </h3>
-            <p className="font-sans text-body-sm text-slate mb-6 max-w-md mx-auto">
-              {searchQuery
-                ? t('emptyState.noSearchResults', 'No agents match your search criteria.')
-                : t('emptyState.description', 'Get started by creating your first autonomous agent.')}
-            </p>
-            <Button
-              variant="primary"
-              size="sm"
-              icon={<Plus className="w-3.5 h-3.5" />}
-              onClick={() => onEditAgent('new')}
-            >
-              {t('actions.createNew', 'Create New Agent')}
-            </Button>
-          </Card>
+          <EmptyState
+            icon={<Bot className="h-10 w-10" />}
+            title={t('emptyState.title')}
+            description={searchQuery ? t('emptyState.noSearchResults') : t('emptyState.description')}
+            action={(
+              <Button variant="primary" size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => onEditAgent('new')}>
+                {t('actions.createNew')}
+              </Button>
+            )}
+          />
         ) : (
           <Card className="border border-onyx/10 bg-canvas/90 shadow-xs overflow-hidden rounded-2xl">
             <div className="overflow-x-auto">

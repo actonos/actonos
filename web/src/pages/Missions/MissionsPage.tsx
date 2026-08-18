@@ -25,6 +25,8 @@ import {
 import { api } from '@/lib/api';
 import type { AgentRun, ApprovalRequest, AutonomousTask, HeartbeatConfigData, HeartbeatRun, TaskPriority, TaskStatus } from '@/lib/types';
 import { TaskModal } from './components/TaskModal';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 
 export interface MissionsPageProps {
   onOpenChat?: (agentID?: string) => void;
@@ -217,24 +219,13 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
       <BlobBackdrop />
 
       <PageContainer>
-        {/* Header Strip */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div>
-            <span className="text-caption uppercase tracking-wider text-slate font-semibold block mb-1">
-              {t('page.eyebrow')}
-            </span>
-            <h1 className="font-serif text-heading-lg text-deep-ink tracking-tight flex items-center gap-3">
-              <span>{t('title', 'Missions & Heartbeat Control')}</span>
-              <Badge variant="active" className="text-caption font-mono">
-                {t('page.activeBacklog', { count: activeCount })}
-              </Badge>
-            </h1>
-            <p className="font-sans text-body text-slate mt-1 max-w-2xl">
-              {t('subtitle', 'Intelligent task coordination, standing directives, and continuous cognitive pulse.')}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-center">
+        <PageHeader
+          eyebrow={t('page.eyebrow')}
+          title={t('title')}
+          description={t('subtitle')}
+          badge={<Badge variant="success" className="font-mono">{t('page.activeBacklog', { count: activeCount })}</Badge>}
+          actions={(
+            <>
             <Button
               variant="ghost"
               size="sm"
@@ -252,8 +243,9 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
             >
               {triggeringPulse ? t('actions.pulsing') : t('actions.triggerPulse')}
             </Button>
-          </div>
-        </div>
+            </>
+          )}
+        />
 
         {/* 3 Metric Cards Strip */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
@@ -313,45 +305,18 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
           </Card>
         </div>
 
-        {/* Tab Navigation Capsule */}
-        <div className="flex items-center gap-1.5 bg-canvas/80 backdrop-blur-sm p-1 rounded-full border border-onyx/10 shadow-xs mb-6 self-start max-w-fit">
-          <button
-            type="button"
-            onClick={() => setActiveTab('tasks')}
-            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer ${
-              activeTab === 'tasks' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
-            }`}
-          >
-            {t('tabs.tasks', { count: tasks.length })}
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('directives')}
-            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer ${
-              activeTab === 'directives' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
-            }`}
-          >
-            {t('tabs.directives')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('audit')}
-            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer ${
-              activeTab === 'audit' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
-            }`}
-          >
-            {t('tabs.audit', { count: heartbeatRuns.length })}
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('governance')}
-            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer ${
-              activeTab === 'governance' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
-            }`}
-          >
-            {t('governance.tab', { count: approvals.length })}
-          </button>
-        </div>
+        <SegmentedControl
+          value={activeTab}
+          onChange={setActiveTab}
+          label={t('tabs.label')}
+          className="mb-6 w-fit"
+          options={[
+            { value: 'tasks', label: t('tabs.tasks', { count: tasks.length }) },
+            { value: 'directives', label: t('tabs.directives') },
+            { value: 'audit', label: t('tabs.audit', { count: heartbeatRuns.length }) },
+            { value: 'governance', label: t('governance.tab', { count: approvals.length }) },
+          ]}
+        />
 
         {/* TAB 1: Tasks & Backlog */}
         {activeTab === 'tasks' && (

@@ -13,6 +13,15 @@
   --color-soft-meadow: #eff2e5;
   --color-charcoal: #222222;
   --color-onyx: #000000;
+  --color-status-success: #176b43;
+  --color-status-success-soft: #e2f5e9;
+  --color-status-warning: #8a4b08;
+  --color-status-warning-soft: #fff2d6;
+  --color-status-danger: #b42318;
+  --color-status-danger-soft: #fee9e7;
+  --color-status-info: #3157a4;
+  --color-status-info-soft: #e8eefc;
+  --color-focus-ring: #3157a4;
 
   /* Typography */
   --font-serif: "Manrope Variable", "Noto Sans Variable", ui-sans-serif, system-ui, sans-serif;
@@ -40,6 +49,58 @@ body {
   font-family: var(--font-sans);
   font-feature-settings: "ss01" on, "cv11" on;
   -webkit-font-smoothing: antialiased;
+}
+
+:root {
+  --density-control-height: 44px;
+  --density-row-height: 52px;
+  --density-card-padding: 24px;
+  --density-section-gap: 24px;
+}
+
+:root[data-density="compact"] {
+  --density-control-height: 36px;
+  --density-row-height: 42px;
+  --density-card-padding: 16px;
+  --density-section-gap: 16px;
+}
+
+@media (max-width: 639px) {
+  :root,
+  :root[data-density="compact"] {
+    --density-control-height: 44px;
+    --density-row-height: 48px;
+    --density-card-padding: 16px;
+    --density-section-gap: 20px;
+  }
+}
+
+.density-card {
+  padding: var(--density-card-padding);
+}
+
+.density-row {
+  min-height: var(--density-row-height);
+}
+
+.density-control {
+  min-height: var(--density-control-height);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* Custom Minimalist Scrollbars according to Sunlit Wildflower DESIGN.md */

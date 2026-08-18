@@ -1,12 +1,15 @@
 {
   "eyebrow": "Overview",
   "title": "Dashboard",
+  "liveBadge": "Live",
   "subtitle": "Overview of system status, active agents, and recent activities.",
   "quickstart": {
     "title": "Quick Start Guide",
     "subtitle": "Complete these quick steps to get the most out of ActonOS.",
     "progress": "{{completed}} of {{total}} completed",
     "dismiss": "Hide Guide",
+    "markComplete": "Mark step complete",
+    "markIncomplete": "Mark step incomplete",
     "show": "Show Guide",
     "steps": {
       "keys": {
@@ -91,6 +94,7 @@
     "inspect": "Inspect Ledger & History"
   },
   "heartbeat": {
+    "nominalSummary": "All background systems are running normally.",
     "title": "Heartbeat Pulse",
     "desc": "Autonomous 5m cognitive loop reviewing pending tasks and alerts.",
     "lastStatus": "Last Cycle Status:"

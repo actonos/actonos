@@ -521,6 +521,11 @@ Primary UI pages use hash routes and lazy loading. This preserves deep links and
 browser history in the embedded `go:embed` deployment while keeping editor and
 xterm dependencies outside the application entry chunk.
 
+The frontend shell is organized around workflow navigation, shared primitives,
+and a global command palette. `DensityProvider` persists comfortable/compact
+layout density, while authenticated Playwright and axe checks exercise the
+dashboard and operations flows at mobile, tablet, and desktop breakpoints.
+
 ## References
 
 1. [Model Context Protocol — GitHub](https://github.com/modelcontextprotocol)

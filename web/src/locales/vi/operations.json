@@ -39,7 +39,11 @@
     "title": "Hàng đợi tác vụ nền",
     "subtitle": "Tạm dừng, tiếp tục, chạy lại hoặc hủy công việc tự hành.",
     "updated": "Đã cập nhật trạng thái tác vụ",
-    "updateFailed": "Không thể cập nhật tác vụ"
+    "updateFailed": "Không thể cập nhật tác vụ",
+    "pause": "Tạm dừng tác vụ",
+    "resume": "Tiếp tục tác vụ",
+    "retry": "Chạy lại tác vụ",
+    "cancel": "Hủy tác vụ"
   },
   "cost": {
     "title": "Theo dõi token & chi phí",

@@ -18,7 +18,7 @@ export function Card({
     <div
       onClick={onClick}
       {...props}
-      className={`bg-soft-meadow rounded-[24px] p-6 md:p-8 transition-all ${
+      className={`density-card bg-soft-meadow rounded-[24px] transition-all ${
         hoverable ? 'hover:scale-[1.01] cursor-pointer' : ''
       } ${className}`}
     >

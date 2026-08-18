@@ -16,9 +16,30 @@
     "settings": "Settings"
   },
   "sections": {
+    "overview": "Overview",
+    "build": "Build",
+    "capabilities": "Capabilities",
     "connections": "Connections",
     "tools": "Tools",
     "system": "System"
+  },
+  "search": {
+    "title": "Quick search",
+    "trigger": "Search",
+    "shortcut": "Ctrl K",
+    "escapeKey": "Esc",
+    "placeholder": "Search pages, agents, tasks, tools, and files...",
+    "empty": "No matching commands or resources.",
+    "navigation": "Navigation",
+    "action": "Quick action",
+    "createAgent": "Create a new agent",
+    "editAgent": "Open agent {{id}}",
+    "chatWith": "Chat with {{name}}",
+    "task": "Task status: {{status}}"
+  },
+  "density": {
+    "comfortable": "Use comfortable density",
+    "compact": "Use compact density"
   },
   "categories": {
     "overview": "Overview",
@@ -38,6 +59,7 @@
   },
   "sidebar": {
     "open": "Open sidebar",
+    "close": "Close sidebar",
     "expand": "Expand sidebar",
     "collapse": "Collapse sidebar"
   },

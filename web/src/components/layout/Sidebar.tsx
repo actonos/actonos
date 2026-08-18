@@ -74,13 +74,20 @@ export function Sidebar({
 
   const sections: NavSection[] = [
     {
+      label: t('sections.overview'),
       items: [
         { id: 'dashboard', label: t('links.dashboard', 'Dashboard'), icon: LayoutDashboard },
-        { id: 'agents', label: t('links.agents', 'Agents'), icon: Bot },
         { id: 'missions', label: t('links.missions', 'Missions'), icon: Target },
         { id: 'operations', label: t('links.operations', 'Live Operations'), icon: Gauge },
+      ],
+    },
+    {
+      label: t('sections.build'),
+      items: [
+        { id: 'agents', label: t('links.agents', 'Agents'), icon: Bot },
         { id: 'chat', label: t('links.chat', 'Chat'), icon: MessageSquare },
         { id: 'automations', label: t('links.automations', 'Automations'), icon: Calendar },
+        { id: 'workspace', label: t('links.workspace', 'Workspace'), icon: Folder },
       ],
     },
     {
@@ -91,7 +98,7 @@ export function Sidebar({
       ],
     },
     {
-      label: t('sections.tools', 'Tools'),
+      label: t('sections.capabilities'),
       items: [
         { id: 'tools', label: t('links.tools', 'Tools'), icon: Wrench },
         { id: 'skills', label: t('links.skills', 'Skills'), icon: Sparkles },
@@ -100,7 +107,6 @@ export function Sidebar({
     {
       label: t('sections.system', 'System'),
       items: [
-        { id: 'workspace', label: t('links.workspace', 'Workspace'), icon: Folder },
         { id: 'settings', label: t('links.settings', 'Settings'), icon: Sliders },
       ],
     },
@@ -159,6 +165,8 @@ export function Sidebar({
             {/* Mobile close button */}
             <button
               onClick={onCloseMobile}
+              aria-label={t('sidebar.close')}
+              title={t('sidebar.close')}
               className="lg:hidden p-1.5 rounded-full hover:bg-black/5 text-deep-ink"
             >
               <X className="w-5 h-5" />
@@ -173,7 +181,7 @@ export function Sidebar({
                 {section.label && (
                   <div className={`flex items-center gap-2 mt-4 mb-2 ${collapsed && !showLangOverlay ? 'justify-center' : 'px-3'}`}>
                     {!collapsed || showLangOverlay ? (
-                      <span className="text-[10px] font-semibold uppercase tracking-widest text-slate/70 select-none">
+                      <span className="text-caption font-semibold uppercase tracking-wider text-slate select-none">
                         {section.label}
                       </span>
                     ) : (

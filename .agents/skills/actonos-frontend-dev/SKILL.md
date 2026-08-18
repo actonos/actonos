@@ -57,6 +57,16 @@ ActonOS uses a **sunlit wildflower compliance atelier** aesthetic:
 
 ## 3. Mandatory Internationalization (i18n) — Zero Hardcoded Text
 
+## 3a. Current application architecture
+
+- `DensityProvider` owns the comfortable/compact preference and applies `data-density` to `<html>`.
+- `PageHeader`, `EmptyState`, `IconButton`, and `SegmentedControl` are the required primitives for new route work.
+- Sidebar navigation is grouped by workflow: Overview, Build, Connections, Capabilities, and System.
+- Agent Studio detail routes use `#/agents/new` and `#/agents/:id`; preserve these nested routes when adding links.
+- The global command palette is opened with `Ctrl/Cmd+K`, supports navigation/entity search, and must never execute sensitive mutations without the existing approval flow.
+- Authenticated Playwright coverage and axe checks run at 390×844, 768×1024, and 1440×900. Update visual snapshots only when the UI change is intentional.
+- Product UI is emoji-free and must pass `npm run check:emoji`; all visible copy belongs in locale namespaces and must pass the hardcoded-text audit.
+
 ### Strict Rule
 **Every user-facing string in JSX/TSX must be loaded via `useTranslation()` or `<Trans>` components.**
 Hardcoded strings in components violate build verification.

@@ -608,3 +608,7 @@ git commit -m "test(auth): add token refresh daemon expiry edge cases"
 4. Set `ACTONOS_CANVAS_URL` only to a browser/VNC viewer intentionally exposed
    by the sandbox runtime.
 5. Run `cd web && npx tsc --noEmit && npm run build`, then the Go server tests.
+
+### Frontend UX workflow
+
+Use the shared UI primitives and the comfortable/compact density provider for every new route. Keep navigation grouped by workflow and use nested Agent Studio hashes for detail pages. Validate keyboard access, focus visibility, reduced motion, Vietnamese/English locale parity, and the authenticated browser matrix (390×844, 768×1024, 1440×900) before review.

@@ -16,9 +16,30 @@
     "settings": "Cài đặt"
   },
   "sections": {
+    "overview": "Tổng quan",
+    "build": "Xây dựng",
+    "capabilities": "Năng lực",
     "connections": "Kết nối",
     "tools": "Công cụ",
     "system": "Hệ thống"
+  },
+  "search": {
+    "title": "Tìm nhanh",
+    "trigger": "Tìm kiếm",
+    "shortcut": "Ctrl K",
+    "escapeKey": "Esc",
+    "placeholder": "Tìm trang, agent, tác vụ, công cụ và tệp...",
+    "empty": "Không có lệnh hoặc tài nguyên phù hợp.",
+    "navigation": "Điều hướng",
+    "action": "Thao tác nhanh",
+    "createAgent": "Tạo agent mới",
+    "editAgent": "Mở agent {{id}}",
+    "chatWith": "Trò chuyện với {{name}}",
+    "task": "Trạng thái tác vụ: {{status}}"
+  },
+  "density": {
+    "comfortable": "Dùng mật độ thoáng",
+    "compact": "Dùng mật độ gọn"
   },
   "categories": {
     "overview": "Tổng quan",
@@ -38,6 +59,7 @@
   },
   "sidebar": {
     "open": "Mở thanh điều hướng",
+    "close": "Đóng thanh điều hướng",
     "expand": "Mở rộng thanh điều hướng",
     "collapse": "Thu gọn thanh điều hướng"
   },

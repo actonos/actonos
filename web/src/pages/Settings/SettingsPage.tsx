@@ -40,6 +40,8 @@ import {
   type OTAStatus,
 } from '@/lib/api';
 import { isApprovalRequired, type SystemMetrics, type TailscaleStatus, type LLMProviderInfo } from '@/lib/types';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 
 type SettingsTab = 'identity' | 'keys' | 'tokens' | 'network' | 'audit' | 'maintenance';
 
@@ -289,27 +291,13 @@ export function SettingsPage() {
       <BlobBackdrop />
 
       <PageContainer>
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div className="flex-1">
-            <span className="text-caption uppercase tracking-wider text-slate font-semibold block mb-1">
-              {t('eyebrow', 'System')}
-            </span>
-            <h1 className="font-serif text-heading-lg text-deep-ink tracking-tight flex items-center gap-3">
-              <span>{t('title', 'Settings')}</span>
-              <Badge variant="neutral" className="text-caption font-mono">
-                {t('header.activeModels', { configured: configuredCount, total: PROVIDER_METAS.length })}
-              </Badge>
-            </h1>
-            <p className="font-sans text-body text-slate mt-1 max-w-2xl">
-              {t(
-                'subtitle',
-                'System hardware, API keys, network, and Tailscale VPN.'
-              )}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-center">
+        <PageHeader
+          eyebrow={t('eyebrow')}
+          title={t('title')}
+          description={t('subtitle')}
+          badge={<Badge variant="neutral" className="font-mono">{t('header.activeModels', { configured: configuredCount, total: PROVIDER_METAS.length })}</Badge>}
+          actions={(
+            <>
             <Button
               variant="ghost"
               size="sm"
@@ -326,60 +314,24 @@ export function SettingsPage() {
             >
               {t('actions.restart')}
             </Button>
-          </div>
-        </div>
+            </>
+          )}
+        />
 
-        {/* Tab Navigation Capsule */}
-        <div className="flex items-center gap-1.5 bg-canvas/80 backdrop-blur-sm p-1 rounded-full border border-onyx/10 shadow-xs mb-8 self-start sm:self-auto max-w-fit overflow-x-auto">
-          <button
-            onClick={() => setActiveTab('identity')}
-            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'identity' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
-            }`}
-          >
-            {t('tabs.identity')}
-          </button>
-          <button
-            onClick={() => setActiveTab('keys')}
-            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'keys' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
-            }`}
-          >
-            {t('tabs.providers', { count: configuredCount })}
-          </button>
-          <button
-            onClick={() => setActiveTab('tokens')}
-            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'tokens' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
-            }`}
-          >
-            {t('tabs.tokens')}
-          </button>
-          <button
-            onClick={() => setActiveTab('network')}
-            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'network' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
-            }`}
-          >
-            {t('tabs.network')}
-          </button>
-          <button
-            onClick={() => setActiveTab('audit')}
-            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'audit' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
-            }`}
-          >
-            {t('tabs.audit', { count: auditLogs.length })}
-          </button>
-          <button
-            onClick={() => setActiveTab('maintenance')}
-            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'maintenance' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
-            }`}
-          >
-            {t('tabs.maintenance')}
-          </button>
-        </div>
+        <SegmentedControl
+          value={activeTab}
+          onChange={setActiveTab}
+          label={t('tabs.label')}
+          className="mb-8 w-fit"
+          options={[
+            { value: 'identity', label: t('tabs.identity') },
+            { value: 'keys', label: t('tabs.providers', { count: configuredCount }) },
+            { value: 'tokens', label: t('tabs.tokens') },
+            { value: 'network', label: t('tabs.network') },
+            { value: 'audit', label: t('tabs.audit', { count: auditLogs.length }) },
+            { value: 'maintenance', label: t('tabs.maintenance') },
+          ]}
+        />
 
         {/* TAB: Identity & Owner Profile */}
         {activeTab === 'identity' && (

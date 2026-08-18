@@ -15,4 +15,9 @@ describe('hash routing', () => {
     window.location.hash = '#/unknown';
     expect(tabFromLocation()).toBe('dashboard');
   });
+
+  it('maps nested agent routes to Agent Studio', () => {
+    window.location.hash = '#/agents/agent_system_core';
+    expect(tabFromLocation()).toBe('agent-studio');
+  });
 });

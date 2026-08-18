@@ -23,10 +23,6 @@ import {
   RefreshCw,
   Sparkles,
   Zap,
-  CheckCircle2,
-  Circle,
-  X,
-  Key,
   Radio,
   Coins,
   HeartPulse,
@@ -35,6 +31,8 @@ import { api, type DashboardSummaryData } from '@/lib/api';
 import type { TokenUsageSummary, HeartbeatRun } from '@/lib/types';
 import type { NavTab } from '@/components/layout/Sidebar';
 import { TokenLedgerModal } from '@/components/modals/TokenLedgerModal';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { QuickStartPanel } from '@/components/features/dashboard/QuickStartPanel';
 
 export interface DashboardPageProps {
   onNavigateTab: (tab: NavTab) => void;
@@ -122,52 +120,6 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
     localStorage.setItem('actonos_quickstart_dismissed', 'false');
   };
 
-  const quickstartSteps = [
-    {
-      id: 'keys',
-      title: t('quickstart.steps.keys.title', 'Add API Keys'),
-      desc: t('quickstart.steps.keys.desc', 'Configure Anthropic, OpenAI, or Gemini keys.'),
-      actionText: t('quickstart.steps.keys.action', 'Configure'),
-      icon: Key,
-      tab: 'settings' as NavTab,
-    },
-    {
-      id: 'channel',
-      title: t('quickstart.steps.channel.title', 'Connect a Chat Channel'),
-      desc: t('quickstart.steps.channel.desc', 'Link Telegram, Discord, or WhatsApp to chat with agents.'),
-      actionText: t('quickstart.steps.channel.action', 'Connect'),
-      icon: Radio,
-      tab: 'channels' as NavTab,
-    },
-    {
-      id: 'agent',
-      title: t('quickstart.steps.agent.title', 'Create an AI Agent'),
-      desc: t('quickstart.steps.agent.desc', 'Create and customize your autonomous agent.'),
-      actionText: t('quickstart.steps.agent.action', 'Create'),
-      icon: Bot,
-      tab: 'agents' as NavTab,
-    },
-    {
-      id: 'chat',
-      title: t('quickstart.steps.chat.title', 'Try Chatting'),
-      desc: t('quickstart.steps.chat.desc', 'Send a prompt to see the agent think and use tools.'),
-      actionText: t('quickstart.steps.chat.action', 'Chat'),
-      icon: MessageSquare,
-      tab: 'chat' as NavTab,
-    },
-    {
-      id: 'skills',
-      title: t('quickstart.steps.skills.title', 'Explore Skills'),
-      desc: t('quickstart.steps.skills.desc', 'Install community skills to give your agents new capabilities.'),
-      actionText: t('quickstart.steps.skills.action', 'Browse'),
-      icon: Sparkles,
-      tab: 'skills' as NavTab,
-    },
-  ];
-
-  const completedCount = quickstartSteps.filter((s) => completedSteps[s.id]).length;
-  const progressPercent = Math.round((completedCount / quickstartSteps.length) * 100);
-
   const cpuPercent = data?.metrics?.cpu?.usage_percent || 0;
   const ramUsed = data?.metrics?.memory?.used_mb || 0;
   const ramTotal = data?.metrics?.memory?.total_mb || 1;
@@ -182,151 +134,35 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
       <BlobBackdrop />
 
       <PageContainer>
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div className="flex-1">
-            <span className="text-caption uppercase tracking-wider text-slate font-semibold block mb-1">
-              {t('eyebrow', 'Overview')}
-            </span>
-            <h1 className="font-serif text-heading-lg text-deep-ink tracking-tight flex items-center gap-3">
-              <span>{t('title', 'Dashboard')}</span>
-              <Badge variant="active" className="text-caption font-mono">
-                v0.1.0 Live
-              </Badge>
-            </h1>
-            <p className="font-sans text-body text-slate mt-1 max-w-2xl">
-              {t(
-                'subtitle',
-                'Overview of system status, active agents, and recent activities.'
+        <PageHeader
+          eyebrow={t('eyebrow')}
+          title={t('title')}
+          description={t('subtitle')}
+          badge={<Badge variant="success" className="font-mono">{t('liveBadge')}</Badge>}
+          actions={(
+            <>
+              {quickstartDismissed && (
+                <Button variant="ghost" size="sm" icon={<Sparkles className="h-3.5 w-3.5" />} onClick={handleRestoreQuickstart}>
+                  {t('quickstart.show')}
+                </Button>
               )}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-center">
-            {quickstartDismissed && (
-              <Button
-                variant="ghost"
-                size="sm"
-                icon={<Sparkles className="w-3.5 h-3.5 text-hi-yellow" />}
-                onClick={handleRestoreQuickstart}
-              >
-                {t('quickstart.show', 'Show Guide')}
+              <Button variant="ghost" size="sm" icon={<RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />} onClick={loadSummary}>
+                {t('actions.refresh')}
               </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />}
-              onClick={loadSummary}
-            >
-              {t('actions.refresh')}
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              icon={<MessageSquare className="w-3.5 h-3.5" />}
-              onClick={() => onOpenChat('agent_system_core')}
-            >
-              {t('launchpad.chatCore', 'Chat with Assistant')}
-            </Button>
-          </div>
-        </div>
+              <Button variant="primary" size="sm" icon={<MessageSquare className="h-3.5 w-3.5" />} onClick={() => onOpenChat('agent_system_core')}>
+                {t('launchpad.chatCore')}
+              </Button>
+            </>
+          )}
+        />
 
-        {/* QuickStart Guide Checklist */}
         {!quickstartDismissed && (
-          <Card className="p-6 border-2 border-deep-ink/15 bg-canvas/95 shadow-sm mb-8 relative overflow-hidden">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-full bg-deep-ink text-hi-yellow flex items-center justify-center shadow-xs">
-                    <Sparkles className="w-3.5 h-3.5" />
-                  </div>
-                  <h2 className="font-serif text-heading-sm text-deep-ink font-semibold">
-                    {t('quickstart.title', 'Quick Start Guide')}
-                  </h2>
-                </div>
-                <p className="font-sans text-caption text-slate mt-1">
-                  {t('quickstart.subtitle', 'Complete these quick steps to get the most out of ActonOS.')}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="text-right">
-                  <span className="text-caption font-mono text-deep-ink font-semibold">
-                    {t('quickstart.progress', { completed: completedCount, total: quickstartSteps.length })}
-                  </span>
-                  <div className="w-32 bg-onyx/10 h-1.5 rounded-full mt-1 overflow-hidden">
-                    <div
-                      className="bg-emerald-500 h-full rounded-full transition-all duration-300"
-                      style={{ width: `${progressPercent}%` }}
-                    />
-                  </div>
-                </div>
-                <button
-                  onClick={handleDismissQuickstart}
-                  className="p-1.5 rounded-full hover:bg-black/5 text-slate hover:text-deep-ink transition-colors cursor-pointer"
-                  title={t('quickstart.dismiss', 'Hide Guide')}
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Checklist Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 pt-2">
-              {quickstartSteps.map((step, idx) => {
-                const Icon = step.icon;
-                const isDone = !!completedSteps[step.id];
-
-                return (
-                  <div
-                    key={step.id}
-                    className={`p-3.5 rounded-[18px] border transition-all flex flex-col justify-between ${
-                      isDone
-                        ? 'bg-soft-meadow/50 border-emerald-500/30'
-                        : 'bg-soft-meadow border-onyx/10 hover:border-onyx/20'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-[11px] font-mono font-semibold text-slate">
-                          0{idx + 1}
-                        </span>
-                        <button
-                          onClick={() => toggleStep(step.id)}
-                          className="cursor-pointer transition-colors"
-                        >
-                          {isDone ? (
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                          ) : (
-                            <Circle className="w-4 h-4 text-slate/40 hover:text-slate" />
-                          )}
-                        </button>
-                      </div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <Icon className="w-4 h-4 text-deep-ink shrink-0" />
-                        <h4 className={`text-body-sm font-semibold text-deep-ink truncate ${isDone ? 'line-through opacity-70' : ''}`}>
-                          {step.title}
-                        </h4>
-                      </div>
-                      <p className="text-[11px] text-slate line-clamp-2 mb-3">
-                        {step.desc}
-                      </p>
-                    </div>
-
-                    <Button
-                      variant={isDone ? 'ghost' : 'primary'}
-                      size="sm"
-                      onClick={() => onNavigateTab(step.tab)}
-                      className="w-full justify-center text-caption py-1 h-7"
-                    >
-                      {step.actionText}
-                    </Button>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
+          <QuickStartPanel
+            completedSteps={completedSteps}
+            onToggleStep={toggleStep}
+            onDismiss={handleDismissQuickstart}
+            onNavigate={onNavigateTab}
+          />
         )}
 
         {/* 4 Live Hardware Gauges */}
@@ -634,8 +470,8 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
                   {heartbeatRuns[0]?.status || 'Nominal (Zero Noise)'}
                 </span>
               </div>
-              <div className="text-slate/70 font-mono truncate">
-                {heartbeatRuns[0]?.summary || 'All background systems running nominally.'}
+              <div className="text-slate font-mono truncate">
+                {heartbeatRuns[0]?.summary || t('heartbeat.nominalSummary')}
               </div>
             </div>
           </Card>

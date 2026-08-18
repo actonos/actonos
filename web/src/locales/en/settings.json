@@ -75,6 +75,7 @@
     "restart": "Restart Kernel"
   },
   "tabs": {
+    "label": "Settings sections",
     "identity": "Identity & Soul",
     "providers": "LLM Providers ({{count}})",
     "tokens": "Token Ledger & Cost",

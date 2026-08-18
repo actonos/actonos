@@ -102,6 +102,7 @@
     "singleAgent": "Single Agent Execution"
   },
   "tabs": {
+    "label": "Mission sections",
     "tasks": "Tasks & Backlog ({{count}})",
     "directives": "Standing Directives (HEARTBEAT.md)",
     "audit": "Pulse Audit Ledger ({{count}})"

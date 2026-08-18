@@ -1,12 +1,15 @@
 {
   "eyebrow": "Tổng quan",
   "title": "Bảng điều khiển",
+  "liveBadge": "Trực tiếp",
   "subtitle": "Xem nhanh trạng thái hệ thống, agents và hoạt động gần đây.",
   "quickstart": {
     "title": "Hướng dẫn bắt đầu nhanh",
     "subtitle": "Hoàn thành các bước dưới đây để làm quen với ActonOS.",
     "progress": "Đã hoàn thành {{completed}}/{{total}} bước",
     "dismiss": "Ẩn hướng dẫn",
+    "markComplete": "Đánh dấu bước đã hoàn thành",
+    "markIncomplete": "Đánh dấu bước chưa hoàn thành",
     "show": "Hiện hướng dẫn",
     "steps": {
       "keys": {
@@ -91,6 +94,7 @@
     "inspect": "Kiểm tra sổ cái & lịch sử"
   },
   "heartbeat": {
+    "nominalSummary": "Tất cả hệ thống nền đang hoạt động bình thường.",
     "title": "Nhịp Đập Tự Hành",
     "desc": "Chu kỳ tư duy 5 phút tự động kiểm tra tác vụ nền và cảnh báo.",
     "lastStatus": "Trạng thái chu kỳ cuối cùng:"

@@ -16,7 +16,7 @@ export function Button({
   disabled,
   ...props
 }: ButtonProps) {
-  const baseStyles = 'inline-flex items-center justify-center font-sans font-medium transition-all duration-150 rounded-full select-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed';
+  const baseStyles = 'density-control inline-flex items-center justify-center font-sans font-medium transition-all duration-150 rounded-full select-none cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
 
   const sizeStyles = {
     sm: 'px-4 py-1.5 text-body-sm gap-1.5',
