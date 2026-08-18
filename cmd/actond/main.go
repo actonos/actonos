@@ -397,12 +397,25 @@ func main() {
 							}
 
 							// 7. Deliver outbound response via ChannelManager
-							_ = channelMgr.SendMessage(context.Background(), channels.OutboundMessage{
-								ChannelID: msg.ChannelID,
-								AccountID: msg.AccountID,
-								Recipient: senderID,
-								Content:   resp.Content,
-							})
+							// But skip if the agent already dispatched via native_channel_notify tool
+							// to prevent sending the same content twice to the user.
+							alreadySentViaNotifyTool := false
+							if resp != nil {
+								for _, tc := range resp.ToolCalls {
+									if tc.Function.Name == "native_channel_notify" || tc.Function.Name == "channel_notify" {
+										alreadySentViaNotifyTool = true
+										break
+									}
+								}
+							}
+							if resp != nil && !alreadySentViaNotifyTool {
+								_ = channelMgr.SendMessage(context.Background(), channels.OutboundMessage{
+									ChannelID: msg.ChannelID,
+									AccountID: msg.AccountID,
+									Recipient: senderID,
+									Content:   resp.Content,
+								})
+							}
 						}(inMsg)
 					}
 				}

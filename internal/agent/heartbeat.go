@@ -478,18 +478,45 @@ CRITICAL INSTRUCTIONS:
 			backlogSummary = fmt.Sprintf("All %d previous backlog missions have been COMPLETED. There are 0 active or pending tasks in backlog.", len(completedList))
 		}
 	}
+	hasCustomDirectives := standingDirectives != "" &&
+		standingDirectives != "Monitor background tasks, verify system health, maintain Zero-Noise if nominal." &&
+		standingDirectives != "Autonomous standing supervisor. Routinely review pending tasks in TASKS.md and monitor system stability."
 
-	prompt := fmt.Sprintf(
-		"[AUTONOMOUS HEARTBEAT BRAIN CYCLE]\nCurrent UTC Time: %s\nBacklog Status: %s\nStanding Directives:\n%s\n\n"+
-			"ROUTINE EVALUATION INSTRUCTIONS:\n"+
-			"1. ALL past missions are finished. DO NOT restart, continue, or execute any old completed missions or past tasks.\n"+
-			"2. Only evaluate current system health and the standing directives above.\n"+
-			"3. If everything is nominal and no proactive action or user notification is needed, reply exactly 'HEARTBEAT_OK'.\n"+
-			"4. If an action or alert is necessary, execute it and provide a concise summary. DO NOT call 'native_channel_notify' tool as the system will route your response automatically.",
-		time.Now().UTC().Format(time.RFC3339),
-		backlogSummary,
-		standingDirectives,
-	)
+	var prompt string
+	if hasCustomDirectives {
+		prompt = fmt.Sprintf(`[AUTONOMOUS HEARTBEAT CYCLE — MANDATORY DIRECTIVE EXECUTION]
+Current UTC Time: %s
+Backlog Status: %s
+
+═══════════════════════════════════════════════════
+STANDING DIRECTIVES (HIGHEST PRIORITY — MUST EXECUTE):
+%s
+═══════════════════════════════════════════════════
+
+ABSOLUTE RULES:
+1. You MUST execute the standing directives above on EVERY heartbeat cycle. They are your primary mission. Do NOT skip, summarize, or replace them with a status message.
+2. ALL past missions are finished. DO NOT restart or reference any old completed tasks.
+3. DO NOT reply with generic greetings like "Hey, I'm here and ready to roll" or "Everything is nominal". Execute the directive action.
+4. DO NOT call 'native_channel_notify' tool — the system will automatically route your response to the configured channels.
+5. If the standing directive asks you to send/create/generate content, produce that content directly in your response.
+6. Only reply 'HEARTBEAT_OK' if the standing directives contain ZERO actionable instructions AND system health is nominal.`,
+			time.Now().UTC().Format(time.RFC3339),
+			backlogSummary,
+			standingDirectives,
+		)
+	} else {
+		prompt = fmt.Sprintf(
+			"[AUTONOMOUS HEARTBEAT BRAIN CYCLE]\nCurrent UTC Time: %s\nBacklog Status: %s\nStanding Directives:\n%s\n\n"+
+				"ROUTINE EVALUATION INSTRUCTIONS:\n"+
+				"1. ALL past missions are finished. DO NOT restart, continue, or execute any old completed missions or past tasks.\n"+
+				"2. Only evaluate current system health and the standing directives above.\n"+
+				"3. If everything is nominal and no proactive action or user notification is needed, reply exactly 'HEARTBEAT_OK'.\n"+
+				"4. If an action or alert is necessary, execute it and provide a concise summary. DO NOT call 'native_channel_notify' tool as the system will route your response automatically.",
+			time.Now().UTC().Format(time.RFC3339),
+			backlogSummary,
+			standingDirectives,
+		)
+	}
 
 	resp, execErr := h.engine.ExecuteStepWithHistory(routineCtx, primaryAgentID, prompt, nil)
 	if execErr != nil {
