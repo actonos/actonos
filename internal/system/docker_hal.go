@@ -30,30 +30,8 @@ func (h *DockerHAL) RuntimeMode() string {
 }
 
 func (h *DockerHAL) GetMetrics(ctx context.Context) (*SystemMetrics, error) {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-
-	metrics := &SystemMetrics{
-		UptimeSeconds: uint64(time.Since(h.startTime).Seconds()),
-		Timestamp:     time.Now().UTC(),
-		RuntimeMode:   h.RuntimeMode(),
-		CanvasURL:     canvasURLFromEnvironment(),
-	}
-
-	metrics.CPU.Model = runtime.GOARCH + " (" + runtime.GOOS + ")"
-	metrics.CPU.Cores = runtime.NumCPU()
-	metrics.CPU.UsagePercent = 2.5
-	metrics.CPU.TempCelsius = 42.0
-
-	metrics.Memory.TotalMB = 8192
-	metrics.Memory.UsedMB = 1024
-	metrics.Memory.ActondMB = float64(m.Alloc) / (1024 * 1024)
-
-	metrics.Disk.TotalGB = 64.0
-	metrics.Disk.UsedGB = 12.0
-	metrics.Disk.DataDirGB = 0.8
+	metrics := collectLiveHostMetrics(h.dataDir, h.startTime)
 	metrics.Containers = dockerContainerStatuses(ctx)
-
 	return metrics, nil
 }
 

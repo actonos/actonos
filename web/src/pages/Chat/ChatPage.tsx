@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { useToast } from '@/components/ui/Toast';
+import { useRealtime } from '@/components/providers/RealtimeProvider';
 import {
   Bot,
   Sparkles,
@@ -219,6 +220,12 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
     }
   };
 
+  const { snapshot } = useRealtime();
+  const loadingRef = useRef(loading);
+  loadingRef.current = loading;
+  const activeConvIDRef = useRef(activeConvID);
+  activeConvIDRef.current = activeConvID;
+
   useEffect(() => {
     loadAgents();
     loadConversations();
@@ -229,6 +236,82 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
       setActiveAgentID(selectedAgentID);
     }
   }, [selectedAgentID]);
+
+  // Real-time synchronization: pull incoming messages from channels/cron/heartbeat without flickering
+  useEffect(() => {
+    let cancelled = false;
+
+    const syncRecentMessages = async () => {
+      if (loadingRef.current) return;
+      const currentID = activeConvIDRef.current;
+      if (!currentID) return;
+
+      try {
+        const res = await api.getConversation(currentID);
+        if (cancelled || !res.messages) return;
+
+        const newFormatted: ChatMessage[] = res.messages.map((m) => {
+          let toolCalls: ToolCallTrace[] = [];
+          if (m.tool_calls_json && m.tool_calls_json !== 'null' && m.tool_calls_json !== '[]') {
+            try {
+              const parsed = JSON.parse(m.tool_calls_json);
+              if (Array.isArray(parsed)) {
+                toolCalls = parsed.map((rawCall: unknown) => {
+                  const tc = typeof rawCall === 'object' && rawCall !== null ? rawCall as Record<string, unknown> : {};
+                  const fn = typeof tc.function === 'object' && tc.function !== null ? tc.function as Record<string, unknown> : {};
+                  return {
+                    tool: typeof fn.name === 'string' ? fn.name : typeof tc.name === 'string' ? tc.name : 'native_tool',
+                    args: fn.arguments,
+                    status: 'success',
+                  };
+                });
+              }
+            } catch { }
+          }
+          return {
+            id: m.id,
+            role: m.role === 'user' || m.role === 'assistant' ? m.role : 'system',
+            content: m.content,
+            timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+          };
+        });
+
+        setMessages((prev) => {
+          if (prev.length !== newFormatted.length || (prev.length > 0 && prev[prev.length - 1]?.content !== newFormatted[newFormatted.length - 1]?.content)) {
+            return newFormatted;
+          }
+          return prev;
+        });
+      } catch { }
+    };
+
+    const syncConversationsList = async () => {
+      try {
+        const res = await api.listConversations();
+        if (cancelled || !res.conversations) return;
+        setConversations((prev) => {
+          if (prev.length !== res.conversations.length) {
+            return res.conversations;
+          }
+          return prev;
+        });
+      } catch { }
+    };
+
+    syncRecentMessages();
+    syncConversationsList();
+
+    const interval = setInterval(() => {
+      syncRecentMessages();
+      syncConversationsList();
+    }, 2500);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [snapshot?.timestamp, activeConvID]);
 
   const scrollToBottom = (behavior: ScrollBehavior = 'auto') => {
     requestAnimationFrame(() => {

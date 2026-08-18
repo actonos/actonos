@@ -123,6 +123,9 @@ func (s *Server) handleApproveAction(w http.ResponseWriter, r *http.Request) {
 		s.failApproval(w, r, item.ID, "APPROVED_EXECUTION_FAILED", err.Error())
 		return
 	}
+	if s.heartbeat != nil {
+		s.heartbeat.TriggerWakeup()
+	}
 	s.respondJSON(w, http.StatusOK, map[string]any{
 		"approval": item,
 		"result":   result,
@@ -132,6 +135,9 @@ func (s *Server) handleApproveAction(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleRejectAction(w http.ResponseWriter, r *http.Request) {
 	item, ok := s.decideApproval(w, r, "rejected")
 	if ok {
+		if s.heartbeat != nil {
+			s.heartbeat.TriggerWakeup()
+		}
 		s.respondJSON(w, http.StatusOK, item)
 	}
 }

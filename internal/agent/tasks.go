@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -471,6 +472,13 @@ func (tm *TaskManager) GetHeartbeatConfig(ctx context.Context) (*HeartbeatConfig
 		ZeroNoise:       true,
 	}
 
+	if tm.db != nil {
+		var raw string
+		if err := tm.db.QueryRowContext(ctx, "SELECT value FROM heartbeat_settings WHERE key = 'config'").Scan(&raw); err == nil && raw != "" {
+			_ = json.Unmarshal([]byte(raw), cfg)
+		}
+	}
+
 	// Read from HEARTBEAT.md if present
 	hbPath := filepath.Join(tm.workspaceDir, "HEARTBEAT.md")
 	if data, err := os.ReadFile(hbPath); err == nil && len(data) > 0 {
@@ -489,6 +497,17 @@ func (tm *TaskManager) SaveHeartbeatConfig(ctx context.Context, cfg HeartbeatCon
 		hbPath := filepath.Join(tm.workspaceDir, "HEARTBEAT.md")
 		_ = os.WriteFile(hbPath, []byte(cfg.Directives), 0644)
 	}
-	slog.Info("heartbeat directives and configuration saved", "interval_mins", cfg.IntervalMinutes)
+
+	if tm.db != nil {
+		if raw, err := json.Marshal(cfg); err == nil {
+			query := `
+			INSERT INTO heartbeat_settings (key, value) VALUES ('config', ?)
+			ON CONFLICT(key) DO UPDATE SET value = excluded.value
+			`
+			_, _ = tm.db.ExecContext(ctx, query, string(raw))
+		}
+	}
+
+	slog.Info("heartbeat directives and configuration saved", "interval_mins", cfg.IntervalMinutes, "enabled", cfg.Enabled)
 	return nil
 }

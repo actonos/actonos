@@ -488,7 +488,11 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 	}
 
 	if finalResp != nil {
-		e.RecordTokenUsage(ctx, agentID, finalResp.Model, finalResp.Model, source, "", finalResp.Usage)
+		modelName := finalResp.Model
+		if (modelName == "" || !strings.Contains(modelName, "/")) && agent.ModelConfig.PrimaryModel != "" {
+			modelName = agent.ModelConfig.PrimaryModel
+		}
+		e.RecordTokenUsage(ctx, agentID, modelName, "", source, "", finalResp.Usage)
 	}
 	e.finishRun(ctx, run, RunCompleted, "goal_completed", iterationsCompleted, totalUsage)
 
@@ -865,7 +869,11 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 	}
 
 	if finalResp != nil {
-		e.RecordTokenUsage(ctx, agentID, finalResp.Model, finalResp.Model, source, "", finalResp.Usage)
+		modelName := finalResp.Model
+		if (modelName == "" || !strings.Contains(modelName, "/")) && agent.ModelConfig.PrimaryModel != "" {
+			modelName = agent.ModelConfig.PrimaryModel
+		}
+		e.RecordTokenUsage(ctx, agentID, modelName, "", source, "", finalResp.Usage)
 	}
 
 	eventChan <- AgentStreamEvent{
@@ -1024,7 +1032,11 @@ func (e *Engine) ResumeApproved(ctx context.Context, approval tools.ApprovalRequ
 					e.reflectionEngine.ReflectOnConversation(context.Background(), checkpoint.AgentID, checkpoint.Goal, response.Content)
 				}
 			}
-			e.RecordTokenUsage(execCtx, checkpoint.AgentID, response.Model, response.Model, checkpoint.Source, "", usage)
+			modelName := response.Model
+			if (modelName == "" || !strings.Contains(modelName, "/")) && manifest.ModelConfig.PrimaryModel != "" {
+				modelName = manifest.ModelConfig.PrimaryModel
+			}
+			e.RecordTokenUsage(execCtx, checkpoint.AgentID, modelName, "", checkpoint.Source, "", usage)
 
 			// Sync and complete autonomous task if this run was for a Task
 			targetTaskID := checkpoint.TaskID

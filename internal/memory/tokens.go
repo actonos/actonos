@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -74,21 +75,74 @@ func CalculateEstimatedCost(model string, promptTokens, completionTokens int) fl
 	return cost
 }
 
+// NormalizeModelName ensures canonical provider/model format (e.g. "deepseek/deepseek-v4-flash").
+func NormalizeModelName(model, provider string) string {
+	model = strings.TrimSpace(model)
+	provider = strings.TrimSpace(provider)
+	if model == "" {
+		return "unknown"
+	}
+	if strings.Contains(model, "/") {
+		return model
+	}
+	if provider != "" && !strings.Contains(model, "/") {
+		return provider + "/" + model
+	}
+	switch {
+	case strings.HasPrefix(model, "deepseek-"):
+		return "deepseek/" + model
+	case strings.HasPrefix(model, "claude-"):
+		return "anthropic/" + model
+	case strings.HasPrefix(model, "gpt-") || strings.HasPrefix(model, "o1") || strings.HasPrefix(model, "o3") || strings.HasPrefix(model, "text-embedding"):
+		return "openai/" + model
+	case strings.HasPrefix(model, "gemini-"):
+		return "google/" + model
+	case strings.HasPrefix(model, "mistral-") || strings.HasPrefix(model, "codestral-"):
+		return "mistral/" + model
+	case strings.HasPrefix(model, "llama-") || strings.HasPrefix(model, "qwen"):
+		return "ollama/" + model
+	default:
+		return model
+	}
+}
+
 // TokenTracker manages recording and querying token metrics in SQLite.
 type TokenTracker struct {
 	mu sync.RWMutex
 	db *sql.DB
 }
 
-// NewTokenTracker initializes a new TokenTracker.
+// NewTokenTracker initializes a new TokenTracker and migrates legacy rows.
 func NewTokenTracker(db *sql.DB) *TokenTracker {
-	return &TokenTracker{db: db}
+	tracker := &TokenTracker{db: db}
+	if db != nil {
+		go tracker.migrateLegacyModels(context.Background())
+	}
+	return tracker
+}
+
+func (t *TokenTracker) migrateLegacyModels(ctx context.Context) {
+	if t.db == nil {
+		return
+	}
+	_, _ = t.db.ExecContext(ctx, `
+		UPDATE token_usage SET model = 'deepseek/' || model WHERE model NOT LIKE '%/%' AND (model LIKE 'deepseek-%' OR provider = 'deepseek');
+		UPDATE token_usage SET model = 'anthropic/' || model WHERE model NOT LIKE '%/%' AND (model LIKE 'claude-%' OR provider = 'anthropic');
+		UPDATE token_usage SET model = 'openai/' || model WHERE model NOT LIKE '%/%' AND (model LIKE 'gpt-%' OR model LIKE 'o1%' OR model LIKE 'o3%' OR provider = 'openai');
+		UPDATE token_usage SET model = 'google/' || model WHERE model NOT LIKE '%/%' AND (model LIKE 'gemini-%' OR provider = 'google' OR provider = 'gemini');
+		UPDATE token_usage SET model = 'mistral/' || model WHERE model NOT LIKE '%/%' AND (model LIKE 'mistral-%' OR model LIKE 'codestral-%' OR provider = 'mistral');
+	`)
 }
 
 // Record inserts a new token usage record asynchronously or synchronously.
 func (t *TokenTracker) Record(ctx context.Context, rec TokenUsageRecord) error {
 	if t.db == nil {
 		return nil
+	}
+
+	rec.Model = NormalizeModelName(rec.Model, rec.Provider)
+	if rec.Provider == "" && strings.Contains(rec.Model, "/") {
+		rec.Provider = rec.Model[:strings.Index(rec.Model, "/")]
 	}
 
 	if rec.ID == "" {

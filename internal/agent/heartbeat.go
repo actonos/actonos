@@ -56,7 +56,9 @@ type HeartbeatDaemon struct {
 	approvalMgr  ApprovalListProvider
 	workspaceDir string
 	interval     time.Duration
+	enabled      bool
 	stopCh       chan struct{}
+	triggerCh    chan struct{}
 	lastRun      time.Time
 	running      bool
 }
@@ -83,7 +85,9 @@ func NewHeartbeatDaemon(
 		db:           db,
 		workspaceDir: workspaceDir,
 		interval:     interval,
+		enabled:      true,
 		stopCh:       make(chan struct{}),
+		triggerCh:    make(chan struct{}, 1),
 	}
 }
 
@@ -108,6 +112,27 @@ func (h *HeartbeatDaemon) SetApprovalManager(am ApprovalListProvider) {
 	h.approvalMgr = am
 }
 
+// TriggerWakeup schedules an immediate heartbeat evaluation without blocking.
+func (h *HeartbeatDaemon) TriggerWakeup() {
+	select {
+	case h.triggerCh <- struct{}{}:
+	default:
+	}
+}
+
+// SyncConfig dynamically adjusts heartbeat interval and active status.
+func (h *HeartbeatDaemon) SyncConfig(cfg HeartbeatConfig) {
+	h.mu.Lock()
+	if cfg.IntervalMinutes > 0 {
+		h.interval = time.Duration(cfg.IntervalMinutes) * time.Minute
+	}
+	h.enabled = cfg.Enabled
+	h.mu.Unlock()
+
+	slog.Info("heartbeat daemon synchronized with config", "interval", h.interval.String(), "enabled", cfg.Enabled)
+	h.TriggerWakeup()
+}
+
 // Start launches the autonomous heartbeat evaluation loop.
 func (h *HeartbeatDaemon) Start(ctx context.Context) {
 	h.mu.Lock()
@@ -116,14 +141,40 @@ func (h *HeartbeatDaemon) Start(ctx context.Context) {
 		return
 	}
 	h.running = true
+
+	// Sync with persisted config if task manager is ready
+	if h.taskMgr != nil {
+		if cfg, err := h.taskMgr.GetHeartbeatConfig(ctx); err == nil && cfg != nil {
+			if cfg.IntervalMinutes > 0 {
+				h.interval = time.Duration(cfg.IntervalMinutes) * time.Minute
+			}
+			h.enabled = cfg.Enabled
+		}
+	}
 	h.mu.Unlock()
 
-	slog.Info("autonomous heartbeat daemon started", "interval", h.interval.String())
+	slog.Info("autonomous heartbeat daemon started", "interval", h.interval.String(), "enabled", h.enabled)
 	go h.loop(ctx)
+
+	// Launch initial evaluation pulse shortly after startup
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+		case <-h.stopCh:
+			return
+		case <-time.After(3 * time.Second):
+			h.TriggerWakeup()
+		}
+	}()
 }
 
 func (h *HeartbeatDaemon) loop(ctx context.Context) {
-	ticker := time.NewTicker(h.interval)
+	h.mu.RLock()
+	interval := h.interval
+	h.mu.RUnlock()
+
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
@@ -132,8 +183,34 @@ func (h *HeartbeatDaemon) loop(ctx context.Context) {
 			return
 		case <-h.stopCh:
 			return
+		case <-h.triggerCh:
+			h.mu.RLock()
+			enabled := h.enabled
+			curInterval := h.interval
+			h.mu.RUnlock()
+
+			if curInterval != interval {
+				interval = curInterval
+				ticker.Reset(interval)
+			}
+
+			if enabled {
+				h.checkCycle(ctx)
+			}
 		case <-ticker.C:
-			h.checkCycle(ctx)
+			h.mu.RLock()
+			enabled := h.enabled
+			curInterval := h.interval
+			h.mu.RUnlock()
+
+			if curInterval != interval {
+				interval = curInterval
+				ticker.Reset(interval)
+			}
+
+			if enabled {
+				h.checkCycle(ctx)
+			}
 		}
 	}
 }
@@ -373,6 +450,18 @@ CRITICAL INSTRUCTIONS:
 					"target_account_id": activeTask.TargetAccountID,
 					"target_recipient":  "",
 				}))
+			}
+
+			// If there are more pending tasks waiting in backlog, trigger immediate next cycle
+			if h.taskMgr != nil {
+				pendingTasks, _ := h.taskMgr.ListTasks(ctx, "pending", "")
+				if len(pendingTasks) > 0 {
+					slog.Info("queueing immediate next heartbeat cycle for pending backlog tasks", "pending_count", len(pendingTasks))
+					go func() {
+						time.Sleep(2 * time.Second)
+						h.TriggerWakeup()
+					}()
+				}
 			}
 		}
 

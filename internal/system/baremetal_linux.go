@@ -39,56 +39,9 @@ func (h *BaremetalHAL) RuntimeMode() string {
 }
 
 func (h *BaremetalHAL) GetMetrics(ctx context.Context) (*SystemMetrics, error) {
-	metrics := &SystemMetrics{
-		UptimeSeconds: uint64(time.Since(h.startTime).Seconds()),
-		Timestamp:     time.Now().UTC(),
-		RuntimeMode:   h.RuntimeMode(),
-		CanvasURL:     canvasURLFromEnvironment(),
-	}
-
-	metrics.CPU.Model = "MiniPC Generic"
-	metrics.CPU.Cores = runtime.NumCPU()
-
-	// Read CPU Temperature from Linux sysfs
-	if data, err := os.ReadFile("/sys/class/thermal/thermal_zone0/temp"); err == nil {
-		if tempMilli, err := strconv.ParseFloat(strings.TrimSpace(string(data)), 64); err == nil {
-			metrics.CPU.TempCelsius = tempMilli / 1000.0
-		}
-	}
-
-	// Read Memory from /proc/meminfo
-	if file, err := os.Open("/proc/meminfo"); err == nil {
-		defer file.Close()
-		scanner := bufio.NewScanner(file)
-		var memTotalKB, memAvailKB uint64
-		for scanner.Scan() {
-			line := scanner.Text()
-			if strings.HasPrefix(line, "MemTotal:") {
-				fields := strings.Fields(line)
-				if len(fields) >= 2 {
-					memTotalKB, _ = strconv.ParseUint(fields[1], 10, 64)
-				}
-			} else if strings.HasPrefix(line, "MemAvailable:") {
-				fields := strings.Fields(line)
-				if len(fields) >= 2 {
-					memAvailKB, _ = strconv.ParseUint(fields[1], 10, 64)
-				}
-			}
-		}
-		metrics.Memory.TotalMB = memTotalKB / 1024
-		metrics.Memory.UsedMB = (memTotalKB - memAvailKB) / 1024
-	}
-
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	metrics.Memory.ActondMB = float64(m.Alloc) / (1024 * 1024)
-
-	// Disk storage info
-	metrics.Disk.TotalGB = 64.0
-	metrics.Disk.UsedGB = 8.5
-	metrics.Disk.DataDirGB = 1.2
+	metrics := collectLiveHostMetrics(h.dataDir, h.startTime)
+	metrics.RuntimeMode = "baremetal"
 	metrics.Containers = dockerContainerStatuses(ctx)
-
 	return metrics, nil
 }
 

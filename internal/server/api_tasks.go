@@ -57,6 +57,10 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if s.heartbeat != nil {
+		s.heartbeat.TriggerWakeup()
+	}
+
 	s.respondJSON(w, http.StatusCreated, created)
 }
 
@@ -97,6 +101,10 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if s.heartbeat != nil {
+		s.heartbeat.TriggerWakeup()
+	}
+
 	updated, _ := s.taskMgr.GetTask(r.Context(), id)
 	s.respondJSON(w, http.StatusOK, updated)
 }
@@ -112,6 +120,10 @@ func (s *Server) handleDeleteTask(w http.ResponseWriter, r *http.Request) {
 	if err := s.taskMgr.DeleteTask(r.Context(), id); err != nil {
 		s.respondError(w, http.StatusInternalServerError, "TASK_DELETE_FAILED", err.Error())
 		return
+	}
+
+	if s.heartbeat != nil {
+		s.heartbeat.TriggerWakeup()
 	}
 
 	s.respondJSON(w, http.StatusOK, map[string]string{"status": "deleted", "id": id})
@@ -157,6 +169,10 @@ func (s *Server) handleSaveHeartbeatConfig(w http.ResponseWriter, r *http.Reques
 	if err := s.taskMgr.SaveHeartbeatConfig(r.Context(), req); err != nil {
 		s.respondError(w, http.StatusInternalServerError, "CONFIG_SAVE_FAILED", err.Error())
 		return
+	}
+
+	if s.heartbeat != nil {
+		s.heartbeat.SyncConfig(req)
 	}
 
 	s.respondJSON(w, http.StatusOK, req)

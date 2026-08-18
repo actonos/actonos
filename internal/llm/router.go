@@ -139,6 +139,9 @@ func (r *ModelCascadeRouter) CompleteWithCascade(
 
 		resp, err := provider.Complete(ctx, messages, callOpts)
 		if err == nil {
+			if target != "" {
+				resp.Model = target
+			}
 			return resp, nil
 		}
 
