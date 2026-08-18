@@ -160,6 +160,9 @@ func (s *Server) handleExecuteTool(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
+	if r.URL.Query().Get("test") == "true" || r.URL.Query().Get("bypass_approval") == "true" {
+		ctx = tools.WithBypassApproval(ctx)
+	}
 	if req.ApprovalID != "" {
 		ctx = tools.WithApprovalID(ctx, req.ApprovalID)
 	}

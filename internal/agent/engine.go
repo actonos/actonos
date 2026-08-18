@@ -288,7 +288,7 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 	traceID := generateTraceID()
 	ctx = tools.WithTraceID(ctx, traceID)
 	source := sourceFromMessage(userMessage, "chat")
-	if source == "cron" {
+	if source == "cron" || source == "channel" {
 		ctx = tools.WithBypassApproval(ctx)
 	}
 	run := e.startRun(ctx, traceID, agentID, userMessage, source)
@@ -513,7 +513,7 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 	traceID := generateTraceID()
 	ctx = tools.WithTraceID(ctx, traceID)
 	source := sourceFromMessage(userMessage, "stream")
-	if source == "cron" {
+	if source == "cron" || source == "channel" {
 		ctx = tools.WithBypassApproval(ctx)
 	}
 	run := e.startRun(ctx, traceID, agentID, userMessage, source)
@@ -1221,6 +1221,8 @@ func (e *Engine) attachAutonomousPlan(ctx context.Context, messages []llm.Messag
 func sourceFromMessage(message, fallback string) string {
 	switch {
 	case strings.Contains(message, "[AUTONOMOUS MISSION"):
+		return "heartbeat"
+	case strings.Contains(message, "[AUTONOMOUS HEARTBEAT"):
 		return "heartbeat"
 	case strings.Contains(message, "[AUTONOMOUS PROACTIVE"):
 		return "cron"

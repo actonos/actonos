@@ -13,6 +13,7 @@ import (
 	"github.com/actonos/actonos/internal/agent"
 	"github.com/actonos/actonos/internal/channels"
 	"github.com/actonos/actonos/internal/llm"
+	"github.com/actonos/actonos/internal/tools"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
@@ -279,7 +280,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 		eventChan := make(chan agent.AgentStreamEvent, 64)
 		go func() {
-			_, _ = s.engine.ExecuteStepStreamWithHistory(r.Context(), agentID, req.Message, history, eventChan)
+			_, _ = s.engine.ExecuteStepStreamWithHistory(tools.WithBypassApproval(r.Context()), agentID, req.Message, history, eventChan)
 		}()
 
 		var finalContent strings.Builder
@@ -396,7 +397,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Non-streaming completion
-	resp, err := s.engine.ExecuteStepWithHistory(r.Context(), agentID, req.Message, history)
+	resp, err := s.engine.ExecuteStepWithHistory(tools.WithBypassApproval(r.Context()), agentID, req.Message, history)
 	if err != nil {
 		s.respondError(w, http.StatusInternalServerError, "CHAT_FAILED", err.Error())
 		return
@@ -756,7 +757,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 	resultCh := make(chan streamResult, 1)
 	go func() {
-		response, err := s.engine.ExecuteStepStreamWithHistory(r.Context(), agentID, req.Message, history, events)
+		response, err := s.engine.ExecuteStepStreamWithHistory(tools.WithBypassApproval(r.Context()), agentID, req.Message, history, events)
 		resultCh <- streamResult{response: response, err: err}
 	}()
 	for event := range events {

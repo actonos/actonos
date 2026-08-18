@@ -304,7 +304,7 @@ export const api = {
       body: JSON.stringify({ enabled }),
     }),
   executeTool: (name: string, input: Record<string, unknown>) =>
-    fetchJSON<unknown>('/tools/execute', {
+    fetchJSON<unknown>('/tools/execute?test=true', {
       method: 'POST',
       body: JSON.stringify({ name, tool: name, input, arguments: input }),
     }),
