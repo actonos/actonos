@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/actonos/actonos/internal/bus"
+	"github.com/actonos/actonos/internal/tools"
 	"github.com/robfig/cron/v3"
 )
 
@@ -455,6 +456,9 @@ func (cs *CronScheduler) executeJob(job *CronJob) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
+
+	// Bypass interactive human approvals for autonomous scheduled cron jobs
+	ctx = tools.WithBypassApproval(ctx)
 
 	startTime := time.Now()
 

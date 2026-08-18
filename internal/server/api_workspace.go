@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io"
 	"mime"
@@ -143,6 +144,9 @@ func (s *Server) handleGetWorkspaceFile(w http.ResponseWriter, r *http.Request) 
 	}
 	if kind != "image" && kind != "pdf" && kind != "binary" {
 		resp["content"] = string(data)
+	} else if kind == "image" || kind == "pdf" {
+		b64 := base64.StdEncoding.EncodeToString(data)
+		resp["data_url"] = fmt.Sprintf("data:%s;base64,%s", mimeType, b64)
 	}
 	s.respondJSON(w, http.StatusOK, resp)
 }

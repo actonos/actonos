@@ -45,6 +45,7 @@ export function WorkspacePage() {
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState('');
+  const [fileDataUrl, setFileDataUrl] = useState('');
   const [originalContent, setOriginalContent] = useState('');
   const [showDiff, setShowDiff] = useState(false);
   const [fileKind, setFileKind] = useState<string>('text');
@@ -76,6 +77,7 @@ export function WorkspacePage() {
       const res = await api.getWorkspaceFile(filePath);
       setFileKind(res.kind ?? 'text');
       setFileContent(res.content ?? '');
+      setFileDataUrl(res.data_url ?? '');
       setOriginalContent(res.content ?? '');
       setShowDiff(false);
     } catch (err) {
@@ -106,6 +108,7 @@ export function WorkspacePage() {
       if (selectedFile === deletingPath) {
         setSelectedFile(null);
         setFileContent('');
+        setFileDataUrl('');
         setOriginalContent('');
       }
       setDeletingPath(null);
@@ -379,7 +382,7 @@ export function WorkspacePage() {
                       onClick={() => {
                         if (fileKind !== 'text') {
                           const a = document.createElement('a');
-                          a.href = api.workspaceRawUrl(selectedFile);
+                          a.href = fileDataUrl || api.workspaceRawUrl(selectedFile);
                           a.download = selectedFile.split('/').pop() || 'file';
                           a.click();
                           success('File Downloaded', `Downloaded ${a.download}`);
@@ -416,12 +419,12 @@ export function WorkspacePage() {
                 <div className="flex-1 relative min-h-0">
                   {fileKind === 'image' && selectedFile ? (
                     <div className="flex flex-col items-center justify-center h-full bg-soft-meadow rounded-[16px] p-4 overflow-hidden">
-                      {imgError ? (
+                      {imgError && !fileDataUrl ? (
                         <div className="text-center p-6 space-y-2">
                           <AlertCircle className="w-10 h-10 text-amber-600 mx-auto" />
                           <p className="font-mono text-body-sm text-deep-ink font-semibold">Unable to preview image</p>
                           <a
-                            href={api.workspaceRawUrl(selectedFile)}
+                            href={fileDataUrl || api.workspaceRawUrl(selectedFile)}
                             download
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-deep-ink text-white text-caption font-medium"
                           >
@@ -431,7 +434,7 @@ export function WorkspacePage() {
                         </div>
                       ) : (
                         <img
-                          src={api.workspaceRawUrl(selectedFile)}
+                          src={fileDataUrl || api.workspaceRawUrl(selectedFile)}
                           alt={selectedFile}
                           onError={() => setImgError(true)}
                           className="max-w-full max-h-[520px] object-contain mx-auto rounded-xl shadow-xs"
@@ -440,7 +443,7 @@ export function WorkspacePage() {
                     </div>
                   ) : fileKind === 'pdf' && selectedFile ? (
                     <iframe
-                      src={api.workspaceRawUrl(selectedFile)}
+                      src={fileDataUrl || api.workspaceRawUrl(selectedFile)}
                       title={selectedFile}
                       className="w-full h-full border-0 rounded-xl min-h-[500px]"
                     />

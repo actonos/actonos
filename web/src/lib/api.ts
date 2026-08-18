@@ -354,7 +354,7 @@ export const api = {
       count: r.count || (r.files ? r.files.length : 0),
     })),
   getWorkspaceFile: (path: string) =>
-    fetchJSON<{ path: string; content?: string; size: number; kind: string; mime: string }>(`/workspace/file?path=${encodeURIComponent(path)}`),
+    fetchJSON<{ path: string; content?: string; data_url?: string; size: number; kind: string; mime: string }>(`/workspace/file?path=${encodeURIComponent(path)}`),
   workspaceRawUrl: (path: string) =>
     `${API_BASE}/workspace/raw?path=${encodeURIComponent(path)}`,
   saveWorkspaceFile: (path: string, content: string) =>

@@ -102,6 +102,19 @@ func WithApprovalID(ctx context.Context, approvalID string) context.Context {
 	return context.WithValue(ctx, approvalContextKey, approvalID)
 }
 
+type bypassApprovalContextKey struct{}
+
+// WithBypassApproval marks the context to bypass interactive approval requirements (e.g. for background cron jobs).
+func WithBypassApproval(ctx context.Context) context.Context {
+	return context.WithValue(ctx, bypassApprovalContextKey{}, true)
+}
+
+// IsApprovalBypassed checks if approval checks should be bypassed for this execution.
+func IsApprovalBypassed(ctx context.Context) bool {
+	val, _ := ctx.Value(bypassApprovalContextKey{}).(bool)
+	return val
+}
+
 // TraceIDFromContext retrieves the current trace identifier.
 func TraceIDFromContext(ctx context.Context) string {
 	value, _ := ctx.Value(traceIDContextKey).(string)
@@ -321,7 +334,7 @@ func (r *ToolRegistry) Execute(ctx context.Context, agentID, name string, inputJ
 		ctx = WithTraceID(ctx, traceID)
 	}
 
-	if resolver != nil && approvalRequired(policy.ApprovalThreshold, riskLevel) {
+	if resolver != nil && approvalRequired(policy.ApprovalThreshold, riskLevel) && !IsApprovalBypassed(ctx) {
 		approvalID, _ := ctx.Value(approvalContextKey).(string)
 		if approvalID == "" {
 			request, requestErr := approvalManager.Request(ctx, traceID, agentID, name, riskLevel, normalizedInput)

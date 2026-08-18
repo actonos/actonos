@@ -288,6 +288,9 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 	traceID := generateTraceID()
 	ctx = tools.WithTraceID(ctx, traceID)
 	source := sourceFromMessage(userMessage, "chat")
+	if source == "cron" {
+		ctx = tools.WithBypassApproval(ctx)
+	}
 	run := e.startRun(ctx, traceID, agentID, userMessage, source)
 
 	if e.bus != nil {
@@ -510,6 +513,9 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 	traceID := generateTraceID()
 	ctx = tools.WithTraceID(ctx, traceID)
 	source := sourceFromMessage(userMessage, "stream")
+	if source == "cron" {
+		ctx = tools.WithBypassApproval(ctx)
+	}
 	run := e.startRun(ctx, traceID, agentID, userMessage, source)
 
 	eventChan <- AgentStreamEvent{
