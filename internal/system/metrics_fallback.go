@@ -4,7 +4,6 @@ package system
 
 import (
 	"math/rand"
-	"os"
 	"runtime"
 	"time"
 )
