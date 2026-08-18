@@ -39,21 +39,106 @@ func NewOpenAIProvider(apiKey, model, baseURL string) *OpenAIProvider {
 	}
 }
 
+type openAIMessage struct {
+	Role             string           `json:"role"`
+	Content          *string          `json:"content"`
+	ReasoningContent *string          `json:"reasoning_content,omitempty"`
+	ToolCalls        []openAIToolCall `json:"tool_calls,omitempty"`
+	ToolCallID       string           `json:"tool_call_id,omitempty"`
+	Name             string           `json:"name,omitempty"`
+}
+
+type openAIToolCall struct {
+	Index    *int               `json:"index,omitempty"`
+	ID       string             `json:"id"`
+	Type     string             `json:"type"` // "function"
+	Function openAIFunctionCall `json:"function"`
+}
+
+type openAIFunctionCall struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
+}
+
 type openAIChatRequest struct {
 	Model       string           `json:"model"`
-	Messages    []Message        `json:"messages"`
+	Messages    []openAIMessage  `json:"messages"`
 	Temperature *float64         `json:"temperature,omitempty"`
 	MaxTokens   *int             `json:"max_tokens,omitempty"`
 	Tools       []ToolDefinition `json:"tools,omitempty"`
 	Stream      bool             `json:"stream,omitempty"`
 }
 
+func normalizeToolArguments(raw json.RawMessage) string {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" {
+		return "{}"
+	}
+	if strings.HasPrefix(trimmed, "\"") && strings.HasSuffix(trimmed, "\"") {
+		var unquoted string
+		if err := json.Unmarshal(raw, &unquoted); err == nil {
+			return unquoted
+		}
+	}
+	return trimmed
+}
+
+func toOpenAIMessages(messages []Message) []openAIMessage {
+	result := make([]openAIMessage, 0, len(messages))
+	for _, m := range messages {
+		var toolCalls []openAIToolCall
+		if len(m.ToolCalls) > 0 {
+			toolCalls = make([]openAIToolCall, 0, len(m.ToolCalls))
+			for _, tc := range m.ToolCalls {
+				argStr := normalizeToolArguments(tc.Function.Arguments)
+				toolType := tc.Type
+				if toolType == "" {
+					toolType = "function"
+				}
+				toolCalls = append(toolCalls, openAIToolCall{
+					ID:   tc.ID,
+					Type: toolType,
+					Function: openAIFunctionCall{
+						Name:      tc.Function.Name,
+						Arguments: argStr,
+					},
+				})
+			}
+		}
+
+		c := m.Content
+		var rcPtr *string
+		if m.Role == RoleAssistant {
+			rc := m.ReasoningContent
+			rcPtr = &rc
+		}
+
+		result = append(result, openAIMessage{
+			Role:             string(m.Role),
+			Content:          &c,
+			ReasoningContent: rcPtr,
+			ToolCalls:        toolCalls,
+			ToolCallID:       m.ToolCallID,
+			Name:             m.Name,
+		})
+	}
+	return result
+}
+
 type openAIChatResponse struct {
 	Choices []struct {
 		Message struct {
-			Role      string     `json:"role"`
-			Content   string     `json:"content"`
-			ToolCalls []ToolCall `json:"tool_calls,omitempty"`
+			Role             string `json:"role"`
+			Content          string `json:"content"`
+			ReasoningContent string `json:"reasoning_content,omitempty"`
+			ToolCalls        []struct {
+				ID       string `json:"id"`
+				Type     string `json:"type"`
+				Function struct {
+					Name      string `json:"name"`
+					Arguments string `json:"arguments"`
+				} `json:"function"`
+			} `json:"tool_calls,omitempty"`
 		} `json:"message"`
 		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
@@ -78,7 +163,7 @@ func (p *OpenAIProvider) Complete(ctx context.Context, messages []Message, opts 
 
 	reqBody := openAIChatRequest{
 		Model:       model,
-		Messages:    messages,
+		Messages:    toOpenAIMessages(messages),
 		Temperature: opts.Temperature,
 		MaxTokens:   opts.MaxTokens,
 		Tools:       opts.Tools,
@@ -129,10 +214,27 @@ func (p *OpenAIProvider) Complete(ctx context.Context, messages []Message, opts 
 	}
 
 	firstChoice := chatResp.Choices[0]
+	var respToolCalls []ToolCall
+	for _, tc := range firstChoice.Message.ToolCalls {
+		toolType := tc.Type
+		if toolType == "" {
+			toolType = "function"
+		}
+		respToolCalls = append(respToolCalls, ToolCall{
+			ID:   tc.ID,
+			Type: toolType,
+			Function: FunctionCall{
+				Name:      tc.Function.Name,
+				Arguments: json.RawMessage(tc.Function.Arguments),
+			},
+		})
+	}
+
 	return &Response{
-		Content:   firstChoice.Message.Content,
-		ToolCalls: firstChoice.Message.ToolCalls,
-		Model:     chatResp.Model,
+		Content:          firstChoice.Message.Content,
+		ReasoningContent: firstChoice.Message.ReasoningContent,
+		ToolCalls:        respToolCalls,
+		Model:            chatResp.Model,
 		Usage: Usage{
 			PromptTokens:     chatResp.Usage.PromptTokens,
 			CompletionTokens: chatResp.Usage.CompletionTokens,
@@ -148,7 +250,7 @@ func (p *OpenAIProvider) StreamComplete(ctx context.Context, messages []Message,
 		model = opts.Model
 	}
 	reqBody := openAIChatRequest{
-		Model: model, Messages: messages, Temperature: opts.Temperature,
+		Model: model, Messages: toOpenAIMessages(messages), Temperature: opts.Temperature,
 		MaxTokens: opts.MaxTokens, Tools: opts.Tools, Stream: true,
 	}
 	payload, err := json.Marshal(reqBody)
@@ -223,8 +325,9 @@ func (p *OpenAIProvider) StreamComplete(ctx context.Context, messages []Message,
 			var event struct {
 				Choices []struct {
 					Delta struct {
-						Content   string `json:"content"`
-						ToolCalls []struct {
+						Content          string `json:"content"`
+						ReasoningContent string `json:"reasoning_content,omitempty"`
+						ToolCalls        []struct {
 							Index    int    `json:"index"`
 							ID       string `json:"id"`
 							Type     string `json:"type"`
@@ -267,8 +370,9 @@ func (p *OpenAIProvider) StreamComplete(ctx context.Context, messages []Message,
 					call.arguments.WriteString(delta.Function.Arguments)
 				}
 				ch <- StreamChunk{
-					DeltaContent: event.Choices[0].Delta.Content,
-					Usage:        event.Usage,
+					DeltaContent:   event.Choices[0].Delta.Content,
+					DeltaReasoning: event.Choices[0].Delta.ReasoningContent,
+					Usage:          event.Usage,
 				}
 			} else if event.Usage != nil {
 				ch <- StreamChunk{Usage: event.Usage}

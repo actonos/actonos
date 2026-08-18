@@ -2,6 +2,7 @@ package llm
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 )
@@ -88,3 +89,101 @@ func TestModelCascadeRouter_Embed(t *testing.T) {
 		t.Fatalf("expected 64 dimensions, got %d", len(embeddings[0]))
 	}
 }
+
+func TestToOpenAIMessages_ToolArgumentsSerializedAsString(t *testing.T) {
+	msgs := []Message{
+		{Role: RoleUser, Content: "Find hot tech news"},
+		{
+			Role:    RoleAssistant,
+			Content: "",
+			ToolCalls: []ToolCall{
+				{
+					ID:   "call_search_1",
+					Type: "function",
+					Function: FunctionCall{
+						Name:      "web_search",
+						Arguments: []byte(`{"query":"hot tech news 2026"}`),
+					},
+				},
+			},
+		},
+		{
+			Role:       RoleTool,
+			ToolCallID: "call_search_1",
+			Content:    "Found 5 articles",
+		},
+	}
+
+	converted := toOpenAIMessages(msgs)
+	if len(converted) != 3 {
+		t.Fatalf("expected 3 messages, got %d", len(converted))
+	}
+
+	asst := converted[1]
+	if len(asst.ToolCalls) != 1 {
+		t.Fatalf("expected 1 tool call, got %d", len(asst.ToolCalls))
+	}
+
+	if asst.ToolCalls[0].Function.Arguments != `{"query":"hot tech news 2026"}` {
+		t.Fatalf("expected raw JSON string arguments, got %s", asst.ToolCalls[0].Function.Arguments)
+	}
+
+	req := openAIChatRequest{
+		Model:    "deepseek-chat",
+		Messages: converted,
+	}
+	rawJSON, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	// Verify that arguments in the JSON output is a string ("arguments":"{...}") and NOT a raw object ("arguments":{...})
+	var rawMap map[string]any
+	if err := json.Unmarshal(rawJSON, &rawMap); err != nil {
+		t.Fatalf("json.Unmarshal into generic map failed: %v", err)
+	}
+
+	messagesList, ok := rawMap["messages"].([]any)
+	if !ok || len(messagesList) < 2 {
+		t.Fatalf("unexpected messages payload in json: %v", rawMap["messages"])
+	}
+
+	asstMap, ok := messagesList[1].(map[string]any)
+	if !ok {
+		t.Fatalf("messages[1] is not a map: %v", messagesList[1])
+	}
+
+	tcList, ok := asstMap["tool_calls"].([]any)
+	if !ok || len(tcList) == 0 {
+		t.Fatalf("tool_calls missing in messages[1]: %v", asstMap)
+	}
+
+	tc0, ok := tcList[0].(map[string]any)
+	if !ok {
+		t.Fatalf("tool_calls[0] is not a map: %v", tcList[0])
+	}
+
+	fnMap, ok := tc0["function"].(map[string]any)
+	if !ok {
+		t.Fatalf("function is not a map: %v", tc0["function"])
+	}
+
+	argsVal, ok := fnMap["arguments"].(string)
+	if !ok {
+		t.Fatalf("expected function.arguments to be a string in JSON, but got %T: %v", fnMap["arguments"], fnMap["arguments"])
+	}
+
+	if argsVal != `{"query":"hot tech news 2026"}` {
+		t.Fatalf("expected string value `{\"query\":\"hot tech news 2026\"}`, got: %s", argsVal)
+	}
+
+	// Verify that reasoning_content field is present in assistant message JSON (for DeepSeek/R1 thinking mode compliance)
+	rcVal, hasRC := asstMap["reasoning_content"]
+	if !hasRC {
+		t.Fatal("expected reasoning_content field to be present in assistant message JSON")
+	}
+	if _, isString := rcVal.(string); !isString {
+		t.Fatalf("expected reasoning_content to be string in JSON, got %T", rcVal)
+	}
+}
+

@@ -726,9 +726,14 @@ func (t *WebSearchTool) Execute(ctx context.Context, inputJSON json.RawMessage) 
 		}, nil
 	}
 
-	rawJSON, _ := json.MarshalIndent(results, "", "  ")
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "Web Search Results for '%s' (%d items found):\n\n", input.Query, len(results))
+	for i, item := range results {
+		fmt.Fprintf(&sb, "%d. **%s**\n   - Snippet: %s\n   - URL: %s\n\n", i+1, item.Title, item.Snippet, item.URL)
+	}
+
 	return &ToolResult{
-		Content: fmt.Sprintf("Web Search Results for '%s':\n%s", input.Query, string(rawJSON)),
+		Content: strings.TrimSpace(sb.String()),
 		Data:    map[string]any{"query": input.Query, "count": len(results), "results": results},
 	}, nil
 }

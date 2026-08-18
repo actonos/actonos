@@ -208,7 +208,7 @@ func (s *Server) setupRoutes() {
 	r.Use(middleware.RealIP)
 	r.Use(s.securityHeadersMiddleware)
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(60 * time.Second))
+	r.Use(middleware.Timeout(10 * time.Minute))
 
 	// CORS for development and cross-origin Web UI
 	r.Use(cors.Handler(cors.Options{

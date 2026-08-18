@@ -166,8 +166,12 @@ func (e *Engine) buildCognitivePrompt(ctx context.Context, agentID string, agent
 		if profile.UserRole != "" {
 			fmt.Fprintf(&sb, "- **Collaborator Role**: %s\n", profile.UserRole)
 		}
-		if profile.Language != "" {
-			fmt.Fprintf(&sb, "- **Preferred Language**: %s\n", profile.Language)
+		userLang := profile.Language
+		if prefLang, ok := profile.Preferences["language"]; ok && prefLang != "" {
+			userLang = prefLang
+		}
+		if userLang != "" {
+			fmt.Fprintf(&sb, "- **Collaborator Preferred Language**: %s (Primary rule: always respond in the exact language of the user's prompt)\n", userLang)
 		}
 		if profile.Timezone != "" {
 			fmt.Fprintf(&sb, "- **Timezone**: %s (Current Time: %s)\n", profile.Timezone, time.Now().UTC().Format(time.RFC3339))
@@ -201,7 +205,7 @@ func (e *Engine) buildCognitivePrompt(ctx context.Context, agentID string, agent
 	// 6. Universal Conversational Standards & Anti-Robot Principles (Multi-Purpose)
 	sb.WriteString("## Universal Operating Standards & Demeanor\n")
 	sb.WriteString("- **Language Match (CRITICAL)**: Always respond in the EXACT language used by the collaborator in their prompt (e.g. Vietnamese if asked in Vietnamese, English if asked in English).\n")
-	sb.WriteString("- **Direct Answer Delivery (CRITICAL)**: Always provide the actual answer, news, findings, or solution requested. NEVER respond with an empty greeting, status recap, or service menu ('Hey, I'm here and ready...') when the user asked for information or tasks.\n")
+	sb.WriteString("- **Direct Answer Delivery (CRITICAL)**: When asked for news, research, summaries, or questions, you MUST deliver the actual news, facts, and answers directly. NEVER output an introductory greeting, capability menu ('Nova here, fully operational...'), or self-introduction when an inquiry or command is given.\n")
 	sb.WriteString("- **Authentic & Empathetic Partnership**: Communicate naturally, intelligently, and respectfully. Embody your designated role and expertise with genuine dedication.\n")
 	sb.WriteString("- **Zero Robotic Clichés**: NEVER produce canned AI disclaimers ('As an AI...', 'I am just a language model...'), generic filler, or repetitive apologies. Dive straight into meaningful, high-value assistance.\n")
 	sb.WriteString("- **Clarity & Actionable Insight**: Deliver structured, clear, and beautifully formatted Markdown responses. Provide decisive recommendations, thorough analysis, or precise actions tailored to the user's specific domain.\n\n")
@@ -212,7 +216,7 @@ func (e *Engine) buildCognitivePrompt(ctx context.Context, agentID string, agent
 	sb.WriteString("  - For web search, news, current events, or general knowledge: use `native_web_search`. NEVER explore workspace files (`native_file_read`, `native_file_list`), NEVER run shell commands (`native_exec`), and NEVER inspect host hardware telemetry (`native_sysinfo`).\n")
 	sb.WriteString("  - For workspace code or local file questions: only then inspect files in the workspace.\n")
 	sb.WriteString("  - NEVER randomly read filesystem files or query system diagnostics unless the user explicitly requested system or file operations.\n")
-	sb.WriteString("- **Synthesize Tool Results (CRITICAL)**: When tool observations are present in the conversation, your response MUST synthesize and present the actual data and news gathered. NEVER ignore tool results to output a generic greeting.\n")
+	sb.WriteString("- **Synthesize Tool Results (CRITICAL)**: When `native_web_search` or other tools return observations, you MUST immediately synthesize the findings and provide the complete answer, summary, or news directly to the collaborator. Do not ask what to tackle first; you must answer the current question immediately.\n")
 	sb.WriteString("- **Immediate Convergence**: As soon as relevant information is gathered (e.g. from web search or file read), IMMEDIATELY deliver your final response to the user. Do NOT invoke extra or unrelated tools.\n")
 	sb.WriteString("- **Graceful Fallback**: If a tool returns no results, do not randomly try unrelated tools. Directly explain what you searched and provide the best available answer or summary.\n\n")
 
@@ -423,11 +427,12 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 			break
 		}
 
-		// Append assistant response with requested tool calls
+		// Append assistant response with requested tool calls (Content is empty so LLM generates the final answer in the next iteration)
 		messages = append(messages, llm.Message{
-			Role:      llm.RoleAssistant,
-			Content:   resp.Content,
-			ToolCalls: resp.ToolCalls,
+			Role:             llm.RoleAssistant,
+			Content:          "",
+			ReasoningContent: resp.ReasoningContent,
+			ToolCalls:        resp.ToolCalls,
 		})
 
 		// Execute each tool call
@@ -635,7 +640,7 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 
 	var finalResp *llm.Response
 	totalUsage := llm.Usage{}
-	maxIterations := 10
+	maxIterations := 5
 	converged := false
 	iterationsCompleted := 0
 	consecutiveFailures := 0
@@ -650,7 +655,7 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 		}
 
 		currentOpts := opts
-		if iter == maxIterations-1 {
+		if iter >= 3 || iter == maxIterations-1 {
 			currentOpts.Tools = nil
 			messages = append(messages, llm.Message{
 				Role:    llm.RoleSystem,
@@ -709,11 +714,12 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 			break
 		}
 
-		// Append assistant response with requested tool calls
+		// Append assistant response with requested tool calls (Content is empty so LLM generates the final answer in the next iteration)
 		messages = append(messages, llm.Message{
-			Role:      llm.RoleAssistant,
-			Content:   resp.Content,
-			ToolCalls: resp.ToolCalls,
+			Role:             llm.RoleAssistant,
+			Content:          "",
+			ReasoningContent: resp.ReasoningContent,
+			ToolCalls:        resp.ToolCalls,
 		})
 
 		// Execute each tool call with AST inspection & live streaming events
@@ -1127,7 +1133,10 @@ func (e *Engine) ResumeApproved(ctx context.Context, approval tools.ApprovalRequ
 			return response, nil
 		}
 		messages = append(messages, llm.Message{
-			Role: llm.RoleAssistant, Content: response.Content, ToolCalls: response.ToolCalls,
+			Role:             llm.RoleAssistant,
+			Content:          response.Content,
+			ReasoningContent: response.ReasoningContent,
+			ToolCalls:        response.ToolCalls,
 		})
 		for _, call := range response.ToolCalls {
 			toolResult, toolErr := e.tools.Execute(execCtx, checkpoint.AgentID, call.Function.Name, call.Function.Arguments)
@@ -1325,20 +1334,27 @@ func (e *Engine) completeStreamIteration(
 	if len(cascadeOrder) > 0 {
 		response.Model = cascadeOrder[0]
 	}
+
+	var deltaTokens []string
+
 	for {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case chunk, ok := <-stream:
 			if !ok {
-				return response, nil
+				goto DoneStream
 			}
 			if chunk.Error != nil {
 				return nil, chunk.Error
 			}
+			if chunk.DeltaReasoning != "" {
+				response.ReasoningContent += chunk.DeltaReasoning
+				eventChan <- AgentStreamEvent{Type: EventStreamThought, Thought: chunk.DeltaReasoning}
+			}
 			if chunk.DeltaContent != "" {
 				response.Content += chunk.DeltaContent
-				eventChan <- AgentStreamEvent{Type: EventStreamToken, Content: chunk.DeltaContent}
+				deltaTokens = append(deltaTokens, chunk.DeltaContent)
 			}
 			if len(chunk.ToolCalls) > 0 {
 				response.ToolCalls = append(response.ToolCalls, chunk.ToolCalls...)
@@ -1347,10 +1363,26 @@ func (e *Engine) completeStreamIteration(
 				response.Usage = *chunk.Usage
 			}
 			if chunk.Done {
-				return response, nil
+				goto DoneStream
 			}
 		}
 	}
+
+DoneStream:
+	// If no tool calls were made, this is the final answer iteration: stream tokens to user
+	if len(response.ToolCalls) == 0 {
+		for _, tok := range deltaTokens {
+			eventChan <- AgentStreamEvent{Type: EventStreamToken, Content: tok}
+		}
+	} else if len(deltaTokens) > 0 {
+		// If text was generated alongside tool calls, emit as thought so it doesn't pollute the final answer
+		combinedThought := strings.TrimSpace(strings.Join(deltaTokens, ""))
+		if combinedThought != "" {
+			eventChan <- AgentStreamEvent{Type: EventStreamThought, Thought: combinedThought}
+		}
+	}
+
+	return response, nil
 }
 
 func (e *Engine) blockTaskOnResumeFailure(ctx context.Context, checkpoint *RunCheckpoint, reason string) {

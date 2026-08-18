@@ -46,8 +46,9 @@ func SanitizeMessages(messages []Message) []Message {
 						content = "[Completed tool actions]"
 					}
 					cleaned = append(cleaned, Message{
-						Role:    RoleAssistant,
-						Content: content,
+						Role:             RoleAssistant,
+						Content:          content,
+						ReasoningContent: msg.ReasoningContent,
 					})
 				} else {
 					// Assistant message with at least some tool responses
@@ -72,8 +73,9 @@ func SanitizeMessages(messages []Message) []Message {
 					content = "[Acknowledged]"
 				}
 				cleaned = append(cleaned, Message{
-					Role:    RoleAssistant,
-					Content: content,
+					Role:             RoleAssistant,
+					Content:          content,
+					ReasoningContent: msg.ReasoningContent,
 				})
 			}
 

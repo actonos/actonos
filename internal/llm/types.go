@@ -14,11 +14,12 @@ const (
 
 // Message represents a single message in an LLM conversation.
 type Message struct {
-	Role       Role        `json:"role"`
-	Content    string      `json:"content"`
-	ToolCalls  []ToolCall  `json:"tool_calls,omitempty"`
-	ToolCallID string      `json:"tool_call_id,omitempty"`
-	Name       string      `json:"name,omitempty"`
+	Role             Role        `json:"role"`
+	Content          string      `json:"content"`
+	ReasoningContent string      `json:"reasoning_content,omitempty"`
+	ToolCalls        []ToolCall  `json:"tool_calls,omitempty"`
+	ToolCallID       string      `json:"tool_call_id,omitempty"`
+	Name             string      `json:"name,omitempty"`
 }
 
 // ToolCall represents a structured function call invoked by the model.
@@ -74,17 +75,19 @@ type Usage struct {
 
 // Response represents a non-streaming completion result.
 type Response struct {
-	Content   string     `json:"content"`
-	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
-	Usage     Usage      `json:"usage"`
-	Model     string     `json:"model"`
+	Content          string     `json:"content"`
+	ReasoningContent string     `json:"reasoning_content,omitempty"`
+	ToolCalls        []ToolCall `json:"tool_calls,omitempty"`
+	Usage            Usage      `json:"usage"`
+	Model            string     `json:"model"`
 }
 
 // StreamChunk represents a single chunk during streaming completions.
 type StreamChunk struct {
-	DeltaContent string     `json:"delta_content,omitempty"`
-	ToolCalls    []ToolCall `json:"tool_calls,omitempty"`
-	Usage        *Usage     `json:"usage,omitempty"`
-	Done         bool       `json:"done"`
-	Error        error      `json:"error,omitempty"`
+	DeltaContent   string     `json:"delta_content,omitempty"`
+	DeltaReasoning string     `json:"delta_reasoning,omitempty"`
+	ToolCalls      []ToolCall `json:"tool_calls,omitempty"`
+	Usage          *Usage     `json:"usage,omitempty"`
+	Done           bool       `json:"done"`
+	Error          error      `json:"error,omitempty"`
 }
