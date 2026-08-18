@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/actonos/actonos/internal/llm"
@@ -99,11 +101,37 @@ func NewPlanner(llmRouter *llm.ModelCascadeRouter) *Planner {
 	return &Planner{llmRouter: llmRouter}
 }
 
-// DecomposeGoal decomposes a complex user prompt into structured subtasks.
-func (p *Planner) DecomposeGoal(ctx context.Context, goal string, availableAgents []AgentManifest) (*TaskPlan, error) {
+// DecomposeGoal decomposes a complex user prompt into structured subtasks using the configured agent models.
+func (p *Planner) DecomposeGoal(ctx context.Context, goal string, availableAgents []AgentManifest, modelCascade ...string) (*TaskPlan, error) {
 	plan := &TaskPlan{
 		Goal:      goal,
 		CreatedAt: time.Now().UTC(),
+	}
+
+	// 1. Build cascade of models dynamically from passed models or available agents
+	var cascade []string
+	seen := make(map[string]bool)
+	for _, m := range modelCascade {
+		m = strings.TrimSpace(m)
+		if m != "" && !seen[m] {
+			seen[m] = true
+			cascade = append(cascade, m)
+		}
+	}
+	if len(cascade) == 0 {
+		for _, ag := range availableAgents {
+			if ag.ModelConfig.PrimaryModel != "" && !seen[ag.ModelConfig.PrimaryModel] {
+				seen[ag.ModelConfig.PrimaryModel] = true
+				cascade = append(cascade, ag.ModelConfig.PrimaryModel)
+			}
+			if ag.ModelConfig.FallbackModel != "" && !seen[ag.ModelConfig.FallbackModel] {
+				seen[ag.ModelConfig.FallbackModel] = true
+				cascade = append(cascade, ag.ModelConfig.FallbackModel)
+			}
+		}
+	}
+	if len(cascade) == 0 {
+		cascade = []string{"anthropic/claude-sonnet-4.5", "google/gemini-2.5-flash"}
 	}
 
 	prompt := fmt.Sprintf(`You are the ActonOS Orchestration Planner.
@@ -131,9 +159,9 @@ Return ONLY valid JSON in this exact structure:
 		Temperature: &temp,
 	}
 
-	resp, err := p.llmRouter.CompleteWithCascade(ctx, []string{"anthropic/claude-sonnet-4.5", "google/gemini-2.5-flash"}, messages, opts)
+	resp, err := p.llmRouter.CompleteWithCascade(ctx, cascade, messages, opts)
 	if err != nil {
-		slog.Warn("planner fallback to basic decomposition", "error", err)
+		slog.Warn("planner fallback to basic decomposition", "cascade", cascade, "error", err)
 		plan.Steps = []PlanStep{
 			{ID: "task_1", Description: "Execute initial analysis for: " + goal, AgentRole: "general", Status: "pending"},
 			{ID: "task_2", Description: "Consolidate and verify results for: " + goal, AgentRole: "report", Dependencies: []string{"task_1"}, Status: "pending"},
@@ -141,8 +169,24 @@ Return ONLY valid JSON in this exact structure:
 		return plan, nil
 	}
 
+	cleanedContent := strings.TrimSpace(resp.Content)
+	if strings.HasPrefix(cleanedContent, "```") {
+		lines := strings.Split(cleanedContent, "\n")
+		if len(lines) >= 2 {
+			cleanedContent = strings.Join(lines[1:len(lines)-1], "\n")
+		}
+	}
+	cleanedContent = strings.TrimSpace(cleanedContent)
+
 	var steps []PlanStep
-	if err := json.Unmarshal([]byte(resp.Content), &steps); err != nil {
+	if err := json.Unmarshal([]byte(cleanedContent), &steps); err != nil {
+		re := regexp.MustCompile(`(?s)\[\s*\{.*\}\s*\]`)
+		if match := re.FindString(cleanedContent); match != "" {
+			_ = json.Unmarshal([]byte(match), &steps)
+		}
+	}
+
+	if len(steps) == 0 {
 		plan.Steps = []PlanStep{
 			{ID: "task_1", Description: goal, AgentRole: "general", Status: "pending"},
 		}

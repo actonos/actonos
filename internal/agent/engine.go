@@ -247,7 +247,16 @@ func (e *Engine) ExecuteAutonomousGoal(ctx context.Context, agentID, goal string
 	if err != nil {
 		return nil, fmt.Errorf("listing agents for planning: %w", err)
 	}
-	plan, err := e.planner.DecomposeGoal(ctx, goal, agents)
+	var modelCascade []string
+	if agent, err := e.agentMgr.Get(ctx, agentID); err == nil && agent != nil {
+		if agent.ModelConfig.PrimaryModel != "" {
+			modelCascade = append(modelCascade, agent.ModelConfig.PrimaryModel)
+		}
+		if agent.ModelConfig.FallbackModel != "" {
+			modelCascade = append(modelCascade, agent.ModelConfig.FallbackModel)
+		}
+	}
+	plan, err := e.planner.DecomposeGoal(ctx, goal, agents, modelCascade...)
 	if err != nil {
 		return nil, fmt.Errorf("decomposing autonomous goal: %w", err)
 	}
