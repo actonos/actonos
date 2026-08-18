@@ -1,4 +1,4 @@
-import type { HTMLAttributes, ReactNode } from 'react';
+import { forwardRef, type HTMLAttributes, type ReactNode } from 'react';
 
 export interface CardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onClick'> {
   children: ReactNode;
@@ -7,15 +7,16 @@ export interface CardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onClick
   hoverable?: boolean;
 }
 
-export function Card({
+export const Card = forwardRef<HTMLDivElement, CardProps>(function Card({
   children,
   className = '',
   onClick,
   hoverable = false,
   ...props
-}: CardProps) {
+}, ref) {
   return (
     <div
+      ref={ref}
       onClick={onClick}
       {...props}
       className={`density-card bg-soft-meadow rounded-[24px] transition-all ${
@@ -25,4 +26,4 @@ export function Card({
       {children}
     </div>
   );
-}
+});

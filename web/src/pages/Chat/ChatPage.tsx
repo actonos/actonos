@@ -2,6 +2,13 @@ import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
+import { ChatHeader } from '@/components/features/chat/ChatHeader';
+import { ChatComposer } from '@/components/features/chat/ChatComposer';
+import { ChatEmptyState } from '@/components/features/chat/ChatEmptyState';
+import { TraceDisclosure } from '@/components/features/chat/TraceDisclosure';
+import { MessageBubble } from '@/components/features/chat/MessageBubble';
+import { MessageTimeline } from '@/components/features/chat/MessageTimeline';
+import { ChatSessionRail } from '@/components/features/chat/ChatSessionRail';
 import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -10,9 +17,7 @@ import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { useToast } from '@/components/ui/Toast';
 import {
   Bot,
-  Send,
   Sparkles,
-  Zap,
   Trash2,
   Copy,
   Check,
@@ -64,10 +69,12 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<Record<string, 'traces' | 'audit'>>({});
   const [expandedTrace, setExpandedTrace] = useState<Record<string, boolean>>({});
+  const renderLegacyTrace = false as boolean;
 
   // Search & Filter
   const [sessionSearch, setSessionSearch] = useState('');
   const [sessionFilterScope, setSessionFilterScope] = useState<'all' | 'agent'>('all');
+  const [sessionsOpen, setSessionsOpen] = useState(false);
 
   // Modals & Renaming
   const [deletingConvId, setDeletingConvId] = useState<string | null>(null);
@@ -433,10 +440,10 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
   });
 
   const promptChips = [
-    'System Diagnostics & Performance',
-    'List files in workspace',
-    'Decompose goal into subtasks',
-    'Explain ActonOS architecture',
+    t('prompts.diagnostics'),
+    t('prompts.workspace'),
+    t('prompts.decompose'),
+    t('prompts.architecture'),
   ];
 
   return (
@@ -444,10 +451,30 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
       <BlobBackdrop />
 
       <PageContainer className="flex-1 flex flex-col py-4">
+        <ChatHeader agent={activeAgent} onOpenSessions={() => setSessionsOpen(true)} />
         {/* Main 2-Column Chat Area */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 max-h-[calc(100vh-100px)]">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 lg:grid-cols-12">
+          <ChatSessionRail
+            agents={agents}
+            conversations={filteredConversations}
+            activeAgentID={activeAgentID}
+            activeConversationID={activeConvID}
+            search={sessionSearch}
+            scope={sessionFilterScope}
+            onAgentChange={(agentID) => {
+              setActiveAgentID(agentID);
+              onSelectAgentID?.(agentID);
+            }}
+            onConversationSelect={selectConversation}
+            onConversationDelete={setDeletingConvId}
+            onSearchChange={setSessionSearch}
+            onScopeChange={setSessionFilterScope}
+            onNew={handleNewChat}
+            open={sessionsOpen}
+            onClose={() => setSessionsOpen(false)}
+          />
           {/* Left Column: Sessions & Custom Agent Switcher (4 Cols) */}
-          <Card className="hidden lg:flex lg:col-span-4 flex-col p-4 border border-onyx/10 justify-between h-full bg-canvas/95 shadow-xs overflow-hidden">
+          <Card className="hidden flex-col p-4 border border-onyx/10 justify-between h-full bg-canvas/95 shadow-xs overflow-hidden" aria-hidden="true">
             <div className="space-y-3.5 flex flex-col h-full overflow-hidden">
               {/* 1. Custom Agent Switcher Header */}
               <div className="relative" ref={dropdownRef}>
@@ -791,39 +818,49 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
               </div>
             </div>
 
-            {/* Messages Scroll Area */}
-            <div className="flex-1 overflow-y-auto my-4 space-y-4 pr-2 max-h-[480px]">
-              {messages.length === 0 ? (
-                <div className="py-16 text-center text-slate">
-                  <div className="w-14 h-14 rounded-full bg-soft-meadow flex items-center justify-center mx-auto mb-3 border border-onyx/10">
-                    <Sparkles className="w-7 h-7 text-hi-yellow" />
-                  </div>
-                  <h4 className="font-serif text-heading-sm text-deep-ink mb-1">
-                    {t('startConversation', { name: activeAgent?.name || 'Nova' })}
-                  </h4>
-                  <p className="font-sans text-body-sm text-slate max-w-md mx-auto mb-6">
-                    {t('startDescription')}
-                  </p>
+            <MessageTimeline
+              messages={messages}
+              loading={loading}
+              agentName={activeAgent?.name || t('defaultAgent')}
+              prompts={promptChips}
+              copiedIndex={copiedIdx}
+              expandedTraces={expandedTrace}
+              traceTabs={activeTab}
+              endRef={messagesEndRef}
+              onPrompt={handlePromptChip}
+              onCopy={handleCopy}
+              onToggleTrace={toggleTrace}
+              onTraceTabChange={(messageID, tab) => setActiveTab((previous) => ({ ...previous, [messageID]: tab }))}
+            />
 
-                  {/* Prompt Suggestion Chips */}
-                  <div className="flex flex-wrap justify-center gap-2 max-w-lg mx-auto">
-                    {promptChips.map((chip, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => handlePromptChip(chip)}
-                        className="px-3.5 py-1.5 rounded-full bg-soft-meadow hover:bg-white text-caption font-medium text-deep-ink border border-onyx/10 transition-colors shadow-xs cursor-pointer flex items-center gap-1.5"
-                      >
-                        <Zap className="w-3 h-3 text-hi-yellow" />
-                        <span>{chip}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+            {/* Legacy message renderer is disabled while migration is verified. */}
+            <div className="hidden flex-1 overflow-y-auto my-4 space-y-4 pr-2 max-h-[480px]" aria-hidden="true">
+              {messages.length === 0 ? (
+                <ChatEmptyState
+                  agentName={activeAgent?.name || t('defaultAgent')}
+                  prompts={promptChips}
+                  onPrompt={handlePromptChip}
+                />
               ) : (
                 messages.map((msg, idx) => {
                   const hasTraces = (msg.toolCalls && msg.toolCalls.length > 0) || !!msg.thought;
                   const hasAudits = msg.auditLogs && msg.auditLogs.length > 0;
                   const currentMsgTab = activeTab[msg.id] || 'traces';
+
+                  if (!renderLegacyTrace) {
+                    return (
+                      <MessageBubble
+                        key={msg.id || idx}
+                        message={msg}
+                        copied={copiedIdx === idx}
+                        traceExpanded={Boolean(expandedTrace[msg.id])}
+                        traceTab={currentMsgTab}
+                        onCopy={() => handleCopy(msg.content, idx)}
+                        onToggleTrace={() => toggleTrace(msg.id)}
+                        onTraceTabChange={(tab) => setActiveTab((previous) => ({ ...previous, [msg.id]: tab }))}
+                      />
+                    );
+                  }
 
                   return (
                     <div
@@ -856,9 +893,16 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                           )}
                         </div>
 
-                        {/* ReAct Execution Trace & Security Audit Log Accordion */}
-                        {(hasTraces || hasAudits) && (
-                          <div className="mt-3 pt-2.5 border-t border-onyx/10 text-caption">
+                        <TraceDisclosure
+                          message={msg}
+                          expanded={Boolean(expandedTrace[msg.id])}
+                          activeTab={currentMsgTab}
+                          onToggle={() => toggleTrace(msg.id)}
+                          onTabChange={(tab) => setActiveTab((previous) => ({ ...previous, [msg.id]: tab }))}
+                        />
+
+                        {renderLegacyTrace && (hasTraces || hasAudits) && (
+                          <div className="hidden">
                             <div className="flex items-center justify-between">
                               <button
                                 onClick={() => toggleTrace(msg.id)}
@@ -866,7 +910,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                               >
                                 <Terminal className="w-3.5 h-3.5 text-deep-ink" />
                                 <span>
-                                  {msg.toolCalls?.length ? `${msg.toolCalls.length} Tool Execution(s)` : 'Execution Details'}
+                                  {msg.toolCalls?.length ? `${msg.toolCalls?.length || 0} Tool Execution(s)` : 'Execution Details'}
                                   {hasAudits ? ` • ${msg.auditLogs?.length} Audit Logs` : ''}
                                 </span>
                                 {expandedTrace[msg.id] ? (
@@ -907,7 +951,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                                 {currentMsgTab === 'traces' ? (
                                   <div className="space-y-2">
                                     {msg.toolCalls && msg.toolCalls.length > 0 ? (
-                                      msg.toolCalls.map((tc, tcIdx) => (
+                                      msg.toolCalls?.map((tc, tcIdx) => (
                                         <div
                                           key={tcIdx}
                                           className="p-2 bg-soft-meadow rounded-xl border border-onyx/5 space-y-1 text-[11px]"
@@ -1010,34 +1054,16 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                   <span>{t('connecting')}</span>
                 </div>
               )}
-              <div ref={messagesEndRef} />
+              <div />
             </div>
 
-            {/* Input Form */}
-            <form onSubmit={handleSend} className="pt-2 border-t border-soft-meadow">
-              <div className="flex items-center gap-2 bg-white rounded-full p-1.5 border border-onyx/15 shadow-sm focus-within:ring-2 focus-within:ring-deep-ink">
-                <input
-                  ref={inputRef}
-                  type="text"
-                  placeholder={t('placeholder', 'Ask a question or assign an autonomous task...')}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  className="flex-1 bg-transparent px-4 py-2 text-body-sm text-deep-ink focus:outline-none"
-                  disabled={loading}
-                />
-
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="sm"
-                  disabled={!input.trim() || loading}
-                  icon={<Send className="w-3.5 h-3.5" />}
-                  className="shrink-0 px-5 py-2 font-semibold"
-                >
-                  {t('send', 'Send')}
-                </Button>
-              </div>
-            </form>
+            <ChatComposer
+              value={input}
+              loading={loading}
+              inputRef={inputRef}
+              onChange={setInput}
+              onSubmit={handleSend}
+            />
           </Card>
         </div>
       </PageContainer>
@@ -1049,7 +1075,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
         onConfirm={handleConfirmDeleteConv}
         title={t('deleteSession', 'Delete Conversation Session')}
         description={t('deleteConfirm', 'Are you sure you want to permanently clear this conversation session history?')}
-        confirmLabel="Delete Session"
+        confirmLabel={t('deleteSession')}
         variant="danger"
       />
     </div>

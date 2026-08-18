@@ -141,6 +141,8 @@
     "launch": "Launch Session",
     "saving": "Saving...",
     "save": "Save Agent",
+    "saved": "Saved",
+    "leaveConfirm": "You have unsaved changes. Leave this page?",
     "name": "Agent Name",
     "namePlaceholder": "e.g., Senior Full-Stack Architect",
     "identifier": "Identifier (Slug)",
@@ -156,13 +158,15 @@
     "allTools": "All (*)",
     "all": "All",
     "tabs": {
+      "label": "Agent Studio sections",
       "instructions": "Instructions",
       "soul": "Persona & Soul (SOUL.md)",
       "memory": "Memory (MEMORY.md)",
       "model": "LLM & Reasoning ({{status}})",
       "tools": "Tools ({{value}})",
       "channels": "Channels ({{value}})",
-      "governance": "Governance"
+      "governance": "Governance",
+      "review": "Review & save"
     },
     "length": "Length: {{count}} characters",
     "prompt": {
@@ -183,6 +187,9 @@
       "title": "Persistent Episodic Memory Diary (MEMORY.md)",
       "description": "Autonomous reflections, user preferences, and synthesized long-term knowledge accumulated by this agent across sessions.",
       "refresh": "Refresh Memory",
+      "refreshed": "Memory refreshed",
+      "refreshedDescription": "Loaded the latest MEMORY.md reflections.",
+      "refreshFailed": "Failed to refresh memory",
       "empty": "No Episodic Memory Recorded Yet",
       "emptyDescription": "As you interact with this agent in Chat and background tasks, the ReAct reflection daemon will synthesize key decisions, project conventions, and user preferences into persistent timestamped memory here.",
       "longTerm": "Autonomous Long-Term Memory"
@@ -206,7 +213,11 @@
       "clear": "Clear All",
       "selectAll": "Select All (*)",
       "fullTitle": "Full Authorization:",
-      "fullDescription": "Agent can use all available tools and plugins."
+      "fullDescription": "Agent can use all available tools and plugins.",
+      "empty": "No tools are available",
+      "noDescription": "No tool description provided.",
+      "authorized": "Authorized",
+      "disabled": "Disabled"
     },
     "channels": {
       "title": "Chat Channels Inbound Listeners",
@@ -215,7 +226,14 @@
       "allDescription": "Agent listens to incoming messages across Telegram, Discord, WhatsApp, and Webhook.",
       "specific": "Specific Channels Only",
       "specificDescription": "Restrict this agent to only respond to specific channels chosen below.",
-      "select": "Select Channels to Listen"
+      "select": "Select Channels to Listen",
+      "modeLabel": "Channel listener mode",
+      "catalog": {
+        "telegram": { "name": "Telegram", "description": "Listen to Telegram bot chats and mentions" },
+        "discord": { "name": "Discord", "description": "Listen to Discord server messages and threads" },
+        "whatsapp": { "name": "WhatsApp", "description": "Listen to WhatsApp Cloud API messages" },
+        "webhook": { "name": "Inbound Webhook", "description": "Trigger the agent from HTTP webhooks" }
+      }
     },
     "governance": {
       "title": "Governance & Permissions",
@@ -228,6 +246,25 @@
       "paths": "Allowed Workspace Paths",
       "pathsPlaceholder": "e.g., *, /data/workspace/project/*",
       "pathsHelp": "Comma-separated file paths or wildcards (*) that this agent is permitted to access."
+    },
+    "review": {
+      "title": "Review agent manifest",
+      "description": "Verify identity, models, permissions, channels, and governance before saving.",
+      "ready": "Manifest is ready to save",
+      "needsAttention": "Resolve these issues before saving",
+      "valid": "Validation passed",
+      "invalid": "Validation required",
+      "nameRequired": "Agent name is required.",
+      "identifierRequired": "Agent identifier is required.",
+      "primaryModelRequired": "Primary model is required.",
+      "toolsRequired": "Select at least one authorized tool.",
+      "channelsRequired": "Select at least one channel or listen to all channels.",
+      "identity": "Identity",
+      "models": "Models",
+      "tools": "Tools",
+      "channels": "Channels",
+      "approval": "Approval",
+      "budget": "Monthly budget"
     }
   }
 }

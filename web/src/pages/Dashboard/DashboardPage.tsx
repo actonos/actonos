@@ -33,6 +33,7 @@ import type { NavTab } from '@/components/layout/Sidebar';
 import { TokenLedgerModal } from '@/components/modals/TokenLedgerModal';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { QuickStartPanel } from '@/components/features/dashboard/QuickStartPanel';
+import { SystemHealthStrip } from '@/components/features/dashboard/SystemHealthStrip';
 
 export interface DashboardPageProps {
   onNavigateTab: (tab: NavTab) => void;
@@ -165,8 +166,10 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
           />
         )}
 
+        <SystemHealthStrip data={data} />
+
         {/* 4 Live Hardware Gauges */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="hidden grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8" aria-hidden="true">
           {/* CPU Gauge */}
           <Card className="p-5 border border-onyx/10 bg-canvas/90 shadow-xs hover:border-onyx/20 transition-all">
             <div className="flex items-center justify-between mb-2">

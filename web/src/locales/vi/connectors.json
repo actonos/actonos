@@ -1,4 +1,9 @@
 {
+  "disconnect": {
+    "title": "Ngắt kết nối {{name}}",
+    "fallbackName": "trình kết nối",
+    "confirm": "Ngắt kết nối"
+  },
   "eyebrow": "Tích hợp & Dịch vụ SaaS",
   "title": "Kết Nối Dịch Vụ",
   "subtitle": "Kết nối các dịch vụ bên ngoài như Google, Notion, GitHub và Slack thông qua OAuth 2.1 hoặc Personal Access Token.",

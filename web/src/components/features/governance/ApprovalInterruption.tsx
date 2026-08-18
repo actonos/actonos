@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/lib/api';
 import type { ApprovalRequest } from '@/lib/types';
@@ -14,6 +14,8 @@ export function ApprovalInterruption() {
   const [approval, setApproval] = useState<ApprovalRequest | null>(null);
   const [feedback, setFeedback] = useState('');
   const [deciding, setDeciding] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const feedbackRef = useRef<HTMLTextAreaElement>(null);
   const { snapshot } = useRealtime();
 
   useEffect(() => {
@@ -29,6 +31,29 @@ export function ApprovalInterruption() {
       window.removeEventListener('actonos:approval-required', handleApprovalRequired);
     };
   }, []);
+
+  useEffect(() => {
+    if (!approval) return;
+    feedbackRef.current?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab' || !dialogRef.current) return;
+      const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), textarea:not([disabled])',
+      );
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [approval]);
 
   if (!approval) return null;
 
@@ -54,6 +79,7 @@ export function ApprovalInterruption() {
   return (
     <div className="fixed inset-0 z-[100] bg-deep-ink/55 backdrop-blur-sm flex items-center justify-center p-4">
       <Card
+        ref={dialogRef}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="approval-interruption-title"
@@ -69,6 +95,7 @@ export function ApprovalInterruption() {
         </pre>
         <label className="block text-caption font-semibold text-deep-ink mb-1">{t('approval.feedbackLabel')}</label>
         <textarea
+          ref={feedbackRef}
           value={feedback}
           onChange={(event) => setFeedback(event.target.value)}
           placeholder={t('approval.feedbackPlaceholder')}
@@ -76,7 +103,7 @@ export function ApprovalInterruption() {
           className="w-full mb-4 rounded-[18px] border border-onyx/15 bg-soft-meadow px-4 py-3 text-body-sm"
         />
         <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
-          <Button variant="ghost" disabled={deciding} onClick={() => decide(false)}>{t('approval.reject')}</Button>
+          <Button variant="ghost" disabled={deciding || !feedback.trim()} onClick={() => decide(false)}>{t('approval.reject')}</Button>
           <Button variant="primary" disabled={deciding} onClick={() => decide(true)}>{t('approval.approve')}</Button>
         </div>
       </Card>

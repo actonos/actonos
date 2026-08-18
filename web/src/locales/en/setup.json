@@ -36,6 +36,7 @@
     "securityNote": "Hardware Security Vault • AES-256-GCM + HttpOnly session cookie"
   },
   "wizard": {
+    "progress": "Setup progress",
     "validationTitle": "Validation Error",
     "nameRequired": "Please enter your name.",
     "passwordShortTitle": "Password Too Short",

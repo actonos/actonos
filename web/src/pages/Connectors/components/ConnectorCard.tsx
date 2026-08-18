@@ -67,7 +67,7 @@ export function ConnectorCard({
     <Card
       className={`flex flex-col justify-between border p-6 transition-all duration-200 ${
         isComingSoon
-          ? 'border-onyx/5 bg-canvas/50 opacity-70'
+          ? 'border-onyx/10 border-dashed bg-canvas/70'
           : connector.connected
           ? 'border-emerald-500/30 bg-canvas/95 shadow-xs'
           : 'border-onyx/10 bg-canvas/85 hover:border-onyx/20'

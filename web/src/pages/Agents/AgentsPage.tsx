@@ -302,7 +302,7 @@ export function AgentsPage({
                                 )}
                               </div>
                               <div className="flex items-center gap-2 mt-0.5">
-                                <span className="font-mono text-[11px] text-slate/80 select-all">
+                          <span className="font-mono text-[11px] text-slate select-all">
                                   {agent.agent_id}
                                 </span>
                               </div>

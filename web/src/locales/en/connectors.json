@@ -1,4 +1,9 @@
 {
+  "disconnect": {
+    "title": "Disconnect {{name}}",
+    "fallbackName": "connector",
+    "confirm": "Disconnect"
+  },
   "eyebrow": "Integrations & SaaS",
   "title": "Service Connectors",
   "subtitle": "Connect external services like Google, Notion, GitHub, and Slack with OAuth 2.1 or Personal Access Tokens.",

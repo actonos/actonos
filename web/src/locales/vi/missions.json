@@ -108,6 +108,8 @@
     "audit": "Sổ cái kiểm tra xung ({{count}})"
   },
   "filters": {
+    "statusLabel": "Lọc theo trạng thái",
+    "priorityLabel": "Lọc theo mức ưu tiên",
     "allStatuses": "Tất cả trạng thái",
     "allPriorities": "Tất cả các ưu tiên"
   },

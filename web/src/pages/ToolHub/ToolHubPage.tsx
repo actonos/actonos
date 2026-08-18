@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
@@ -120,8 +121,13 @@ export function ToolHubPage() {
       <BlobBackdrop />
 
       <PageContainer>
+        <PageHeader eyebrow={t('eyebrow')} title={t('title')} description={t('subtitle')} actions={(
+          <Button variant="ghost" size="sm" icon={<RefreshCw className="h-3.5 w-3.5" />} onClick={loadTools}>
+            {t('actions.refresh')}
+          </Button>
+        )} />
         {/* Header section */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div className="hidden flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6" aria-hidden="true">
           <div className="flex-1">
             <span className="text-caption uppercase tracking-wider text-slate font-semibold block mb-1">
               {t('eyebrow', 'Tools')}

@@ -108,6 +108,8 @@
     "audit": "Pulse Audit Ledger ({{count}})"
   },
   "filters": {
+    "statusLabel": "Filter by status",
+    "priorityLabel": "Filter by priority",
     "allStatuses": "All Statuses",
     "allPriorities": "All Priorities"
   },

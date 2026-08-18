@@ -55,7 +55,7 @@ export function ChannelCard({
   return (
     <Card
       className={`flex flex-col justify-between p-6 border transition-all duration-200 ${channel.isComingSoon
-          ? 'border-onyx/5 bg-canvas/40 opacity-75'
+          ? 'border-onyx/10 border-dashed bg-canvas/70'
           : activeAccounts.length > 0
             ? 'border-emerald-500/30 bg-canvas/95 shadow-xs'
             : 'border-onyx/10 bg-canvas/85 hover:border-onyx/20'

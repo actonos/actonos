@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { readHashParams, setHashParam } from '@/lib/url-state';
 import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -30,7 +32,11 @@ export function SkillsPage() {
   const { success, error, info } = useToast();
   const [installedSkills, setInstalledSkills] = useState<ToolInfo[]>([]);
   const [hubCatalog, setHubCatalog] = useState<HubSkillItem[]>([]);
-  const [activeTab, setActiveTab] = useState<'installed' | 'hub'>('installed');
+  const [activeTab, setActiveTab] = useState<'installed' | 'hub'>(() => readHashParams().get('view') === 'catalog' ? 'hub' : 'installed');
+  const selectTab = (tab: 'installed' | 'hub') => {
+    setActiveTab(tab);
+    setHashParam('view', tab === 'installed' ? undefined : 'catalog');
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [installingId, setInstallingId] = useState<string | null>(null);
@@ -159,13 +165,16 @@ export function SkillsPage() {
       <BlobBackdrop />
 
       <PageContainer>
+        <PageHeader eyebrow={t('eyebrow')} title={t('title')} description={t('subtitle')} actions={(
+          <Button variant="ghost" size="sm" icon={<RefreshCw />} onClick={loadData}>{t('actions.refresh')}</Button>
+        )} />
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div className="flex-1">
             <span className="text-caption uppercase tracking-wider text-slate font-semibold block mb-1">
               {t('eyebrow', 'Skills')}
             </span>
-            <h1 className="font-serif text-heading-lg text-deep-ink tracking-tight">
+            <h1 className="hidden font-serif text-heading-lg text-deep-ink tracking-tight" aria-hidden="true">
               {t('title', 'Agent Skills')}
             </h1>
             <p className="font-sans text-body text-slate mt-1 max-w-2xl">
@@ -192,7 +201,7 @@ export function SkillsPage() {
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8">
           <div className="flex items-center gap-1.5 bg-canvas/80 backdrop-blur-sm p-1 rounded-full border border-onyx/10 shadow-xs self-start sm:self-auto">
             <button
-              onClick={() => setActiveTab('installed')}
+              onClick={() => selectTab('installed')}
               className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer ${
                 activeTab === 'installed'
                   ? 'bg-deep-ink text-white font-semibold shadow-xs'
@@ -202,7 +211,7 @@ export function SkillsPage() {
               {t('tabs.installed', { count: installedSkills.length })}
             </button>
             <button
-              onClick={() => setActiveTab('hub')}
+              onClick={() => selectTab('hub')}
               className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer ${
                 activeTab === 'hub'
                   ? 'bg-deep-ink text-white font-semibold shadow-xs'
@@ -234,7 +243,7 @@ export function SkillsPage() {
               <Sparkles className="w-12 h-12 text-deep-ink mx-auto mb-3 opacity-40" />
               <p className="font-sans text-body-sm text-slate mb-2 font-semibold">{t('empty.title', 'No skills found')}</p>
               <p className="font-sans text-caption text-slate mb-4">{t('empty.subtitle')}</p>
-              <Button variant="primary" size="sm" onClick={() => setActiveTab('hub')}>
+              <Button variant="primary" size="sm" onClick={() => selectTab('hub')}>
                 {t('tabs.hub', { count: hubCatalog.length })}
               </Button>
             </div>

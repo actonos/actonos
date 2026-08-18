@@ -65,6 +65,8 @@ The current product UI uses Manrope for display and Noto Sans for functional tex
 - Respect `prefers-reduced-motion`.
 - Use responsive breakpoints tested at 390×844, 768×1024, and 1440×900.
 - Prefer workflow-oriented navigation groups and nested routes for detail views.
+- Operational pages use shared metric cards, explicit async states, and freshness badges. Advanced payloads belong in disclosure panels or drawers rather than the default viewport.
+- Human approval interruptions use a modal alertdialog with visible risk, focused feedback input, keyboard focus containment, and an explicit reason for rejection.
 
 ### Spacing Scale
 
@@ -322,6 +324,13 @@ The off-white tones are not neutral white — #f9fbf2 has a faint warm-green cas
   --surface-deep-ink: #130e30;
 }
 ```
+
+## Responsive workflow rules
+
+- Chat history remains reachable through a labelled drawer below the desktop breakpoint.
+- Disabled and coming-soon cards retain WCAG text contrast; use borders, badges, and explanatory copy instead of reducing opacity on the entire card.
+- Multi-view operational pages use a horizontally scrollable `SegmentedControl` and persist the selected view in the hash query.
+- Agent Studio ends with a review summary; invalid sections are explained before Save becomes available.
 
 ## Modern Multilingual Typography
 

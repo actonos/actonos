@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
 import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
@@ -261,8 +262,13 @@ export function ConnectorsPage() {
       <BlobBackdrop />
 
       <PageContainer>
+        <PageHeader eyebrow={t('eyebrow')} title={t('title')} description={t('subtitle')} actions={(
+          <Button variant="ghost" size="sm" icon={<RefreshCw className={loading ? 'animate-spin' : ''} />} onClick={loadData}>
+            {t('ui.refresh')}
+          </Button>
+        )} />
         {/* Page Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div className="hidden flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6" aria-hidden="true">
           <div className="flex-1">
             <span className="text-caption uppercase tracking-wider text-slate font-semibold block mb-1">
               {t('eyebrow', 'Integrations & SaaS')}
@@ -410,9 +416,9 @@ export function ConnectorsPage() {
         isOpen={!!disconnectingConnector}
         onClose={() => setDisconnectingConnector(null)}
         onConfirm={handleConfirmDisconnect}
-        title={`Disconnect ${disconnectingConnector?.name || 'Connector'}`}
+        title={t('disconnect.title', { name: disconnectingConnector?.name || t('disconnect.fallbackName') })}
         description={`Are you sure you want to disconnect ${disconnectingConnector?.name}? Stored tokens and access permissions will be removed from the encrypted vault.`}
-        confirmLabel="Disconnect"
+        confirmLabel={t('disconnect.confirm')}
         variant="danger"
       />
     </div>

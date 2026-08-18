@@ -27,6 +27,7 @@ import type { AgentRun, ApprovalRequest, AutonomousTask, HeartbeatConfigData, He
 import { TaskModal } from './components/TaskModal';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { readHashParams, setHashParam } from '@/lib/url-state';
 
 export interface MissionsPageProps {
   onOpenChat?: (agentID?: string) => void;
@@ -36,7 +37,10 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
   const { t } = useTranslation('missions');
   const { success, error, info } = useToast();
 
-  const [activeTab, setActiveTab] = useState<'tasks' | 'directives' | 'audit' | 'governance'>('tasks');
+  const [activeTab, setActiveTab] = useState<'tasks' | 'directives' | 'audit' | 'governance'>(() => {
+    const value = readHashParams().get('view');
+    return value === 'directives' || value === 'audit' || value === 'governance' ? value : 'tasks';
+  });
   const [tasks, setTasks] = useState<AutonomousTask[]>([]);
   const [heartbeatConfig, setHeartbeatConfig] = useState<HeartbeatConfigData>({
     enabled: true,
@@ -61,6 +65,10 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<AutonomousTask | null>(null);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
+  const changeTab = (tab: 'tasks' | 'directives' | 'audit' | 'governance') => {
+    setActiveTab(tab);
+    setHashParam('view', tab === 'tasks' ? undefined : tab);
+  };
 
   const loadData = async () => {
     try {
@@ -307,7 +315,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
 
         <SegmentedControl
           value={activeTab}
-          onChange={setActiveTab}
+          onChange={changeTab}
           label={t('tabs.label')}
           className="mb-6 w-fit"
           options={[
@@ -325,6 +333,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-canvas rounded-2xl border border-onyx/10">
               <div className="flex flex-wrap items-center gap-2">
                 <select
+                  aria-label={t('filters.statusLabel')}
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
                   className="bg-soft-meadow text-deep-ink text-[12px] font-sans px-3 py-1.5 rounded-full border border-onyx/10 focus:outline-none"
@@ -337,6 +346,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                 </select>
 
                 <select
+                  aria-label={t('filters.priorityLabel')}
                   value={priorityFilter}
                   onChange={(e) => setPriorityFilter(e.target.value)}
                   className="bg-soft-meadow text-deep-ink text-[12px] font-sans px-3 py-1.5 rounded-full border border-onyx/10 focus:outline-none"

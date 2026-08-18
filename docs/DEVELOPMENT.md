@@ -612,3 +612,5 @@ git commit -m "test(auth): add token refresh daemon expiry edge cases"
 ### Frontend UX workflow
 
 Use the shared UI primitives and the comfortable/compact density provider for every new route. Keep navigation grouped by workflow and use nested Agent Studio hashes for detail pages. Validate keyboard access, focus visibility, reduced motion, Vietnamese/English locale parity, and the authenticated browser matrix (390×844, 768×1024, 1440×900) before review.
+Agent Studio sections expose dirty-state protection, Settings tabs preserve URL state, and Setup Wizard exposes an accessible progress indicator. New multi-step flows should follow the same patterns.
+Authenticated Playwright coverage runs axe on every primary route, reloads hash-query views, and exercises the narrow-layout Chat session drawer. Allow route transitions to settle before evaluating computed contrast.

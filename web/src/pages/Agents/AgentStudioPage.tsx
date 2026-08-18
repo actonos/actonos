@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
@@ -32,6 +32,14 @@ import {
 import { api } from '@/lib/api';
 import type { AgentManifest, ApprovalLevel, ToolInfo, LLMProviderInfo } from '@/lib/types';
 import { LATEST_MODEL_CATALOG, getCategorizedModels } from '@/lib/models';
+import { AgentStudioNav, type AgentStudioSection } from '@/components/features/agents/AgentStudioNav';
+import { AgentIdentitySection } from '@/components/features/agents/AgentIdentitySection';
+import { AgentGovernanceSection } from '@/components/features/agents/AgentGovernanceSection';
+import { AgentToolsSection } from '@/components/features/agents/AgentToolsSection';
+import { AgentChannelsSection } from '@/components/features/agents/AgentChannelsSection';
+import { AgentTextSection } from '@/components/features/agents/AgentTextSection';
+import { AgentMemorySection } from '@/components/features/agents/AgentMemorySection';
+import { AgentReviewSection } from '@/components/features/agents/AgentReviewSection';
 
 export interface AgentStudioPageProps {
   agentID: string; // 'new' or existing agent ID like 'agent_system_core'
@@ -39,7 +47,7 @@ export interface AgentStudioPageProps {
   onOpenChat: (agentID: string) => void;
 }
 
-type StudioTab = 'prompt' | 'soul' | 'memory' | 'model' | 'tools' | 'channels' | 'governance';
+type StudioTab = AgentStudioSection;
 
 const ACTON_STANDARD_SOUL = `# ActonOS Agent Soul (SOUL.md)
 
@@ -100,6 +108,8 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
   const [activeTab, setActiveTab] = useState<StudioTab>('prompt');
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
+  const [refreshingMemory, setRefreshingMemory] = useState(false);
+  const baselineRef = useRef('');
   const [toolsList, setToolsList] = useState<ToolInfo[]>([]);
 
   // LLM Providers from Settings
@@ -137,6 +147,27 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
   const [maxBudget, setMaxBudget] = useState(50);
   const [approvalLevel, setApprovalLevel] = useState<'Low' | 'Medium' | 'High'>('Medium');
   const [allowedPaths, setAllowedPaths] = useState('*');
+  const renderLegacyEditors = false as boolean;
+
+  const formSignature = useMemo(() => JSON.stringify({
+    name, idSlug, description, avatarIcon, status, isSystem, primaryModel, fallbackModel,
+    temperature, maxTokens, systemInstructions, soul, memoryMD, authorizedTools,
+    listenAllChannels, selectedChannels, maxBudget, approvalLevel, allowedPaths,
+  }), [
+    name, idSlug, description, avatarIcon, status, isSystem, primaryModel, fallbackModel,
+    temperature, maxTokens, systemInstructions, soul, memoryMD, authorizedTools,
+    listenAllChannels, selectedChannels, maxBudget, approvalLevel, allowedPaths,
+  ]);
+  const isDirty = baselineRef.current !== '' && baselineRef.current !== formSignature;
+  const validationErrors = useMemo(() => {
+    const issues: string[] = [];
+    if (!String(name ?? '').trim()) issues.push(t('studio.review.nameRequired'));
+    if (!String(idSlug ?? '').trim()) issues.push(t('studio.review.identifierRequired'));
+    if (!String(primaryModel ?? '').trim()) issues.push(t('studio.review.primaryModelRequired'));
+    if (authorizedTools.length === 0) issues.push(t('studio.review.toolsRequired'));
+    if (!listenAllChannels && selectedChannels.length === 0) issues.push(t('studio.review.channelsRequired'));
+    return issues;
+  }, [authorizedTools.length, idSlug, listenAllChannels, name, primaryModel, selectedChannels.length, t]);
 
   // Load Agent, Available Tools & Active LLM Providers
   useEffect(() => {
@@ -221,9 +252,24 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
     fetchData();
   }, [agentID, isNew]);
 
+  useEffect(() => {
+    if (!loading && baselineRef.current === '') baselineRef.current = formSignature;
+  }, [loading, formSignature]);
+
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => {
+      if (!isDirty) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [isDirty]);
+
   const handleSave = async () => {
-    if (!name.trim()) {
-      error('Validation Error', 'Agent name cannot be empty.');
+    if (validationErrors.length > 0) {
+      setActiveTab('review');
+      error(t('studio.review.invalid'), validationErrors[0]);
       return;
     }
 
@@ -275,6 +321,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
       } else {
         success('Agent Saved', `Manifest & SOUL persona for "${name}" updated.`);
       }
+      baselineRef.current = formSignature;
     } catch (err) {
       error('Failed to save agent', getErrorMessage(err));
     } finally {
@@ -362,7 +409,9 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-3">
             <button
-              onClick={onBack}
+              onClick={() => {
+                if (!isDirty || window.confirm(t('studio.leaveConfirm'))) onBack();
+              }}
               className="p-2 rounded-full bg-soft-meadow hover:bg-black/5 text-deep-ink border border-onyx/10 transition-all cursor-pointer"
               title={t('studio.back')}
             >
@@ -401,15 +450,28 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               size="sm"
               icon={<Save className="w-3.5 h-3.5" />}
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || validationErrors.length > 0}
             >
-              {saving ? t('studio.saving') : t('studio.save')}
+              {saving ? t('studio.saving') : isDirty ? t('studio.save') : t('studio.saved')}
             </Button>
           </div>
         </div>
 
-        {/* Identity & Basic Header Card */}
-        <Card className="p-6 border border-onyx/10 bg-canvas/90 shadow-xs mb-8 space-y-4">
+        <AgentIdentitySection
+          name={name}
+          identifier={idSlug}
+          description={description}
+          avatarIcon={avatarIcon}
+          status={status}
+          identifierLocked={!isNew || isSystem}
+          onNameChange={setName}
+          onIdentifierChange={setIdSlug}
+          onDescriptionChange={setDescription}
+          onStatusChange={setStatus}
+        />
+
+        {/* Legacy identity editor disabled after feature extraction. */}
+        <Card className="hidden p-6 border border-onyx/10 bg-canvas/90 shadow-xs mb-8 space-y-4" aria-hidden="true">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-3 md:col-span-2">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -491,9 +553,21 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
           </div>
         </Card>
 
-        {/* Tab Navigation Capsule */}
-        <div className="flex items-center gap-1.5 bg-canvas/80 backdrop-blur-sm p-1 rounded-full border border-onyx/10 shadow-xs mb-8 self-start sm:self-auto max-w-fit overflow-x-auto">
+        <AgentStudioNav
+          value={activeTab}
+          modelReady={primaryIsReady}
+          allTools={isAllToolsSelected}
+          toolCount={authorizedTools.length}
+          allChannels={listenAllChannels}
+          channelCount={selectedChannels.length}
+          onChange={setActiveTab}
+        />
+
+        {/* Legacy section navigation disabled after feature extraction. */}
+        <div role="tablist" aria-label={t('studio.tabs.label')} className="hidden sticky top-20 z-20 items-center gap-1.5 bg-canvas/95 backdrop-blur-sm p-1 rounded-full border border-onyx/10 shadow-xs mb-8 self-start sm:self-auto max-w-full overflow-x-auto" aria-hidden="true">
           <button
+            role="tab"
+            aria-selected={activeTab === 'prompt'}
             onClick={() => setActiveTab('prompt')}
             className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'prompt' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
@@ -502,6 +576,8 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             {t('studio.tabs.instructions')}
           </button>
           <button
+            role="tab"
+            aria-selected={activeTab === 'soul'}
             onClick={() => setActiveTab('soul')}
             className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'soul' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
@@ -510,6 +586,8 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             {t('studio.tabs.soul')}
           </button>
           <button
+            role="tab"
+            aria-selected={activeTab === 'memory'}
             onClick={() => setActiveTab('memory')}
             className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'memory' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
@@ -518,6 +596,8 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             {t('studio.tabs.memory')}
           </button>
           <button
+            role="tab"
+            aria-selected={activeTab === 'model'}
             onClick={() => setActiveTab('model')}
             className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'model' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
@@ -526,6 +606,8 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             {t('studio.tabs.model', { status: primaryIsReady ? t('studio.ready') : t('studio.keyNeeded') })}
           </button>
           <button
+            role="tab"
+            aria-selected={activeTab === 'tools'}
             onClick={() => setActiveTab('tools')}
             className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'tools' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
@@ -534,6 +616,8 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             {t('studio.tabs.tools', { value: isAllToolsSelected ? t('studio.allTools') : authorizedTools.length })}
           </button>
           <button
+            role="tab"
+            aria-selected={activeTab === 'channels'}
             onClick={() => setActiveTab('channels')}
             className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'channels' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
@@ -542,6 +626,8 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             {t('studio.tabs.channels', { value: listenAllChannels ? t('studio.all') : selectedChannels.length })}
           </button>
           <button
+            role="tab"
+            aria-selected={activeTab === 'governance'}
             onClick={() => setActiveTab('governance')}
             className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'governance' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
@@ -551,8 +637,21 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
           </button>
         </div>
 
-        {/* TAB 1: System Prompt */}
         {activeTab === 'prompt' && (
+          <AgentTextSection
+            icon={FileCode}
+            title={t('studio.prompt.title')}
+            description={t('studio.prompt.description')}
+            value={systemInstructions}
+            placeholder={t('studio.prompt.placeholder')}
+            resetLabel={t('studio.prompt.loadPreset')}
+            statusLabel={t('studio.prompt.standard')}
+            onChange={setSystemInstructions}
+            onReset={loadStandardPreset}
+          />
+        )}
+        {/* Legacy prompt editor retained temporarily for source migration only. */}
+        {renderLegacyEditors && activeTab === 'prompt' && (
           <Card className="p-6 border border-onyx/10 bg-canvas/90 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-onyx/5">
               <div>
@@ -590,8 +689,21 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
           </Card>
         )}
 
-        {/* TAB: Dedicated Agent SOUL.md Editor */}
         {activeTab === 'soul' && (
+          <AgentTextSection
+            icon={Sparkles}
+            title={t('studio.soul.title')}
+            description={t('studio.soul.description')}
+            value={soul}
+            placeholder={t('studio.soul.placeholder')}
+            resetLabel={t('studio.soul.loadTemplate')}
+            statusLabel={t('studio.soul.isolated')}
+            onChange={setSoul}
+            onReset={loadStandardSoulTemplate}
+          />
+        )}
+        {/* Legacy soul editor retained temporarily for source migration only. */}
+        {renderLegacyEditors && activeTab === 'soul' && (
           <Card className="p-6 border border-onyx/10 bg-canvas/90 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-onyx/5">
               <div>
@@ -633,8 +745,27 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
           </Card>
         )}
 
-        {/* TAB: Persistent Episodic Memory & Reflection (MEMORY.md) */}
         {activeTab === 'memory' && (
+          <AgentMemorySection
+            value={memoryMD}
+            refreshing={refreshingMemory}
+            onRefresh={async () => {
+              if (!agentID || isNew) return;
+              setRefreshingMemory(true);
+              try {
+                const memory = await api.getMemoryMD(agentID);
+                setMemoryMD(memory.memory_md || '');
+                info(t('studio.memory.refreshed'), t('studio.memory.refreshedDescription'));
+              } catch (err) {
+                error(t('studio.memory.refreshFailed'), getErrorMessage(err));
+              } finally {
+                setRefreshingMemory(false);
+              }
+            }}
+          />
+        )}
+        {/* Legacy memory editor retained temporarily for source migration only. */}
+        {renderLegacyEditors && activeTab === 'memory' && (
           <Card className="p-6 border border-onyx/10 bg-canvas/90 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-onyx/5">
               <div>
@@ -920,8 +1051,19 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
           </div>
         )}
 
-        {/* TAB 3: Authorized Tools */}
         {activeTab === 'tools' && (
+          <AgentToolsSection
+            tools={toolsList}
+            authorizedTools={authorizedTools}
+            allSelected={isAllToolsSelected}
+            onToggle={handleToggleTool}
+            onClear={handleClearTools}
+            onSelectAll={handleSelectAllTools}
+          />
+        )}
+
+        {/* Legacy tools editor disabled after feature extraction. */}
+        {renderLegacyEditors && activeTab === 'tools' && (
           <Card className="p-6 border border-onyx/10 bg-canvas/90 space-y-6">
             <div className="flex items-center justify-between pb-3 border-b border-onyx/5">
               <div>
@@ -993,8 +1135,17 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
           </Card>
         )}
 
-        {/* TAB 4: Chat Channels Listeners */}
         {activeTab === 'channels' && (
+          <AgentChannelsSection
+            listenAll={listenAllChannels}
+            selectedChannels={selectedChannels}
+            onListenModeChange={setListenAllChannels}
+            onToggleChannel={handleToggleChannel}
+          />
+        )}
+
+        {/* Legacy channels editor disabled after feature extraction. */}
+        {renderLegacyEditors && activeTab === 'channels' && (
           <Card className="p-6 border border-onyx/10 bg-canvas/90 space-y-6">
             <div className="flex items-center justify-between pb-3 border-b border-onyx/5">
               <div>
@@ -1098,8 +1249,33 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
           </Card>
         )}
 
-        {/* TAB 5: Governance & Scope */}
         {activeTab === 'governance' && (
+          <AgentGovernanceSection
+            budget={maxBudget}
+            approvalLevel={approvalLevel}
+            allowedPaths={allowedPaths}
+            onBudgetChange={setMaxBudget}
+            onApprovalLevelChange={setApprovalLevel}
+            onAllowedPathsChange={setAllowedPaths}
+          />
+        )}
+
+        {activeTab === 'review' && (
+          <AgentReviewSection
+            errors={validationErrors}
+            items={[
+              { label: t('studio.review.identity'), value: `${name || t('studio.untitled')} (${idSlug || '-'})` },
+              { label: t('studio.review.models'), value: `${primaryModel} / ${fallbackModel}` },
+              { label: t('studio.review.tools'), value: isAllToolsSelected ? t('studio.allTools') : String(authorizedTools.length) },
+              { label: t('studio.review.channels'), value: listenAllChannels ? t('studio.all') : String(selectedChannels.length) },
+              { label: t('studio.review.approval'), value: approvalLevel },
+              { label: t('studio.review.budget'), value: `$${maxBudget}` },
+            ]}
+          />
+        )}
+
+        {/* Legacy governance editor disabled after feature extraction. */}
+        {renderLegacyEditors && activeTab === 'governance' && (
           <Card className="p-6 border border-onyx/10 bg-canvas/90 space-y-6">
             <h3 className="font-serif text-heading-sm text-deep-ink flex items-center gap-2">
               <Shield className="w-5 h-5 text-deep-ink" />

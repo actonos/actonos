@@ -1,4 +1,11 @@
 {
+  "views": {
+    "label": "Operations views",
+    "overview": "Overview",
+    "feed": "Run feed",
+    "runtime": "Runtime",
+    "cost": "Cost"
+  },
   "eyebrow": "Real-time command center",
   "title": "Live Operations",
   "subtitle": "Hardware, Docker, autonomous reasoning, safe approvals, execution canvas, task queue, and model spend in one responsive workspace.",

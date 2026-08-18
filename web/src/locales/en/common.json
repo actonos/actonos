@@ -36,7 +36,10 @@
     "stopped": "Stopped",
     "error": "Error",
     "connected": "Connected",
-    "disconnected": "Disconnected"
+    "disconnected": "Disconnected",
+    "live": "Live",
+    "stale": "Stale",
+    "noData": "No data"
   },
   "errorBoundary": {
     "title": "Something went wrong",

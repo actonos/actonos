@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { readHashParams, setHashParam } from '@/lib/url-state';
 import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
 import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
@@ -76,7 +78,14 @@ export function ChannelsPage() {
   const [loading, setLoading] = useState(true);
 
   // Filter & Search state
-  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'pairing' | 'webhook'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'pairing' | 'webhook'>(() => {
+    const value = readHashParams().get('view');
+    return value === 'active' || value === 'pairing' || value === 'webhook' ? value : 'all';
+  });
+  const selectTab = (tab: 'all' | 'active' | 'pairing' | 'webhook') => {
+    setActiveTab(tab);
+    setHashParam('view', tab === 'all' ? undefined : tab);
+  };
   const [searchQuery, setSearchQuery] = useState('');
 
   // Account Management Modal state
@@ -283,8 +292,13 @@ export function ChannelsPage() {
       <BlobBackdrop />
 
       <PageContainer>
+        <PageHeader eyebrow={t('eyebrow')} title={t('title')} description={t('subtitle')} actions={(
+          <Button variant="ghost" size="sm" icon={<RefreshCw className={loading ? 'animate-spin' : ''} />} onClick={loadData}>
+            {t('actions.refresh')}
+          </Button>
+        )} />
         {/* Top Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div className="hidden flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6" aria-hidden="true">
           <div className="flex-1">
             <span className="text-caption uppercase tracking-wider text-slate font-semibold block mb-1">
               {t('eyebrow', 'Channels & Gateways')}
@@ -378,7 +392,7 @@ export function ChannelsPage() {
           <div className="flex items-center gap-1.5 bg-soft-meadow p-1 rounded-full border border-onyx/10 shrink-0">
             <button
               type="button"
-              onClick={() => setActiveTab('all')}
+              onClick={() => selectTab('all')}
               className={`px-4 py-1.5 rounded-full text-caption font-sans font-semibold transition-all cursor-pointer ${
                 activeTab === 'all'
                   ? 'bg-deep-ink text-white shadow-xs'
@@ -389,7 +403,7 @@ export function ChannelsPage() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('active')}
+              onClick={() => selectTab('active')}
               className={`px-4 py-1.5 rounded-full text-caption font-sans font-semibold transition-all cursor-pointer ${
                 activeTab === 'active'
                   ? 'bg-deep-ink text-white shadow-xs'
@@ -400,7 +414,7 @@ export function ChannelsPage() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('pairing')}
+              onClick={() => selectTab('pairing')}
               className={`px-4 py-1.5 rounded-full text-caption font-sans font-semibold transition-all cursor-pointer ${
                 activeTab === 'pairing'
                   ? 'bg-deep-ink text-white shadow-xs'
@@ -411,7 +425,7 @@ export function ChannelsPage() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('webhook')}
+              onClick={() => selectTab('webhook')}
               className={`px-4 py-1.5 rounded-full text-caption font-sans font-semibold transition-all cursor-pointer ${
                 activeTab === 'webhook'
                   ? 'bg-deep-ink text-white shadow-xs'

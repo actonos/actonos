@@ -1,4 +1,11 @@
 {
+  "views": {
+    "label": "Các chế độ vận hành",
+    "overview": "Tổng quan",
+    "feed": "Luồng thực thi",
+    "runtime": "Môi trường chạy",
+    "cost": "Chi phí"
+  },
   "eyebrow": "Trung tâm điều hành thời gian thực",
   "title": "Vận hành trực tiếp",
   "subtitle": "Theo dõi phần cứng, Docker, chuỗi suy luận, phê duyệt an toàn, môi trường thực thi, hàng đợi tác vụ và chi phí mô hình trên một giao diện thích ứng.",

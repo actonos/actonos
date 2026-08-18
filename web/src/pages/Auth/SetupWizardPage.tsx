@@ -108,10 +108,11 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
           </p>
 
           {/* Stepper Dots */}
-          <div className="flex items-center justify-center gap-2.5 mt-6">
+          <div className="flex items-center justify-center gap-2.5 mt-6" role="progressbar" aria-valuemin={1} aria-valuemax={3} aria-valuenow={step} aria-label={t('wizard.progress')}>
             {[1, 2, 3].map((s) => (
               <div
                 key={s}
+                aria-current={step === s ? 'step' : undefined}
                 className={`h-2 rounded-full transition-all duration-300 ${
                   step === s
                     ? 'w-8 bg-deep-ink'

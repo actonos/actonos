@@ -36,6 +36,7 @@
     "securityNote": "Kho bảo mật phần cứng • AES-256-GCM + cookie phiên HttpOnly"
   },
   "wizard": {
+    "progress": "Tiến độ thiết lập",
     "validationTitle": "Lỗi xác thực",
     "nameRequired": "Vui lòng nhập tên của bạn.",
     "passwordShortTitle": "Mật khẩu quá ngắn",

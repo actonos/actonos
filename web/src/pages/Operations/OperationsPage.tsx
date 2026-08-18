@@ -19,6 +19,8 @@ import { useRealtime } from '@/components/providers/RealtimeProvider';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { readHashParams, setHashParam } from '@/lib/url-state';
 
 function percent(value: number) {
   return `${Math.max(0, Math.min(100, value)).toFixed(0)}%`;
@@ -40,6 +42,10 @@ export function OperationsPage() {
   const [events, setEvents] = useState<RunEvent[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [selectedRun, setSelectedRun] = useState<string>('');
+  const [view, setView] = useState<'overview' | 'feed' | 'runtime' | 'cost'>(() => {
+    const value = readHashParams().get('view');
+    return value === 'feed' || value === 'runtime' || value === 'cost' ? value : 'overview';
+  });
   const terminalNode = useRef<HTMLDivElement>(null);
   const terminal = useRef<Terminal | null>(null);
 
@@ -141,7 +147,23 @@ export function OperationsPage() {
         )}
       />
 
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-6">
+      <SegmentedControl
+        value={view}
+        onChange={(next) => {
+          setView(next);
+          setHashParam('view', next === 'overview' ? undefined : next);
+        }}
+        label={t('views.label')}
+        options={[
+          { value: 'overview', label: t('views.overview') },
+          { value: 'feed', label: t('views.feed') },
+          { value: 'runtime', label: t('views.runtime') },
+          { value: 'cost', label: t('views.cost') },
+        ]}
+        className="mb-6"
+      />
+
+      <div className={`${view === 'overview' || view === 'runtime' ? 'grid' : 'hidden'} grid-cols-2 gap-3 xl:grid-cols-4 mb-6`}>
         {gaugeCards.map((gauge) => {
           const Icon = gauge.icon;
           return (
@@ -161,7 +183,7 @@ export function OperationsPage() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
-        <Card className="xl:col-span-7 p-5 border border-onyx/10">
+        <Card className={`${view === 'overview' || view === 'feed' ? 'block' : 'hidden'} xl:col-span-7 p-5 border border-onyx/10`}>
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="font-serif text-heading-sm font-bold">{t('feed.title')}</h2>
@@ -189,7 +211,7 @@ export function OperationsPage() {
           </div>
         </Card>
 
-        <Card className="xl:col-span-5 p-5 border border-onyx/10">
+        <Card className={`${view === 'overview' || view === 'runtime' ? 'block' : 'hidden'} xl:col-span-5 p-5 border border-onyx/10`}>
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="font-serif text-heading-sm font-bold">{t('containers.title')}</h2>
@@ -215,7 +237,7 @@ export function OperationsPage() {
           </div>
         </Card>
 
-        <Card className="xl:col-span-7 p-5 border border-onyx/10">
+        <Card className={`${view === 'runtime' ? 'block' : 'hidden'} xl:col-span-7 p-5 border border-onyx/10`}>
           <div className="flex items-center justify-between mb-3">
             <div>
               <h2 className="font-serif text-heading-sm font-bold">{t('canvas.title')}</h2>
@@ -229,12 +251,12 @@ export function OperationsPage() {
           </div>
         </Card>
 
-        <Card className="xl:col-span-5 p-0 border border-onyx/10 overflow-hidden">
+        <Card className={`${view === 'runtime' ? 'block' : 'hidden'} xl:col-span-5 p-0 border border-onyx/10 overflow-hidden`}>
           <div className="p-4 flex items-center gap-2 bg-soft-meadow"><SquareTerminal className="w-4 h-4" /><h2 className="font-serif text-heading-sm font-bold">{t('terminal.title')}</h2></div>
           <div ref={terminalNode} className="h-[330px] bg-deep-ink p-2" />
         </Card>
 
-        <Card className="xl:col-span-7 p-5 border border-onyx/10">
+        <Card className={`${view === 'overview' ? 'block' : 'hidden'} xl:col-span-7 p-5 border border-onyx/10`}>
           <div className="flex items-center justify-between mb-4">
             <div><h2 className="font-serif text-heading-sm font-bold">{t('queue.title')}</h2><p className="text-caption text-slate">{t('queue.subtitle')}</p></div>
             <Button variant="ghost" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={refreshTasks}>{t('refresh')}</Button>
@@ -259,7 +281,7 @@ export function OperationsPage() {
           </div>
         </Card>
 
-        <Card className="xl:col-span-5 p-5 border border-onyx/10">
+        <Card className={`${view === 'overview' || view === 'cost' ? 'block' : 'hidden'} xl:col-span-5 p-5 border border-onyx/10`}>
           <div className="flex items-center gap-2 mb-4"><Coins className="w-5 h-5" /><h2 className="font-serif text-heading-sm font-bold">{t('cost.title')}</h2></div>
           <div className="grid grid-cols-2 gap-3 mb-4">
             <div className="p-3 rounded-[18px] bg-soft-meadow"><p className="text-caption text-slate">{t('cost.today')}</p><p className="text-heading-sm font-bold">${(tokens?.today_cost_usd || 0).toFixed(4)}</p><p className="text-[11px] text-slate">{t('units.tokens', { value: (tokens?.today_tokens || 0).toLocaleString() })}</p></div>

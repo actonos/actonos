@@ -525,6 +525,28 @@ The frontend shell is organized around workflow navigation, shared primitives,
 and a global command palette. `DensityProvider` persists comfortable/compact
 layout density, while authenticated Playwright and axe checks exercise the
 dashboard and operations flows at mobile, tablet, and desktop breakpoints.
+Page-level async data follows `AsyncState<T>` and important filter/tab state is
+encoded in hash query parameters via `url-state.ts`.
+The Chat route is decomposed into feature components for session navigation,
+empty guidance, composing, message timelines, message presentation, and
+execution disclosures.
+Agent Studio uses a dedicated section navigator with model readiness and
+tool/channel authorization summaries, while the route owns draft persistence
+and save orchestration.
+Identity and lifecycle fields are isolated in `AgentIdentitySection`, allowing
+validation and responsive layout to evolve independently of manifest loading.
+Delegation budget, approval threshold, and allowed paths are isolated in
+`AgentGovernanceSection`, while backend authorization remains authoritative.
+Tool authorization is isolated in `AgentToolsSection`, with the manifest route
+retaining the canonical authorized-tool list and wildcard semantics.
+Inbound channel listener configuration is isolated in `AgentChannelsSection`,
+with wildcard and explicit channel selections mapped back to the manifest.
+Agent Studio completes the flow with a Review & save section that aggregates
+structural validation before backend authorization. Chat uses one conversation
+data source rendered as a desktop rail or a dismissible mobile drawer.
+Operations exposes overview, feed, runtime, and cost views over the single
+shared realtime provider. Hash route resolution strips page-local query state,
+so deep links such as `#/operations?view=runtime` survive reload.
 
 ## References
 

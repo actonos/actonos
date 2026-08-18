@@ -42,6 +42,7 @@ import {
 import { isApprovalRequired, type SystemMetrics, type TailscaleStatus, type LLMProviderInfo } from '@/lib/types';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { readHashParams, setHashParam } from '@/lib/url-state';
 
 type SettingsTab = 'identity' | 'keys' | 'tokens' | 'network' | 'audit' | 'maintenance';
 
@@ -50,7 +51,16 @@ import { PROVIDER_METAS, type ProviderMeta } from '@/lib/models';
 export function SettingsPage() {
   const { t } = useTranslation('settings');
   const { success, error, info } = useToast();
-  const [activeTab, setActiveTab] = useState<SettingsTab>('keys');
+  const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
+    const value = readHashParams().get('view');
+    return ['identity', 'keys', 'tokens', 'network', 'audit', 'maintenance'].includes(value || '')
+      ? value as SettingsTab
+      : 'keys';
+  });
+  const changeTab = (tab: SettingsTab) => {
+    setActiveTab(tab);
+    setHashParam('view', tab === 'keys' ? undefined : tab);
+  };
 
   // Metrics & Tailscale
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
@@ -320,7 +330,7 @@ export function SettingsPage() {
 
         <SegmentedControl
           value={activeTab}
-          onChange={setActiveTab}
+          onChange={changeTab}
           label={t('tabs.label')}
           className="mb-8 w-fit"
           options={[

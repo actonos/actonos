@@ -1,4 +1,6 @@
 {
+  "sessions": "Phiên trò chuyện",
+  "closeSessions": "Đóng danh sách phiên",
   "title": "Trò chuyện & Nhận thức",
   "subtitle": "Phiên làm việc nhận thức ReAct trực tiếp với các AI Agent tự trị.",
   "placeholder": "Đặt câu hỏi hoặc giao việc (Hỗ trợ Markdown & Tool execution)...",
@@ -25,6 +27,17 @@
   "copy": "Sao chép",
   "copied": "Đã chép!",
   "promptSuggestions": "Gợi ý câu lệnh",
+  "sessionScope": "Phạm vi hội thoại",
+  "currentAgent": "Agent hiện tại",
+  "noMessages": "Chưa có tin nhắn",
+  "executionDetails": "{{tools}} lần chạy công cụ · {{audits}} nhật ký kiểm toán",
+  "defaultAgent": "Nova",
+  "prompts": {
+    "diagnostics": "Chẩn đoán hệ thống và hiệu năng",
+    "workspace": "Liệt kê tệp trong workspace",
+    "decompose": "Phân rã mục tiêu thành các tác vụ nhỏ",
+    "architecture": "Giải thích kiến trúc ActonOS"
+  },
   "activeAgentInfo": "Thông tin Agent",
   "today": "Hôm nay",
   "yesterday": "Hôm qua",

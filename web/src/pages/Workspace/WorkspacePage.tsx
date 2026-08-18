@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -193,13 +194,16 @@ export function WorkspacePage() {
       <BlobBackdrop />
 
       <PageContainer>
+        <PageHeader eyebrow={t('eyebrow')} title={t('title')} description={t('subtitle')} actions={(
+          <Button variant="ghost" size="sm" icon={<RefreshCw />} onClick={() => loadFiles()}>{t('actions.refresh')}</Button>
+        )} />
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div className="flex-1">
             <span className="text-caption uppercase tracking-wider text-slate font-semibold block mb-1">
               {t('eyebrow', 'Sandboxed Filesystem')}
             </span>
-            <h1 className="font-serif text-heading-lg text-deep-ink tracking-tight">
+            <h1 className="hidden font-serif text-heading-lg text-deep-ink tracking-tight" aria-hidden="true">
               {t('title', 'Workspace Explorer')}
             </h1>
             <p className="font-sans text-body text-slate mt-1 max-w-2xl">

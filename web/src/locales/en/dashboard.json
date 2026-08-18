@@ -39,6 +39,7 @@
       }
     }
   },
+  "health": { "title": "System health" },
   "gauges": {
     "cpu": "CPU",
     "memory": "Memory",

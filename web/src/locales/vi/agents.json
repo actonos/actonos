@@ -141,6 +141,8 @@
     "launch": "Phiên khởi chạy",
     "saving": "Đang lưu...",
     "save": "Lưu đại lý",
+    "saved": "Đã lưu",
+    "leaveConfirm": "Bạn có thay đổi chưa lưu. Rời khỏi trang?",
     "name": "Tên đại lý",
     "namePlaceholder": "ví dụ: Kiến trúc sư Full-Stack cấp cao",
     "identifier": "Mã định danh (Sên)",
@@ -156,13 +158,15 @@
     "allTools": "Tất cả (*)",
     "all": "Tất cả",
     "tabs": {
+      "label": "Các phần Agent Studio",
       "instructions": "Hướng dẫn",
       "soul": "Nhân cách & Linh hồn (SOUL.md)",
       "memory": "Bộ nhớ (MEMORY.md)",
       "model": "LLM & Lý luận ({{status}})",
       "tools": "Công cụ ({{value}})",
       "channels": "Kênh ({{value}})",
-      "governance": "Quản trị"
+      "governance": "Quản trị",
+      "review": "Kiểm tra và lưu"
     },
     "length": "Độ dài: {{count}} ký tự",
     "prompt": {
@@ -183,6 +187,9 @@
       "title": "Nhật ký ký ức liên tục theo từng giai đoạn (MEMORY.md)",
       "description": "Phản ánh tự động, sở thích của người dùng và kiến ​​thức tổng hợp dài hạn được tác nhân này tích lũy qua các phiên.",
       "refresh": "Làm mới bộ nhớ",
+      "refreshed": "Đã làm mới bộ nhớ",
+      "refreshedDescription": "Đã tải các nội dung phản tư mới nhất từ MEMORY.md.",
+      "refreshFailed": "Không thể làm mới bộ nhớ",
       "empty": "Chưa có ký ức phân đoạn nào được ghi lại",
       "emptyDescription": "Khi bạn tương tác với tác nhân này trong Trò chuyện và các tác vụ trong nền, trình nền phản ánh ReAct sẽ tổng hợp các quyết định chính, quy ước dự án và tùy chọn của người dùng vào bộ nhớ có dấu thời gian liên tục tại đây.",
       "longTerm": "Trí nhớ dài hạn tự trị"
@@ -206,7 +213,11 @@
       "clear": "Xóa tất cả",
       "selectAll": "Chọn tất cả (*)",
       "fullTitle": "Ủy quyền đầy đủ:",
-      "fullDescription": "Đại lý có thể sử dụng tất cả các công cụ và plugin có sẵn."
+      "fullDescription": "Đại lý có thể sử dụng tất cả các công cụ và plugin có sẵn.",
+      "empty": "Chưa có công cụ khả dụng",
+      "noDescription": "Công cụ chưa có mô tả.",
+      "authorized": "Đã cấp quyền",
+      "disabled": "Đã tắt"
     },
     "channels": {
       "title": "Kênh trò chuyện Người nghe trong nước",
@@ -215,7 +226,14 @@
       "allDescription": "Đại lý lắng nghe tin nhắn đến trên Telegram, Discord, WhatsApp và Webhook.",
       "specific": "Chỉ các kênh cụ thể",
       "specificDescription": "Hạn chế tổng đài viên này chỉ phản hồi các kênh cụ thể được chọn bên dưới.",
-      "select": "Chọn kênh để nghe"
+      "select": "Chọn kênh để nghe",
+      "modeLabel": "Chế độ lắng nghe kênh",
+      "catalog": {
+        "telegram": { "name": "Telegram", "description": "Lắng nghe hội thoại và lượt nhắc từ bot Telegram" },
+        "discord": { "name": "Discord", "description": "Lắng nghe tin nhắn và luồng thảo luận Discord" },
+        "whatsapp": { "name": "WhatsApp", "description": "Lắng nghe tin nhắn WhatsApp Cloud API" },
+        "webhook": { "name": "Webhook nhận vào", "description": "Kích hoạt agent từ HTTP webhook" }
+      }
     },
     "governance": {
       "title": "Quản trị & Quyền",
@@ -228,6 +246,25 @@
       "paths": "Đường dẫn không gian làm việc được phép",
       "pathsPlaceholder": "ví dụ: *, /data/workspace/project/*",
       "pathsHelp": "Đường dẫn tệp hoặc ký tự đại diện được phân tách bằng dấu phẩy (*) mà tác nhân này được phép truy cập."
+    },
+    "review": {
+      "title": "Kiểm tra manifest của agent",
+      "description": "Xác minh danh tính, mô hình, quyền, kênh và quản trị trước khi lưu.",
+      "ready": "Manifest đã sẵn sàng để lưu",
+      "needsAttention": "Hãy xử lý các vấn đề sau trước khi lưu",
+      "valid": "Đã vượt qua kiểm tra",
+      "invalid": "Cần kiểm tra lại",
+      "nameRequired": "Tên agent là bắt buộc.",
+      "identifierRequired": "Mã định danh agent là bắt buộc.",
+      "primaryModelRequired": "Mô hình chính là bắt buộc.",
+      "toolsRequired": "Hãy chọn ít nhất một công cụ được cấp quyền.",
+      "channelsRequired": "Hãy chọn ít nhất một kênh hoặc lắng nghe tất cả kênh.",
+      "identity": "Danh tính",
+      "models": "Mô hình",
+      "tools": "Công cụ",
+      "channels": "Kênh",
+      "approval": "Phê duyệt",
+      "budget": "Ngân sách tháng"
     }
   }
 }

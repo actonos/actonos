@@ -54,10 +54,13 @@ export function CommandPalette({
   const [tools, setTools] = useState<ToolInfo[]>([]);
   const [files, setFiles] = useState<SearchFile[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => {
     if (!isOpen) return;
     setQuery('');
+    setActiveIndex(0);
     window.setTimeout(() => inputRef.current?.focus());
     Promise.all([
       api.listAgents().catch(() => ({ agents: [], count: 0 })),
@@ -158,23 +161,49 @@ export function CommandPalette({
     .slice(0, 18);
 
   useEffect(() => {
+    setActiveIndex(0);
+  }, [query]);
+
+  useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
-      if (event.key === 'Enter' && filtered[0]) {
+      if (event.key === 'ArrowDown') {
         event.preventDefault();
-        run(filtered[0].execute);
+        setActiveIndex((index) => filtered.length ? (index + 1) % filtered.length : 0);
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setActiveIndex((index) => filtered.length ? (index - 1 + filtered.length) % filtered.length : 0);
+      }
+      if (event.key === 'Enter' && filtered[activeIndex]) {
+        event.preventDefault();
+        run(filtered[activeIndex].execute);
+      }
+      if (event.key === 'Tab' && dialogRef.current) {
+        const focusable = dialogRef.current.querySelectorAll<HTMLElement>('input, button:not([disabled])');
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [filtered, isOpen, onClose]);
+  }, [activeIndex, filtered, isOpen, onClose]);
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[70] flex items-start justify-center bg-deep-ink/45 px-3 pt-[10vh] backdrop-blur-sm" onMouseDown={onClose}>
       <section
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={t('nav:search.title')}
@@ -196,14 +225,15 @@ export function CommandPalette({
           {filtered.length === 0 ? (
             <p className="px-4 py-10 text-center text-body-sm text-slate">{t('nav:search.empty')}</p>
           ) : (
-            filtered.map((command) => {
+            filtered.map((command, index) => {
               const Icon = command.icon;
               return (
                 <button
                   key={command.id}
                   type="button"
                   onClick={() => run(command.execute)}
-                  className="density-row flex w-full items-center gap-3 rounded-[16px] px-3 text-left hover:bg-soft-meadow focus-visible:bg-soft-meadow"
+                  aria-selected={index === activeIndex}
+                  className={`density-row flex w-full items-center gap-3 rounded-[16px] px-3 text-left hover:bg-soft-meadow focus-visible:bg-soft-meadow ${index === activeIndex ? 'bg-soft-meadow' : ''}`}
                 >
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-soft-meadow text-deep-ink">
                     <Icon className="h-4 w-4" />

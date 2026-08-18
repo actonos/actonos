@@ -66,6 +66,19 @@ ActonOS uses a **sunlit wildflower compliance atelier** aesthetic:
 - The global command palette is opened with `Ctrl/Cmd+K`, supports navigation/entity search, and must never execute sensitive mutations without the existing approval flow.
 - Authenticated Playwright coverage and axe checks run at 390×844, 768×1024, and 1440×900. Update visual snapshots only when the UI change is intentional.
 - Product UI is emoji-free and must pass `npm run check:emoji`; all visible copy belongs in locale namespaces and must pass the hardcoded-text audit.
+- Reusable operational primitives include `MetricCard`, `AsyncState`, and `FreshnessBadge`; use them for health, loading/error, and realtime freshness states instead of page-local variants.
+- Important tabs and filters should be represented in hash query state through `web/src/lib/url-state.ts` so refresh and browser navigation preserve context.
+- Hash route parsing must strip the query before resolving the primary route. A deep link such as `#/operations?view=runtime` must not fall back to Dashboard.
+- Approval interruption dialogs must autofocus feedback, trap keyboard focus, require rejection feedback, and expose risk/action context before allowing a decision.
+- Chat route composition uses feature components such as `ChatHeader`, `ChatSessionRail`, `ChatEmptyState`, `ChatComposer`, `MessageTimeline`, `MessageBubble`, and `TraceDisclosure`; keep message, trace, session, and composer concerns separated when extending chat behavior.
+- Agent Studio section navigation lives in `AgentStudioNav`; expose section readiness/counts there and keep editor sections focused on their own form state.
+- Agent Studio finishes with a localized Review & save section. Structural validation blocks save and summarizes identity, models, tools, channels, approval, and budget.
+- Chat sessions use one responsive rail: persistent on desktop and an explicit dismissible drawer on narrow layouts.
+- Operations uses `overview`, `feed`, `runtime`, and `cost` views, with non-default views persisted in the hash query.
+- Agent identity fields and lifecycle controls live in `AgentIdentitySection`; do not duplicate editable identity controls in the route component.
+- Budget, approval threshold, and workspace scope controls live in `AgentGovernanceSection`; keep governance warnings and validation close to these fields.
+- Tool authorization selection lives in `AgentToolsSection`; use pressed-state buttons, localized status labels, and an explicit empty state.
+- Channel listener configuration lives in `AgentChannelsSection`; channel names/descriptions must come from i18n and selection controls use pressed-state semantics.
 
 ### Strict Rule
 **Every user-facing string in JSX/TSX must be loaded via `useTranslation()` or `<Trans>` components.**

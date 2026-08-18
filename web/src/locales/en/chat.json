@@ -1,4 +1,6 @@
 {
+  "sessions": "Sessions",
+  "closeSessions": "Close sessions",
   "title": "Chat & Cognition",
   "subtitle": "Interactive ReAct cognitive sessions with autonomous AI agents.",
   "placeholder": "Ask anything or assign a task (Markdown & tools supported)...",
@@ -25,6 +27,17 @@
   "copy": "Copy",
   "copied": "Copied!",
   "promptSuggestions": "Suggested Prompts",
+  "sessionScope": "Conversation scope",
+  "currentAgent": "Current agent",
+  "noMessages": "No messages yet",
+  "executionDetails": "{{tools}} tool executions · {{audits}} audit logs",
+  "defaultAgent": "Nova",
+  "prompts": {
+    "diagnostics": "System diagnostics and performance",
+    "workspace": "List files in workspace",
+    "decompose": "Decompose a goal into subtasks",
+    "architecture": "Explain the ActonOS architecture"
+  },
   "activeAgentInfo": "Active Agent Profile",
   "today": "Today",
   "yesterday": "Yesterday",

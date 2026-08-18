@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { readHashParams, setHashParam } from '@/lib/url-state';
 import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -33,7 +35,11 @@ export function AutomationsPage() {
   const [historyRecords, setHistoryRecords] = useState<CronExecutionRecord[]>([]);
   const [agents, setAgents] = useState<AgentManifest[]>([]);
   const [channelAccounts, setChannelAccounts] = useState<import('@/lib/types').ChannelAccount[]>([]);
-  const [activeSubTab, setActiveSubTab] = useState<'jobs' | 'history'>('jobs');
+  const [activeSubTab, setActiveSubTab] = useState<'jobs' | 'history'>(() => readHashParams().get('view') === 'history' ? 'history' : 'jobs');
+  const selectSubTab = (tab: 'jobs' | 'history') => {
+    setActiveSubTab(tab);
+    setHashParam('view', tab === 'jobs' ? undefined : tab);
+  };
   const [loading, setLoading] = useState(true);
   const [runningJobId, setRunningJobId] = useState<string | null>(null);
 
@@ -184,13 +190,16 @@ export function AutomationsPage() {
       <BlobBackdrop />
 
       <PageContainer>
+        <PageHeader eyebrow={t('eyebrow')} title={t('title')} description={t('subtitle')} actions={(
+          <Button variant="ghost" size="sm" icon={<RefreshCw />} onClick={loadData}>{t('actions.refresh')}</Button>
+        )} />
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div className="flex-1">
             <span className="text-caption uppercase tracking-wider text-slate font-semibold block mb-1">
               {t('eyebrow', 'Proactive Autonomous Scheduling')}
             </span>
-            <h1 className="font-serif text-heading-lg text-deep-ink tracking-tight flex items-center gap-3">
+            <h1 className="hidden font-serif text-heading-lg text-deep-ink tracking-tight flex items-center gap-3" aria-hidden="true">
               <span>{t('title', 'Cron Automations')}</span>
               <Badge variant="neutral" className="text-caption font-mono">
                 {jobs.length} {t('scheduled')}
@@ -227,7 +236,7 @@ export function AutomationsPage() {
         {/* Sub-Tabs: Scheduled Tasks vs Execution History */}
         <div className="flex gap-2 mb-6 border-b border-onyx/10 pb-3">
           <button
-            onClick={() => setActiveSubTab('jobs')}
+            onClick={() => selectSubTab('jobs')}
             className={`px-4 py-2 rounded-xl text-body-sm font-semibold transition-all cursor-pointer flex items-center gap-2 ${
               activeSubTab === 'jobs'
                 ? 'bg-deep-ink text-canvas shadow-xs'
@@ -238,7 +247,7 @@ export function AutomationsPage() {
             <span>{t('tabs.tasks', { count: jobs.length })}</span>
           </button>
           <button
-            onClick={() => setActiveSubTab('history')}
+            onClick={() => selectSubTab('history')}
             className={`px-4 py-2 rounded-xl text-body-sm font-semibold transition-all cursor-pointer flex items-center gap-2 ${
               activeSubTab === 'history'
                 ? 'bg-deep-ink text-canvas shadow-xs'

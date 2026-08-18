@@ -39,6 +39,7 @@
       }
     }
   },
+  "health": { "title": "Sức khỏe hệ thống" },
   "gauges": {
     "cpu": "CPU",
     "memory": "Bộ nhớ RAM",

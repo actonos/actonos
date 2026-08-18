@@ -32,7 +32,7 @@ export const navTabs: NavTab[] = [
 ];
 
 export function tabFromLocation(): NavTab {
-  const value = window.location.hash.replace(/^#\/?/, '');
+  const value = window.location.hash.replace(/^#\/?/, '').split('?')[0];
   if (value === 'agents/new' || value.startsWith('agents/')) return 'agent-studio';
   return navTabs.includes(value as NavTab) ? value as NavTab : 'dashboard';
 }
@@ -84,7 +84,7 @@ export function App() {
   useEffect(() => {
     const syncLocation = () => {
       const nextTab = tabFromLocation();
-      const route = window.location.hash.replace(/^#\/?/, '');
+      const route = window.location.hash.replace(/^#\/?/, '').split('?')[0];
       if (nextTab === 'agent-studio' && route.startsWith('agents/')) {
         setStudioAgentID(decodeURIComponent(route.slice('agents/'.length)) || 'new');
       }

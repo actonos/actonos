@@ -36,7 +36,10 @@
     "stopped": "Đã Tạm Dừng",
     "error": "Lỗi",
     "connected": "Đã Kết Nối",
-    "disconnected": "Chưa Kết Nối"
+    "disconnected": "Chưa Kết Nối",
+    "live": "Đang trực tuyến",
+    "stale": "Dữ liệu cũ",
+    "noData": "Chưa có dữ liệu"
   },
   "errorBoundary": {
     "title": "Đã xảy ra lỗi",
