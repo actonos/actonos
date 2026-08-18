@@ -474,6 +474,19 @@ func (cs *CronScheduler) executeJob(job *CronJob) {
 	var execErr error
 
 	if cs.engine != nil {
+		if !cs.engine.HasConfiguredLLM() {
+			slog.Debug("skipping proactive cron job execution: no real LLM provider configured", "job_id", job.ID)
+			cs.recordExecution(CronExecutionRecord{
+				ID:         fmt.Sprintf("ceh_%d_%s", time.Now().UnixNano(), job.ID),
+				JobID:      job.ID,
+				AgentID:    job.AgentID,
+				Prompt:     job.Prompt,
+				Output:     "Execution skipped: no real LLM provider configured in Settings.",
+				Status:     "skipped",
+				ExecutedAt: job.LastRun,
+			})
+			return
+		}
 		executionPrompt := BuildCronExecutionPrompt(job)
 		resp, err := cs.engine.ExecuteStep(ctx, job.AgentID, executionPrompt)
 		if err != nil {

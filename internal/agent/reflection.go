@@ -116,6 +116,10 @@ func (r *ReflectionEngine) ReflectOnConversation(ctx context.Context, agentID, u
 		return
 	}
 
+	if r.llmRouter == nil || !r.llmRouter.HasRealProvider() {
+		return
+	}
+
 	go func() {
 		reflectCtx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 		defer cancel()

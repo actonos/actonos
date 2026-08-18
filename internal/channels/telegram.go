@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,6 +22,7 @@ type TelegramAdapter struct {
 	mu             sync.RWMutex
 	token          string
 	accountID      string
+	apiBaseURL     string
 	bus            *bus.EventBus
 	pairingMgr     *PairingManager
 	client         *http.Client
@@ -46,6 +48,25 @@ func NewTelegramAdapter(token string, bus *bus.EventBus, pairingMgr *PairingMana
 }
 
 func (t *TelegramAdapter) Name() string { return "telegram" }
+
+// SetAPIBaseURL configures a custom Telegram API gateway or reverse proxy endpoint.
+func (t *TelegramAdapter) SetAPIBaseURL(url string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.apiBaseURL = strings.TrimSpace(url)
+}
+
+func (t *TelegramAdapter) getAPIBase() string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.apiBaseURL != "" {
+		return strings.TrimRight(t.apiBaseURL, "/")
+	}
+	if env := os.Getenv("TELEGRAM_API_BASE"); env != "" {
+		return strings.TrimRight(env, "/")
+	}
+	return "https://api.telegram.org"
+}
 
 // SetAccountID sets the account identifier for this adapter.
 func (t *TelegramAdapter) SetAccountID(id string) {
@@ -181,7 +202,7 @@ func (t *TelegramAdapter) fetchUpdates(ctx context.Context) {
 		return
 	}
 
-	url := fmt.Sprintf("https://api.telegram.org/bot%s/getUpdates?offset=%d&timeout=20", token, offset)
+	url := fmt.Sprintf("%s/bot%s/getUpdates?offset=%d&timeout=20", t.getAPIBase(), token, offset)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return
@@ -189,11 +210,16 @@ func (t *TelegramAdapter) fetchUpdates(ctx context.Context) {
 
 	resp, err := t.client.Do(req)
 	if err != nil {
+		if ctx.Err() == nil {
+			slog.Warn("telegram getUpdates network error", "account_id", t.GetAccountID(), "error", err)
+		}
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		slog.Warn("telegram getUpdates non-200 response", "account_id", t.GetAccountID(), "status", resp.StatusCode, "body", string(body))
 		return
 	}
 
@@ -204,6 +230,7 @@ func (t *TelegramAdapter) fetchUpdates(ctx context.Context) {
 
 	var tgResp tgResponse
 	if err := json.Unmarshal(body, &tgResp); err != nil || !tgResp.OK {
+		slog.Warn("telegram getUpdates unmarshal failed or !OK", "account_id", t.GetAccountID(), "error", err, "body", string(body))
 		return
 	}
 
@@ -218,6 +245,7 @@ func (t *TelegramAdapter) fetchUpdates(ctx context.Context) {
 			continue
 		}
 
+		slog.Info("telegram message received", "from_id", upd.Message.From.ID, "chat_id", upd.Message.Chat.ID, "user", upd.Message.From.Username, "text", upd.Message.Text)
 		t.handleInboundMessage(ctx, upd)
 	}
 }
@@ -250,12 +278,11 @@ func (t *TelegramAdapter) handleInboundMessage(ctx context.Context, upd tgUpdate
 
 	if !isAuth {
 		// Attempt pairing check
-		cleanCode := strings.TrimPrefix(text, "/pair ")
-		cleanCode = strings.TrimSpace(cleanCode)
-
-		if len(cleanCode) == 6 && t.pairingMgr != nil {
-			paired, err := t.pairingMgr.ValidateAndPair("telegram", cleanCode, senderID, senderName)
+		pin := ExtractPairingPIN(text)
+		if pin != "" && t.pairingMgr != nil {
+			paired, err := t.pairingMgr.ValidateAndPair("telegram", pin, senderID, senderName)
 			if err == nil && paired {
+				slog.Info("telegram user paired successfully", "sender_id", senderID, "name", senderName)
 				_ = t.SendMessage(ctx, OutboundMessage{
 					ChannelID: "telegram",
 					Recipient: chatID,
@@ -264,6 +291,8 @@ func (t *TelegramAdapter) handleInboundMessage(ctx context.Context, upd tgUpdate
 				return
 			}
 		}
+
+		slog.Warn("unauthorized telegram message received; prompting for pairing", "sender_id", senderID, "chat_id", chatID)
 
 		t.mu.Lock()
 		if t.unauthNotified == nil {
@@ -341,7 +370,7 @@ func (t *TelegramAdapter) SendMessage(ctx context.Context, msg OutboundMessage) 
 }
 
 func (t *TelegramAdapter) sendSingleMessage(ctx context.Context, token, recipient, text string) error {
-	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", token)
+	url := fmt.Sprintf("%s/bot%s/sendMessage", t.getAPIBase(), token)
 
 	// 1. Try sending with Markdown formatting
 	bodyMD := map[string]any{

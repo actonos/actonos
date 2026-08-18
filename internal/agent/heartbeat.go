@@ -233,6 +233,22 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context) *HeartbeatRun {
 
 	primaryAgentID := "agent_system_core"
 
+	// If no real LLM provider is configured (only local-stub or empty), skip autonomous execution to avoid spamming alerts.
+	if h.engine == nil || !h.engine.HasConfiguredLLM() {
+		slog.Debug("autonomous heartbeat skipped: no real LLM provider configured")
+		run := &HeartbeatRun{
+			AgentID:    primaryAgentID,
+			ExecutedAt: time.Now().UTC(),
+			Status:     "ok",
+			Summary:    "Heartbeat nominal (waiting for LLM provider configuration).",
+		}
+		b := make([]byte, 8)
+		_, _ = rand.Read(b)
+		run.ID = "hb_" + hex.EncodeToString(b)
+		h.recordRun(*run)
+		return run
+	}
+
 	// 1. Read standing directives
 	heartbeatMDPath := filepath.Join(h.workspaceDir, "HEARTBEAT.md")
 	standingDirectives := "Monitor background tasks, verify system health, maintain Zero-Noise if nominal."
@@ -452,8 +468,8 @@ CRITICAL INSTRUCTIONS:
 				}))
 			}
 
-			// If there are more pending tasks waiting in backlog, trigger immediate next cycle
-			if h.taskMgr != nil {
+			// If active task was completed and there are more pending tasks waiting in backlog, trigger immediate next cycle
+			if h.taskMgr != nil && activeTask.Status == "completed" {
 				pendingTasks, _ := h.taskMgr.ListTasks(ctx, "pending", "")
 				if len(pendingTasks) > 0 {
 					slog.Info("queueing immediate next heartbeat cycle for pending backlog tasks", "pending_count", len(pendingTasks))

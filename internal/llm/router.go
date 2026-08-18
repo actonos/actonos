@@ -35,6 +35,18 @@ func (r *ModelCascadeRouter) Count() int {
 	return len(r.providers)
 }
 
+// HasRealProvider reports whether any non-stub LLM provider is registered in the cascade router.
+func (r *ModelCascadeRouter) HasRealProvider() bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for id := range r.providers {
+		if id != "local-stub" {
+			return true
+		}
+	}
+	return false
+}
+
 // SetDefaultProvider sets the default provider ID.
 func (r *ModelCascadeRouter) SetDefaultProvider(id string) {
 	r.mu.Lock()

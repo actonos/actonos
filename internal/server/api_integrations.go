@@ -928,7 +928,7 @@ func (s *Server) handleSaveChannels(w http.ResponseWriter, r *http.Request) {
 
 	// Dynamically sync all active accounts with ChannelManager
 	if s.channelMgr != nil {
-		_ = s.channelMgr.SyncAccounts(r.Context(), allAccounts)
+		_ = s.channelMgr.SyncAccounts(context.Background(), allAccounts)
 	}
 
 	s.respondJSON(w, http.StatusOK, map[string]string{"status": "saved"})

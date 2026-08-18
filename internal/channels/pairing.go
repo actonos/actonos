@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"math/big"
+	"strings"
 	"sync"
 	"time"
 )
@@ -135,7 +136,7 @@ func (pm *PairingManager) ValidateAndPair(channelID, code, senderID, senderName 
 		return false, nil
 	}
 
-	if req.ChannelID != "" && req.ChannelID != channelID {
+	if req.ChannelID != "" && req.ChannelID != "all" && req.ChannelID != channelID {
 		return false, nil
 	}
 
@@ -244,3 +245,35 @@ func (pm *PairingManager) RevokeUser(channelID, senderID string) error {
 	}
 	return nil
 }
+
+// ExtractPairingPIN extracts a 6-digit numeric pairing PIN from message text (e.g. "/pair 123456", "123456", "@Bot /pair 123456").
+func ExtractPairingPIN(text string) string {
+	trimmed := strings.TrimSpace(text)
+	if len(trimmed) == 6 && isAllDigits(trimmed) {
+		return trimmed
+	}
+	if idx := strings.Index(trimmed, "/pair"); idx != -1 {
+		after := strings.TrimSpace(trimmed[idx+len("/pair"):])
+		fields := strings.Fields(after)
+		if len(fields) > 0 && len(fields[0]) == 6 && isAllDigits(fields[0]) {
+			return fields[0]
+		}
+	}
+	for _, word := range strings.Fields(trimmed) {
+		clean := strings.Trim(word, ":,.!?()[]{}'\"")
+		if len(clean) == 6 && isAllDigits(clean) {
+			return clean
+		}
+	}
+	return ""
+}
+
+func isAllDigits(s string) bool {
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+

@@ -103,6 +103,11 @@ func (e *Engine) SetSessionManager(sm SessionHistoryProvider) {
 	e.sessionMgr = sm
 }
 
+// HasConfiguredLLM reports whether the engine has a real (non-stub) LLM provider configured.
+func (e *Engine) HasConfiguredLLM() bool {
+	return e.llm != nil && e.llm.HasRealProvider()
+}
+
 // RecordTokenUsage records usage metrics if token tracker is configured.
 func (e *Engine) RecordTokenUsage(ctx context.Context, agentID, model, provider, source, convID string, usage llm.Usage) {
 	if e.tokenTracker == nil {
@@ -1298,7 +1303,7 @@ func sourceFromMessage(message, fallback string) string {
 		return "heartbeat"
 	case strings.Contains(message, "[AUTONOMOUS PROACTIVE"):
 		return "cron"
-	case strings.Contains(message, "[Channel Metadata]"):
+	case strings.Contains(message, "[Channel:"), strings.Contains(message, "[Channel Metadata]"):
 		return "channel"
 	default:
 		return fallback

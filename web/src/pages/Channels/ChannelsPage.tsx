@@ -94,7 +94,7 @@ export function ChannelsPage() {
 
   // Pairing state
   const [pairingCode, setPairingCode] = useState<string | null>(null);
-  const [pairingChannel, setPairingChannel] = useState<'telegram' | 'whatsapp'>('telegram');
+  const [pairingChannel, setPairingChannel] = useState<'telegram' | 'whatsapp' | 'discord'>('telegram');
   const [authorizations, setAuthorizations] = useState<ChannelAuthorizationItem[]>([]);
   const [generatingCode, setGeneratingCode] = useState(false);
   const [revokingUser, setRevokingUser] = useState<{
@@ -227,7 +227,7 @@ export function ChannelsPage() {
     }
   };
 
-  const handleGeneratePairingCode = async (ch: 'telegram' | 'whatsapp') => {
+  const handleGeneratePairingCode = async (ch: 'telegram' | 'whatsapp' | 'discord') => {
     setGeneratingCode(true);
     setPairingChannel(ch);
     try {

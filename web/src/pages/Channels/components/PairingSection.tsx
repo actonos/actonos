@@ -13,6 +13,7 @@ import {
   UserCheck,
   Send,
   Phone,
+  MessageSquare,
   RefreshCw,
   Search,
 } from 'lucide-react';
@@ -20,10 +21,10 @@ import type { ChannelAuthorizationItem } from '@/lib/api';
 
 interface PairingSectionProps {
   pairingCode: string | null;
-  pairingChannel: 'telegram' | 'whatsapp';
+  pairingChannel: 'telegram' | 'whatsapp' | 'discord';
   authorizations: ChannelAuthorizationItem[];
   generatingCode: boolean;
-  onGenerateCode: (channel: 'telegram' | 'whatsapp') => void;
+  onGenerateCode: (channel: 'telegram' | 'whatsapp' | 'discord') => void;
   onRevokeUser: (item: { channel_id: string; sender_id: string; sender_name?: string }) => void;
   onRefresh: () => void;
 }
@@ -39,7 +40,7 @@ export function PairingSection({
 }: PairingSectionProps) {
   const { t } = useTranslation('channels');
   const [copiedPIN, setCopiedPIN] = useState(false);
-  const [selectedChannel, setSelectedChannel] = useState<'telegram' | 'whatsapp'>(pairingChannel);
+  const [selectedChannel, setSelectedChannel] = useState<'telegram' | 'whatsapp' | 'discord'>(pairingChannel);
   const [filterQuery, setFilterQuery] = useState('');
   const [countdown, setCountdown] = useState<number>(600); // 10 minutes default
 
@@ -118,9 +119,20 @@ export function PairingSection({
                     ? 'bg-deep-ink text-hi-yellow shadow-xs'
                     : 'text-slate hover:text-deep-ink'
                     }`}
-                  title={t('telegram.name')}
+                  title={t('telegram.name', 'Telegram')}
                 >
                   <Send className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedChannel('discord')}
+                  className={`p-1.5 rounded-full transition-colors cursor-pointer ${selectedChannel === 'discord'
+                    ? 'bg-deep-ink text-hi-yellow shadow-xs'
+                    : 'text-slate hover:text-deep-ink'
+                    }`}
+                  title={t('discord.name', 'Discord')}
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
                 </button>
                 <button
                   type="button"
@@ -129,7 +141,7 @@ export function PairingSection({
                     ? 'bg-deep-ink text-hi-yellow shadow-xs'
                     : 'text-slate hover:text-deep-ink'
                     }`}
-                  title={t('whatsapp.name')}
+                  title={t('whatsapp.name', 'WhatsApp')}
                 >
                   <Phone className="w-3.5 h-3.5" />
                 </button>

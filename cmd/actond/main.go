@@ -386,10 +386,17 @@ func main() {
 
 							// 5. Execute cognitive ReAct loop with multi-layer memory (Working + Episodic + Procedural + User Profile)
 							// Channel messages bypass approval — authenticated paired users have implicit trust.
+							slog.Info("processing inbound channel message", "channel", msg.ChannelID, "account", msg.AccountID, "sender", msg.SenderID, "target_agent", target)
 							channelCtx := tools.WithBypassApproval(context.Background())
 							resp, err := engine.ExecuteStepWithHistory(channelCtx, target, promptWithMeta, history)
 							if err != nil {
 								slog.Error("failed to process channel message", "channel", msg.ChannelID, "error", err)
+								_ = channelMgr.SendMessage(context.Background(), channels.OutboundMessage{
+									ChannelID: msg.ChannelID,
+									AccountID: msg.AccountID,
+									Recipient: senderID,
+									Content:   fmt.Sprintf("⚠️ Unable to process request: %v", err),
+								})
 								return
 							}
 

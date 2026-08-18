@@ -181,6 +181,9 @@ func (m *ChannelManager) startTelegramAccountLocked(_ context.Context, acc Chann
 	}
 	adapter := NewTelegramAdapter(token, m.eventBus, m.pairingMgr)
 	adapter.SetAccountID(acc.ID)
+	if apiBase := acc.Metadata["api_base"]; apiBase != "" {
+		adapter.SetAPIBaseURL(apiBase)
+	}
 	if err := adapter.Start(adapterCtx); err == nil {
 		m.tgAdapters[acc.ID] = adapter
 		slog.Info("channel account started", "channel", "telegram", "account_id", acc.ID, "name", acc.Name)
@@ -233,7 +236,7 @@ func (m *ChannelManager) startDiscordAccountLocked(_ context.Context, acc Channe
 		delete(m.dcAdapters, acc.ID)
 	}
 	for existingID, adapter := range m.dcAdapters {
-		if adapter.webhookURL == token {
+		if adapter.token == token {
 			_ = adapter.Stop()
 			delete(m.dcAdapters, existingID)
 		}
@@ -244,7 +247,8 @@ func (m *ChannelManager) startDiscordAccountLocked(_ context.Context, acc Channe
 		m.ctx, m.cancel = context.WithCancel(context.Background())
 		adapterCtx = m.ctx
 	}
-	adapter := NewDiscordAdapter(token, m.eventBus)
+	adapter := NewDiscordAdapter(token, m.eventBus, m.pairingMgr)
+	adapter.SetAccountID(acc.ID)
 	if err := adapter.Start(adapterCtx); err == nil {
 		m.dcAdapters[acc.ID] = adapter
 		slog.Info("channel account started", "channel", "discord", "account_id", acc.ID, "name", acc.Name)
