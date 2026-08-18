@@ -61,6 +61,7 @@ type RunCheckpoint struct {
 	RunID       string        `json:"run_id"`
 	TraceID     string        `json:"trace_id"`
 	AgentID     string        `json:"agent_id"`
+	TaskID      string        `json:"task_id,omitempty"`
 	Goal        string        `json:"goal"`
 	Source      string        `json:"source"`
 	Messages    []llm.Message `json:"messages"`

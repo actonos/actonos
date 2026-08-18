@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 	"time"
 
@@ -34,6 +35,8 @@ type Engine struct {
 	contextManager   *ContextManager
 	runStore         *RunStore
 	planner          *Planner
+	taskMgr          *TaskManager
+	sessionMgr       SessionHistoryProvider
 	theta            float64 // Entropy threshold
 }
 
@@ -88,6 +91,16 @@ func (e *Engine) SetToolRegistry(r *tools.ToolRegistry) {
 // SetTokenTracker attaches the token usage tracker.
 func (e *Engine) SetTokenTracker(t *memory.TokenTracker) {
 	e.tokenTracker = t
+}
+
+// SetTaskManager attaches the autonomous task manager.
+func (e *Engine) SetTaskManager(tm *TaskManager) {
+	e.taskMgr = tm
+}
+
+// SetSessionManager attaches the session history provider.
+func (e *Engine) SetSessionManager(sm SessionHistoryProvider) {
+	e.sessionMgr = sm
 }
 
 // RecordTokenUsage records usage metrics if token tracker is configured.
@@ -974,6 +987,50 @@ func (e *Engine) ResumeApproved(ctx context.Context, approval tools.ApprovalRequ
 				}
 			}
 			e.RecordTokenUsage(execCtx, checkpoint.AgentID, response.Model, response.Model, checkpoint.Source, "", usage)
+
+			// Sync and complete autonomous task if this run was for a Task
+			targetTaskID := checkpoint.TaskID
+			if targetTaskID == "" {
+				re := regexp.MustCompile(`Task ID:\s*([^\s|]+)`)
+				if match := re.FindStringSubmatch(checkpoint.Goal); len(match) > 1 {
+					targetTaskID = match[1]
+				}
+			}
+			if targetTaskID != "" && e.taskMgr != nil {
+				if task, err := e.taskMgr.GetTask(execCtx, targetTaskID); err == nil && task != nil {
+					content := strings.TrimSpace(response.Content)
+					shortLog := shortSummary(content, 250)
+					if strings.Contains(content, "[TASK_COMPLETED]") || (e.verifier != nil && e.verifier.VerifyTaskCompletion(task.Description, content, response.ToolCalls)) {
+						task.Status = "completed"
+						task.Progress = 100
+						now := time.Now().UTC()
+						task.CompletedAt = &now
+						task.ExecutionLog = shortLog
+					} else if strings.Contains(content, "[TASK_BLOCKED") {
+						task.Status = "blocked"
+						task.ExecutionLog = shortLog
+					} else {
+						task.Status = "completed"
+						task.Progress = 100
+						now := time.Now().UTC()
+						task.CompletedAt = &now
+						task.ExecutionLog = shortLog
+					}
+					_ = e.taskMgr.UpdateTask(execCtx, *task)
+					if e.sessionMgr != nil && task.SessionID != "" {
+						_ = e.sessionMgr.SaveMessage(execCtx, task.SessionID, checkpoint.AgentID, "assistant", response.Content, response.ToolCalls)
+					}
+					if e.bus != nil {
+						e.bus.Publish(bus.NewEvent(bus.EventAgentActionDone, checkpoint.AgentID, map[string]any{
+							"task_id":  task.ID,
+							"status":   task.Status,
+							"progress": task.Progress,
+							"summary":  task.ExecutionLog,
+						}))
+					}
+				}
+			}
+
 			return response, nil
 		}
 		messages = append(messages, llm.Message{
@@ -1067,11 +1124,12 @@ func (e *Engine) saveApprovalCheckpoint(
 	if run == nil || e.runStore == nil {
 		return
 	}
+	taskID, _ := ctx.Value("task_id").(string)
 	// The approval was hashed over the normalized input, so the checkpoint must
 	// persist the same form or the resume-time hash comparison will not match.
 	pending.Function.Arguments = tools.NormalizeToolInput(pending.Function.Arguments)
 	_ = e.runStore.SaveCheckpoint(ctx, RunCheckpoint{
-		RunID: run.ID, TraceID: run.TraceID, AgentID: agentID, Goal: goal,
+		RunID: run.ID, TraceID: run.TraceID, AgentID: agentID, TaskID: taskID, Goal: goal,
 		Source: source, Messages: messages, Iteration: iteration,
 		Usage: usage, PendingTool: pending,
 	})

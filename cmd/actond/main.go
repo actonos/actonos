@@ -256,11 +256,17 @@ func main() {
 	if err != nil {
 		slog.Warn("failed to initialize task manager", "error", err)
 	}
+	if taskMgr != nil {
+		engine.SetTaskManager(taskMgr)
+	}
 
 	// Initialize Autonomous Heartbeat Daemon
 	heartbeatDaemon := agent.NewHeartbeatDaemon(agentMgr, engine, eventBus, db.SQLDB(), workspaceDir, 5*time.Minute)
 	if taskMgr != nil {
 		heartbeatDaemon.SetTaskManager(taskMgr)
+	}
+	if approvalMgr != nil {
+		heartbeatDaemon.SetApprovalManager(approvalMgr)
 	}
 	heartbeatDaemon.Start(ctx)
 	defer heartbeatDaemon.Stop()
@@ -302,6 +308,7 @@ func main() {
 	// Multi-Channel Cognitive Session Manager
 	sessionMgr := channels.NewChannelSessionManager(db.SQLDB())
 	heartbeatDaemon.SetSessionManager(sessionMgr)
+	engine.SetSessionManager(sessionMgr)
 
 	// Set Default Recipient Resolver for Proactive Schedulers
 	cronSched.SetDefaultRecipientGetter(func(channel string) string {

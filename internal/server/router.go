@@ -169,6 +169,12 @@ func NewServer(cfg Config) *Server {
 		buildTime:    buildTime,
 	}
 	s.realtime = newRealtimeHub(s)
+	if s.engine != nil && s.taskMgr != nil {
+		s.engine.SetTaskManager(s.taskMgr)
+	}
+	if s.heartbeat != nil && s.approvalMgr != nil {
+		s.heartbeat.SetApprovalManager(s.approvalMgr)
+	}
 
 	s.setupRoutes()
 	return s

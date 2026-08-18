@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/actonos/actonos/internal/bus"
 	"github.com/actonos/actonos/internal/llm"
+	"github.com/actonos/actonos/internal/tools"
 )
 
 // HeartbeatRun represents an execution record of a proactive heartbeat cycle.
@@ -36,6 +38,11 @@ type SessionHistoryProvider interface {
 	SaveMessage(ctx context.Context, convID, agentID, role, content string, toolCalls any) error
 }
 
+// ApprovalListProvider defines capabilities for inspecting pending system approvals.
+type ApprovalListProvider interface {
+	List(ctx context.Context, status string, limit int) ([]tools.ApprovalRequest, error)
+}
+
 // HeartbeatDaemon monitors proactive trigger rules, executes cognitive self-driving checks, and manages autonomous agent pulse.
 type HeartbeatDaemon struct {
 	mu           sync.RWMutex
@@ -46,6 +53,7 @@ type HeartbeatDaemon struct {
 	db           *sql.DB
 	taskMgr      *TaskManager
 	sessionMgr   SessionHistoryProvider
+	approvalMgr  ApprovalListProvider
 	workspaceDir string
 	interval     time.Duration
 	stopCh       chan struct{}
@@ -91,6 +99,13 @@ func (h *HeartbeatDaemon) SetSessionManager(sm SessionHistoryProvider) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.sessionMgr = sm
+}
+
+// SetApprovalManager injects the pending approvals provider.
+func (h *HeartbeatDaemon) SetApprovalManager(am ApprovalListProvider) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.approvalMgr = am
 }
 
 // Start launches the autonomous heartbeat evaluation loop.
@@ -152,12 +167,41 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context) *HeartbeatRun {
 	if h.taskMgr != nil {
 		// Priority order: in_progress first, then pending
 		inProg, _ := h.taskMgr.ListTasks(ctx, "in_progress", "")
-		if len(inProg) > 0 {
-			activeTask = &inProg[0]
-		} else {
+		for i := range inProg {
+			t := &inProg[i]
+			// Check if this in_progress task is currently paused waiting for operator approval
+			if h.approvalMgr != nil {
+				pendingApprovals, err := h.approvalMgr.List(ctx, "pending", 50)
+				if err == nil && len(pendingApprovals) > 0 {
+					isPendingApproval := false
+					for _, pa := range pendingApprovals {
+						if pa.AgentID == t.AssignedAgentID || pa.AgentID == primaryAgentID {
+							isPendingApproval = true
+							break
+						}
+					}
+					if isPendingApproval {
+						slog.Info("task execution is paused waiting for operator approval; skipping cycle", "task_id", t.ID)
+						continue
+					}
+				}
+			}
+			activeTask = t
+			break
+		}
+		if activeTask == nil {
 			pending, _ := h.taskMgr.ListTasks(ctx, "pending", "")
 			if len(pending) > 0 {
-				activeTask = &pending[0]
+				if h.approvalMgr != nil {
+					pendingApprovals, err := h.approvalMgr.List(ctx, "pending", 50)
+					if err == nil && len(pendingApprovals) > 0 {
+						slog.Info("pending approvals exist in system; waiting for resolution before launching new tasks", "count", len(pendingApprovals))
+					} else {
+						activeTask = &pending[0]
+					}
+				} else {
+					activeTask = &pending[0]
+				}
 			}
 		}
 	}
@@ -177,6 +221,12 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context) *HeartbeatRun {
 			assignedAgent = primaryAgentID
 		}
 		run.AgentID = assignedAgent
+
+		// Mark task as in_progress immediately
+		if activeTask.Status == "pending" {
+			activeTask.Status = "in_progress"
+			_ = h.taskMgr.UpdateTask(ctx, *activeTask)
+		}
 
 		// 1. Resume or create task working session
 		var history []llm.Message
@@ -229,8 +279,20 @@ CRITICAL INSTRUCTIONS:
 			activeTask.Description, standingDirectives, activeTask.TargetChannel,
 		)
 
-		resp, execErr := h.engine.ExecuteAutonomousGoal(ctx, assignedAgent, prompt, history)
+		taskCtx := context.WithValue(ctx, "task_id", activeTask.ID)
+		resp, execErr := h.engine.ExecuteAutonomousGoal(taskCtx, assignedAgent, prompt, history)
 		if execErr != nil {
+			var approvalErr *tools.ApprovalRequiredError
+			if errors.As(execErr, &approvalErr) {
+				run.Status = "approval_required"
+				run.Summary = fmt.Sprintf("Mission '%s' paused: operator approval required for '%s'.", activeTask.Title, approvalErr.Approval.ToolName)
+				activeTask.ExecutionLog = fmt.Sprintf("Paused: operator approval required for tool '%s'.", approvalErr.Approval.ToolName)
+				if h.taskMgr != nil {
+					_ = h.taskMgr.UpdateTask(ctx, *activeTask)
+				}
+				h.recordRun(*run)
+				return run
+			}
 			run.Status = "error"
 			run.Summary = fmt.Sprintf("Failed executing task '%s': %v", activeTask.Title, execErr)
 			slog.Error("heartbeat task execution error", "task_id", activeTask.ID, "error", execErr)
