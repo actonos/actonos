@@ -135,7 +135,7 @@ func (s *Server) handleGetHeartbeatConfig(w http.ResponseWriter, r *http.Request
 		s.respondJSON(w, http.StatusOK, agent.HeartbeatConfig{
 			Enabled:         true,
 			IntervalMinutes: 5,
-			Directives:      "Autonomous standing supervisor.",
+			Directives:      "",
 			TargetChannel:   "all",
 			TargetAccountID: "all",
 			AutoDelegate:    true,

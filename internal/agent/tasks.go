@@ -44,6 +44,10 @@ type HeartbeatConfig struct {
 	ZeroNoise       bool   `json:"zero_noise"`
 }
 
+// legacyDefaultHeartbeatDirective was persisted by earlier releases despite
+// having no concrete check to perform. It must not activate an idle heartbeat.
+const legacyDefaultHeartbeatDirective = "Autonomous standing supervisor. Routinely review pending tasks in TASKS.md and monitor system stability."
+
 // TaskManager coordinates autonomous tasks, persistence in SQLite, and bi-directional markdown synchronization.
 type TaskManager struct {
 	mu           sync.RWMutex
@@ -65,12 +69,6 @@ func NewTaskManager(db *sql.DB, workspaceDir string) (*TaskManager, error) {
 
 	if err := tm.initDB(); err != nil {
 		return nil, err
-	}
-
-	// Initial sync: populate defaults if DB is completely empty
-	tasks, _ := tm.ListTasks(context.Background(), "", "")
-	if len(tasks) == 0 {
-		tm.seedDefaultTasks()
 	}
 
 	return tm, nil
@@ -120,32 +118,6 @@ func (tm *TaskManager) initDB() error {
 	`)
 
 	return nil
-}
-
-func (tm *TaskManager) seedDefaultTasks() {
-	ctx := context.Background()
-	defaultTasks := []AutonomousTask{
-		{
-			Title:           "Verify System Health & Storage Integrity",
-			Description:     "Run native_sysinfo to inspect memory allocation, CPU load, SQLite database & WAL status, and vector memory index health. If nominal, report healthy metrics and complete the mission.",
-			Priority:        "p1_high",
-			AssignedAgentID: "auto",
-			Status:          "pending",
-			CreatedBy:       "system",
-		},
-		{
-			Title:           "Monitor Connected Messaging Channels",
-			Description:     "Ensure Telegram and Discord channel bot connections remain responsive with zero session drops.",
-			Priority:        "p2_normal",
-			AssignedAgentID: "agent_system_core",
-			Status:          "pending",
-			CreatedBy:       "system",
-		},
-	}
-
-	for _, dt := range defaultTasks {
-		_, _ = tm.CreateTask(ctx, dt)
-	}
 }
 
 // CreateTask inserts a new task and updates TASKS.md.
@@ -465,7 +437,7 @@ func (tm *TaskManager) GetHeartbeatConfig(ctx context.Context) (*HeartbeatConfig
 	cfg := &HeartbeatConfig{
 		Enabled:         true,
 		IntervalMinutes: 5,
-		Directives:      "Autonomous standing supervisor. Routinely review pending tasks in TASKS.md and monitor system stability.",
+		Directives:      "",
 		TargetChannel:   "all",
 		TargetAccountID: "all",
 		AutoDelegate:    true,
@@ -482,7 +454,10 @@ func (tm *TaskManager) GetHeartbeatConfig(ctx context.Context) (*HeartbeatConfig
 	// Read from HEARTBEAT.md if present
 	hbPath := filepath.Join(tm.workspaceDir, "HEARTBEAT.md")
 	if data, err := os.ReadFile(hbPath); err == nil && len(data) > 0 {
-		cfg.Directives = string(data)
+		directives := string(data)
+		if strings.TrimSpace(directives) != legacyDefaultHeartbeatDirective {
+			cfg.Directives = directives
+		}
 	}
 
 	return cfg, nil
@@ -493,6 +468,9 @@ func (tm *TaskManager) SaveHeartbeatConfig(ctx context.Context, cfg HeartbeatCon
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
 
+	if strings.TrimSpace(cfg.Directives) == legacyDefaultHeartbeatDirective {
+		cfg.Directives = ""
+	}
 	if cfg.Directives != "" {
 		hbPath := filepath.Join(tm.workspaceDir, "HEARTBEAT.md")
 		_ = os.WriteFile(hbPath, []byte(cfg.Directives), 0644)

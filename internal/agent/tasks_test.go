@@ -29,8 +29,8 @@ func TestTaskManagerCRUDFilteringAndMarkdown(t *testing.T) {
 	manager := newTaskManagerForTest(t)
 	ctx := context.Background()
 	existing, err := manager.ListTasks(ctx, "all", "all")
-	if err != nil || len(existing) != 2 {
-		t.Fatalf("default task seeding failed: count=%d err=%v", len(existing), err)
+	if err != nil || len(existing) != 0 {
+		t.Fatalf("new backlog should be empty: count=%d err=%v", len(existing), err)
 	}
 
 	task, err := manager.CreateTask(ctx, AutonomousTask{
@@ -94,6 +94,19 @@ func TestTaskManagerHeartbeatAndNilDatabase(t *testing.T) {
 	cfg, err := manager.GetHeartbeatConfig(ctx)
 	if err != nil || cfg.Directives != "stay healthy" || !cfg.Enabled || !cfg.AutoDelegate {
 		t.Fatalf("unexpected heartbeat config: cfg=%+v err=%v", cfg, err)
+	}
+}
+
+func TestTaskManagerIgnoresLegacyHeartbeatDirective(t *testing.T) {
+	manager := newTaskManagerForTest(t)
+	ctx := context.Background()
+	if err := os.WriteFile(filepath.Join(manager.workspaceDir, "HEARTBEAT.md"), []byte(legacyDefaultHeartbeatDirective), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := manager.GetHeartbeatConfig(ctx)
+	if err != nil || cfg.Directives != "" {
+		t.Fatalf("legacy directive should be normalized to empty: cfg=%+v err=%v", cfg, err)
 	}
 }
 

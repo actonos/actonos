@@ -52,6 +52,7 @@ func TestHasActionableHeartbeatDirectives(t *testing.T) {
 		want    bool
 	}{
 		{name: "empty", content: "", want: false},
+		{name: "legacy generic supervisor", content: legacyDefaultHeartbeatDirective, want: false},
 		{name: "template comments and headings", content: "<!-- scheduler note -->\n# Heartbeat\n\n- [ ]\n```markdown\n```", want: false},
 		{name: "multiline comment", content: "<!--\nnot a directive\n-->\n## Still idle", want: false},
 		{name: "explicit directive", content: "# Ops\nCheck the deployment health endpoint.", want: true},
@@ -63,6 +64,60 @@ func TestHasActionableHeartbeatDirectives(t *testing.T) {
 				t.Fatalf("hasActionableHeartbeatDirectives(%q) = %v, want %v", tt.content, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestHeartbeatSkipsLegacyDefaultDirective(t *testing.T) {
+	db, eventBus := setupTestDB(t)
+	manager, err := NewAgentManager(db, eventBus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "HEARTBEAT.md"), []byte(legacyDefaultHeartbeatDirective), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	provider := llm.NewMockProvider("openai/gpt-4o", "HEARTBEAT_OK")
+	router := llm.NewModelCascadeRouter()
+	router.RegisterProvider("openai/gpt-4o", provider)
+	engine := NewEngine(manager, eventBus, router, nil)
+	daemon := NewHeartbeatDaemon(manager, engine, eventBus, db.SQLDB(), workspace, time.Hour)
+
+	run, err := daemon.TriggerManualPulse(context.Background())
+	if err != nil || run.Status != "ok" || provider.CompleteCalls != 0 {
+		t.Fatalf("legacy directive should not trigger a heartbeat routine: run=%+v err=%v calls=%d", run, err, provider.CompleteCalls)
+	}
+}
+
+func TestHeartbeatSkipsLegacySystemTasks(t *testing.T) {
+	db, eventBus := setupTestDB(t)
+	manager, err := NewAgentManager(db, eventBus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	taskManager, err := NewTaskManager(db.SQLDB(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := taskManager.CreateTask(context.Background(), AutonomousTask{
+		Title:       "Legacy system health check",
+		Description: "This task was previously seeded automatically.",
+		CreatedBy:   "system",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	provider := llm.NewMockProvider("openai/gpt-4o", "HEARTBEAT_OK")
+	router := llm.NewModelCascadeRouter()
+	router.RegisterProvider("openai/gpt-4o", provider)
+	engine := NewEngine(manager, eventBus, router, nil)
+	daemon := NewHeartbeatDaemon(manager, engine, eventBus, db.SQLDB(), t.TempDir(), time.Hour)
+	daemon.SetTaskManager(taskManager)
+
+	run, err := daemon.TriggerManualPulse(context.Background())
+	if err != nil || run.Status != "ok" || provider.CompleteCalls != 0 {
+		t.Fatalf("system-created task should not trigger a heartbeat mission: run=%+v err=%v calls=%d", run, err, provider.CompleteCalls)
 	}
 }
 
@@ -148,13 +203,13 @@ func TestHeartbeatAdvancesAndCompletesAutonomousTask(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tasks, err := taskManager.ListTasks(context.Background(), "pending", "")
-	if err != nil || len(tasks) == 0 {
-		t.Fatalf("default task missing: %+v err=%v", tasks, err)
-	}
-	target := tasks[0]
-	target.TargetChannel = "none"
-	if err := taskManager.UpdateTask(context.Background(), target); err != nil {
+	target, err := taskManager.CreateTask(context.Background(), AutonomousTask{
+		Title:         "Verify system health",
+		Description:   "Inspect system state.",
+		CreatedBy:     "user",
+		TargetChannel: "none",
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
 

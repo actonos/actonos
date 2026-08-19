@@ -278,6 +278,9 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context) *HeartbeatRun {
 		inProg, _ := h.taskMgr.ListTasks(ctx, "in_progress", "")
 		for i := range inProg {
 			t := &inProg[i]
+			if t.CreatedBy == "system" {
+				continue
+			}
 			// Check if this in_progress task is currently paused waiting for operator approval
 			if h.approvalMgr != nil {
 				pendingApprovals, err := h.approvalMgr.List(ctx, "pending", 50)
@@ -300,16 +303,22 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context) *HeartbeatRun {
 		}
 		if activeTask == nil {
 			pending, _ := h.taskMgr.ListTasks(ctx, "pending", "")
-			if len(pending) > 0 {
+			for i := range pending {
+				if pending[i].CreatedBy == "system" {
+					continue
+				}
 				if h.approvalMgr != nil {
 					pendingApprovals, err := h.approvalMgr.List(ctx, "pending", 50)
 					if err == nil && len(pendingApprovals) > 0 {
 						slog.Info("pending approvals exist in system; waiting for resolution before launching new tasks", "count", len(pendingApprovals))
 					} else {
-						activeTask = &pending[0]
+						activeTask = &pending[i]
 					}
 				} else {
-					activeTask = &pending[0]
+					activeTask = &pending[i]
+				}
+				if activeTask != nil {
+					break
 				}
 			}
 		}
@@ -628,6 +637,10 @@ func shortSummary(content string, maxLen int) string {
 }
 
 func hasActionableHeartbeatDirectives(content string) bool {
+	if strings.TrimSpace(content) == legacyDefaultHeartbeatDirective {
+		return false
+	}
+
 	inComment := false
 	for _, line := range strings.Split(content, "\n") {
 		trimmed := strings.TrimSpace(line)
