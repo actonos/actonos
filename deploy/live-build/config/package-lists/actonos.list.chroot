@@ -2,9 +2,12 @@
 # ActonOS Live-Build Package Manifest
 # ==============================================================================
 
-# Core System & Hardware Drivers
+# Core System & Live Configuration
 linux-image-amd64
 live-boot
+live-config
+live-config-systemd
+live-tools
 systemd-sysv
 network-manager
 openssh-server
@@ -22,6 +25,14 @@ firmware-misc-nonfree
 firmware-realtek
 firmware-iwlwifi
 firmware-atheros
+
+# Disk Partitioning & Appliance Installer Tools
+parted
+dosfstools
+e2fsprogs
+rsync
+grub-pc
+grub-efi-amd64
 
 # Sandboxing & Agent Runtime CLI
 bubblewrap
