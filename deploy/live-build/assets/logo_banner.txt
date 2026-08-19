@@ -5,6 +5,6 @@
  ██║  ██║╚██████╗   ██║   ╚██████╔╝██║ ╚████║╚██████╔╝███████║
  ╚═╝  ╚═╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝ ╚══════╝
  ─────────────────────────────────────────────────────────────
-  ActonOS v1.0 — Extensible AI Agent Operating System Kernel
+  ActonOS v0.1.0 — Extensible AI Agent Operating System Kernel
   Autonomous • Sandboxed • Distributed • Bare-metal Ready
  ─────────────────────────────────────────────────────────────
