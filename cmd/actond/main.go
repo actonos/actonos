@@ -232,6 +232,7 @@ func main() {
 	contextMgr.SetDB(db.SQLDB())
 	engine.SetContextManager(contextMgr)
 	engine.SetToolRegistry(toolReg)
+	engine.SetWorkspaceDir(workspaceDir)
 	runStore := agent.NewRunStore(db.SQLDB())
 	engine.SetRunStore(runStore)
 	engine.SetPlanner(agent.NewPlanner(llmRouter))

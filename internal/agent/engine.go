@@ -37,6 +37,7 @@ type Engine struct {
 	planner          *Planner
 	taskMgr          *TaskManager
 	sessionMgr       SessionHistoryProvider
+	workspaceDir     string
 	theta            float64 // Entropy threshold
 }
 
@@ -103,6 +104,11 @@ func (e *Engine) SetSessionManager(sm SessionHistoryProvider) {
 	e.sessionMgr = sm
 }
 
+// SetWorkspaceDir sets the primary workspace directory for file sandbox and environment prompt.
+func (e *Engine) SetWorkspaceDir(dir string) {
+	e.workspaceDir = dir
+}
+
 // HasConfiguredLLM reports whether the engine has a real (non-stub) LLM provider configured.
 func (e *Engine) HasConfiguredLLM() bool {
 	return e.llm != nil && e.llm.HasRealProvider()
@@ -147,6 +153,10 @@ func (e *Engine) buildCognitivePrompt(ctx context.Context, agentID string, agent
 		}
 	}
 	sb.WriteString("- **Platform Environment**: ActonOS Intelligent Autonomous Multi-Agent Workspace\n\n")
+
+	// 1b. Host Operating System & Execution Environment (OS & CLI Tool Awareness)
+	sb.WriteString(BuildHostEnvironmentPrompt(e.workspaceDir))
+	sb.WriteString("\n")
 
 	// 2. Base Soul Persona (isolated per agent)
 	if e.profileMgr != nil {
