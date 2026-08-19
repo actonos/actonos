@@ -3,14 +3,9 @@
 package system
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
-	"runtime"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/godbus/dbus/v5"

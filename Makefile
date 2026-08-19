@@ -23,7 +23,7 @@
 #   make help          Show this help message
 # ==============================================================================
 
-.PHONY: all deps dev lint test test-unit test-race test-integ build-web build docker iso \
+.PHONY: all deps dev lint test test-unit test-race test-integ build-web build docker docker-multiarch docker-run iso \
         clean version bump-patch bump-minor bump-major release help
 
 # ------------------------------------------------------------------------------
@@ -123,11 +123,31 @@ build-only:
 # ------------------------------------------------------------------------------
 # Docker
 # ------------------------------------------------------------------------------
-docker: build
+docker:
 	@echo "==> Building Docker image $(DOCKER_IMAGE):$(DOCKER_TAG)..."
-	docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) -t $(DOCKER_IMAGE):latest \
+	docker build \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
+		--build-arg BUILD_TIME=$(BUILD_TIME) \
+		-t $(DOCKER_IMAGE):$(DOCKER_TAG) \
+		-t $(DOCKER_IMAGE):latest \
 		-f deploy/docker/Dockerfile .
 	@echo "==> Docker image built: $(DOCKER_IMAGE):$(DOCKER_TAG)"
+
+docker-multiarch:
+	@echo "==> Building multi-arch Docker image (linux/amd64, linux/arm64)..."
+	docker buildx build --platform linux/amd64,linux/arm64 \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
+		--build-arg BUILD_TIME=$(BUILD_TIME) \
+		-t $(DOCKER_IMAGE):$(DOCKER_TAG) \
+		-t $(DOCKER_IMAGE):latest \
+		-f deploy/docker/Dockerfile .
+	@echo "==> Multi-arch Docker image built: $(DOCKER_IMAGE):$(DOCKER_TAG)"
+
+docker-run:
+	@echo "==> Running ActonOS container via docker-compose..."
+	docker compose -f deploy/docker/docker-compose.yml up -d
 
 # ------------------------------------------------------------------------------
 # ISO (Bare-metal)

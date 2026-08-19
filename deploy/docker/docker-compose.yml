@@ -3,18 +3,50 @@ services:
     build:
       context: ../..
       dockerfile: deploy/docker/Dockerfile
-    image: actonos/agent:latest
+      args:
+        VERSION: ${VERSION:-1.0.0}
+    image: actonos/actonos:${VERSION:-latest}
     container_name: actonos-agent
+    restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "${PORT:-8080}:8080"
     volumes:
       - acton-data:/data
+      # Mount docker socket (read-only) if you want ActonOS to monitor host containers via DockerHAL:
+      # - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - RUNTIME_MODE=docker
       - PORT=8080
       - DATA_DIR=/data
-    restart: unless-stopped
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - ACTONOS_SECRET_KEY=${ACTONOS_SECRET_KEY:-}
+      # Optional: AI Provider Keys (or configure via Web UI Settings)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
+    deploy:
+      resources:
+        limits:
+          cpus: "${CPU_LIMIT:-2.0}"
+          memory: "${MEM_LIMIT:-2048M}"
+        reservations:
+          cpus: "0.25"
+          memory: "256M"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8080/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   acton-data:
+    name: acton-data
     driver: local

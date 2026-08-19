@@ -37,65 +37,60 @@ The `actond` binary auto-detects its runtime environment via the Hardware Abstra
 docker run -d \
   --name actonos \
   -p 8080:8080 \
-  -v $(pwd)/acton-data:/data \
+  -v acton-data:/data \
   -e RUNTIME_MODE=docker \
   --restart unless-stopped \
   actonos/actonos:latest
 ```
 
-### Docker Compose
+### Agent Batteries-Included Runtime
 
-```yaml
-# deploy/docker/docker-compose.yml
-version: "3.9"
+The ActonOS Docker container is pre-configured with a full developer and automation toolchain so AI agents can execute tasks autonomously:
 
-services:
-  actonos:
-    image: actonos/actonos:latest
-    container_name: actonos
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    volumes:
-      - acton-data:/data
-    environment:
-      - RUNTIME_MODE=docker
-      - LOG_LEVEL=info
-      - LISTEN_ADDR=:8080
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+| Category | Pre-installed Tools & Libraries |
+|:---|:---|
+| **Search & Files** | `ripgrep` (`rg`), `jq`, `tree`, `findutils`, `tar`, `gzip`, `unzip` |
+| **Language Runtimes** | `python3`, `pip`, `venv` (in `/opt/venv`), `nodejs`, `npm`, `npx` |
+| **Python Libraries** | `requests`, `httpx`, `beautifulsoup4`, `pyyaml`, `pydantic` |
+| **Network & VCS** | `curl`, `wget`, `git`, `sqlite3`, `openssh-client` |
+| **Headless Web & Browser** | `chromium`, `font-noto`, `font-noto-cjk` (supports `chromedp` web browsing & screenshots) |
+| **Process Init & Security** | `tini` (PID 1), non-root `acton` user (UID 1000) |
 
-volumes:
-  acton-data:
-    driver: local
-```
+### Docker Compose Deployment
+
+A complete production `docker-compose.yml` is provided in `deploy/docker/`:
 
 ```bash
-# Start
-docker compose -f deploy/docker/docker-compose.yml up -d
+# 1. Navigate to docker directory
+cd deploy/docker
 
-# View logs
-docker compose -f deploy/docker/docker-compose.yml logs -f
+# 2. Copy environment template
+cp .env.example .env
 
-# Stop
-docker compose -f deploy/docker/docker-compose.yml down
+# 3. Start ActonOS in background
+docker compose up -d
+
+# 4. View real-time logs
+docker compose logs -f
+```
+
+#### Automated HTTPS with Caddy
+
+For public-facing production setups with automatic SSL/TLS certificates:
+
+```bash
+DOMAIN=agent.yourdomain.com docker compose -f deploy/docker/docker-compose.caddy.yml up -d
 ```
 
 ### Building the Docker Image
 
 ```bash
-# From project root
+# Build standard image
 make docker
 
-# Or manually
-docker build -t actonos/actonos:latest -f deploy/docker/Dockerfile .
+# Build multi-architecture image (linux/amd64 and linux/arm64)
+make docker-multiarch
 ```
-
-The multi-stage Dockerfile produces an Alpine-based image under **35 MB**.
 
 ---
 
