@@ -1,0 +1,45 @@
+# ==============================================================================
+# ActonOS Universal Dockerized ISO Builder
+# Builds Debian Live Hybrid ISO with custom branding, GRUB, and preseed
+# ==============================================================================
+FROM debian:bookworm-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    live-build \
+    debootstrap \
+    xorriso \
+    isolinux \
+    syslinux-common \
+    syslinux-efi \
+    grub-pc-bin \
+    grub-efi-amd64-bin \
+    qemu-user-static \
+    binfmt-support \
+    mtools \
+    dosfstools \
+    squashfs-tools \
+    cpio \
+    fakeroot \
+    ca-certificates \
+    git \
+    curl \
+    wget \
+    rsync \
+    python3 \
+    nodejs \
+    npm \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Embed official static Go 1.26 toolchain
+COPY --from=golang:1.26-alpine /usr/local/go /usr/local/go
+ENV PATH="/usr/local/go/bin:${PATH}"
+
+WORKDIR /workspace
+
+COPY deploy/live-build/ /workspace/deploy/live-build/
+COPY scripts/build-iso.sh /workspace/scripts/build-iso.sh
+
+CMD ["/bin/bash", "scripts/build-iso.sh"]

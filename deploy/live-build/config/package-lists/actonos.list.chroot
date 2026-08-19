@@ -1,0 +1,45 @@
+# ==============================================================================
+# ActonOS Live-Build Package Manifest
+# ==============================================================================
+
+# Core System & Hardware Drivers
+linux-image-amd64
+live-boot
+systemd-sysv
+network-manager
+openssh-server
+sudo
+dbus
+ca-certificates
+tzdata
+curl
+wget
+git
+pciutils
+usbutils
+firmware-linux
+firmware-misc-nonfree
+firmware-realtek
+firmware-iwlwifi
+firmware-atheros
+
+# Sandboxing & Agent Runtime CLI
+bubblewrap
+libseccomp2
+ripgrep
+jq
+sqlite3
+tree
+procps
+htop
+tmux
+tar
+gzip
+unzip
+
+# Python & Node Runtimes
+python3
+python3-pip
+python3-venv
+nodejs
+npm

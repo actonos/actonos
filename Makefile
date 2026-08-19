@@ -23,7 +23,7 @@
 #   make help          Show this help message
 # ==============================================================================
 
-.PHONY: all deps dev lint test test-unit test-race test-integ build-web build docker docker-multiarch docker-run iso \
+.PHONY: all deps dev lint test test-unit test-race test-integ build-web build docker docker-multiarch docker-run iso iso-arm64 \
         clean version bump-patch bump-minor bump-major release help
 
 # ------------------------------------------------------------------------------
@@ -153,9 +153,14 @@ docker-run:
 # ISO (Bare-metal)
 # ------------------------------------------------------------------------------
 iso:
-	@echo "==> Building installation ISO..."
-	@bash scripts/build-iso.sh
+	@echo "==> Building installation ISO (AMD64)..."
+	@ARCH=amd64 bash scripts/build-iso.sh
 	@echo "==> ISO build complete."
+
+iso-arm64:
+	@echo "==> Building installation ISO (ARM64)..."
+	@ARCH=arm64 bash scripts/build-iso.sh
+	@echo "==> ISO ARM64 build complete."
 
 # ------------------------------------------------------------------------------
 # Version Management

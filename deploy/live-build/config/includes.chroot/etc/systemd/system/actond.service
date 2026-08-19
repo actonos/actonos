@@ -1,0 +1,25 @@
+[Unit]
+Description=ActonOS AI Agent Operating System Daemon
+Documentation=https://actonos.org/docs
+After=network.target network-online.target dbus.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=acton
+Group=acton
+WorkingDirectory=/data
+ExecStart=/usr/local/bin/actond --data-dir=/data --port=8080 --listen=:8080
+Restart=always
+RestartSec=3s
+LimitNOFILE=65536
+LimitNPROC=4096
+StandardOutput=journal
+StandardError=journal
+Environment=DATA_DIR=/data
+Environment=PORT=8080
+Environment=RUNTIME_MODE=baremetal
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:/data/bin
+
+[Install]
+WantedBy=multi-user.target
