@@ -102,6 +102,7 @@ mkdir -p config/includes.chroot/data
 cp -r "${LIVE_BUILD_SRC}/config/"* config/
 cp "${WORK_DIR}/actond" config/includes.chroot/usr/local/bin/actond
 chmod +x config/includes.chroot/usr/local/bin/* 2>/dev/null || true
+chmod +x config/hooks/*/*.hook.chroot 2>/dev/null || true
 
 # Dynamic kernel package per architecture
 sed -i "s/linux-image-amd64/linux-image-${ARCH}/g" config/package-lists/actonos.list.chroot 2>/dev/null || true

@@ -1,0 +1,35 @@
+#!/bin/sh
+# ==============================================================================
+# ActonOS Live-build Chroot Hook: Setup 'acton' user & /data permissions
+# ==============================================================================
+set -e
+
+echo "[ActonOS] Initializing 'acton' appliance user and /data permissions..."
+
+# 1. Create group and user 'acton' (UID/GID 1000)
+if ! getent group acton >/dev/null 2>&1; then
+    groupadd -g 1000 acton
+fi
+
+if ! id -u acton >/dev/null 2>&1; then
+    useradd -u 1000 -g acton -d /data -s /bin/bash -m -G sudo,adm,systemd-journal,dialout,plugdev,netdev acton
+    # Set default password 'acton'
+    echo "acton:acton" | chpasswd
+fi
+
+# 2. Grant passwordless sudo to acton user
+mkdir -p /etc/sudoers.d
+echo "acton ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/010_acton-nopasswd
+chmod 0440 /etc/sudoers.d/010_acton-nopasswd
+
+# 3. Create full directory structure in /data
+mkdir -p /data/config /data/workspace /data/logs /data/skills /data/releases /data/bin /data/.npm-global
+chown -R acton:acton /data
+chmod 755 /data
+
+# 4. Enable actond systemd service
+if [ -f /etc/systemd/system/actond.service ]; then
+    systemctl enable actond.service 2>/dev/null || true
+fi
+
+echo "[ActonOS] User 'acton' and /data hierarchy initialized successfully."

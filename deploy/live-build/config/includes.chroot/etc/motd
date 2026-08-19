@@ -4,6 +4,7 @@
   * Data Directory:  /data
   * Service Status:  systemctl status actond
   * Realtime Logs:   journalctl -u actond -f
+  * Disk Installer:  sudo acton-install-disk
   * Welcome Tool:    acton-welcome
 
-Type 'acton-welcome' for quick diagnostics and initial setup.
+Type 'sudo acton-install-disk' to install ActonOS onto permanent disk/SSD.

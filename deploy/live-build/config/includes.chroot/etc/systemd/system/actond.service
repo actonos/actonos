@@ -9,7 +9,13 @@ Type=simple
 User=acton
 Group=acton
 WorkingDirectory=/data
-ExecStart=/usr/local/bin/actond --data-dir=/data --listen=:8080
+
+# Ensure /data hierarchy and permissions exist before starting (runs with root privileges via '+' prefix)
+ExecStartPre=+/bin/mkdir -p /data
+ExecStartPre=+/bin/chown -R acton:acton /data
+ExecStartPre=+/bin/chmod 755 /data
+
+ExecStart=/usr/local/bin/actond --data-dir=/data --listen-addr=:8080
 Restart=always
 RestartSec=3s
 LimitNOFILE=65536
