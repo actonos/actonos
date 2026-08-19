@@ -28,8 +28,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     rsync \
     python3 \
-    nodejs \
-    npm \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
@@ -37,9 +35,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=golang:1.26-alpine /usr/local/go /usr/local/go
 ENV PATH="/usr/local/go/bin:${PATH}"
 
-WORKDIR /workspace
+# Embed official Node.js 22 LTS toolchain
+COPY --from=node:22-bookworm-slim /usr/local/bin /usr/local/bin
+COPY --from=node:22-bookworm-slim /usr/local/lib/node_modules /usr/local/lib/node_modules
 
-COPY deploy/live-build/ /workspace/deploy/live-build/
-COPY scripts/build-iso.sh /workspace/scripts/build-iso.sh
+# Copy the entire workspace into container (respecting .dockerignore to skip host node_modules, git, etc.)
+COPY . /workspace/
+
+WORKDIR /workspace
 
 CMD ["/bin/bash", "scripts/build-iso.sh"]
