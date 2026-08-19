@@ -104,8 +104,9 @@ cp "${WORK_DIR}/actond" config/includes.chroot/usr/local/bin/actond
 chmod +x config/includes.chroot/usr/local/bin/* 2>/dev/null || true
 chmod +x config/hooks/*/*.hook.chroot 2>/dev/null || true
 
-# Dynamic kernel package per architecture
+# Dynamic kernel and grub packages per architecture
 sed -i "s/linux-image-amd64/linux-image-${ARCH}/g" config/package-lists/actonos.list.chroot 2>/dev/null || true
+sed -i "s/grub-efi-amd64-bin/grub-efi-${ARCH}-bin/g" config/package-lists/actonos.list.chroot 2>/dev/null || true
 
 # Preseed configuration is already included via config/includes.binary/preseed/auto-install.cfg
 

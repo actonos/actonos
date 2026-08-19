@@ -31,8 +31,9 @@ parted
 dosfstools
 e2fsprogs
 rsync
-grub-pc
-grub-efi-amd64
+grub-common
+grub-pc-bin
+grub-efi-amd64-bin
 
 # Sandboxing & Agent Runtime CLI
 bubblewrap
