@@ -18,6 +18,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/actonos/actonos/internal/bus"
 )
 
 var (
@@ -45,7 +47,24 @@ type MCPClient struct {
 	mu      sync.Mutex
 	pending map[int64]chan mcpResponse
 	closed  bool
+	// deliberate is set by Close() to distinguish an operator-initiated
+	// disconnect from an unexpected process crash / stdout error, so onClose
+	// only fires (and only publishes an error event) for the latter.
+	deliberate bool
+	// onClose, when set, is invoked exactly once from readLoop when the
+	// underlying transport ends unexpectedly (e.g. the MCP server process
+	// died). It lets MCPHostEngine notice a mid-session disconnect that
+	// would otherwise be invisible until the whole tool call failed.
+	onClose func(err error)
 	http    *http.Client
+}
+
+// SetOnClose registers a callback invoked once if the client's transport
+// closes unexpectedly (not via an explicit Close()).
+func (c *MCPClient) SetOnClose(fn func(err error)) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.onClose = fn
 }
 
 // NewHTTPMCPClient creates a remote JSON-RPC MCP client over streamable HTTP.
@@ -159,12 +178,22 @@ func (c *MCPClient) readLoop() {
 		line, err := c.stdout.ReadBytes('\n')
 		if err != nil {
 			c.mu.Lock()
+			wasDeliberate := c.deliberate
 			c.closed = true
 			for _, ch := range c.pending {
 				close(ch)
 			}
 			c.pending = make(map[int64]chan mcpResponse)
+			onClose := c.onClose
+			c.onClose = nil // fire at most once
 			c.mu.Unlock()
+			if !wasDeliberate && onClose != nil {
+				if err == io.EOF {
+					onClose(errors.New("mcp server process ended unexpectedly (stdout closed)"))
+				} else {
+					onClose(fmt.Errorf("mcp server stdout read error: %w", err))
+				}
+			}
 			return
 		}
 		if len(line) > 4<<20 {
@@ -399,7 +428,9 @@ func (c *MCPClient) CallTool(ctx context.Context, name string, args json.RawMess
 func (c *MCPClient) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.deliberate = true
 	c.closed = true
+	c.onClose = nil
 	if c.stdin != nil {
 		_ = c.stdin.Close()
 	}
@@ -445,23 +476,44 @@ func (a *MCPToolAdapter) Execute(ctx context.Context, inputJSON json.RawMessage)
 
 // MCPHostEngine manages multiple MCP server connections.
 type MCPHostEngine struct {
-	mu       sync.RWMutex
-	registry *ToolRegistry
-	clients  map[string]*MCPClient
-	db       *sql.DB
-	secrets  MCPSecretStore
+	mu         sync.RWMutex
+	registry   *ToolRegistry
+	clients    map[string]*MCPClient
+	db         *sql.DB
+	secrets    MCPSecretStore
+	eventBus   *bus.EventBus
+	lastErrors map[string]mcpRuntimeError // serverID -> most recent error, cleared on successful connect
+}
+
+// mcpRuntimeError records the most recent connection/runtime failure for an
+// MCP server so it can be surfaced via ListServers even after the failure
+// itself has scrolled out of the log.
+type mcpRuntimeError struct {
+	Err string
+	At  time.Time
+}
+
+// SetEventBus wires the shared EventBus so MCP connection failures and
+// unexpected disconnects can be published as EventMCPServerError /
+// EventMCPServerRecovered for the NotificationManager to pick up.
+func (h *MCPHostEngine) SetEventBus(eventBus *bus.EventBus) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.eventBus = eventBus
 }
 
 // MCPServerStatus is the non-secret administrative view of an MCP server.
 type MCPServerStatus struct {
-	ID        string    `json:"id"`
-	Transport string    `json:"transport"`
-	Command   string    `json:"command,omitempty"`
-	Args      []string  `json:"args,omitempty"`
-	URL       string    `json:"url,omitempty"`
-	Enabled   bool      `json:"enabled"`
-	Connected bool      `json:"connected"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID          string    `json:"id"`
+	Transport   string    `json:"transport"`
+	Command     string    `json:"command,omitempty"`
+	Args        []string  `json:"args,omitempty"`
+	URL         string    `json:"url,omitempty"`
+	Enabled     bool      `json:"enabled"`
+	Connected   bool      `json:"connected"`
+	LastError   string    `json:"last_error,omitempty"`
+	LastErrorAt time.Time `json:"last_error_at,omitempty"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // MCPSecretStore stores MCP environment secrets encrypted at rest.
@@ -473,8 +525,9 @@ type MCPSecretStore interface {
 // NewMCPHostEngine creates a new MCP host engine.
 func NewMCPHostEngine(registry *ToolRegistry) *MCPHostEngine {
 	return &MCPHostEngine{
-		registry: registry,
-		clients:  make(map[string]*MCPClient),
+		registry:   registry,
+		clients:    make(map[string]*MCPClient),
+		lastErrors: make(map[string]mcpRuntimeError),
 	}
 }
 
@@ -524,10 +577,16 @@ func (h *MCPHostEngine) ListServers(ctx context.Context) ([]MCPServerStatus, err
 			continue
 		}
 		_, connected := h.clients[id]
-		items = append(items, MCPServerStatus{
+		lastErr, hasLastErr := h.lastErrors[id]
+		status := MCPServerStatus{
 			ID: id, Transport: cfg.Transport, Command: cfg.Command, Args: cfg.Args,
 			URL: cfg.URL, Enabled: enabled == 1, Connected: connected, UpdatedAt: updated,
-		})
+		}
+		if hasLastErr {
+			status.LastError = lastErr.Err
+			status.LastErrorAt = lastErr.At
+		}
+		items = append(items, status)
 	}
 	return items, rows.Err()
 }
@@ -613,7 +672,61 @@ func (h *MCPHostEngine) RestoreServers(ctx context.Context) {
 	for _, cfg := range configs {
 		if err := h.ConnectServer(ctx, cfg); err != nil {
 			slog.Warn("mcp server restore failed", "server", cfg.ID, "error", err)
+			h.recordMCPError(cfg.ID, cfg.Command, err)
 		}
+	}
+}
+
+// recordMCPError stores the latest failure for a server and publishes
+// EventMCPServerError so the NotificationManager can surface it on the web
+// UI, instead of the failure only ever reaching the server log. Must be
+// called without holding h.mu.
+func (h *MCPHostEngine) recordMCPError(serverID, name string, err error) {
+	h.mu.Lock()
+	h.recordMCPErrorLocked(serverID, name, err)
+	h.mu.Unlock()
+}
+
+// recordMCPErrorLocked is the lock-already-held variant, used by callers
+// (like ConnectServer) that already hold h.mu.
+func (h *MCPHostEngine) recordMCPErrorLocked(serverID, name string, err error) {
+	h.lastErrors[serverID] = mcpRuntimeError{Err: err.Error(), At: time.Now().UTC()}
+	eventBus := h.eventBus
+	if name == "" {
+		name = serverID
+	}
+	if eventBus != nil {
+		eventBus.Publish(bus.NewEvent(bus.EventMCPServerError, serverID, map[string]any{
+			"server_id": serverID,
+			"name":      name,
+			"error":     err.Error(),
+		}))
+	}
+}
+
+// recordMCPRecovered clears any stored failure for a server and, if it had
+// previously failed, publishes EventMCPServerRecovered. Must be called
+// without holding h.mu.
+func (h *MCPHostEngine) recordMCPRecovered(serverID, name string) {
+	h.mu.Lock()
+	h.recordMCPRecoveredLocked(serverID, name)
+	h.mu.Unlock()
+}
+
+// recordMCPRecoveredLocked is the lock-already-held variant, used by callers
+// (like ConnectServer) that already hold h.mu.
+func (h *MCPHostEngine) recordMCPRecoveredLocked(serverID, name string) {
+	_, hadError := h.lastErrors[serverID]
+	delete(h.lastErrors, serverID)
+	eventBus := h.eventBus
+	if name == "" {
+		name = serverID
+	}
+	if hadError && eventBus != nil {
+		eventBus.Publish(bus.NewEvent(bus.EventMCPServerRecovered, serverID, map[string]any{
+			"server_id": serverID,
+			"name":      name,
+		}))
 	}
 }
 
@@ -640,7 +753,9 @@ func (h *MCPHostEngine) ConnectServer(ctx context.Context, cfg MCPServerConfig) 
 		client, err = NewStdioMCPClient(cfg)
 	}
 	if err != nil {
-		return fmt.Errorf("connecting to mcp server %s: %w", cfg.ID, err)
+		wrapped := fmt.Errorf("connecting to mcp server %s: %w", cfg.ID, err)
+		h.recordMCPErrorLocked(cfg.ID, cfg.ID, wrapped)
+		return wrapped
 	}
 
 	initCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -648,13 +763,17 @@ func (h *MCPHostEngine) ConnectServer(ctx context.Context, cfg MCPServerConfig) 
 
 	if err := client.Initialize(initCtx); err != nil {
 		_ = client.Close()
-		return fmt.Errorf("mcp handshake failed for %s: %w", cfg.ID, err)
+		wrapped := fmt.Errorf("mcp handshake failed for %s: %w", cfg.ID, err)
+		h.recordMCPErrorLocked(cfg.ID, cfg.ID, wrapped)
+		return wrapped
 	}
 
 	tools, err := client.ListTools(initCtx)
 	if err != nil {
 		_ = client.Close()
-		return fmt.Errorf("listing mcp tools for %s: %w", cfg.ID, err)
+		wrapped := fmt.Errorf("listing mcp tools for %s: %w", cfg.ID, err)
+		h.recordMCPErrorLocked(cfg.ID, cfg.ID, wrapped)
+		return wrapped
 	}
 
 	var registered []string
@@ -669,12 +788,25 @@ func (h *MCPHostEngine) ConnectServer(ctx context.Context, cfg MCPServerConfig) 
 				h.registry.Unregister(name)
 			}
 			_ = client.Close()
-			return fmt.Errorf("registering mcp tool %s: %w", adapter.Name(), err)
+			wrapped := fmt.Errorf("registering mcp tool %s: %w", adapter.Name(), err)
+			h.recordMCPErrorLocked(cfg.ID, cfg.ID, wrapped)
+			return wrapped
 		}
 		registered = append(registered, adapter.Name())
 		slog.Info("registered mcp tool", "server", cfg.ID, "tool", adapter.Name())
 	}
 	h.clients[cfg.ID] = client
+	h.recordMCPRecoveredLocked(cfg.ID, cfg.ID)
+	serverID := cfg.ID
+	client.SetOnClose(func(closeErr error) {
+		h.mu.Lock()
+		if h.clients[serverID] == client {
+			delete(h.clients, serverID)
+		}
+		h.recordMCPErrorLocked(serverID, serverID, closeErr)
+		h.mu.Unlock()
+		slog.Warn("mcp server disconnected unexpectedly", "server", serverID, "error", closeErr)
+	})
 	if h.db != nil {
 		persisted := cfg
 		persisted.Env = nil
@@ -706,6 +838,7 @@ func (h *MCPHostEngine) DisconnectServer(serverID string) error {
 
 	_ = client.Close()
 	delete(h.clients, serverID)
+	delete(h.lastErrors, serverID)
 	if h.db != nil {
 		_, _ = h.db.Exec("UPDATE mcp_servers SET enabled = 0, updated_at = ? WHERE id = ?", time.Now().UTC(), serverID)
 	}

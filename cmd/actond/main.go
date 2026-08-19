@@ -181,6 +181,7 @@ func main() {
 	}
 	tools.RegisterNativeTools(toolReg, workspaceDir)
 	mcpHost := tools.NewMCPHostEngine(toolReg)
+	mcpHost.SetEventBus(eventBus)
 	if err := mcpHost.SetPersistence(db.SQLDB(), vault); err != nil {
 		slog.Warn("failed to initialize persistent MCP registry", "error", err)
 	}

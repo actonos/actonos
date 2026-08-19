@@ -84,6 +84,86 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Safe WAL-checkpoint on shutdown and `VACUUM INTO` backup endpoint.
   - Docker `HEALTHCHECK` and systemd unit `deploy/systemd/actond.service`.
 
+### Added
+- **Integration Health Visibility for Chat Channels, Connectors, and MCP Servers**:
+  - Previously, a broken Telegram/WhatsApp/Discord account, an expired/failed OAuth connector token, or an
+    MCP server that failed to (re)connect or crashed mid-session only ever produced a `slog.Warn` server
+    log line — nothing reached the web UI, so users had no way to discover *why* a channel, connector, or
+    tool integration silently stopped working.
+  - New bus events `channel.adapter_error` / `channel.adapter_recovered` and `mcp.server_error` /
+    `mcp.server_recovered` (`internal/bus/messages.go`), published on every state transition (first
+    failure after healthy, first success after failing) rather than on every retry, to avoid notification
+    spam from a tight backoff/poll loop.
+  - `internal/channels/manager.go`: new in-memory `AccountStatus{Connected, LastError, LastErrorAt}` map
+    per account, updated both from synchronous adapter-start failures and asynchronously from each
+    adapter's own poll/gateway loop (see below); exposed via `GetAccountStatuses()` and surfaced in
+    `GET /api/integrations/channels/accounts` responses as an inline `status` field per account.
+  - `internal/channels/telegram.go` / `discord.go`: the long-polling `fetchUpdates` loop and the Discord
+    Gateway WebSocket dial loop previously swallowed connection/auth failures (e.g. a revoked bot token)
+    into an endless `slog.Warn` cycle with zero operator visibility once the adapter had already "started"
+    successfully. Both now call a `reportPollHealth`/`reportGatewayHealth` helper that publishes the new
+    channel health events on state transitions.
+  - `internal/tools/mcp_client.go`: `MCPClient` gained a `deliberate`/`onClose` mechanism — the stdio
+    `readLoop()` now distinguishes an operator-initiated `Close()` from an unexpected process crash/stdout
+    error and invokes `onClose` exactly once for the latter. `MCPHostEngine` gained `SetEventBus()`,
+    `lastErrors` tracking, and now publishes `mcp.server_error`/`mcp.server_recovered` on `RestoreServers()`
+    failures, `ConnectServer()` failures, and unexpected mid-session disconnects (previously invisible:
+    `ListServers()` kept reporting `Connected: true` for a dead server until full process restart).
+    `MCPServerStatus` gained `LastError`/`LastErrorAt` fields.
+  - `internal/system/notifications.go`: `NotificationManager.StartBackgroundListener()` now subscribes to
+    all 6 new/existing integration events (`EventTokenExpired`, `EventTokenFailed`, the 2 new channel
+    events, the 2 new MCP events) and creates persisted, web-visible notifications linking to `/connectors`,
+    `/channels`, or `/tools` respectively. A 15-minute per-integration cooldown (`shouldNotifyIntegration`)
+    prevents a persistently broken integration from spamming a new notification every retry cycle; a
+    recovery event both resets the cooldown and creates a "back online" success notification.
+  - `cmd/actond/main.go`: wires `mcpHost.SetEventBus(eventBus)` after `NewMCPHostEngine` construction
+    (channels' `ChannelManager` already had the event bus wired for its own bus-event lifecycle).
+
+### Fixed
+- **Heartbeat brought into alignment with [OpenClaw's Heartbeat contract](https://docs.openclaw.ai/vi/gateway/heartbeat)**,
+  fixing several related bugs reported as spurious cron-approval prompts and duplicate/unrelated web notifications:
+  - Idle heartbeats (no active task, no actionable `HEARTBEAT.md` content) no longer invoke the model at all,
+    so an unattended pulse can no longer invent a cron schedule to ask approval for.
+  - `HEARTBEAT_OK` is now classified per OpenClaw's exact contract (`classifyHeartbeatResponse`): only an
+    ack when the token is at the start/end of the reply and the remainder is ≤ `ackMaxChars` (default 300,
+    configurable via new `HeartbeatConfig.AckMaxChars`); anything else is delivered as a real alert exactly once.
+  - Both mission and routine heartbeat cycles now hard-deny `native_channel_notify`/`channel_notify` and
+    `native_cron_schedule` via `tools.WithDeniedTools`, enforced inside `ToolRegistry.Execute` — a real
+    execution boundary, not just a prompt instruction.
+  - New `tools.WithAllowedTools`/`AllowedTools`/`IsToolAllowedInContext` context-based allowlist primitive
+    (intersects across nested calls) alongside the existing denylist.
+  - A 15s trigger cooldown coalesces trigger storms (e.g. a task mutation and an approval decision firing
+    `TriggerWakeup()` moments apart) into a single cycle; manual "Pulse Now" requests always bypass it.
+  - New optional `activeHours` window (`ActiveHoursStart`/`End`/`Timezone`) restricts routine pulses to a
+    daily time range, mirroring OpenClaw's `heartbeat.activeHours`.
+  - `ApprovalManager.Request()` now reports `IsNew()`; `ToolRegistry` only republishes the
+    `approval:required` bus event for a genuinely new approval, not a reused pending one — fixing a
+    duplicate web notification for the same approval request.
+  - `useWebNotifications()` desktop-notification dedup is now a module-level key shared across every hook
+    instance, fixing duplicate desktop notifications when `NotificationBell` and `NotificationsPage` are
+    both mounted.
+  - Removed default "system"-seeded backlog tasks and the historical generic default `HEARTBEAT.md`
+    directive, both of which used to masquerade as real actionable work on every pulse.
+  - **New**: weaker/faster models occasionally ignored the directive-or-`HEARTBEAT_OK` contract entirely
+    and free-associated a conversational greeting or capability menu instead (e.g. replying "Chào Bieber!
+    Tôi đã sẵn sàng, bạn cần hỗ trợ gì?" instead of executing the standing directive). The routine cycle's
+    system prompt now includes an explicit "Autonomous Headless Execution Mode" rule block (only injected
+    for heartbeat calls) telling the model there is no human present to greet, and a `looksLikeIdleChatter`
+    safety net now reclassifies any such off-topic, tool-free reply as nominal ("ok") instead of forwarding
+    it as a user-facing alert.
+  - **New**: a pending approval for any agent used to freeze the *entire* backlog from launching new
+    pending tasks. Approval gating for new task launches is now scoped to the task's own assigned agent —
+    an unrelated approval elsewhere no longer blocks unrelated work from proceeding.
+  - **New**: a mission task that never advances (model repeats the same `[PROGRESS: X%]` every cycle) used
+    to retry silently forever. `trackTaskStall()` now escalates a one-time `[STALL WARNING]` into the task's
+    execution log and run summary after 3 consecutive no-progress cycles, so it becomes operator-visible
+    instead of quietly burning a model turn every cycle indefinitely.
+  - **New**: since the model can never call the notify tool itself, a task whose directive clearly asks to
+    "gửi thông báo" / "send to" a channel but whose own `TargetChannel` field is `"none"` would silently
+    discard its completed result with no visible trace. `mentionsNotificationIntent()` now logs a one-time
+    diagnostic warning for this misconfiguration (the task still executes normally — this is a warning, not
+    an auto-corrected delivery target, since the target channel remains an explicit structured field).
+
 ### Infrastructure
 - `.editorconfig` for consistent coding style
 - `.gitignore` for Go + Node.js + IDE artifacts

@@ -249,26 +249,154 @@ sequenceDiagram
 
 ### C. Autonomous Mission Control & Heartbeat Cognitive Pulse
 
+Heartbeat design follows the same contract documented by
+[OpenClaw's Heartbeat gateway](https://docs.openclaw.ai/vi/gateway/heartbeat):
+a periodic agent turn inside the main session that can surface anything worth
+attention, without spamming the operator, and that never invents scheduled
+automations or unrelated side work on its own.
+
+**Trigger sources & gating** — every pulse is either a scheduled tick, an
+event-driven wakeup (task/approval mutation), or a manual "Pulse Now" request.
+Only manual pulses bypass the safety gates below:
+
 ```mermaid
 graph TD
-    PULSE["Heartbeat Daemon\n5m Cognitive Pulse\n(or Instant UI Trigger)"] --> READ_MD["Load Standing Directives\n(HEARTBEAT.md) & Backlog\n(TASKS.md / SQLite)"]
-    READ_MD --> CHECK_TASK{"Pending / Active\nTasks in Backlog?"}
-    
-    CHECK_TASK -- "Yes (P0 -> P3)" --> RESUME_SESSION["Resume Dedicated Session\n(conv_task_<id>)\nLoad Working Memory Context"]
-    RESUME_SESSION --> REACT_LOOP["Execute ReAct Step\nAuthorized Tools Sandbox"]
-    REACT_LOOP --> PERSIST_STEP["Save Message in Session\nUpdate Progress (0-100%)\nSync to TASKS.md"]
-    PERSIST_STEP --> PUSH_ALERT{"Task Complete or\nAction Needed?"}
-    PUSH_ALERT -- "Yes" --> PROACTIVE_PUSH["Proactive Channel Push\n(Telegram, Discord, WhatsApp)\nAnti-Double-Dispatch Guard"]
-    PUSH_ALERT -- "No" --> AUDIT_RECORD["Record Pulse Run in SQLite"]
-    
-    CHECK_TASK -- "No (Backlog Clean)" --> ZERO_NOISE{"System Nominal?"}
-    ZERO_NOISE -- "Yes" --> HB_OK["Return HEARTBEAT_OK\nZero Noise Policy\n(No Channel Spam)"]
-    ZERO_NOISE -- "Alert" --> PROACTIVE_PUSH
+    TICK["Ticker\n(every intervalMinutes)"] --> GATE
+    WAKE["TriggerWakeup()\n(task created/updated,\napproval decided, config saved)"] --> GATE
+    MANUAL["Manual Pulse\n(UI 'Pulse Now' button)"] --> RUN
+
+    GATE{"checkCycle(ctx, manual=false)"}
+    GATE -- "< 15s since last run" --> DROP1["Skip: cooldown\n(coalesces trigger storms,\ne.g. task + approval firing\nwithin the same moment)"]
+    GATE -- "outside configured\nactiveHours window" --> DROP2["Skip: outside active hours\n(next in-window tick runs normally)"]
+    GATE -- "no active task AND\nno actionable HEARTBEAT.md" --> DROP3["Skip: idle guard\n(never calls the model)"]
+    GATE -- "otherwise" --> RUN["Run cycle"]
 ```
 
-- **Working Memory Continuity**: Automatically preserves dialogue and intermediate thoughts inside SQLite `chat_sessions` per task ID (`conv_task_<id>`), allowing multi-step task execution without losing progress across pulses.
-- **Bi-directional Synchronization**: Changes in the Web UI, REST API, or Agent ReAct steps automatically synchronize between SQLite and `data/workspace/TASKS.md` and `data/workspace/HEARTBEAT.md`.
-- **Zero-Noise Guarantee**: If all systems are nominal and no task needs human escalation, the kernel records the run in SQLite and remains completely silent without sending spam to external messaging channels.
+- **Idle guard**: `hasActionableHeartbeatDirectives()` treats an empty file, a
+  file containing only comments/headings/empty checklist items, or the
+  historical generic default directive as "nothing to do" — the model is
+  never invoked just to reply with small talk or invent a cron job.
+- **Trigger cooldown**: rapid-fire `TriggerWakeup()` calls (a task mutation and
+  an approval decision landing seconds apart) are coalesced instead of running
+  one full agent turn per event.
+- **Active hours** (optional, `HeartbeatConfig.ActiveHoursStart/End/Timezone`):
+  mirrors OpenClaw's `heartbeat.activeHours` — outside the window, routine
+  pulses are skipped until the next in-window tick; a zero-width window
+  (`start == end`) always skips.
+- **Agent-scoped approval gating**: launching a new pending task is only
+  deferred if a pending approval belongs to *that task's own* assigned agent
+  — an unrelated approval elsewhere in the system no longer freezes the
+  entire backlog from making progress.
+- **Stall escalation**: `trackTaskStall()` keeps an in-memory per-task
+  progress tracker; if a mission task's `Progress` stays unchanged across
+  `maxStalledCyclesBeforeEscalation` (3) consecutive cycles, a one-time
+  `[STALL WARNING]` is appended to its execution log and surfaced in the run
+  summary/notification instead of silently retrying the same non-advancing
+  work forever.
+- **Notify-misconfiguration warning**: if a task's title/description clearly
+  asks to send/notify somewhere (`mentionsNotificationIntent()`) but its own
+  `TargetChannel` is `"none"`, the daemon still executes the task normally but
+  logs a one-time warning — the model can never call the notify tool itself,
+  so a `TargetChannel=="none"` misconfiguration would otherwise silently
+  discard a completed result with no visible trace.
+
+**Cycle execution & response contract**:
+
+```mermaid
+graph TD
+    RUN["Run cycle"] --> READ_MD["Load Standing Directives\n(HEARTBEAT.md) & Backlog\n(TASKS.md / SQLite)"]
+    READ_MD --> CHECK_TASK{"Pending / Active\nTasks in Backlog?\n(skips CreatedBy=='system')"}
+
+    CHECK_TASK -- "Yes (P0 -> P3)" --> RESUME_SESSION["CASE A: Mission Execution\nResume Session (conv_task_&lt;id&gt;)\nLoad Working Memory Context"]
+    RESUME_SESSION --> DENY_A["Deny native_channel_notify,\nchannel_notify, native_cron_schedule\n(hard context boundary, not just a prompt)"]
+    DENY_A --> REACT_LOOP["Execute ReAct Step\nAuthorized Tools Sandbox"]
+    REACT_LOOP --> PERSIST_STEP["Save Message in Session\nUpdate Progress (0-100%)\nSync to TASKS.md\nStall Tracker + Notify-Misconfig Warning"]
+    PERSIST_STEP --> PROACTIVE_PUSH["Proactive Channel Push\n(Telegram, Discord, WhatsApp, Web)\nAnti-Double-Dispatch Guard"]
+
+    CHECK_TASK -- "No (Backlog Clean)" --> DENY_B["CASE B: Routine Cycle\nDeny native_channel_notify,\nchannel_notify, native_cron_schedule\n+ Headless-mode prompt rule\n(no greetings, no self-intro)"]
+    DENY_B --> MODEL["Model reply:\nread HEARTBEAT.md strictly,\nnever infer/repeat old work"]
+    MODEL --> CLASSIFY{"classifyHeartbeatResponse()\nHEARTBEAT_OK at start/end\nAND remainder <= ackMaxChars (300)?"}
+    CLASSIFY -- "Yes: Ack" --> HB_OK["Record 'ok' run\nZero Noise: nothing sent"]
+    CLASSIFY -- "No: Alert" --> IDLE_CHECK{"looksLikeIdleChatter()\nno tool calls AND\ngreeting/self-intro pattern?"}
+    IDLE_CHECK -- "Yes: off-topic noise" --> HB_OK
+    IDLE_CHECK -- "No: real content" --> PROACTIVE_PUSH
+```
+
+- **Response contract (OpenClaw-aligned)**: `classifyHeartbeatResponse()`
+  only treats `HEARTBEAT_OK` as a silent acknowledgement when the token sits
+  at the very start or end of the reply (not merely mentioned mid-text) and
+  the remaining commentary is at most `ackMaxChars` (default 300, configurable
+  per `HeartbeatConfig.AckMaxChars`). Anything else — including hallucinated,
+  off-directive chatter — is treated as a real alert and delivered exactly
+  once through the configured target channel.
+- **Idle-chatter safety net**: weaker/faster models occasionally ignore the
+  directive-or-`HEARTBEAT_OK` contract entirely and free-associate a
+  conversational greeting or capability menu (e.g. "Chào Bieber! Tôi đã sẵn
+  sàng, bạn cần hỗ trợ gì?") instead of executing the directive. The routine
+  system prompt now injects an explicit "Autonomous Headless Execution Mode"
+  rule (no human is present to greet) via a `heartbeat_headless_mode` context
+  flag, and `looksLikeIdleChatter()` reclassifies any tool-free, greeting-like
+  reply as nominal so it is never forwarded as a user-facing alert.
+- **Hard tool boundary, not a prompt hint**: both mission (CASE A) and routine
+  (CASE B) cycles execute inside a `context.Context` that hard-denies
+  `native_channel_notify`/`channel_notify` (delivery is the daemon's job, the
+  model never dispatches its own notification) and `native_cron_schedule`
+  (recurring automations always require an explicit operator request, never
+  one inferred by an unattended heartbeat). `tools.WithDeniedTools` /
+  `tools.WithAllowedTools` are enforced inside `ToolRegistry.Execute` itself,
+  so this cannot be bypassed even if a future prompt forgets to mention it.
+- **Working Memory Continuity**: Automatically preserves dialogue and
+  intermediate thoughts inside SQLite `chat_sessions` per task ID
+  (`conv_task_<id>`), allowing multi-step task execution without losing
+  progress across pulses.
+- **Bi-directional Synchronization**: Changes in the Web UI, REST API, or
+  Agent ReAct steps automatically synchronize between SQLite and
+  `data/workspace/TASKS.md` and `data/workspace/HEARTBEAT.md`.
+- **Zero-Noise Guarantee**: If all systems are nominal and no task needs human
+  escalation, the kernel records the run in SQLite and remains completely
+  silent — no channel spam, no web notification.
+
+**Duplicate-notification safeguards** — three independent bugs previously
+produced multiple `/notifications` entries for what looked like a single
+event; each has its own dedicated guard now:
+
+```mermaid
+sequenceDiagram
+    participant Tool as ToolRegistry.Execute
+    participant AM as ApprovalManager
+    participant Bus as EventBus
+    participant Hooks as useWebNotifications()
+    participant UI as NotificationBell / NotificationsPage
+
+    Tool->>AM: Request(agent, tool, input)
+    AM-->>Tool: ApprovalRequest{IsNew: true|false}
+    alt IsNew() == true (brand-new pending approval)
+        Tool->>Bus: publish "approval:required"
+    else IsNew() == false (same exact action already pending)
+        Tool--xBus: no publish (operator already asked once)
+    end
+    Bus->>Hooks: latest_notification (realtime snapshot)
+    Note over Hooks: module-level lastDesktopNotificationId\nshared across every hook instance
+    Hooks->>UI: desktop notification (fired exactly once,\nregardless of how many components mounted the hook)
+```
+
+- **Approval dedup** (`tools.ApprovalRequest.IsNew()`): `ApprovalManager.Request()`
+  reuses an existing pending approval for the same exact action instead of
+  creating a new record; the registry now only republishes the
+  `approval:required` bus event when a row was genuinely just inserted.
+- **Web notification hook dedup** (`useWebNotifications.ts`): `NotificationBell`
+  and `NotificationsPage` both mount the hook simultaneously; a
+  module-level `lastDesktopNotificationId` (rather than a per-instance ref) is
+  now shared across every mounted instance so a single realtime event fires
+  exactly one desktop notification.
+- **Legacy directive/task contamination**: a hardcoded default directive and
+  two auto-seeded "system" tasks from early releases used to masquerade as
+  real, actionable work. `normalizeHeartbeatDirectives()` strips the legacy
+  line from `HEARTBEAT.md`/config, and the mission scan now skips any
+  backlog task with `CreatedBy == "system"`.
+
+Further context:
+
 - **Durable Execution State**: Every engine invocation creates an `agent_runs` record
   and append-only `run_events`. A W3C-sized trace ID correlates LLM attempts, tool
   observations, approval pauses, token totals, and termination reasons.
@@ -304,6 +432,58 @@ graph LR
 ### OAuth 2.1 & Token Refresh Daemon
 
 All SaaS connections (Gmail, Notion, Figma, GitHub) authenticate via OAuth 2.1 with PKCE (S256). The `token_refresher.go` daemon automatically renews access tokens **5 minutes before expiry** to maintain seamless connectivity.
+
+### Integration Health Visibility (Channels, Connectors, MCP)
+
+A broken chat channel adapter, an expired/failed connector token, or a dead MCP server used to fail
+**silently** — a `slog.Warn` server log line and nothing else. There was no way for a user to discover
+*why* a channel/connector/tool stopped working short of reading the daemon's stdout. All three subsystems
+now funnel failures through the shared `EventBus` into persisted, web-visible notifications:
+
+```mermaid
+graph TD
+    subgraph "Failure sources"
+        TG["Telegram poll loop\n(fetchUpdates)"]
+        DC["Discord gateway\n(dial/reconnect)"]
+        CM["ChannelManager\n(adapter Start() failure)"]
+        TR["TokenRefreshDaemon\n(CheckAndRefreshAll)"]
+        MCPC["MCPClient.readLoop()\n(unexpected stdio close)"]
+        MCPH["MCPHostEngine\n(RestoreServers / ConnectServer)"]
+    end
+
+    TG -- "state transition only" --> EB(("EventBus"))
+    DC -- "state transition only" --> EB
+    CM --> EB
+    TR --> EB
+    MCPC -- "onClose callback\n(skipped if deliberate Close)" --> MCPH
+    MCPH --> EB
+
+    EB -->|"channel.adapter_error/recovered"| NM["NotificationManager\nStartBackgroundListener"]
+    EB -->|"auth.token_expired / auth.token_failed"| NM
+    EB -->|"mcp.server_error/recovered"| NM
+
+    NM -->|"15-min per-integration cooldown\n(shouldNotifyIntegration)"| DB[("notifications\ntable (SQLite)")]
+    DB --> WEB["Web UI\n/channels · /connectors · /tools"]
+```
+
+Key properties of this design:
+
+- **State-transition only, not per-retry**: a persistently broken Telegram token would otherwise poll every
+  ~500ms forever; `TelegramAdapter.reportPollHealth` / `DiscordAdapter.reportGatewayHealth` only publish an
+  event on the *first* failure after being healthy and the *first* success after a run of failures.
+  `NotificationManager` additionally enforces its own 15-minute cooldown per integration (`connector:<id>`,
+  `channel:<accountID>`, `mcp:<serverID>` dedup keys) so a flapping integration cannot spam the bell icon.
+  A recovery event resets the cooldown immediately so the *next* failure (if any) is reported right away.
+- **Deliberate vs. unexpected MCP disconnects**: `MCPClient.Close()` sets a `deliberate` flag and clears the
+  `onClose` callback before killing the process, so an operator disabling/removing an MCP server never
+  fires a spurious error notification — only a genuine mid-session crash or unreachable HTTP endpoint does.
+- **Dead-client cleanup**: previously `MCPHostEngine.ListServers()` kept reporting `Connected: true` for a
+  server whose process had already died, until the whole ActonOS process restarted. The `onClose` callback
+  now removes the dead entry from `h.clients` immediately, so status reflects reality.
+- **Inline status, not just a toast**: `ChannelManager.GetAccountStatuses()` and `MCPServerStatus.LastError`
+  /`LastErrorAt` are also returned directly by `GET /api/integrations/channels/accounts` and the MCP list
+  endpoint, so the Channels/Tools pages can show a persistent "why is this broken" indicator, not just a
+  one-time notification that can be missed or dismissed.
 
 ---
 

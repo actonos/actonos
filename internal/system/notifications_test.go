@@ -113,6 +113,94 @@ func TestNotificationManager_LifecycleAndPagination(t *testing.T) {
 	}
 }
 
+func TestNotificationManager_IntegrationHealthEvents(t *testing.T) {
+	tempDir := t.TempDir()
+	db, err := sql.Open("sqlite", filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	eventBus := bus.NewEventBus()
+	mgr, err := NewNotificationManager(db, eventBus)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	mgr.StartBackgroundListener(ctx)
+	defer mgr.Stop()
+
+	// Connector token expired should produce a warning notification linking to /connectors.
+	eventBus.Publish(bus.NewEvent(bus.EventTokenExpired, "github", map[string]any{"reason": "no_refresh_token"}))
+	// Connector refresh failure should produce an error notification (different dedup key from expired,
+	// but here we use the same provider so only the FIRST of these two fires due to the cooldown; verify count below).
+	eventBus.Publish(bus.NewEvent(bus.EventTokenFailed, "slack", "invalid_grant"))
+	// Channel adapter failure.
+	eventBus.Publish(bus.NewEvent(bus.EventChannelAdapterError, "tg_1", map[string]any{
+		"channel": "telegram", "name": "Support Bot", "account_id": "tg_1", "error": "unauthorized",
+	}))
+	// MCP server failure.
+	eventBus.Publish(bus.NewEvent(bus.EventMCPServerError, "srv_1", map[string]any{
+		"server_id": "srv_1", "name": "filesystem", "error": "process exited",
+	}))
+
+	time.Sleep(100 * time.Millisecond)
+
+	items, total, _, err := mgr.List(ctx, 1, 20, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 4 {
+		t.Fatalf("expected 4 integration-health notifications (github expired, slack failed, telegram error, mcp error), got %d: %+v", total, items)
+	}
+
+	links := map[string]int{}
+	for _, n := range items {
+		links[n.Link]++
+	}
+	if links["/connectors"] != 2 {
+		t.Fatalf("expected 2 notifications linking to /connectors, got %d", links["/connectors"])
+	}
+	if links["/channels"] != 1 {
+		t.Fatalf("expected 1 notification linking to /channels, got %d", links["/channels"])
+	}
+	if links["/tools"] != 1 {
+		t.Fatalf("expected 1 notification linking to /tools, got %d", links["/tools"])
+	}
+
+	// A duplicate failure for the same channel account within the cooldown window must be suppressed.
+	eventBus.Publish(bus.NewEvent(bus.EventChannelAdapterError, "tg_1", map[string]any{
+		"channel": "telegram", "name": "Support Bot", "account_id": "tg_1", "error": "unauthorized again",
+	}))
+	time.Sleep(50 * time.Millisecond)
+	_, totalAfterDup, _, _ := mgr.List(ctx, 1, 20, "", false)
+	if totalAfterDup != 4 {
+		t.Fatalf("expected duplicate failure within cooldown to be suppressed, total went from 4 to %d", totalAfterDup)
+	}
+
+	// A recovery event clears the cooldown and produces a success notification.
+	eventBus.Publish(bus.NewEvent(bus.EventChannelAdapterRecovered, "tg_1", map[string]any{
+		"channel": "telegram", "name": "Support Bot", "account_id": "tg_1",
+	}))
+	time.Sleep(50 * time.Millisecond)
+	_, totalAfterRecovery, _, _ := mgr.List(ctx, 1, 20, "", false)
+	if totalAfterRecovery != 5 {
+		t.Fatalf("expected recovery notification to be created, total went from 4 to %d", totalAfterRecovery)
+	}
+
+	// After recovery, a new failure should be reported immediately (cooldown reset).
+	eventBus.Publish(bus.NewEvent(bus.EventChannelAdapterError, "tg_1", map[string]any{
+		"channel": "telegram", "name": "Support Bot", "account_id": "tg_1", "error": "unauthorized once more",
+	}))
+	time.Sleep(50 * time.Millisecond)
+	_, totalAfterSecondFailure, _, _ := mgr.List(ctx, 1, 20, "", false)
+	if totalAfterSecondFailure != 6 {
+		t.Fatalf("expected new failure after recovery to bypass cooldown, total went from 5 to %d", totalAfterSecondFailure)
+	}
+}
+
 func TestNotificationManager_EventBusListener(t *testing.T) {
 	tempDir := t.TempDir()
 	db, err := sql.Open("sqlite", filepath.Join(tempDir, "test.db"))

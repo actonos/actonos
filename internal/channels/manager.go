@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/actonos/actonos/internal/bus"
 )
@@ -19,23 +20,86 @@ type ChannelManager struct {
 	tgAdapters  map[string]*TelegramAdapter
 	waAdapters  map[string]*WhatsAppAdapter
 	dcAdapters  map[string]*DiscordAdapter
+	statuses    map[string]AccountStatus // keyed by account ID; runtime health, not persisted config
 	ctx         context.Context
 	cancel      context.CancelFunc
+}
+
+// AccountStatus is the in-memory (non-persisted, resets on daemon restart)
+// runtime health of a channel account adapter, surfaced through
+// GetAccountStatuses so the web UI and notifications can explain *why* a
+// channel isn't working instead of just showing it silently absent.
+type AccountStatus struct {
+	Connected   bool      `json:"connected"`
+	LastError   string    `json:"last_error,omitempty"`
+	LastErrorAt time.Time `json:"last_error_at,omitempty"`
 }
 
 // NewChannelManager initializes the multi-account channel manager.
 func NewChannelManager(eventBus *bus.EventBus, pairingMgr *PairingManager) *ChannelManager {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &ChannelManager{
+	m := &ChannelManager{
 		eventBus:   eventBus,
 		pairingMgr: pairingMgr,
 		accounts:   make(map[string]ChannelAccount),
 		tgAdapters: make(map[string]*TelegramAdapter),
 		waAdapters: make(map[string]*WhatsAppAdapter),
 		dcAdapters: make(map[string]*DiscordAdapter),
+		statuses:   make(map[string]AccountStatus),
 		ctx:        ctx,
 		cancel:     cancel,
 	}
+	m.watchAdapterHealthEvents()
+	return m
+}
+
+// watchAdapterHealthEvents keeps m.statuses in sync with the
+// EventChannelAdapterError/Recovered events published either by the manager
+// itself (synchronous start failures) or directly by an adapter's background
+// poll/gateway loop (async runtime failures, e.g. an invalid token that only
+// surfaces once polling begins). This ensures GetAccountStatuses reflects
+// reality regardless of which layer detected the failure.
+func (m *ChannelManager) watchAdapterHealthEvents() {
+	if m.eventBus == nil {
+		return
+	}
+	errSub := m.eventBus.Subscribe(bus.EventChannelAdapterError)
+	recoveredSub := m.eventBus.Subscribe(bus.EventChannelAdapterRecovered)
+	go func() {
+		for {
+			select {
+			case ev, ok := <-errSub:
+				if !ok {
+					return
+				}
+				m.applyAdapterHealthEvent(ev, false)
+			case ev, ok := <-recoveredSub:
+				if !ok {
+					return
+				}
+				m.applyAdapterHealthEvent(ev, true)
+			}
+		}
+	}()
+}
+
+func (m *ChannelManager) applyAdapterHealthEvent(ev bus.Event, recovered bool) {
+	payload, ok := ev.Payload.(map[string]any)
+	if !ok {
+		return
+	}
+	accountID, _ := payload["account_id"].(string)
+	if accountID == "" {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if recovered {
+		m.statuses[accountID] = AccountStatus{Connected: true}
+		return
+	}
+	errMsg, _ := payload["error"].(string)
+	m.statuses[accountID] = AccountStatus{Connected: false, LastError: errMsg, LastErrorAt: time.Now().UTC()}
 }
 
 // Start begins listening on all registered channel accounts.
@@ -186,8 +250,10 @@ func (m *ChannelManager) startTelegramAccountLocked(_ context.Context, acc Chann
 	}
 	if err := adapter.Start(adapterCtx); err == nil {
 		m.tgAdapters[acc.ID] = adapter
+		m.recordAccountResultLocked(acc, "telegram", nil)
 		slog.Info("channel account started", "channel", "telegram", "account_id", acc.ID, "name", acc.Name)
 	} else {
+		m.recordAccountResultLocked(acc, "telegram", err)
 		slog.Warn("failed to start telegram account adapter", "account_id", acc.ID, "error", err)
 	}
 }
@@ -220,8 +286,10 @@ func (m *ChannelManager) startWhatsAppAccountLocked(_ context.Context, acc Chann
 	adapter := NewWhatsAppAdapter(token, acc.PhoneID, secret, m.eventBus, m.pairingMgr)
 	if err := adapter.Start(adapterCtx); err == nil {
 		m.waAdapters[acc.ID] = adapter
+		m.recordAccountResultLocked(acc, "whatsapp", nil)
 		slog.Info("channel account started", "channel", "whatsapp", "account_id", acc.ID, "name", acc.Name)
 	} else {
+		m.recordAccountResultLocked(acc, "whatsapp", err)
 		slog.Warn("failed to start whatsapp account adapter", "account_id", acc.ID, "error", err)
 	}
 }
@@ -251,10 +319,54 @@ func (m *ChannelManager) startDiscordAccountLocked(_ context.Context, acc Channe
 	adapter.SetAccountID(acc.ID)
 	if err := adapter.Start(adapterCtx); err == nil {
 		m.dcAdapters[acc.ID] = adapter
+		m.recordAccountResultLocked(acc, "discord", nil)
 		slog.Info("channel account started", "channel", "discord", "account_id", acc.ID, "name", acc.Name)
 	} else {
+		m.recordAccountResultLocked(acc, "discord", err)
 		slog.Warn("failed to start discord account adapter", "account_id", acc.ID, "error", err)
 	}
+}
+
+// recordAccountResultLocked updates the in-memory runtime status for an
+// account and, on a state transition (working -> broken or broken ->
+// working), publishes a bus event so operators can be notified on the web UI
+// instead of the failure only ever reaching the server log. Must be called
+// with m.mu already held.
+func (m *ChannelManager) recordAccountResultLocked(acc ChannelAccount, channel string, err error) {
+	prev := m.statuses[acc.ID]
+	if err == nil {
+		m.statuses[acc.ID] = AccountStatus{Connected: true}
+		if !prev.Connected && m.eventBus != nil {
+			m.eventBus.Publish(bus.NewEvent(bus.EventChannelAdapterRecovered, acc.ID, map[string]any{
+				"channel":    channel,
+				"account_id": acc.ID,
+				"name":       acc.Name,
+			}))
+		}
+		return
+	}
+	m.statuses[acc.ID] = AccountStatus{Connected: false, LastError: err.Error(), LastErrorAt: time.Now().UTC()}
+	if m.eventBus != nil {
+		m.eventBus.Publish(bus.NewEvent(bus.EventChannelAdapterError, acc.ID, map[string]any{
+			"channel":    channel,
+			"account_id": acc.ID,
+			"name":       acc.Name,
+			"error":      err.Error(),
+		}))
+	}
+}
+
+// GetAccountStatuses returns the in-memory runtime health of every known
+// channel account (keyed by account ID), independent of the persisted
+// enabled/disabled configuration.
+func (m *ChannelManager) GetAccountStatuses() map[string]AccountStatus {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make(map[string]AccountStatus, len(m.statuses))
+	for id, st := range m.statuses {
+		out[id] = st
+	}
+	return out
 }
 
 // GetAccounts returns all registered accounts.

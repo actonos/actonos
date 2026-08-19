@@ -202,6 +202,16 @@ func (e *Engine) buildCognitivePrompt(ctx context.Context, agentID string, agent
 		sb.WriteString("\n\n")
 	}
 
+	// 5b. Headless/Unattended Execution Mode (set by the heartbeat daemon and
+	// other autonomous callers where there is no human present to greet or
+	// ask "how can I help"). See internal/agent/heartbeat.go.
+	if headless, _ := ctx.Value("heartbeat_headless_mode").(bool); headless {
+		sb.WriteString("## Autonomous Headless Execution Mode (CRITICAL)\n")
+		sb.WriteString("- This is an unattended background automation cycle. NO human is reading this in real time — there is nobody to greet, welcome, or offer help to.\n")
+		sb.WriteString("- NEVER reply with a greeting, self-introduction, capability menu, or a question like 'what would you like help with?'. That is a critical failure in this mode.\n")
+		sb.WriteString("- You MUST do exactly one of the following: (a) execute the standing directive(s) using your authorized tools and report the concrete, factual result, or (b) if there is truly nothing actionable, reply with EXACTLY `HEARTBEAT_OK` and nothing else.\n\n")
+	}
+
 	// 6. Universal Conversational Standards & Anti-Robot Principles (Multi-Purpose)
 	sb.WriteString("## Universal Operating Standards & Demeanor\n")
 	sb.WriteString("- **Language Match (CRITICAL)**: Always respond in the EXACT language used by the collaborator in their prompt (e.g. Vietnamese if asked in Vietnamese, English if asked in English).\n")
@@ -372,7 +382,11 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 
 	// 3. Attach authorized tools if registry available
 	if e.tools != nil && len(agent.AuthorizedTools) > 0 {
-		opts.Tools = e.tools.ToLLMToolDefinitions(agent.AuthorizedTools, tools.DeniedTools(ctx)...)
+		authorizedTools := agent.AuthorizedTools
+		if allowed := tools.AllowedTools(ctx); allowed != nil {
+			authorizedTools = allowed
+		}
+		opts.Tools = e.tools.ToLLMToolDefinitions(authorizedTools, tools.DeniedTools(ctx)...)
 	}
 
 	startTime := time.Now()
@@ -653,7 +667,11 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 	}
 
 	if e.tools != nil && len(agent.AuthorizedTools) > 0 {
-		opts.Tools = e.tools.ToLLMToolDefinitions(agent.AuthorizedTools, tools.DeniedTools(ctx)...)
+		authorizedTools := agent.AuthorizedTools
+		if allowed := tools.AllowedTools(ctx); allowed != nil {
+			authorizedTools = allowed
+		}
+		opts.Tools = e.tools.ToLLMToolDefinitions(authorizedTools, tools.DeniedTools(ctx)...)
 	}
 
 	var finalResp *llm.Response
@@ -1056,7 +1074,11 @@ func (e *Engine) ResumeApproved(ctx context.Context, approval tools.ApprovalRequ
 	if manifest.ModelConfig.MaxTokens > 0 {
 		opts.MaxTokens = &manifest.ModelConfig.MaxTokens
 	}
-	opts.Tools = e.tools.ToLLMToolDefinitions(manifest.AuthorizedTools, tools.DeniedTools(ctx)...)
+	authorizedTools := manifest.AuthorizedTools
+	if allowed := tools.AllowedTools(ctx); allowed != nil {
+		authorizedTools = allowed
+	}
+	opts.Tools = e.tools.ToLLMToolDefinitions(authorizedTools, tools.DeniedTools(ctx)...)
 	usage := checkpoint.Usage
 
 	// Subsequent tool calls must not inherit the consumed approval ID, ensuring

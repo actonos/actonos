@@ -308,14 +308,36 @@ Delete a task from the database and workspace `TASKS.md`.
 
 ## Heartbeat Coordinator & Autonomous Pulse
 
+Behavior follows [OpenClaw's Heartbeat contract](https://docs.openclaw.ai/vi/gateway/heartbeat): a periodic
+agent turn that reads `HEARTBEAT.md` strictly, never invents work, and stays silent unless something is
+actually worth surfacing. See `docs/ARCHITECTURE.md` §4.C for the full trigger/gating and response-contract
+diagrams.
+
 ### `GET /api/heartbeat/config`
-Get current standing directives (`HEARTBEAT.md`), pulse interval, and zero-noise settings.
+Get current standing directives (`HEARTBEAT.md`), pulse interval, target channel, and response-contract
+settings. Response body (`HeartbeatConfig`):
+
+| Field | Type | Default | Description |
+|:---|:---|:---|:---|
+| `enabled` | bool | `true` | Whether the daemon runs at all. |
+| `interval_minutes` | int | `5` | Ticker cadence between routine pulses. |
+| `directives` | string | `""` | Raw `HEARTBEAT.md` content (legacy default lines are stripped automatically). |
+| `target_channel` | string | `"all"` | Delivery channel for alerts; `"none"` runs the cycle but sends nothing. |
+| `target_account_id` | string | `"all"` | Multi-account channel id override. |
+| `auto_delegate` | bool | `true` | Reserved for future delegation policy. |
+| `zero_noise` | bool | `true` | Reserved; ack/alert classification always applies regardless. |
+| `ack_max_chars` | int | `300` | Max characters allowed alongside `HEARTBEAT_OK` before a reply counts as a real alert. |
+| `active_hours_start` | string | `""` | Daily `HH:MM` window start (routine pulses only); empty = 24/7. |
+| `active_hours_end` | string | `""` | Daily `HH:MM` window end; `start == end` always skips. |
+| `active_hours_timezone` | string | `""` | IANA timezone for the window; empty = server local time. |
 
 ### `PUT /api/heartbeat/config`
-Save standing directives and pulse configuration.
+Save standing directives and pulse configuration (same `HeartbeatConfig` body as above). Also re-syncs the
+running daemon (`HeartbeatDaemon.SyncConfig`) immediately.
 
 ### `POST /api/heartbeat/trigger`
-Trigger an immediate on-demand cognitive heartbeat pulse.
+Trigger an immediate on-demand cognitive heartbeat pulse. Manual pulses always bypass the trigger cooldown
+and `active_hours` window (mirrors OpenClaw's `system event --mode now`).
 
 ### `GET /api/heartbeat/runs`
 List recent heartbeat cognitive pulses and audit evaluations.

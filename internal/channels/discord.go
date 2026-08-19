@@ -31,6 +31,7 @@ type DiscordAdapter struct {
 	lastChannelID  string
 	unauthNotified map[string]time.Time
 	seq            atomic.Int64
+	gatewayFailing bool // tracks whether the gateway is currently failing to (re)connect, to publish health events only on state transitions
 }
 
 // NewDiscordAdapter creates a new DiscordAdapter supporting both Bot Tokens and Webhooks.
@@ -72,6 +73,34 @@ func (d *DiscordAdapter) GetLastChannelID() string {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return d.lastChannelID
+}
+
+// reportGatewayHealth publishes a channel adapter health event only on a
+// state transition (first dial failure after being connected, or first
+// successful (re)connect after a run of failures), so a persistently broken
+// gateway doesn't spam a new event on every backoff retry.
+func (d *DiscordAdapter) reportGatewayHealth(dialErr error) {
+	d.mu.Lock()
+	wasFailing := d.gatewayFailing
+	d.gatewayFailing = dialErr != nil
+	accountID := d.accountID
+	d.mu.Unlock()
+
+	if d.bus == nil || accountID == "" {
+		return
+	}
+	if dialErr != nil && !wasFailing {
+		d.bus.Publish(bus.NewEvent(bus.EventChannelAdapterError, accountID, map[string]any{
+			"channel":    "discord",
+			"account_id": accountID,
+			"error":      dialErr.Error(),
+		}))
+	} else if dialErr == nil && wasFailing {
+		d.bus.Publish(bus.NewEvent(bus.EventChannelAdapterRecovered, accountID, map[string]any{
+			"channel":    "discord",
+			"account_id": accountID,
+		}))
+	}
 }
 
 // Start begins the Discord connection (Gateway WebSocket for bots, or ready state for webhooks).
@@ -142,6 +171,7 @@ func (d *DiscordAdapter) gatewayLoop(ctx context.Context) {
 		wsConn, _, err := websocket.Dial(connCtx, gatewayURL, nil)
 		if err != nil {
 			slog.Warn("discord gateway connect failed; retrying", "account_id", d.GetAccountID(), "error", err, "retry_in", backoff.String())
+			d.reportGatewayHealth(err)
 			connCancel()
 			select {
 			case <-ctx.Done():
@@ -157,6 +187,7 @@ func (d *DiscordAdapter) gatewayLoop(ctx context.Context) {
 		}
 
 		backoff = 2 * time.Second
+		d.reportGatewayHealth(nil)
 		d.runGatewaySession(connCtx, wsConn)
 		connCancel()
 		_ = wsConn.Close(websocket.StatusNormalClosure, "reconnecting")

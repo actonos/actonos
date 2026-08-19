@@ -33,14 +33,18 @@ type NotificationManager struct {
 	db     *sql.DB
 	bus    *bus.EventBus
 	stopCh chan struct{}
+
+	alertMu    sync.Mutex
+	lastAlerts map[string]time.Time // dedup key -> last time an integration-health notification was created
 }
 
 // NewNotificationManager creates and initializes a NotificationManager.
 func NewNotificationManager(db *sql.DB, eventBus *bus.EventBus) (*NotificationManager, error) {
 	nm := &NotificationManager{
-		db:     db,
-		bus:    eventBus,
-		stopCh: make(chan struct{}),
+		db:         db,
+		bus:        eventBus,
+		stopCh:     make(chan struct{}),
+		lastAlerts: make(map[string]time.Time),
 	}
 	if err := nm.initDB(); err != nil {
 		return nil, err
@@ -254,6 +258,32 @@ func (nm *NotificationManager) ClearAll(ctx context.Context) error {
 	return err
 }
 
+// integrationAlertCooldown is how long we suppress a repeat notification for
+// the same failing integration (channel account, connector provider, or MCP
+// server) so a persistently-broken connection doesn't spam the web UI with a
+// new notification every retry/poll cycle.
+const integrationAlertCooldown = 15 * time.Minute
+
+// shouldNotifyIntegration reports whether enough time has passed since the
+// last notification for the given dedup key to justify creating a new one.
+func (nm *NotificationManager) shouldNotifyIntegration(key string) bool {
+	nm.alertMu.Lock()
+	defer nm.alertMu.Unlock()
+	if last, ok := nm.lastAlerts[key]; ok && time.Since(last) < integrationAlertCooldown {
+		return false
+	}
+	nm.lastAlerts[key] = time.Now()
+	return true
+}
+
+// clearIntegrationAlert resets the dedup cooldown for a key, used when an
+// integration recovers so the next failure (if any) is reported immediately.
+func (nm *NotificationManager) clearIntegrationAlert(key string) {
+	nm.alertMu.Lock()
+	defer nm.alertMu.Unlock()
+	delete(nm.lastAlerts, key)
+}
+
 // StartBackgroundListener subscribes to EventBus events and automatically creates notifications.
 func (nm *NotificationManager) StartBackgroundListener(ctx context.Context) {
 	if nm.bus == nil {
@@ -263,6 +293,12 @@ func (nm *NotificationManager) StartBackgroundListener(ctx context.Context) {
 	approvalSub := nm.bus.Subscribe("approval:required")
 	toolErrSub := nm.bus.Subscribe(bus.EventToolExecutionError)
 	actionDoneSub := nm.bus.Subscribe(bus.EventAgentActionDone)
+	tokenExpiredSub := nm.bus.Subscribe(bus.EventTokenExpired)
+	tokenFailedSub := nm.bus.Subscribe(bus.EventTokenFailed)
+	channelErrSub := nm.bus.Subscribe(bus.EventChannelAdapterError)
+	channelRecoveredSub := nm.bus.Subscribe(bus.EventChannelAdapterRecovered)
+	mcpErrSub := nm.bus.Subscribe(bus.EventMCPServerError)
+	mcpRecoveredSub := nm.bus.Subscribe(bus.EventMCPServerRecovered)
 
 	go func() {
 		for {
@@ -293,6 +329,123 @@ func (nm *NotificationManager) StartBackgroundListener(ctx context.Context) {
 						Type:     "error",
 						Category: "agent",
 						Link:     "/missions",
+					})
+				}
+			case ev, ok := <-tokenExpiredSub:
+				if !ok {
+					return
+				}
+				provider := ev.AgentID
+				reason := "no_refresh_token"
+				if payload, ok := ev.Payload.(map[string]any); ok {
+					if r, ok := payload["reason"].(string); ok && r != "" {
+						reason = r
+					}
+				}
+				if nm.shouldNotifyIntegration("connector:" + provider) {
+					_, _ = nm.Create(context.Background(), Notification{
+						Title:    fmt.Sprintf("Connector cần kết nối lại: %s", provider),
+						Message:  fmt.Sprintf("Kết nối '%s' đã hết hạn refresh token (%s). Vui lòng vào Connectors để xác thực lại.", provider, reason),
+						Type:     "warning",
+						Category: "system",
+						Link:     "/connectors",
+					})
+				}
+			case ev, ok := <-tokenFailedSub:
+				if !ok {
+					return
+				}
+				provider := ev.AgentID
+				errMsg, _ := ev.Payload.(string)
+				if nm.shouldNotifyIntegration("connector:" + provider) {
+					_, _ = nm.Create(context.Background(), Notification{
+						Title:    fmt.Sprintf("Lỗi làm mới token: %s", provider),
+						Message:  fmt.Sprintf("Không thể làm mới token cho '%s': %s", provider, errMsg),
+						Type:     "error",
+						Category: "system",
+						Link:     "/connectors",
+					})
+				}
+			case ev, ok := <-channelErrSub:
+				if !ok {
+					return
+				}
+				if payload, ok := ev.Payload.(map[string]any); ok {
+					channel, _ := payload["channel"].(string)
+					name, _ := payload["name"].(string)
+					errMsg, _ := payload["error"].(string)
+					accountID, _ := payload["account_id"].(string)
+					if name == "" {
+						name = accountID
+					}
+					if nm.shouldNotifyIntegration("channel:" + accountID) {
+						_, _ = nm.Create(context.Background(), Notification{
+							Title:    fmt.Sprintf("Kênh chat lỗi: %s (%s)", name, channel),
+							Message:  fmt.Sprintf("Không thể kết nối tài khoản '%s' trên %s: %s", name, channel, errMsg),
+							Type:     "error",
+							Category: "system",
+							Link:     "/channels",
+						})
+					}
+				}
+			case ev, ok := <-channelRecoveredSub:
+				if !ok {
+					return
+				}
+				if payload, ok := ev.Payload.(map[string]any); ok {
+					channel, _ := payload["channel"].(string)
+					name, _ := payload["name"].(string)
+					accountID, _ := payload["account_id"].(string)
+					if name == "" {
+						name = accountID
+					}
+					nm.clearIntegrationAlert("channel:" + accountID)
+					_, _ = nm.Create(context.Background(), Notification{
+						Title:    fmt.Sprintf("Kênh chat đã kết nối lại: %s (%s)", name, channel),
+						Message:  fmt.Sprintf("Tài khoản '%s' trên %s đã hoạt động trở lại.", name, channel),
+						Type:     "success",
+						Category: "system",
+						Link:     "/channels",
+					})
+				}
+			case ev, ok := <-mcpErrSub:
+				if !ok {
+					return
+				}
+				if payload, ok := ev.Payload.(map[string]any); ok {
+					serverID, _ := payload["server_id"].(string)
+					name, _ := payload["name"].(string)
+					errMsg, _ := payload["error"].(string)
+					if name == "" {
+						name = serverID
+					}
+					if nm.shouldNotifyIntegration("mcp:" + serverID) {
+						_, _ = nm.Create(context.Background(), Notification{
+							Title:    fmt.Sprintf("MCP server lỗi: %s", name),
+							Message:  fmt.Sprintf("MCP server '%s' không kết nối được hoặc bị ngắt kết nối bất ngờ: %s", name, errMsg),
+							Type:     "error",
+							Category: "system",
+							Link:     "/tools",
+						})
+					}
+				}
+			case ev, ok := <-mcpRecoveredSub:
+				if !ok {
+					return
+				}
+				if payload, ok := ev.Payload.(map[string]any); ok {
+					serverID, _ := payload["server_id"].(string)
+					name, _ := payload["name"].(string)
+					if name == "" {
+						name = serverID
+					}
+					nm.clearIntegrationAlert("mcp:" + serverID)
+					_, _ = nm.Create(context.Background(), Notification{
+						Title:    fmt.Sprintf("MCP server đã kết nối lại: %s", name),
+						Message:  fmt.Sprintf("MCP server '%s' đã hoạt động trở lại.", name),
+						Type:     "success",
+						Category: "system",
+						Link:     "/tools",
 					})
 				}
 			case ev, ok := <-actionDoneSub:

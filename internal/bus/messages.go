@@ -32,6 +32,15 @@ const (
 	EventTokenExpired   = "auth.token_expired"
 	EventTokenFailed    = "auth.token_failed"
 
+	// Integration health events (chat channels, connectors, MCP servers).
+	// Published whenever a connection fails to establish, is lost
+	// unexpectedly, or recovers, so operators can be notified on the web UI
+	// instead of the failure only ever reaching the server log.
+	EventChannelAdapterError     = "channel.adapter_error"
+	EventChannelAdapterRecovered = "channel.adapter_recovered"
+	EventMCPServerError          = "mcp.server_error"
+	EventMCPServerRecovered      = "mcp.server_recovered"
+
 	// Memory & Storage events
 	EventMemoryStored  = "memory.stored"
 	EventMemoryDecayed = "memory.decayed"

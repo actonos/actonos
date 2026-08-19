@@ -140,6 +140,7 @@ func (s *Server) handleGetHeartbeatConfig(w http.ResponseWriter, r *http.Request
 			TargetAccountID: "all",
 			AutoDelegate:    true,
 			ZeroNoise:       true,
+			AckMaxChars:     300,
 		})
 		return
 	}

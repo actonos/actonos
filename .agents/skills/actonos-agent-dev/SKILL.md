@@ -87,10 +87,22 @@ type AutonomousTask struct {
 - Bi-directional synchronization with `data/workspace/TASKS.md` ensures CLI, file tools, and LLMs see identical task structures.
 
 ### C. Heartbeat Cognitive Pulse & Working Memory Continuity (`heartbeat.go`)
-- **Cognitive Pulse**: Evaluates active backlog tasks and standing directives (`HEARTBEAT.md`) every 5m (or on manual trigger).
+Follows [OpenClaw's Heartbeat contract](https://docs.openclaw.ai/vi/gateway/heartbeat) — see
+`docs/ARCHITECTURE.md` §4.C for full diagrams.
+- **Gated triggers**: scheduled ticks and event wakeups (`TriggerWakeup()`, e.g. task/approval mutations)
+  pass through `checkCycle(ctx, manual=false)`, which enforces a 15s trigger cooldown (coalesces trigger
+  storms), an optional daily `activeHours` window, and an idle guard (`hasActionableHeartbeatDirectives()`)
+  that skips the model entirely when there's no active task and no actionable `HEARTBEAT.md` content. Manual
+  "Pulse Now" calls (`manual=true`) bypass all three gates.
 - **Session Resume**: For each mission, resumes its dedicated `chat_sessions` (`conv_task_<id>`) and loads previous step history (`LoadRecentHistory`), enabling multi-pulse problem solving without losing context.
-- **Zero-Noise Policy**: Returns `HEARTBEAT_OK` when nominal to avoid spamming user channels.
-- **Anti-Double-Dispatch**: Suppresses duplicate notifications if the agent already pushed a message via tools.
+- **Hard tool boundary**: both mission and routine cycles run inside a context that hard-denies
+  `native_channel_notify`/`channel_notify` (delivery is the daemon's job) and `native_cron_schedule`
+  (recurring automations always need an explicit operator request) via `tools.WithDeniedTools`, enforced
+  inside `ToolRegistry.Execute` itself — not just a prompt instruction.
+- **Response contract**: `classifyHeartbeatResponse()` only treats `HEARTBEAT_OK` as silent when the token
+  is at the start/end of the reply and the remainder is ≤ `ackMaxChars` (default 300, configurable). Anything
+  else — including off-directive hallucinated chatter — is delivered as a real alert exactly once.
+- **Anti-Double-Dispatch**: Suppresses duplicate notifications if the agent already pushed a message via tools, and `tools.ApprovalRequest.IsNew()` prevents re-publishing `approval:required` for an already-pending approval.
 
 ### D. Scheduled Automations (`cron_scheduler.go`)
 Manages cron expressions (e.g. `0 9 * * *`), dispatches autonomous prompt triggers, and records SQLite execution runs.

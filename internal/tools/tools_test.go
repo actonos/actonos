@@ -150,6 +150,57 @@ func TestToolRegistryEnforcesAuthorizationAndApproval(t *testing.T) {
 	}
 }
 
+// TestToolRegistryDoesNotRepublishReusedApproval guards the bug where a
+// pending approval that already surfaced to the operator produced a second,
+// duplicate "approval:required" event (and therefore a duplicate web
+// notification) the next time the same exact action was attempted.
+func TestToolRegistryDoesNotRepublishReusedApproval(t *testing.T) {
+	db, err := memory.Open(filepath.Join(t.TempDir(), "policy-dedup.db"))
+	if err != nil {
+		t.Fatalf("opening test database: %v", err)
+	}
+	defer db.Close()
+
+	eventBus := bus.NewEventBus()
+	registry := NewToolRegistry(eventBus)
+	RegisterNativeTools(registry, t.TempDir())
+	registry.SetApprovalManager(NewApprovalManager(db.SQLDB()))
+	registry.SetPolicyResolver(func(context.Context, string) (AgentToolPolicy, error) {
+		return AgentToolPolicy{
+			AuthorizedTools:   []string{"native_file_write"},
+			ApprovalThreshold: "High",
+			AllowedPaths:      []string{"*"},
+		}, nil
+	})
+
+	events := eventBus.Subscribe("approval:required")
+	defer eventBus.Unsubscribe("approval:required", events)
+
+	input := json.RawMessage(`{"path":"approved.txt","content":"safe"}`)
+	if _, err := registry.Execute(context.Background(), "agent", "native_file_write", input); err == nil {
+		t.Fatal("expected approval requirement on first attempt")
+	}
+	if _, err := registry.Execute(context.Background(), "agent", "native_file_write", input); err == nil {
+		t.Fatal("expected approval requirement on second (reused) attempt")
+	}
+
+	count := 0
+	timeout := time.NewTimer(200 * time.Millisecond)
+	defer timeout.Stop()
+drain:
+	for {
+		select {
+		case <-events:
+			count++
+		case <-timeout.C:
+			break drain
+		}
+	}
+	if count != 1 {
+		t.Fatalf("expected exactly 1 approval:required event for a reused pending approval, got %d", count)
+	}
+}
+
 func TestCommandPolicyBlocksDestructiveInput(t *testing.T) {
 	registry := NewToolRegistry(nil)
 	RegisterNativeTools(registry, t.TempDir())
@@ -189,6 +240,22 @@ func TestToolRegistry_ToLLMToolDefinitions(t *testing.T) {
 	)
 	if !errors.Is(err, ErrToolDeniedInContext) {
 		t.Fatalf("expected context-denied tool error, got %v", err)
+	}
+
+	// Allowlist: only native_sysinfo may execute, even though the tool is
+	// registered and not otherwise denied.
+	allowedCtx := WithAllowedTools(context.Background(), "native_sysinfo")
+	if _, err := registry.Execute(allowedCtx, "agent", "native_file_read", json.RawMessage(`{"path":"x"}`)); !errors.Is(err, ErrToolDeniedInContext) {
+		t.Fatalf("expected tool outside allowlist to be denied, got %v", err)
+	}
+	if _, err := registry.Execute(allowedCtx, "agent", "native_sysinfo", json.RawMessage(`{}`)); err != nil {
+		t.Fatalf("expected allowlisted tool to execute, got %v", err)
+	}
+
+	// Nested WithAllowedTools calls intersect rather than broaden.
+	narrowed := WithAllowedTools(WithAllowedTools(context.Background(), "native_sysinfo", "native_file_read"), "native_file_read")
+	if got := AllowedTools(narrowed); len(got) != 1 || got[0] != "native_file_read" {
+		t.Fatalf("expected nested WithAllowedTools to intersect to [native_file_read], got %v", got)
 	}
 }
 
@@ -363,6 +430,12 @@ func TestApprovalManagerLifecycleAndExactHash(t *testing.T) {
 	duplicate, err := manager.Request(ctx, "trace-other", "agent-a", "native_file_write", "High", input)
 	if err != nil || duplicate.ID != item.ID {
 		t.Fatalf("pending exact action was not deduplicated: %+v err=%v", duplicate, err)
+	}
+	if !item.IsNew() {
+		t.Fatal("first Request() for a fresh action should report IsNew() == true")
+	}
+	if duplicate.IsNew() {
+		t.Fatal("Request() reusing a pending approval should report IsNew() == false")
 	}
 	if err := manager.ValidateApproved(ctx, item.ID, item.AgentID, item.ToolName, input); !errors.Is(err, ErrApprovalInvalid) {
 		t.Fatalf("pending approval unexpectedly validated: %v", err)

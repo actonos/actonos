@@ -1,14 +1,19 @@
 package tools
 
 import (
+	"bufio"
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/actonos/actonos/internal/bus"
 	_ "modernc.org/sqlite"
 )
 
@@ -164,6 +169,203 @@ func TestMCPHostHTTPConnectExecutePersistDisconnectAndRestore(t *testing.T) {
 	if err := restored.DisconnectServer(cfg.ID); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestMCPHostPublishesEventsOnConnectFailureAndRecovery(t *testing.T) {
+	eventBus := bus.NewEventBus()
+	errSub := eventBus.Subscribe(bus.EventMCPServerError)
+	recoveredSub := eventBus.Subscribe(bus.EventMCPServerRecovered)
+
+	registry := NewToolRegistry(nil)
+	host := NewMCPHostEngine(registry)
+	host.SetEventBus(eventBus)
+
+	// A bogus stdio command should fail to start and publish an error event.
+	badCfg := MCPServerConfig{ID: "broken_server", Transport: "stdio", Command: "this-binary-does-not-exist-anywhere"}
+	if err := host.ConnectServer(context.Background(), badCfg); err == nil {
+		t.Fatal("expected connect failure for nonexistent binary")
+	}
+	select {
+	case ev := <-errSub:
+		if ev.AgentID != badCfg.ID {
+			t.Fatalf("expected error event for %s, got %s", badCfg.ID, ev.AgentID)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected EventMCPServerError to be published on connect failure")
+	}
+
+	statuses, err := listServersWithPersistence(t, host, badCfg.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if statuses.LastError == "" {
+		t.Fatal("expected LastError to be recorded in ListServers after failed connect")
+	}
+
+	// A subsequent successful connect for the same ID should clear the error
+	// and publish a recovered event.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var raw map[string]json.RawMessage
+		_ = json.NewDecoder(r.Body).Decode(&raw)
+		var method string
+		_ = json.Unmarshal(raw["method"], &method)
+		if method == "notifications/initialized" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		var id int64
+		_ = json.Unmarshal(raw["id"], &id)
+		result := json.RawMessage(`{"tools":[]}`)
+		_ = json.NewEncoder(w).Encode(mcpResponse{JSONRPC: "2.0", ID: id, Result: result})
+	}))
+	defer server.Close()
+
+	// Reconnect using the same server ID as an HTTP transport this time
+	// (ConnectServer only rejects duplicates while still connected).
+	goodCfg := MCPServerConfig{ID: badCfg.ID, Transport: "http", URL: server.URL}
+	if err := host.ConnectServer(context.Background(), goodCfg); err != nil {
+		t.Fatalf("expected reconnect to succeed: %v", err)
+	}
+	select {
+	case ev := <-recoveredSub:
+		if ev.AgentID != badCfg.ID {
+			t.Fatalf("expected recovered event for %s, got %s", badCfg.ID, ev.AgentID)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected EventMCPServerRecovered to be published after successful reconnect")
+	}
+}
+
+func listServersWithPersistence(t *testing.T, host *MCPHostEngine, serverID string) (MCPServerStatus, error) {
+	t.Helper()
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		return MCPServerStatus{}, err
+	}
+	defer db.Close()
+	if err := host.SetPersistence(db, nil); err != nil {
+		return MCPServerStatus{}, err
+	}
+	if _, err := db.Exec("INSERT INTO mcp_servers (id, config_json, enabled, updated_at) VALUES (?, '{}', 1, ?)", serverID, time.Now().UTC()); err != nil {
+		return MCPServerStatus{}, err
+	}
+	statuses, err := host.ListServers(context.Background())
+	if err != nil {
+		return MCPServerStatus{}, err
+	}
+	for _, s := range statuses {
+		if s.ID == serverID {
+			return s, nil
+		}
+	}
+	return MCPServerStatus{}, fmt.Errorf("server %s not found in ListServers", serverID)
+}
+
+func TestMCPClientInvokesOnCloseForUnexpectedDisconnectButNotForDeliberateClose(t *testing.T) {
+	// Unexpected disconnect: the underlying stdout pipe closes on its own
+	// (simulating the MCP server process crashing), readLoop should invoke
+	// onClose exactly once.
+	t.Run("unexpected", func(t *testing.T) {
+		pr, pw := io.Pipe()
+		client := &MCPClient{
+			stdout:  bufio.NewReader(pr),
+			pending: make(map[int64]chan mcpResponse),
+		}
+		called := make(chan error, 1)
+		client.SetOnClose(func(err error) { called <- err })
+		go client.readLoop()
+
+		_ = pw.Close() // simulate the process's stdout closing unexpectedly
+
+		select {
+		case err := <-called:
+			if err == nil {
+				t.Fatal("expected a non-nil error describing the unexpected disconnect")
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("expected onClose to be invoked after unexpected stdout close")
+		}
+	})
+
+	// Deliberate close: calling Close() should suppress the onClose callback
+	// entirely, since the disconnect was operator-initiated.
+	t.Run("deliberate", func(t *testing.T) {
+		pr, pw := io.Pipe()
+		defer pw.Close()
+		client := &MCPClient{
+			stdout:  bufio.NewReader(pr),
+			stdin:   pw,
+			pending: make(map[int64]chan mcpResponse),
+		}
+		called := make(chan error, 1)
+		client.SetOnClose(func(err error) { called <- err })
+		go client.readLoop()
+
+		if err := client.Close(); err != nil {
+			t.Fatalf("Close returned error: %v", err)
+		}
+		_ = pr.Close() // now let readLoop observe the close so it can exit
+
+		select {
+		case err := <-called:
+			t.Fatalf("onClose should not fire after a deliberate Close(), got: %v", err)
+		case <-time.After(300 * time.Millisecond):
+			// expected: no callback fired
+		}
+	})
+}
+
+func TestMCPHostRemovesDeadClientAndPublishesErrorOnUnexpectedDisconnect(t *testing.T) {
+	eventBus := bus.NewEventBus()
+	errSub := eventBus.Subscribe(bus.EventMCPServerError)
+
+	registry := NewToolRegistry(nil)
+	host := NewMCPHostEngine(registry)
+	host.SetEventBus(eventBus)
+
+	pr, pw := io.Pipe()
+	client := &MCPClient{
+		config:  MCPServerConfig{ID: "dying_server"},
+		stdout:  bufio.NewReader(pr),
+		pending: make(map[int64]chan mcpResponse),
+	}
+	host.mu.Lock()
+	host.clients["dying_server"] = client
+	serverID := "dying_server"
+	client.SetOnClose(func(closeErr error) {
+		host.mu.Lock()
+		if host.clients[serverID] == client {
+			delete(host.clients, serverID)
+		}
+		host.recordMCPErrorLocked(serverID, serverID, closeErr)
+		host.mu.Unlock()
+	})
+	host.mu.Unlock()
+	go client.readLoop()
+
+	_ = pw.Close() // simulate the MCP server process dying
+
+	select {
+	case ev := <-errSub:
+		if ev.AgentID != serverID {
+			t.Fatalf("expected error event for %s, got %s", serverID, ev.AgentID)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected EventMCPServerError after unexpected stdio disconnect")
+	}
+
+	// Give the async onClose handler a moment to remove the dead entry.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		host.mu.RLock()
+		_, stillPresent := host.clients[serverID]
+		host.mu.RUnlock()
+		if !stillPresent {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("expected dead client to be removed from host.clients after unexpected disconnect")
 }
 
 func TestMCPHostRejectsInvalidConfiguration(t *testing.T) {

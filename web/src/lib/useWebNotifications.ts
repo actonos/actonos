@@ -1,8 +1,14 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRealtime } from '@/components/providers/RealtimeProvider';
 import type { NotificationItem } from '@/lib/types';
 
 export type BrowserNotificationPermission = 'default' | 'granted' | 'denied' | 'unsupported';
+
+// Shared across every useWebNotifications() instance (NotificationBell,
+// NotificationsPage, etc. all mount this hook simultaneously). Without a
+// module-level dedup key, each instance keeps its own lastNotifiedIdRef and
+// independently fires a desktop notification for the same realtime event.
+let lastDesktopNotificationId: string | null = null;
 
 export function useWebNotifications() {
   const [permission, setPermission] = useState<BrowserNotificationPermission>(() => {
@@ -13,7 +19,6 @@ export function useWebNotifications() {
   });
 
   const { snapshot } = useRealtime();
-  const lastNotifiedIdRef = useRef<string | null>(null);
 
   const requestPermission = useCallback(async (): Promise<BrowserNotificationPermission> => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -58,11 +63,11 @@ export function useWebNotifications() {
   // Trigger browser push when a new unread notification arrives via Realtime WebSocket
   useEffect(() => {
     const latest = snapshot?.latest_notification;
-    if (!latest || latest.is_read || latest.id === lastNotifiedIdRef.current) {
+    if (!latest || latest.is_read || latest.id === lastDesktopNotificationId) {
       return;
     }
 
-    lastNotifiedIdRef.current = latest.id;
+    lastDesktopNotificationId = latest.id;
     if (permission === 'granted') {
       showDesktopNotification(latest);
     }

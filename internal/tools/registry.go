@@ -162,6 +162,59 @@ func DeniedTools(ctx context.Context) []string {
 	return names
 }
 
+type allowedToolsContextKey struct{}
+
+// WithAllowedTools hard-restricts execution to exactly these tools for the
+// lifetime of this context. Unlike WithDeniedTools (a blocklist), this is an
+// allowlist: nesting calls can only narrow the set further (intersection),
+// never broaden it. Autonomous routine loops (e.g. the heartbeat's zero-noise
+// cycle) use this so a model cannot go off-script and call tools nobody asked
+// it to use (browser navigation, channel notify, cron scheduling, ...).
+func WithAllowedTools(ctx context.Context, names ...string) context.Context {
+	if len(names) == 0 {
+		return ctx
+	}
+	allowed := map[string]bool{}
+	for _, name := range names {
+		allowed[name] = true
+	}
+	if existing, ok := ctx.Value(allowedToolsContextKey{}).(map[string]bool); ok {
+		narrowed := map[string]bool{}
+		for name := range allowed {
+			if existing[name] {
+				narrowed[name] = true
+			}
+		}
+		allowed = narrowed
+	}
+	return context.WithValue(ctx, allowedToolsContextKey{}, allowed)
+}
+
+// IsToolAllowedInContext reports whether a tool passes the context allowlist.
+// With no allowlist set, every tool is allowed (subject to IsToolDenied).
+func IsToolAllowedInContext(ctx context.Context, name string) bool {
+	allowed, ok := ctx.Value(allowedToolsContextKey{}).(map[string]bool)
+	if !ok {
+		return true
+	}
+	return allowed[name]
+}
+
+// AllowedTools lists the tools permitted in this context, or nil when
+// unrestricted.
+func AllowedTools(ctx context.Context) []string {
+	allowed, ok := ctx.Value(allowedToolsContextKey{}).(map[string]bool)
+	if !ok {
+		return nil
+	}
+	names := make([]string, 0, len(allowed))
+	for name := range allowed {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
 // TraceIDFromContext retrieves the current trace identifier.
 func TraceIDFromContext(ctx context.Context) string {
 	value, _ := ctx.Value(traceIDContextKey).(string)
@@ -341,6 +394,9 @@ func (r *ToolRegistry) Execute(ctx context.Context, agentID, name string, inputJ
 	if IsToolDenied(ctx, name) {
 		return nil, fmt.Errorf("%w: agent=%s tool=%s", ErrToolDeniedInContext, agentID, name)
 	}
+	if !IsToolAllowedInContext(ctx, name) {
+		return nil, fmt.Errorf("%w: agent=%s tool=%s", ErrToolDeniedInContext, agentID, name)
+	}
 
 	tool, err := r.Get(name)
 	if err != nil {
@@ -400,7 +456,10 @@ func (r *ToolRegistry) Execute(ctx context.Context, agentID, name string, inputJ
 			if r.auditLogger != nil {
 				r.auditLogger.LogAudit(traceID, agentID, name, riskLevel, "Blocked", ErrApprovalRequired.Error(), 0)
 			}
-			if r.bus != nil {
+			// Only publish the bus event (and therefore surface a new web
+			// notification) for a genuinely new approval. A reused pending
+			// approval means the operator was already asked once.
+			if r.bus != nil && request.IsNew() {
 				r.bus.Publish(bus.NewEvent("approval:required", agentID, map[string]any{
 					"approval": *request,
 				}))

@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/actonos/actonos/internal/bus"
 	"github.com/actonos/actonos/internal/llm"
@@ -59,11 +60,30 @@ type HeartbeatDaemon struct {
 	enabled       bool
 	targetChannel string
 	targetAccount string
+	ackMaxChars   int
+	activeStart   string
+	activeEnd     string
+	activeTZ      string
 	stopCh        chan struct{}
 	triggerCh     chan struct{}
 	lastRun       time.Time
 	running       bool
+	stallTracker  map[string]taskStallState
 }
+
+// taskStallState tracks in-memory (non-persisted) consecutive-cycle progress
+// for a mission task so a task that never advances can be flagged for
+// operator attention instead of silently retrying forever every cycle.
+type taskStallState struct {
+	lastProgress  int
+	stalledCycles int
+	notified      bool
+}
+
+// maxStalledCyclesBeforeEscalation is how many consecutive heartbeat cycles a
+// task may report unchanged progress before the daemon escalates a one-time
+// stall notice to the operator instead of retrying silently forever.
+const maxStalledCyclesBeforeEscalation = 3
 
 // NewHeartbeatDaemon creates a new HeartbeatDaemon.
 func NewHeartbeatDaemon(
@@ -90,8 +110,10 @@ func NewHeartbeatDaemon(
 		enabled:       true,
 		targetChannel: "all",
 		targetAccount: "all",
+		ackMaxChars:   defaultAckMaxChars,
 		stopCh:        make(chan struct{}),
 		triggerCh:     make(chan struct{}, 1),
+		stallTracker:  make(map[string]taskStallState),
 	}
 }
 
@@ -137,6 +159,12 @@ func (h *HeartbeatDaemon) SyncConfig(cfg HeartbeatConfig) {
 	if cfg.TargetAccountID != "" {
 		h.targetAccount = cfg.TargetAccountID
 	}
+	if cfg.AckMaxChars > 0 {
+		h.ackMaxChars = cfg.AckMaxChars
+	}
+	h.activeStart = cfg.ActiveHoursStart
+	h.activeEnd = cfg.ActiveHoursEnd
+	h.activeTZ = cfg.ActiveHoursTimezone
 	h.mu.Unlock()
 
 	slog.Info("heartbeat daemon synchronized with config", "interval", h.interval.String(), "enabled", cfg.Enabled)
@@ -165,6 +193,12 @@ func (h *HeartbeatDaemon) Start(ctx context.Context) {
 			if cfg.TargetAccountID != "" {
 				h.targetAccount = cfg.TargetAccountID
 			}
+			if cfg.AckMaxChars > 0 {
+				h.ackMaxChars = cfg.AckMaxChars
+			}
+			h.activeStart = cfg.ActiveHoursStart
+			h.activeEnd = cfg.ActiveHoursEnd
+			h.activeTZ = cfg.ActiveHoursTimezone
 		}
 	}
 	h.mu.Unlock()
@@ -211,7 +245,7 @@ func (h *HeartbeatDaemon) loop(ctx context.Context) {
 			}
 
 			if enabled {
-				h.checkCycle(ctx)
+				h.checkCycle(ctx, false)
 			}
 		case <-ticker.C:
 			h.mu.RLock()
@@ -225,26 +259,50 @@ func (h *HeartbeatDaemon) loop(ctx context.Context) {
 			}
 
 			if enabled {
-				h.checkCycle(ctx)
+				h.checkCycle(ctx, false)
 			}
 		}
 	}
 }
 
-// TriggerManualPulse executes an immediate on-demand heartbeat pulse.
+// TriggerManualPulse executes an immediate on-demand heartbeat pulse. Unlike
+// scheduled/triggered cycles, a manual pulse always bypasses the trigger
+// cooldown and active-hours window because the operator explicitly asked
+// for it right now (mirrors OpenClaw's `system event --mode now`).
 func (h *HeartbeatDaemon) TriggerManualPulse(ctx context.Context) (*HeartbeatRun, error) {
 	slog.Info("manual heartbeat pulse triggered by user")
-	run := h.checkCycle(ctx)
+	run := h.checkCycle(ctx, true)
 	return run, nil
 }
 
-// checkCycle runs the autonomous cognitive heartbeat iteration.
-func (h *HeartbeatDaemon) checkCycle(ctx context.Context) *HeartbeatRun {
+// minTriggerGap coalesces trigger storms (e.g. a task mutation and an
+// approval decision firing TriggerWakeup within moments of each other) so a
+// full autonomous agent turn is not run once per event. Scheduled ticks and
+// manual pulses are never subject to this gap.
+const minTriggerGap = 15 * time.Second
+
+// checkCycle runs the autonomous cognitive heartbeat iteration. manual is
+// true only for operator-initiated pulses (TriggerManualPulse); it bypasses
+// the trigger cooldown and active-hours window.
+func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) *HeartbeatRun {
 	h.executionMu.Lock()
 	defer h.executionMu.Unlock()
 
+	now := time.Now().UTC()
 	h.mu.Lock()
-	h.lastRun = time.Now().UTC()
+	if !manual {
+		if !h.lastRun.IsZero() && now.Sub(h.lastRun) < minTriggerGap {
+			h.mu.Unlock()
+			slog.Debug("heartbeat cycle skipped: trigger cooldown active", "since_last_run", now.Sub(h.lastRun).String())
+			return nil
+		}
+		if !h.withinActiveHoursLocked(now) {
+			h.mu.Unlock()
+			slog.Debug("heartbeat cycle skipped: outside configured active hours")
+			return nil
+		}
+	}
+	h.lastRun = now
 	h.mu.Unlock()
 
 	primaryAgentID := "agent_system_core"
@@ -307,16 +365,31 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context) *HeartbeatRun {
 				if pending[i].CreatedBy == "system" {
 					continue
 				}
+				candidateAgent := pending[i].AssignedAgentID
+				if candidateAgent == "" || candidateAgent == "auto" {
+					candidateAgent = primaryAgentID
+				}
+				// Only skip launching THIS task if an approval is pending for
+				// its own assigned agent — an unrelated approval elsewhere in
+				// the system must never block the entire backlog from making
+				// progress.
 				if h.approvalMgr != nil {
 					pendingApprovals, err := h.approvalMgr.List(ctx, "pending", 50)
 					if err == nil && len(pendingApprovals) > 0 {
-						slog.Info("pending approvals exist in system; waiting for resolution before launching new tasks", "count", len(pendingApprovals))
-					} else {
-						activeTask = &pending[i]
+						isBlockedByApproval := false
+						for _, pa := range pendingApprovals {
+							if pa.AgentID == candidateAgent {
+								isBlockedByApproval = true
+								break
+							}
+						}
+						if isBlockedByApproval {
+							slog.Info("task launch deferred: its assigned agent has a pending approval", "task_id", pending[i].ID, "agent_id", candidateAgent)
+							continue
+						}
 					}
-				} else {
-					activeTask = &pending[i]
 				}
+				activeTask = &pending[i]
 				if activeTask != nil {
 					break
 				}
@@ -353,6 +426,27 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context) *HeartbeatRun {
 		if activeTask.Status == "pending" {
 			activeTask.Status = "in_progress"
 			_ = h.taskMgr.UpdateTask(ctx, *activeTask)
+		}
+
+		// Guard against a silent, invisible failure mode: the model can never
+		// call the notify tool itself (denied below), so delivery relies
+		// entirely on the task's own TargetChannel. If the operator's request
+		// clearly asks to notify/send somewhere but the task is configured
+		// with TargetChannel=="none", the completed work would otherwise
+		// vanish with no visible trace. Warn loudly (once per task) so this
+		// misconfiguration is diagnosable instead of silently dropped.
+		if activeTask.TargetChannel == "none" && mentionsNotificationIntent(activeTask.Title+" "+activeTask.Description) {
+			h.mu.Lock()
+			state := h.stallTracker[activeTask.ID+":notify_misconfig"]
+			if !state.notified {
+				state.notified = true
+				h.stallTracker[activeTask.ID+":notify_misconfig"] = state
+				h.mu.Unlock()
+				slog.Warn("mission directive appears to request notification delivery but TargetChannel is 'none'; the result will not be delivered anywhere",
+					"task_id", activeTask.ID, "title", activeTask.Title)
+			} else {
+				h.mu.Unlock()
+			}
 		}
 
 		// 1. Resume or create task working session
@@ -411,6 +505,12 @@ CRITICAL INSTRUCTIONS:
 		// memories from deleted tasks from contaminating the current task context.
 		taskCtx := context.WithValue(ctx, "task_id", activeTask.ID)
 		taskCtx = context.WithValue(taskCtx, "suppress_episodic_memory", true)
+		taskCtx = context.WithValue(taskCtx, "heartbeat_headless_mode", true)
+		// Delivery is the runtime's responsibility (the mission coordinator routes
+		// the final response to activeTask.TargetChannel below); the model must
+		// never call the notify tool itself, and must never create/alter recurring
+		// automations as a side effect of executing a one-off mission.
+		taskCtx = tools.WithDeniedTools(taskCtx, "native_channel_notify", "channel_notify", "native_cron_schedule")
 		resp, execErr := h.engine.ExecuteAutonomousGoal(taskCtx, assignedAgent, prompt, history)
 		if execErr != nil {
 			var approvalErr *tools.ApprovalRequiredError
@@ -473,6 +573,21 @@ CRITICAL INSTRUCTIONS:
 				run.Summary = fmt.Sprintf("Advanced mission '%s' to %d%%. %s", activeTask.Title, activeTask.Progress, shortLog)
 			}
 
+			// Stall detection: a task must not silently retry forever if it
+			// never actually advances. Completed/blocked tasks clear their
+			// stall state (an explicit terminal outcome, not a stall); an
+			// in_progress task whose Progress hasn't changed across several
+			// consecutive cycles gets a one-time escalation notice appended
+			// so the operator can intervene instead of the daemon spending a
+			// full model turn every cycle to make zero progress.
+			stalled, stallCycles := h.trackTaskStall(activeTask.ID, activeTask.Status, activeTask.Progress)
+			if stalled && activeTask.Status == "in_progress" {
+				stallNote := fmt.Sprintf(" [STALL WARNING: no progress advancement across %d consecutive heartbeat cycles — operator review recommended]", stallCycles)
+				activeTask.ExecutionLog += stallNote
+				run.Summary += stallNote
+				slog.Warn("mission task stalled: no progress across multiple heartbeat cycles", "task_id", activeTask.ID, "stalled_cycles", stallCycles, "progress", activeTask.Progress)
+			}
+
 			if h.taskMgr != nil {
 				_ = h.taskMgr.UpdateTask(ctx, *activeTask)
 			}
@@ -521,10 +636,13 @@ CRITICAL INSTRUCTIONS:
 
 	// CASE B: Routine System Health & Zero-Noise Evaluation
 	routineCtx := context.WithValue(ctx, "suppress_episodic_memory", true)
-	// Recurring schedules are explicit operator automations, never work inferred
-	// by an unattended heartbeat. Exclude the tool from the LLM schema and keep a
-	// registry-level denial as a defense in depth boundary.
-	routineCtx = tools.WithDeniedTools(routineCtx, "native_cron_schedule")
+	routineCtx = context.WithValue(routineCtx, "heartbeat_headless_mode", true)
+	// Recurring schedules and outbound notifications are runtime/operator
+	// concerns, never actions an unattended routine heartbeat should take
+	// itself: cron changes must always be an explicit operator request
+	// (never inferred from a directive), and delivery of the reply below is
+	// handled automatically by the daemon via the configured target channel.
+	routineCtx = tools.WithDeniedTools(routineCtx, "native_cron_schedule", "native_channel_notify", "channel_notify")
 	backlogSummary := "All previous backlog missions are COMPLETED. There are ZERO pending or in-progress tasks."
 	if h.taskMgr != nil {
 		completedList, _ := h.taskMgr.ListTasks(ctx, "completed", "")
@@ -532,23 +650,27 @@ CRITICAL INSTRUCTIONS:
 			backlogSummary = fmt.Sprintf("All %d previous backlog missions have been COMPLETED. There are 0 active or pending tasks in backlog.", len(completedList))
 		}
 	}
-	prompt := fmt.Sprintf(`[AUTONOMOUS HEARTBEAT CYCLE — MANDATORY DIRECTIVE EXECUTION]
+	// Prompt structure follows OpenClaw's documented heartbeat contract:
+	// https://docs.openclaw.ai/vi/gateway/heartbeat — read/execute standing
+	// directives strictly, never infer or repeat old work, and reply with the
+	// bare acknowledgement token when nothing needs attention.
+	prompt := fmt.Sprintf(`[AUTONOMOUS HEARTBEAT CYCLE]
 Current UTC Time: %s
 Backlog Status: %s
 
 ═══════════════════════════════════════════════════
-STANDING DIRECTIVES (HIGHEST PRIORITY — MUST EXECUTE):
+STANDING DIRECTIVES (HEARTBEAT.md — HIGHEST PRIORITY):
 %s
 ═══════════════════════════════════════════════════
 
-ABSOLUTE RULES:
-1. You MUST execute the standing directives above on EVERY heartbeat cycle. They are your primary mission. Do NOT skip, summarize, or replace them with a status message.
-2. ALL past missions are finished. DO NOT restart or reference any old completed tasks.
-3. DO NOT reply with generic greetings like "Hey, I'm here and ready to roll" or "Everything is nominal". Execute the directive action.
-4. DO NOT call 'native_channel_notify' tool — the system will automatically route your response to the configured channels.
-5. If the standing directive asks you to send/create/generate content, produce that content directly in your response.
-6. NEVER create, change, list, or delete cron schedules during a heartbeat. Recurring automations require an explicit operator request outside this routine; never infer one from a directive or prior conversation.
-7. Only reply 'HEARTBEAT_OK' if the standing directives contain ZERO actionable instructions AND system health is nominal.`,
+Read the standing directives above and follow them strictly. Do not infer or repeat old tasks from prior heartbeat cycles or chats — all past missions are finished.
+
+RULES:
+1. Execute only what the standing directives above actually ask for. Do not invent, assume, or expand scope beyond them.
+2. Do NOT call 'native_channel_notify' — delivery to the configured channel is handled automatically by the system after this response.
+3. NEVER create, change, list, or delete cron/scheduled jobs during a heartbeat. Recurring automations require an explicit operator request outside this routine.
+4. If nothing needs attention (directives are empty, already satisfied, or system health is nominal), reply with exactly: HEARTBEAT_OK — and nothing else of substance. Do not include HEARTBEAT_OK anywhere in an actual alert reply.
+5. If there IS something worth surfacing, reply with the alert content directly (no preamble, no meta-commentary like "notification sent").`,
 		time.Now().UTC().Format(time.RFC3339),
 		backlogSummary,
 		standingDirectives,
@@ -577,13 +699,31 @@ ABSOLUTE RULES:
 			_ = h.sessionMgr.SaveMessage(ctx, hbConvID, primaryAgentID, "assistant", resp.Content, resp.ToolCalls)
 		}
 
-		if strings.Contains(trimmed, "HEARTBEAT_OK") || trimmed == "" {
+		h.mu.RLock()
+		ackMaxChars := h.ackMaxChars
+		h.mu.RUnlock()
+		isAck, alertText := classifyHeartbeatResponse(trimmed, ackMaxChars)
+
+		// Weaker/faster models sometimes ignore the HEARTBEAT_OK contract
+		// entirely and free-associate a conversational greeting or capability
+		// menu instead of executing the standing directive or replying with
+		// the ack token. Since the daemon never delivers such output as a
+		// legitimate result (the model never called a tool and produced no
+		// substantive content), treat it as noise rather than spamming the
+		// user with a notification every cycle.
+		if !isAck && len(resp.ToolCalls) == 0 && looksLikeIdleChatter(alertText) {
+			slog.Warn("heartbeat produced an off-topic idle response instead of executing the directive; suppressing delivery",
+				"agent_id", primaryAgentID, "content_preview", shortSummary(alertText, 200))
+			isAck = true
+		}
+
+		if isAck {
 			run.Status = "ok"
 			run.Summary = "System nominal. Zero tasks pending. No proactive notification required."
 			slog.Debug("heartbeat nominal (zero noise)", "agent_id", primaryAgentID)
 		} else {
 			run.Status = "action_taken"
-			run.Summary = shortSummary(trimmed, 250)
+			run.Summary = shortSummary(alertText, 250)
 			slog.Info("heartbeat performed proactive action", "agent_id", primaryAgentID)
 
 			alreadyNotified := false
@@ -594,9 +734,9 @@ ABSOLUTE RULES:
 				}
 			}
 
-			isRedundantToolReport := strings.HasPrefix(trimmed, "The notification has been successfully sent") ||
-				strings.HasPrefix(trimmed, "Successfully dispatched proactive notification") ||
-				strings.HasPrefix(trimmed, "Notification sent")
+			isRedundantToolReport := strings.HasPrefix(alertText, "The notification has been successfully sent") ||
+				strings.HasPrefix(alertText, "Successfully dispatched proactive notification") ||
+				strings.HasPrefix(alertText, "Notification sent")
 
 			h.mu.RLock()
 			targetChannel := h.targetChannel
@@ -606,7 +746,7 @@ ABSOLUTE RULES:
 				h.eventBus.Publish(bus.NewEvent(bus.EventAgentActionDone, primaryAgentID, map[string]any{
 					"type":              "proactive_cron_notification",
 					"job_name":          "Heartbeat Pulse",
-					"content":           cleanFullContent(trimmed),
+					"content":           cleanFullContent(alertText),
 					"target_channel":    targetChannel,
 					"target_account_id": targetAccount,
 					"target_recipient":  "",
@@ -617,6 +757,207 @@ ABSOLUTE RULES:
 
 	h.recordRun(*run)
 	return run
+}
+
+// heartbeatOKToken is OpenClaw's canonical acknowledgement token: when it
+// appears at the very start or end of a routine heartbeat reply (with a
+// short enough remainder), the cycle is treated as silent/nominal and
+// nothing is delivered to the user.
+// See https://docs.openclaw.ai/vi/gateway/heartbeat.
+const heartbeatOKToken = "HEARTBEAT_OK"
+
+// defaultAckMaxChars bounds how much leading/trailing commentary may
+// accompany HEARTBEAT_OK before a reply is treated as a real alert instead of
+// a silent acknowledgement (OpenClaw default: 300).
+const defaultAckMaxChars = 300
+
+// classifyHeartbeatResponse implements OpenClaw's heartbeat response
+// contract: HEARTBEAT_OK is only treated as an acknowledgement when it
+// appears at the start or end of the trimmed reply AND the remaining content
+// is at most ackMaxChars long. A token appearing in the middle of the reply
+// is not special-cased and the whole reply is treated as an alert. Returns
+// (isAck, alertText) — alertText is only meaningful when isAck is false.
+func classifyHeartbeatResponse(content string, ackMaxChars int) (bool, string) {
+	trimmed := strings.TrimSpace(content)
+	if trimmed == "" {
+		return true, ""
+	}
+	if ackMaxChars <= 0 {
+		ackMaxChars = defaultAckMaxChars
+	}
+
+	if rest, ok := stripBoundaryToken(trimmed, heartbeatOKToken, true); ok && len(rest) <= ackMaxChars {
+		return true, ""
+	}
+	if rest, ok := stripBoundaryToken(trimmed, heartbeatOKToken, false); ok && len(rest) <= ackMaxChars {
+		return true, ""
+	}
+	return false, trimmed
+}
+
+// notificationIntentKeywords are common Vietnamese/English phrasings a user
+// uses when they expect a task's result to be delivered somewhere (a chat
+// channel, Telegram, etc). Used only to decide whether to WARN about a
+// TargetChannel=="none" misconfiguration — never to infer or override the
+// actual delivery target, which always remains an explicit structured field.
+var notificationIntentKeywords = []string{
+	"gửi thông báo", "gửi tới", "gửi đến", "báo cho", "thông báo cho", "gửi cho",
+	"send to", "send it to", "notify", "send a message", "send this to",
+}
+
+// mentionsNotificationIntent reports whether text appears to ask for the
+// result to be delivered/sent somewhere.
+func mentionsNotificationIntent(text string) bool {
+	lower := strings.ToLower(text)
+	for _, kw := range notificationIntentKeywords {
+		if strings.Contains(lower, kw) {
+			return true
+		}
+	}
+	return false
+}
+
+// idleChatterPatterns match common conversational greeting / capability-menu
+// / "how can I help" openers that a model sometimes free-associates instead
+// of following the heartbeat directive-execution-or-HEARTBEAT_OK contract.
+// These are unambiguous signs of an off-topic, non-substantive reply: a real
+// alert never opens by greeting the user or asking what they need.
+var idleChatterPatterns = []string{
+	"chào bieber", "chào anh", "chào bạn", "xin chào",
+	"tôi đã sẵn sàng", "tôi đang sẵn sàng", "em đã sẵn sàng", "sẵn sàng hỗ trợ",
+	"bạn cần tôi hỗ trợ", "bạn muốn tôi hỗ trợ", "anh cần em hỗ trợ", "cần hỗ trợ gì",
+	"how can i help", "how can i assist", "what would you like", "i'm ready to help",
+	"i am ready to help", "ready to assist", "what can i do for you",
+}
+
+// looksLikeIdleChatter reports whether content is a conversational
+// greeting/self-introduction with no substantive directive execution result
+// (numbers, findings, errors, etc). Used only as a last-resort safety net
+// when the model neither called a tool nor emitted the HEARTBEAT_OK
+// acknowledgement — such replies must never be forwarded as a user-facing
+// alert, since they answer nobody's question and report nothing real.
+func looksLikeIdleChatter(content string) bool {
+	lower := strings.ToLower(strings.TrimSpace(content))
+	if lower == "" {
+		return false
+	}
+	// Only consider the opening of the reply: a greeting used as a genuine
+	// preamble deep inside a real report is not what this guards against.
+	head := lower
+	if len(head) > 120 {
+		head = head[:120]
+	}
+	for _, pat := range idleChatterPatterns {
+		if strings.Contains(head, pat) {
+			return true
+		}
+	}
+	return false
+}
+
+// stripBoundaryToken removes token from the start (prefix=true) or end
+// (prefix=false) of s, requiring a word boundary so e.g. "HEARTBEAT_OKAY"
+// does not falsely match "HEARTBEAT_OK". Returns the remaining trimmed text
+// and whether the token was actually found at that boundary.
+func stripBoundaryToken(s, token string, prefix bool) (string, bool) {
+	if prefix {
+		if !strings.HasPrefix(s, token) {
+			return "", false
+		}
+		if len(s) > len(token) && isTokenBoundaryRune(rune(s[len(token)])) {
+			return "", false
+		}
+		return strings.TrimSpace(s[len(token):]), true
+	}
+	if !strings.HasSuffix(s, token) {
+		return "", false
+	}
+	if len(s) > len(token) && isTokenBoundaryRune(rune(s[len(s)-len(token)-1])) {
+		return "", false
+	}
+	return strings.TrimSpace(s[:len(s)-len(token)]), true
+}
+
+func isTokenBoundaryRune(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'
+}
+
+// parseHHMM parses an "HH:MM" clock time into minutes-since-midnight,
+// accepting "24:00" as the end of a day.
+func parseHHMM(v string) (int, bool) {
+	parts := strings.SplitN(v, ":", 2)
+	if len(parts) != 2 {
+		return 0, false
+	}
+	hh, errH := strconv.Atoi(parts[0])
+	mm, errM := strconv.Atoi(parts[1])
+	if errH != nil || errM != nil || hh < 0 || hh > 24 || mm < 0 || mm > 59 || (hh == 24 && mm != 0) {
+		return 0, false
+	}
+	return hh*60 + mm, true
+}
+
+// trackTaskStall updates the in-memory (non-persisted, resets on restart)
+// per-task progress tracker and reports whether this task has now reached
+// maxStalledCyclesBeforeEscalation consecutive cycles with unchanged
+// progress. A terminal status (anything other than in_progress) clears the
+// tracked state entirely, since a completed/blocked/failed outcome is an
+// explicit result, not a stall. Only escalates once per stall streak.
+func (h *HeartbeatDaemon) trackTaskStall(taskID, status string, progress int) (escalate bool, cycles int) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if status != "in_progress" {
+		delete(h.stallTracker, taskID)
+		return false, 0
+	}
+
+	state := h.stallTracker[taskID]
+	if progress > state.lastProgress {
+		state = taskStallState{lastProgress: progress}
+	} else {
+		state.stalledCycles++
+	}
+	h.stallTracker[taskID] = state
+
+	if state.stalledCycles >= maxStalledCyclesBeforeEscalation && !state.notified {
+		state.notified = true
+		h.stallTracker[taskID] = state
+		return true, state.stalledCycles
+	}
+	return false, state.stalledCycles
+}
+
+// withinActiveHoursLocked reports whether now falls inside the configured
+// active-hours window. Must be called with h.mu already held. When no window
+// is configured, heartbeat runs 24/7 (OpenClaw's default). An explicit
+// zero-width window (start == end) always evaluates to outside the window.
+func (h *HeartbeatDaemon) withinActiveHoursLocked(now time.Time) bool {
+	if h.activeStart == "" && h.activeEnd == "" {
+		return true
+	}
+	startMin, okS := parseHHMM(h.activeStart)
+	endMin, okE := parseHHMM(h.activeEnd)
+	if !okS || !okE {
+		// Misconfigured window: fail open rather than silently going quiet forever.
+		return true
+	}
+	if startMin == endMin {
+		return false
+	}
+	loc := time.UTC
+	if h.activeTZ != "" {
+		if l, err := time.LoadLocation(h.activeTZ); err == nil {
+			loc = l
+		}
+	}
+	local := now.In(loc)
+	nowMin := local.Hour()*60 + local.Minute()
+	if startMin < endMin {
+		return nowMin >= startMin && nowMin < endMin
+	}
+	// Wrap-around window (e.g. 22:00-06:00).
+	return nowMin >= startMin || nowMin < endMin
 }
 
 func cleanFullContent(content string) string {

@@ -315,6 +315,13 @@ export interface HeartbeatConfigData {
   target_account_id: string;
   auto_delegate: boolean;
   zero_noise: boolean;
+  /** Max characters allowed to accompany HEARTBEAT_OK before a reply is treated as a real alert (default 300). */
+  ack_max_chars?: number;
+  /** Daily HH:MM window (e.g. "09:00") restricting routine (non-manual) pulses. Leave both empty to run 24/7. */
+  active_hours_start?: string;
+  active_hours_end?: string;
+  /** IANA timezone name for active_hours_start/end; defaults to the server's local timezone. */
+  active_hours_timezone?: string;
 }
 
 export interface HeartbeatRun {

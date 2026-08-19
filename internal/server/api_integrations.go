@@ -761,9 +761,30 @@ func (s *Server) handleListAllChannelAccounts(w http.ResponseWriter, r *http.Req
 	all = append(all, dc...)
 	all = append(all, wa...)
 
+	// Attach live runtime health (connected/last error) so the Channels UI
+	// can explain why an account isn't working instead of just showing it
+	// silently absent, without requiring a separate poll/notification.
+	var statuses map[string]channels.AccountStatus
+	if s.channelMgr != nil {
+		statuses = s.channelMgr.GetAccountStatuses()
+	}
+	type accountWithStatus struct {
+		channels.ChannelAccount
+		Status *channels.AccountStatus `json:"status,omitempty"`
+	}
+	enriched := make([]accountWithStatus, 0, len(all))
+	for _, acc := range all {
+		entry := accountWithStatus{ChannelAccount: acc}
+		if st, ok := statuses[acc.ID]; ok {
+			stCopy := st
+			entry.Status = &stCopy
+		}
+		enriched = append(enriched, entry)
+	}
+
 	s.respondJSON(w, http.StatusOK, map[string]any{
-		"accounts": all,
-		"count":    len(all),
+		"accounts": enriched,
+		"count":    len(enriched),
 	})
 }
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -32,6 +33,7 @@ type TelegramAdapter struct {
 	lastChatID     string
 	chatIDs        map[string]bool
 	unauthNotified map[string]time.Time
+	pollFailing    bool // tracks whether the last getUpdates poll failed, to publish health events only on state transitions
 }
 
 // NewTelegramAdapter creates a new TelegramAdapter.
@@ -48,6 +50,34 @@ func NewTelegramAdapter(token string, bus *bus.EventBus, pairingMgr *PairingMana
 }
 
 func (t *TelegramAdapter) Name() string { return "telegram" }
+
+// reportPollHealth publishes a channel adapter health event only on a state
+// transition (first failure after being healthy, or first success after a
+// run of failures), so a persistently broken poll loop doesn't spam a new
+// event every ~500ms cycle while still surfacing the failure promptly.
+func (t *TelegramAdapter) reportPollHealth(pollErr error) {
+	t.mu.Lock()
+	wasFailing := t.pollFailing
+	t.pollFailing = pollErr != nil
+	accountID := t.accountID
+	t.mu.Unlock()
+
+	if t.bus == nil || accountID == "" {
+		return
+	}
+	if pollErr != nil && !wasFailing {
+		t.bus.Publish(bus.NewEvent(bus.EventChannelAdapterError, accountID, map[string]any{
+			"channel":    "telegram",
+			"account_id": accountID,
+			"error":      pollErr.Error(),
+		}))
+	} else if pollErr == nil && wasFailing {
+		t.bus.Publish(bus.NewEvent(bus.EventChannelAdapterRecovered, accountID, map[string]any{
+			"channel":    "telegram",
+			"account_id": accountID,
+		}))
+	}
+}
 
 // SetAPIBaseURL configures a custom Telegram API gateway or reverse proxy endpoint.
 func (t *TelegramAdapter) SetAPIBaseURL(url string) {
@@ -212,6 +242,7 @@ func (t *TelegramAdapter) fetchUpdates(ctx context.Context) {
 	if err != nil {
 		if ctx.Err() == nil {
 			slog.Warn("telegram getUpdates network error", "account_id", t.GetAccountID(), "error", err)
+			t.reportPollHealth(fmt.Errorf("network error: %w", err))
 		}
 		return
 	}
@@ -220,6 +251,7 @@ func (t *TelegramAdapter) fetchUpdates(ctx context.Context) {
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		slog.Warn("telegram getUpdates non-200 response", "account_id", t.GetAccountID(), "status", resp.StatusCode, "body", string(body))
+		t.reportPollHealth(fmt.Errorf("telegram API returned status %d", resp.StatusCode))
 		return
 	}
 
@@ -231,8 +263,10 @@ func (t *TelegramAdapter) fetchUpdates(ctx context.Context) {
 	var tgResp tgResponse
 	if err := json.Unmarshal(body, &tgResp); err != nil || !tgResp.OK {
 		slog.Warn("telegram getUpdates unmarshal failed or !OK", "account_id", t.GetAccountID(), "error", err, "body", string(body))
+		t.reportPollHealth(errors.New("telegram getUpdates returned an unexpected/failed response"))
 		return
 	}
+	t.reportPollHealth(nil)
 
 	for _, upd := range tgResp.Result {
 		t.mu.Lock()

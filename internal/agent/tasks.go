@@ -42,6 +42,19 @@ type HeartbeatConfig struct {
 	TargetAccountID string `json:"target_account_id"`
 	AutoDelegate    bool   `json:"auto_delegate"`
 	ZeroNoise       bool   `json:"zero_noise"`
+
+	// AckMaxChars bounds how much extra commentary may accompany HEARTBEAT_OK
+	// before a reply is treated as a real alert rather than a silent
+	// acknowledgement. Mirrors OpenClaw's heartbeat.ackMaxChars (default 300).
+	AckMaxChars int `json:"ack_max_chars,omitempty"`
+
+	// ActiveHoursStart/End restrict routine (non-manual) heartbeat cycles to a
+	// daily HH:MM window; outside the window, cycles are skipped until the
+	// next tick inside it. Leave both empty to run 24/7 (default). Mirrors
+	// OpenClaw's heartbeat.activeHours.
+	ActiveHoursStart    string `json:"active_hours_start,omitempty"`
+	ActiveHoursEnd      string `json:"active_hours_end,omitempty"`
+	ActiveHoursTimezone string `json:"active_hours_timezone,omitempty"`
 }
 
 // legacyDefaultHeartbeatDirective was persisted by earlier releases despite
@@ -442,6 +455,7 @@ func (tm *TaskManager) GetHeartbeatConfig(ctx context.Context) (*HeartbeatConfig
 		TargetAccountID: "all",
 		AutoDelegate:    true,
 		ZeroNoise:       true,
+		AckMaxChars:     300,
 	}
 
 	if tm.db != nil {

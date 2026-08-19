@@ -37,6 +37,19 @@ type ApprovalRequest struct {
 	ExpiresAt   time.Time       `json:"expires_at"`
 	DecidedAt   *time.Time      `json:"decided_at,omitempty"`
 	DecidedBy   string          `json:"decided_by,omitempty"`
+
+	// created is true only when Request() actually inserted a brand-new row,
+	// as opposed to returning an already-pending approval for the same exact
+	// action. Callers use IsNew() to avoid re-publishing "approval:required"
+	// bus events (and therefore duplicate web notifications) for a request
+	// the operator has already been asked about.
+	created bool
+}
+
+// IsNew reports whether this ApprovalRequest was just created by Request(),
+// as opposed to being an existing pending approval that was reused.
+func (a ApprovalRequest) IsNew() bool {
+	return a.created
 }
 
 // ApprovalRequiredError carries the durable approval identifier to callers.
@@ -129,6 +142,7 @@ func (m *ApprovalManager) Request(ctx context.Context, traceID, agentID, toolNam
 		Status:      "pending",
 		RequestedAt: now,
 		ExpiresAt:   now.Add(m.ttl),
+		created:     true,
 	}
 	_, err = m.db.ExecContext(ctx, `
 		INSERT INTO approvals (
