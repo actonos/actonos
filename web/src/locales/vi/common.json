@@ -43,7 +43,7 @@
   },
   "errorBoundary": {
     "title": "Đã xảy ra lỗi",
-    "description": "Đã xảy ra lỗi không mong muốn trong chế độ xem ứng dụng. Hạt nhân hệ thống vẫn an toàn.",
+    "description": "Đã xảy ra lỗi không mong muốn trong chế độ xem ứng dụng. Kernel hệ thống vẫn an toàn.",
     "home": "Trở về nhà",
     "reload": "Tải lại Xem"
   }

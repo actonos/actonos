@@ -13,8 +13,8 @@
     "channel": "Kênh thông báo",
     "account": "Tài khoản đích",
     "taskPlaceholder": "ví dụ. Xác minh sao lưu cơ sở dữ liệu và giới hạn lưu trữ",
-    "directivePlaceholder": "Hướng dẫn chi tiết cho đại lý tự trị. Điều phối viên sẽ thực hiện từng bước và duy trì bộ nhớ qua các chu kỳ xung.",
-    "autoCoordinator": "Điều phối viên tự động (Đại lý chính)",
+    "directivePlaceholder": "Hướng dẫn chi tiết cho agent tự trị. Điều phối viên sẽ thực hiện từng bước và duy trì bộ nhớ qua các chu kỳ xung.",
+    "autoCoordinator": "Điều phối viên tự động (Agent chính)",
     "allAccounts": "Tất cả tài khoản của {{channel}}",
     "cancel": "Hủy bỏ",
     "saving": "Đang lưu...",
@@ -28,8 +28,8 @@
     "directivesSaved": "Đã lưu chỉ thị"
   },
   "pulse": {
-    "triggering": "Đang kích hoạt nhịp",
-    "triggeredSuccess": "Đã kích hoạt xung nhịp",
+    "triggering": "Đang kích hoạt",
+    "triggeredSuccess": "Đã kích hoạt",
     "triggeredDescription": "Chu kỳ xung tự chủ đã được khởi chạy ngầm."
   },
   "governance": {
@@ -98,9 +98,9 @@
     "activeBacklog": "{{count}} tồn đọng hoạt động"
   },
   "actions": {
-    "refresh": "Làm cho khỏe lại",
+    "refresh": "Làm mới",
     "pulsing": "Đang đập...",
-    "triggerPulse": "Kích hoạt xung ngay bây giờ",
+    "triggerPulse": "Kích hoạt ngay",
     "newMission": "Nhiệm vụ mới",
     "detail": "Chi tiết",
     "chat": "Chi tiết",
@@ -114,12 +114,12 @@
     "total": "/ {{count}} tổng",
     "completed": "{{count}} đã hoàn thành",
     "heartbeat": "Heartbeat Pulse",
-    "interval": "Khoảng thời gian {{minutes}}m",
-    "last": "Cuối cùng: {{status}}",
+    "interval": "Thời gian {{minutes}}m",
+    "last": "Lần cuối hoạt động: {{status}}",
     "nominal": "danh nghĩa",
-    "coordinator": "Cốt lõi điều phối viên",
+    "coordinator": "Điều phối viên",
     "autoDelegate": "Swarm Tự động ủy quyền đang hoạt động",
-    "singleAgent": "Thực thi đại lý đơn lẻ"
+    "singleAgent": "Thực thi agent đơn lẻ"
   },
   "tabs": {
     "label": "Các phần nhiệm vụ",
@@ -148,7 +148,7 @@
     "save": "Lưu chỉ thị",
     "instructions": "Hướng dẫn thường trực (Markdown)",
     "placeholder": "# Chỉ thị thường trực\n- Liên tục xác minh tính toàn vẹn của cơ sở dữ liệu và lưu trữ cục bộ\n- Nếu mọi thứ đều bình thường, hãy trả lời HEARTBEAT_OK",
-    "interval": "Khoảng thời gian xung",
+    "interval": "Thời gian",
     "intervals": {
       "one": "Cứ sau 1 phút (Tần số cao)",
       "five": "Cứ sau 5 phút (Tiêu chuẩn được đề xuất)",
@@ -169,7 +169,7 @@
       "summary": "Tóm tắt & Dấu vết hành động"
     },
     "zeroNoise": "Không có tiếng ồn",
-    "empty": "Chưa có xung chạy nào được ghi lại. Nhấp vào \"Kích hoạt xung ngay\" để thực hiện một chu kỳ ngay lập tức."
+    "empty": "Chưa có xung chạy nào được ghi lại. Nhấp vào \"Kích hoạt ngay\" để thực hiện một chu kỳ ngay lập tức."
   },
   "delete": {
     "title": "Xóa nhiệm vụ",

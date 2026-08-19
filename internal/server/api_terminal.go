@@ -6,11 +6,56 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os/exec"
+	"runtime"
 	"strconv"
 	"time"
 
 	"github.com/coder/websocket"
 )
+
+// TerminalShellOption represents an available shell option on the host OS.
+type TerminalShellOption struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Available bool   `json:"available"`
+}
+
+// TerminalInfoResponse represents host operating system details and shell options.
+type TerminalInfoResponse struct {
+	OS              string                `json:"os"`
+	DefaultShell    string                `json:"default_shell"`
+	AvailableShells []TerminalShellOption `json:"available_shells"`
+}
+
+// handleTerminalInfo returns operating system details and supported shell list for the host.
+func (s *Server) handleTerminalInfo(w http.ResponseWriter, r *http.Request) {
+	resp := TerminalInfoResponse{
+		OS: runtime.GOOS,
+	}
+
+	if runtime.GOOS == "windows" {
+		resp.DefaultShell = "powershell"
+		resp.AvailableShells = []TerminalShellOption{
+			{ID: "powershell", Name: "PowerShell (ConPTY)", Available: true},
+			{ID: "cmd", Name: "Command Prompt (CMD)", Available: true},
+			{ID: "bash", Name: "WSL / Bash", Available: true},
+		}
+	} else {
+		resp.DefaultShell = "bash"
+		resp.AvailableShells = []TerminalShellOption{
+			{ID: "bash", Name: "Bash (/bin/bash)", Available: true},
+			{ID: "sh", Name: "POSIX Shell (/bin/sh)", Available: true},
+		}
+		if _, err := exec.LookPath("zsh"); err == nil {
+			resp.AvailableShells = append(resp.AvailableShells, TerminalShellOption{
+				ID: "zsh", Name: "Zsh (/bin/zsh)", Available: true,
+			})
+		}
+	}
+
+	s.respondJSON(w, http.StatusOK, resp)
+}
 
 // handleTerminalWebSocket handles interactive web terminal sessions via WebSocket.
 func (s *Server) handleTerminalWebSocket(w http.ResponseWriter, r *http.Request) {

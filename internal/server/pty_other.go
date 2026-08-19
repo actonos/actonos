@@ -4,54 +4,82 @@ package server
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/creack/pty"
 )
 
-type pipePTY struct {
-	cmd    *exec.Cmd
-	stdin  io.WriteCloser
-	stdout io.ReadCloser
+type posixPTY struct {
+	cmd  *exec.Cmd
+	ptmx *os.File
 }
 
-func (p *pipePTY) Read(buf []byte) (int, error) {
-	return p.stdout.Read(buf)
+func (p *posixPTY) Read(buf []byte) (int, error) {
+	return p.ptmx.Read(buf)
 }
 
-func (p *pipePTY) Write(buf []byte) (int, error) {
-	return p.stdin.Write(buf)
+func (p *posixPTY) Write(buf []byte) (int, error) {
+	return p.ptmx.Write(buf)
 }
 
-func (p *pipePTY) Close() error {
-	_ = p.stdin.Close()
-	if p.cmd.Process != nil {
+func (p *posixPTY) Close() error {
+	_ = p.ptmx.Close()
+	if p.cmd != nil && p.cmd.Process != nil {
 		_ = p.cmd.Process.Kill()
 		_ = p.cmd.Wait()
 	}
 	return nil
 }
 
-func (p *pipePTY) Resize(cols, rows int) error {
-	return nil
+func (p *posixPTY) Resize(cols, rows int) error {
+	if cols <= 0 {
+		cols = 120
+	}
+	if rows <= 0 {
+		rows = 30
+	}
+	return pty.Setsize(p.ptmx, &pty.Winsize{
+		Rows: uint16(rows),
+		Cols: uint16(cols),
+	})
 }
 
-func (p *pipePTY) Pid() int {
-	if p.cmd.Process != nil {
+func (p *posixPTY) Pid() int {
+	if p.cmd != nil && p.cmd.Process != nil {
 		return p.cmd.Process.Pid
 	}
 	return 0
 }
 
-// startPTY starts a shell process on non-Windows systems.
+// startPTY starts a true interactive pseudo-terminal on POSIX systems (Linux, macOS).
 func startPTY(shellType, workDir string, cols, rows int) (TerminalPTY, error) {
-	shellPath := "/bin/sh"
-	if strings.ToLower(strings.TrimSpace(shellType)) == "bash" {
-		if path, err := exec.LookPath("bash"); err == nil {
+	if cols <= 0 {
+		cols = 120
+	}
+	if rows <= 0 {
+		rows = 30
+	}
+
+	shellPath := "/bin/bash"
+	if path, err := exec.LookPath("bash"); err == nil {
+		shellPath = path
+	} else if path, err := exec.LookPath("sh"); err == nil {
+		shellPath = path
+	}
+
+	// Detect if a specific valid shell was requested
+	switch strings.ToLower(strings.TrimSpace(shellType)) {
+	case "sh":
+		if path, err := exec.LookPath("sh"); err == nil {
 			shellPath = path
 		}
-	} else {
+	case "zsh":
+		if path, err := exec.LookPath("zsh"); err == nil {
+			shellPath = path
+		}
+	case "bash":
 		if path, err := exec.LookPath("bash"); err == nil {
 			shellPath = path
 		}
@@ -59,7 +87,10 @@ func startPTY(shellType, workDir string, cols, rows int) (TerminalPTY, error) {
 
 	cmd := exec.Command(shellPath, "-l")
 	if workDir == "" {
-		workDir = "."
+		workDir = "/data"
+		if _, err := os.Stat(workDir); os.IsNotExist(err) {
+			workDir = "."
+		}
 	}
 	cmd.Dir = workDir
 	cmd.Env = append(os.Environ(),
@@ -69,27 +100,17 @@ func startPTY(shellType, workDir string, cols, rows int) (TerminalPTY, error) {
 		"LC_ALL=en_US.UTF-8",
 	)
 
-	stdin, err := cmd.StdinPipe()
+	// Start true POSIX pseudo-terminal with specified dimensions
+	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{
+		Rows: uint16(rows),
+		Cols: uint16(cols),
+	})
 	if err != nil {
-		return nil, fmt.Errorf("creating stdin pipe: %w", err)
+		return nil, fmt.Errorf("starting posix pty (%s): %w", shellPath, err)
 	}
 
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		_ = stdin.Close()
-		return nil, fmt.Errorf("creating stdout pipe: %w", err)
-	}
-	cmd.Stderr = cmd.Stdout
-
-	if err := cmd.Start(); err != nil {
-		_ = stdin.Close()
-		_ = stdout.Close()
-		return nil, fmt.Errorf("starting shell (%s): %w", shellPath, err)
-	}
-
-	return &pipePTY{
-		cmd:    cmd,
-		stdin:  stdin,
-		stdout: stdout,
+	return &posixPTY{
+		cmd:  cmd,
+		ptmx: ptmx,
 	}, nil
 }

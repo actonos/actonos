@@ -79,7 +79,7 @@
   "status": {
     "connected": "System Online",
     "offline": "Offline",
-    "runtime": "Docker HAL"
+    "runtime": "HAL"
   },
   "telemetry": {
     "cpu": "CPU: {{value}}%",

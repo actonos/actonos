@@ -7,7 +7,7 @@
     "cost": "Chi phí"
   },
   "eyebrow": "Trung tâm điều hành thời gian thực",
-  "title": "Vận hành trực tiếp",
+  "title": "Theo dõi trực tiếp",
   "subtitle": "Theo dõi phần cứng, chuỗi suy luận, phê duyệt an toàn, môi trường thực thi, hàng đợi tác vụ và chi phí mô hình trên một giao diện thích ứng.",
   "refresh": "Làm mới",
   "connection": {
@@ -67,8 +67,8 @@
     "approved": "Đã chấp thuận thao tác",
     "rejected": "Đã từ chối thao tác",
     "failed": "Không thể xử lý phê duyệt",
-    "approvedFeedback": "Đã kiểm tra và chấp thuận từ Vận hành trực tiếp",
-    "defaultFeedback": "Người vận hành đã từ chối từ Vận hành trực tiếp"
+    "approvedFeedback": "Đã kiểm tra và chấp thuận từ Theo dõi trực tiếp",
+    "defaultFeedback": "Người vận hành đã từ chối từ Theo dõi trực tiếp"
   },
   "units": {
     "milliseconds": "{{value}} ms",

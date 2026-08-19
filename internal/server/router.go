@@ -419,6 +419,7 @@ func (s *Server) setupRoutes() {
 
 			// Interactive Web Terminal
 			r.Route("/terminal", func(r chi.Router) {
+				r.Get("/info", s.handleTerminalInfo)
 				r.Get("/ws", s.handleTerminalWebSocket)
 			})
 		})

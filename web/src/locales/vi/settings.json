@@ -29,7 +29,7 @@
     "title": "Tiêu thụ mã thông báo và sổ cái chi phí",
     "overview": "Tổng quan & Phân tích",
     "transactions": "Sổ cái giao dịch ({{count}})",
-    "refresh": "Làm cho khỏe lại",
+    "refresh": "Làm mới",
     "today": "Khối lượng hôm nay",
     "month": "Tháng này",
     "lifetime": "Mã thông báo trọn đời",
@@ -41,10 +41,10 @@
     "noTrend": "Không có mức tiêu thụ mã thông báo nào được ghi lại trong 14 ngày qua.",
     "byModel": "Mức tiêu thụ theo mẫu",
     "noModels": "Không có số liệu thống kê mô hình có sẵn.",
-    "byAgent": "Tiêu thụ theo đại lý",
-    "noAgents": "Không có số liệu thống kê đại lý có sẵn.",
+    "byAgent": "Tiêu thụ theo agent",
+    "noAgents": "Không có số liệu thống kê agent có sẵn.",
     "filters": "Bộ lọc:",
-    "allAgents": "Tất cả đại lý",
+    "allAgents": "Tất cả agent",
     "allSources": "Tất cả các nguồn",
     "sourceChat": "Trò chuyện (Tương tác)",
     "sourceStream": "Luồng trò chuyện (SSE)",
@@ -71,15 +71,15 @@
     "activeModels": "{{configured}}/{{total}} LLM đang hoạt động"
   },
   "actions": {
-    "refresh": "Làm cho khỏe lại",
-    "restart": "Khởi động lại hạt nhân"
+    "refresh": "Làm mới",
+    "restart": "Khởi động lại"
   },
   "tabs": {
     "label": "Các phần cài đặt",
     "identity": "Bản sắc & Tâm hồn",
     "providers": "Nhà cung cấp LLM ({{count}})",
     "tokens": "Sổ cái Token & Chi phí",
-    "network": "Phần cứng & Cân đuôi",
+    "network": "Phần cứng & Kết nối",
     "audit": "Nhật ký kiểm tra ({{count}})",
     "maintenance": "Lưu trữ & OTA"
   },
@@ -101,7 +101,7 @@
     "tone": "Giai điệu giao tiếp và cộng tác",
     "tonePlaceholder": "ví dụ. thích ứng, tự nhiên, đồng cảm và sắc bén",
     "bio": "Bối cảnh tiểu sử và tên miền của chủ sở hữu",
-    "bioPlaceholder": "Thông tin tóm tắt về bản thân bạn để cung cấp bối cảnh miền cho đại lý...",
+    "bioPlaceholder": "Thông tin tóm tắt về bản thân bạn để cung cấp bối cảnh miền cho agent...",
     "directives": "Chỉ thị và quy tắc thường trực phổ quát",
     "directivesPlaceholder": "Các quy tắc mà tất cả các tác nhân phải tuân theo (ví dụ: Viết mã rõ ràng, giải thích sự cân bằng về kiến ​​trúc, tránh giữ chỗ)...",
     "saveSettings": "Lưu cài đặt hồ sơ"
@@ -110,8 +110,8 @@
     "vaultTitle": "Vault LLM ràng buộc phần cứng",
     "vaultDescription": "Các khóa được mã hóa ở phần còn lại bằng AES-256-GCM với dẫn xuất dấu vân tay phần cứng. Các thay đổi sẽ áp dụng ngay lập tức cho tất cả các nhóm tác nhân đang hoạt động.",
     "encryptionActive": "AES-256-GCM hoạt động",
-    "active": "Tích cực",
-    "disabled": "Tàn tật",
+    "active": "Hoạt động",
+    "disabled": "Đã tắt",
     "configured": "Đã định cấu hình",
     "notSet": "Chưa đặt",
     "apiKey": "Khóa API",
@@ -137,9 +137,9 @@
     "gigabytes": "{{value}} GB",
     "diskDetail": "Tổng cộng: {{total}} GB (Thư mục dữ liệu: {{data}} GB)",
     "uptime": "Thời gian hoạt động & Sức khỏe",
-    "healthy": "Hạt nhân bình thường",
+    "healthy": "Kernel bình thường",
     "temperature": "Nhiệt độ: {{value}}°C",
-    "tailscaleTitle": "VPN lưới đuôi (tsnet)",
+    "tailscaleTitle": "Tailscale (tsnet)",
     "meshActive": "Lưới hoạt động",
     "tailscaleDescription": "Đường hầm lưới WireGuard đầu cuối để truy cập từ xa an toàn mà không cần chuyển tiếp cổng.",
     "nodeIP": "IP node:",
@@ -162,8 +162,8 @@
     "detail": "Tác nhân: {{agent}} • Dấu vết: {{trace}} • Thực thi: {{duration}} ms"
   },
   "maintenance": {
-    "runtimeTitle": "Runtime ActonOS Kernel",
-    "runtimeDescription": "Hệ điều hành AI Agent có thể mở rộng tự động • Thời gian chạy kép (Bare-metal & Docker)",
+    "runtimeTitle": "ActonOS",
+    "runtimeDescription": "Hệ điều hành AI Agent tự vận hành",
     "storageTitle": "Phân tích và sao lưu bộ nhớ",
     "storageDescription": "Việc sử dụng bộ nhớ cơ sở dữ liệu và ảnh chụp nhanh trạng thái để khắc phục thảm họa.",
     "database": "Lưu trữ (DB):",
@@ -172,8 +172,8 @@
     "total": "Tổng kích thước:",
     "megabytes": "{{value}} MB",
     "download": "Tải xuống ảnh chụp nhanh trạng thái",
-    "otaTitle": "Cập nhật hạt nhân OTA",
-    "otaDescription": "Kiểm tra các bản phát hành GitHub để biết các bản cập nhật chương trình cơ sở phân vùng hạt nhân A/B nguyên tử.",
+    "otaTitle": "Cập nhật",
+    "otaDescription": "Kiểm tra các bản phát hành GitHub để biết các bản cập nhật chương trình cơ sở phân vùng Kernel A/B nguyên tử.",
     "current": "Hiện hành:",
     "latest": "Mới nhất:",
     "updateAvailable": "Cập nhật có sẵn:",
@@ -183,7 +183,7 @@
     "check": "Kiểm tra cập nhật"
   },
   "restart": {
-    "title": "Khởi động lại hạt nhân ActonOS",
+    "title": "Khởi động lại ActonOS",
     "description": "Bạn có chắc chắn muốn khởi động lại daemon ActonOS không? Tất cả các tác vụ ReAct đang hoạt động trong nền sẽ được khởi tạo lại một cách rõ ràng.",
     "confirm": "Khởi động lại Daemon"
   }

@@ -444,3 +444,15 @@ export interface VAPIDKeyResponse {
   public_key: string;
 }
 
+export interface TerminalShellOption {
+  id: string;
+  name: string;
+  available: boolean;
+}
+
+export interface TerminalInfoResponse {
+  os: string;
+  default_shell: string;
+  available_shells: TerminalShellOption[];
+}
+

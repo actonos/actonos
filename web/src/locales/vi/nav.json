@@ -1,7 +1,7 @@
 {
   "brand": "ActonOS",
   "links": {
-    "operations": "Vận hành trực tiếp",
+    "operations": "Theo dõi trực tiếp",
     "dashboard": "Tổng quan",
     "agents": "Agents",
     "missions": "Nhiệm vụ",
@@ -77,9 +77,9 @@
     "full": "Đầy đủ"
   },
   "status": {
-    "connected": "Hệ thống hoạt động",
+    "connected": "Đã kết nối",
     "offline": "Ngoại tuyến",
-    "runtime": "Docker HAL"
+    "runtime": "HAL"
   },
   "telemetry": {
     "cpu": "CPU: {{value}}%",

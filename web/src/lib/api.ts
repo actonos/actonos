@@ -609,4 +609,6 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(params || {}),
     }),
+  getTerminalInfo: () =>
+    fetchJSON<import('./types').TerminalInfoResponse>('/terminal/info'),
 };

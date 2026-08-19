@@ -16,11 +16,23 @@ import {
   ZoomOut,
   ChevronDown,
   Sparkles,
+  Server,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { api } from '@/lib/api';
 
-type ShellType = 'powershell' | 'cmd' | 'bash';
+interface TerminalShellOption {
+  id: string;
+  name: string;
+  available: boolean;
+}
+
+interface TerminalInfo {
+  os: string;
+  default_shell: string;
+  available_shells: TerminalShellOption[];
+}
 
 export function TerminalPage() {
   const { t } = useTranslation('terminal');
@@ -30,12 +42,33 @@ export function TerminalPage() {
   const socketRef = useRef<WebSocket | null>(null);
 
   const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting');
-  const [selectedShell, setSelectedShell] = useState<ShellType>('powershell');
+  const [terminalInfo, setTerminalInfo] = useState<TerminalInfo | null>(null);
+  const [selectedShell, setSelectedShell] = useState<string>('bash');
   const [fontSize, setFontSize] = useState<number>(13);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Initialize and connect WebSocket to backend PTY
-  const startSession = (shell: ShellType) => {
+  // 1. Fetch Terminal & Host OS Info from Backend
+  useEffect(() => {
+    let isMounted = true;
+    api.getTerminalInfo()
+      .then((info) => {
+        if (!isMounted) return;
+        setTerminalInfo(info);
+        if (info.default_shell) {
+          setSelectedShell(info.default_shell);
+        }
+      })
+      .catch((err: unknown) => {
+        console.warn('Failed to fetch terminal info, using fallback defaults:', err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // 2. Initialize and connect WebSocket to backend PTY
+  const startSession = (shell: string) => {
     if (socketRef.current) {
       socketRef.current.close();
       socketRef.current = null;
@@ -51,7 +84,7 @@ export function TerminalPage() {
     const rows = term.rows || 30;
 
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProtocol}//${window.location.host}/api/terminal/ws?shell=${shell}&cols=${cols}&rows=${rows}`;
+    const wsUrl = `${wsProtocol}//${window.location.host}/api/terminal/ws?shell=${encodeURIComponent(shell)}&cols=${cols}&rows=${rows}`;
 
     try {
       const socket = new WebSocket(wsUrl);
@@ -60,7 +93,6 @@ export function TerminalPage() {
       socket.onopen = () => {
         setStatus('connected');
         term.focus();
-        // Send initial exact dimensions to PTY
         if (socket.readyState === WebSocket.OPEN) {
           socket.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
         }
@@ -95,6 +127,7 @@ export function TerminalPage() {
     }
   };
 
+  // 3. Mount Xterm and bind keyboard I/O
   useEffect(() => {
     if (!terminalNodeRef.current) return;
 
@@ -140,50 +173,49 @@ export function TerminalPage() {
     terminalRef.current = term;
     fitAddonRef.current = fitAddon;
 
-    setTimeout(() => {
-      fitAddon.fit();
-    }, 100);
-
-    // Forward raw user keystrokes into WebSocket
+    // Send keystrokes directly to WebSocket backend
     const onDataDisposable = term.onData((data) => {
       if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
         socketRef.current.send(data);
       }
     });
 
-    // Resize handler sends resize message to PTY
+    // Auto-fit on resize
     const handleResize = () => {
-      if (fitAddonRef.current && terminalRef.current) {
-        fitAddonRef.current.fit();
+      try {
+        fitAddon.fit();
         if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
           socketRef.current.send(
             JSON.stringify({
               type: 'resize',
-              cols: terminalRef.current.cols,
-              rows: terminalRef.current.rows,
+              cols: term.cols,
+              rows: term.rows,
             })
           );
         }
+      } catch {
+        // ignore resize layout errors before container mounted
       }
     };
-    window.addEventListener('resize', handleResize);
 
+    window.addEventListener('resize', handleResize);
+    setTimeout(handleResize, 100);
+
+    // Start initial session
     startSession(selectedShell);
 
     return () => {
       window.removeEventListener('resize', handleResize);
       onDataDisposable.dispose();
-      if (socketRef.current) {
-        socketRef.current.close();
-        socketRef.current = null;
-      }
       term.dispose();
       terminalRef.current = null;
-      fitAddonRef.current = null;
+      if (socketRef.current) {
+        socketRef.current.close();
+      }
     };
   }, []);
 
-  // Update font size dynamically
+  // Update Font size in real-time
   useEffect(() => {
     if (terminalRef.current && fitAddonRef.current) {
       terminalRef.current.options.fontSize = fontSize;
@@ -200,9 +232,9 @@ export function TerminalPage() {
     }
   }, [fontSize]);
 
-  const handleShellChange = (newShell: ShellType) => {
-    setSelectedShell(newShell);
-    startSession(newShell);
+  const handleShellChange = (shell: string) => {
+    setSelectedShell(shell);
+    startSession(shell);
   };
 
   const handleClear = () => {
@@ -212,42 +244,45 @@ export function TerminalPage() {
     }
   };
 
-  const handleReconnect = () => {
-    startSession(selectedShell);
-  };
-
-  const isWindows = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows');
+  const isWindows = terminalInfo ? terminalInfo.os === 'windows' : false;
 
   return (
-    <div
-      className={`flex flex-col w-full transition-all duration-200 ${
-        isFullscreen
-          ? 'fixed inset-0 z-50 bg-[#090814] p-0'
-          : 'h-[calc(100vh-4rem)] p-4 sm:p-6 bg-canvas'
-      }`}
-    >
-      {/* Container Card */}
-      <div
-        className={`flex flex-col flex-1 w-full bg-[#090814] border border-onyx/15 shadow-2xl overflow-hidden ${
-          isFullscreen ? 'rounded-none' : 'rounded-2xl'
-        }`}
-      >
-        {/* Top Professional Terminal Bar */}
-        <div className="h-12 px-4 bg-[#130f26] border-b border-white/10 flex items-center justify-between gap-3 select-none">
-          {/* Left: Window Dots & Title */}
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="flex items-center gap-1.5 shrink-0">
-              <span className="w-3 h-3 rounded-full bg-rose-500/90 shadow-xs inline-block" />
-              <span className="w-3 h-3 rounded-full bg-amber-500/90 shadow-xs inline-block" />
-              <span className="w-3 h-3 rounded-full bg-emerald-500/90 shadow-xs inline-block" />
+    <div className={`space-y-4 ${isFullscreen ? 'fixed inset-0 z-50 bg-[#090814] p-4 m-0 flex flex-col' : ''}`}>
+      {/* Page Header */}
+      {!isFullscreen && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold font-serif text-deep-ink dark:text-white">
+                {t('title', 'Web Terminal')}
+              </h1>
+              <Badge variant="neutral" className="gap-1 font-mono text-[11px] uppercase">
+                <Server className="w-3 h-3" />
+                {terminalInfo?.os || 'System'} PTY
+              </Badge>
             </div>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              {t('subtitle', 'Interactive pseudo-terminal connection directly into the ActonOS runtime kernel.')}
+            </p>
+          </div>
+        </div>
+      )}
 
-            <div className="h-4 w-px bg-white/15 mx-1 shrink-0" />
-
-            <div className="flex items-center gap-2 min-w-0">
+      {/* Terminal Main Container */}
+      <div className={`flex flex-col rounded-2xl border border-[#2d274f] bg-[#090814] shadow-2xl overflow-hidden transition-all ${isFullscreen ? 'flex-1 min-h-0' : 'h-[680px]'}`}>
+        {/* Top Terminal Bar */}
+        <div className="flex items-center justify-between px-4 py-3 bg-[#130e30] border-b border-[#251f47] select-none">
+          {/* Left: Window Dots & Title */}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-full bg-rose-500/80 border border-rose-600/50" />
+              <div className="w-3 h-3 rounded-full bg-amber-500/80 border border-amber-600/50" />
+              <div className="w-3 h-3 rounded-full bg-emerald-500/80 border border-emerald-600/50" />
+            </div>
+            <div className="flex items-center gap-2 pl-2 border-l border-white/10">
               <TerminalIcon className="w-4 h-4 text-amber-400 shrink-0" />
-              <span className="font-mono text-body-sm font-semibold text-white truncate">
-                ActonOS Pseudo-Terminal (PTY)
+              <span className="text-xs font-mono font-medium text-white/90 hidden sm:inline">
+                ActonOS Pseudo-Terminal ({isWindows ? 'ConPTY' : 'POSIX PTY'})
               </span>
             </div>
 
@@ -273,11 +308,17 @@ export function TerminalPage() {
             <div className="relative inline-flex items-center">
               <select
                 value={selectedShell}
-                onChange={(e) => handleShellChange(e.target.value as ShellType)}
+                onChange={(e) => handleShellChange(e.target.value)}
                 className="appearance-none bg-[#1d1738] hover:bg-[#251f47] text-white/90 font-mono text-[12px] pl-3 pr-7 py-1.5 rounded-lg border border-white/15 focus:outline-none focus:border-amber-400/50 cursor-pointer transition-colors"
                 title="Select shell environment"
               >
-                {isWindows ? (
+                {terminalInfo?.available_shells && terminalInfo.available_shells.length > 0 ? (
+                  terminalInfo.available_shells.map((sh) => (
+                    <option key={sh.id} value={sh.id}>
+                      {sh.name}
+                    </option>
+                  ))
+                ) : isWindows ? (
                   <>
                     <option value="powershell">PowerShell (ConPTY)</option>
                     <option value="cmd">Command Prompt (CMD)</option>
@@ -285,8 +326,8 @@ export function TerminalPage() {
                   </>
                 ) : (
                   <>
-                    <option value="bash">Bash</option>
-                    <option value="sh">POSIX Shell</option>
+                    <option value="bash">Bash (/bin/bash)</option>
+                    <option value="sh">POSIX Shell (/bin/sh)</option>
                   </>
                 )}
               </select>
@@ -318,31 +359,32 @@ export function TerminalPage() {
             <Button
               variant="ghost"
               size="sm"
-              icon={<Trash2 className="w-3.5 h-3.5" />}
               onClick={handleClear}
-              className="text-white/80 hover:text-white hover:bg-white/10"
+              className="text-white/70 hover:text-white hover:bg-white/10 h-8 px-2"
               title="Clear terminal screen"
             >
-              <span className="hidden sm:inline">{t('actions.clear', 'Clear')}</span>
+              <Trash2 className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline text-xs ml-1.5">{t('actions.clear', 'Clear')}</span>
             </Button>
 
             {/* Reconnect Button */}
             <Button
-              variant="secondary"
+              variant="ghost"
               size="sm"
-              icon={<RefreshCw className={`w-3.5 h-3.5 ${status === 'connecting' ? 'animate-spin' : ''}`} />}
-              onClick={handleReconnect}
-              className="bg-amber-400/15 text-amber-300 hover:bg-amber-400/25 border-amber-400/30"
+              onClick={() => startSession(selectedShell)}
+              className="text-white/70 hover:text-white hover:bg-white/10 h-8 px-2"
               title="Reconnect terminal session"
             >
-              <span className="hidden sm:inline">{t('actions.reconnect', 'Reconnect')}</span>
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline text-xs ml-1.5">{t('actions.reconnect', 'Reconnect')}</span>
             </Button>
 
             {/* Fullscreen Toggle */}
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => {
-                setIsFullscreen((f) => !f);
+                setIsFullscreen(!isFullscreen);
                 setTimeout(() => {
                   if (fitAddonRef.current && terminalRef.current) {
                     fitAddonRef.current.fit();
@@ -356,38 +398,37 @@ export function TerminalPage() {
                       );
                     }
                   }
-                }, 120);
+                }, 100);
               }}
-              className="p-2 rounded-lg bg-[#1d1738] hover:bg-[#251f47] text-white/70 hover:text-white border border-white/15 transition-colors cursor-pointer"
+              className="text-white/70 hover:text-white hover:bg-white/10 h-8 px-2"
               title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
             >
               {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-            </button>
+            </Button>
           </div>
         </div>
 
-        {/* XTerm Screen Container */}
+        {/* Xterm DOM Mount Container */}
         <div
           ref={terminalNodeRef}
-          className="flex-1 w-full p-4 overflow-hidden cursor-text bg-[#090814]"
+          className="flex-1 w-full p-3 overflow-hidden bg-[#090814] cursor-text"
           onClick={() => terminalRef.current?.focus()}
         />
 
         {/* Bottom Status Bar */}
-        <div className="h-7 px-4 bg-[#0d0a1d] border-t border-white/5 flex items-center justify-between text-[11px] font-mono text-white/50 select-none">
+        <div className="flex items-center justify-between px-4 py-1.5 bg-[#0e0a24] border-t border-[#1d1738] text-[11px] font-mono text-white/50 select-none">
           <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1.5">
-              <span className={`w-2 h-2 rounded-full ${status === 'connected' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
-              {status === 'connected' ? 'LIVE PTY' : 'OFFLINE'}
+            <span className="flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-amber-400" />
+              ActonOS Sandbox Environment
             </span>
-            <span>UTF-8</span>
-            <span>ConPTY Virtual Terminal</span>
+            <span className="hidden sm:inline">•</span>
+            <span className="hidden sm:inline">UTF-8 / xterm-256color</span>
           </div>
-
           <div className="flex items-center gap-3">
-            <span className="hidden sm:inline flex items-center gap-1 text-white/40">
-              <Sparkles className="w-3 h-3 text-amber-400/60" /> ActonOS Kernel Direct I/O
-            </span>
+            <span>{isWindows ? 'Windows ConPTY' : 'Linux POSIX PTY (/dev/pts)'}</span>
+            <span>•</span>
+            <span className="text-white/70">{selectedShell}</span>
           </div>
         </div>
       </div>

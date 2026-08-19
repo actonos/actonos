@@ -39,7 +39,9 @@
       }
     }
   },
-  "health": { "title": "Sức khỏe hệ thống" },
+  "health": {
+    "title": "Sức khỏe hệ thống"
+  },
   "gauges": {
     "cpu": "CPU",
     "memory": "Bộ nhớ RAM",
@@ -58,7 +60,7 @@
     "uptimeMinutes": "{{value}}m trực tuyến",
     "processStatus": "PID {{status}}",
     "halRunning": "HAL đang chạy",
-    "kernelStable": "Hạt nhân ổn định",
+    "kernelStable": "Kernel ổn định",
     "sync": "Đồng bộ hóa: {{time}}"
   },
   "metrics": {

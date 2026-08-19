@@ -138,7 +138,7 @@
     "diskDetail": "Total: {{total}} GB (Data Dir: {{data}} GB)",
     "uptime": "Uptime & Health",
     "healthy": "Kernel Normal",
-    "temperature": "Temp: {{value}}?C",
+    "temperature": "Temp: {{value}}°C",
     "tailscaleTitle": "Tailscale Mesh VPN (tsnet)",
     "meshActive": "Mesh Active",
     "tailscaleDescription": "End-to-end WireGuard mesh tunnel for secure remote access without port forwarding.",
@@ -162,8 +162,8 @@
     "detail": "Agent: {{agent}} • Trace: {{trace}} • Exec: {{duration}} ms"
   },
   "maintenance": {
-    "runtimeTitle": "ActonOS Kernel Runtime",
-    "runtimeDescription": "Autonomous Extensible AI Agent Operating System • Dual-Runtime (Bare-metal & Docker)",
+    "runtimeTitle": "ActonOS",
+    "runtimeDescription": "Autonomous Extensible AI Agent Operating System",
     "storageTitle": "Storage Breakdown & Backup",
     "storageDescription": "Database storage usage and state snapshot for disaster recovery.",
     "database": "Storage (DB):",

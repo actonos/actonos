@@ -45,8 +45,8 @@
     "successTitle": "Đã khởi tạo ActonOS",
     "successDescription": "Chào mừng bạn đến với hệ điều hành AI tự trị của bạn.",
     "failureTitle": "Khởi tạo không thành công",
-    "title": "Khởi tạo thiết bị hạt nhân",
-    "subtitle": "Thiết lập hạt nhân hệ điều hành AI Agent bị ràng buộc phần cứng",
+    "title": "Khởi tạo",
+    "subtitle": "Thiết lập Kernel hệ điều hành AI Agent bị ràng buộc phần cứng",
     "identityTitle": "Bước 1: Nhận dạng nhà điều hành & Cài đặt khu vực",
     "nameLabel": "Tên/Tên của bạn",
     "namePlaceholder": "ví dụ. Alex, Người điều hành",
@@ -82,7 +82,7 @@
     "reviewTimezone": "Múi giờ:",
     "reviewPassword": "Mật khẩu quản trị:",
     "protected": "Cấu hình & Bảo vệ",
-    "initializing": "Đang khởi tạo hạt nhân...",
+    "initializing": "Đang khởi tạo...",
     "launch": "Khởi tạo và khởi chạy ActonOS"
   }
 }
