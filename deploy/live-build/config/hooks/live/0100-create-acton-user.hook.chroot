@@ -12,24 +12,26 @@ if ! getent group acton >/dev/null 2>&1; then
 fi
 
 if ! id -u acton >/dev/null 2>&1; then
-    useradd -u 1000 -g acton -d /data -s /bin/bash -m -G sudo,adm,systemd-journal,dialout,plugdev,netdev acton
+    useradd -u 1000 -g acton -d /home/acton -s /bin/bash -m -G sudo,adm,systemd-journal,dialout,plugdev,netdev acton
     echo "acton:acton" | chpasswd
     echo "root:acton" | chpasswd
 fi
+
+# Ensure /home/acton has full skeleton files
+mkdir -p /home/acton
+cp -rn /etc/skel/. /home/acton/ 2>/dev/null || true
+chown -R acton:acton /home/acton
+chmod 750 /home/acton
 
 # 2. Grant passwordless sudo to acton user
 mkdir -p /etc/sudoers.d
 echo "acton ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/010_acton-nopasswd
 chmod 0440 /etc/sudoers.d/010_acton-nopasswd
 
-# 3. Create full directory structure, skel, and /home symlink
+# 3. Create full directory structure in /data
 mkdir -p /data/config /data/workspace /data/logs /data/skills /data/releases /data/bin /data/.npm-global
-cp -rn /etc/skel/. /data/ 2>/dev/null || true
 chown -R acton:acton /data
 chmod 755 /data
-
-mkdir -p /home
-ln -sf /data /home/acton 2>/dev/null || true
 
 # 4. Configure systemd targets and TTY console services
 systemctl set-default multi-user.target 2>/dev/null || true

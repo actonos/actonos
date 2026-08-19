@@ -1,9 +1,12 @@
 #!/bin/sh
-# Auto-run ActonOS interactive installer & setup wizard on tty1
-if [ "$(tty)" = "/dev/tty1" ]; then
-    if [ -x /usr/local/bin/acton-install-disk ]; then
-        /usr/local/bin/acton-install-disk
-    elif [ -x /usr/local/bin/acton-welcome ]; then
-        /usr/local/bin/acton-welcome
-    fi
-fi
+# Display ActonOS Welcome diagnostics strictly on interactive user login
+case "$-" in
+    *i*)
+        if [ -t 0 ] && [ -x /usr/local/bin/acton-welcome ]; then
+            clear
+            /usr/local/bin/acton-welcome
+        fi
+        ;;
+    *)
+        ;;
+esac

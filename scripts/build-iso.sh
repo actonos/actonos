@@ -91,6 +91,7 @@ lb config \
     --system live \
     --binary-images iso-hybrid \
     --memtest none \
+    --bootappend-live "boot=live components username=acton user-default-groups=sudo,adm,systemd-journal,dialout,plugdev,netdev hostname=acton console=tty0" \
     --iso-application "ActonOS AI Agent Operating System (${ARCH})" \
     --iso-preparer "ActonOS Release Team" \
     --iso-publisher "ActonOS Foundation" \
