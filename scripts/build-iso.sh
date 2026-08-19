@@ -8,10 +8,11 @@
 # ==============================================================================
 set -e
 
+VERSION="${VERSION:-0.1.0}"
 ARCH="${ARCH:-amd64}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-OUTPUT_ISO="${ROOT_DIR}/build/ActonOS-v1.0-${ARCH}.iso"
+OUTPUT_ISO="${ROOT_DIR}/build/ActonOS-v${VERSION}-${ARCH}.iso"
 LIVE_BUILD_SRC="${ROOT_DIR}/deploy/live-build"
 
 echo "======================================================================"
