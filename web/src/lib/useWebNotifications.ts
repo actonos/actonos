@@ -39,6 +39,43 @@ function getServiceWorkerRegistration(): Promise<ServiceWorkerRegistration | nul
   return swRegistrationPromise;
 }
 
+function playNotificationSound(type: string = 'info') {
+  try {
+    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'sine';
+    if (type === 'approval' || type === 'error') {
+      // 2-tone chime for critical/approval alerts
+      osc.frequency.setValueAtTime(659.25, now); // E5
+      osc.frequency.setValueAtTime(880.0, now + 0.12); // A5
+      gain.gain.setValueAtTime(0.3, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.45);
+    } else {
+      // Pleasant chime for general updates
+      osc.frequency.setValueAtTime(783.99, now); // G5
+      osc.frequency.setValueAtTime(1046.5, now + 0.09); // C6
+      gain.gain.setValueAtTime(0.25, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.38);
+    }
+  } catch {
+    // Audio autoplay may be restricted if user has not interacted with page
+  }
+}
+
 export function useWebNotifications() {
   const [permission, setPermission] = useState<BrowserNotificationPermission>(() => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -53,42 +90,6 @@ export function useWebNotifications() {
 
   const { snapshot } = useRealtime();
   const isSubscribingRef = useRef<boolean>(false);
-
-  // Initialize Service Worker & check Push Subscription status
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const pushSupported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
-    setIsPushSupported(pushSupported);
-
-    if ('serviceWorker' in navigator) {
-      getServiceWorkerRegistration().then(async (reg) => {
-        if (!reg) return;
-        setIsServiceWorkerReady(true);
-
-        // Check active push subscription
-        if (reg.pushManager) {
-          try {
-            const existingSub = await reg.pushManager.getSubscription();
-            setIsPushSubscribed(!!existingSub);
-          } catch (err) {
-            console.warn('[ActonOS SW] Failed to check push subscription:', err);
-          }
-        }
-      });
-
-      // Handle messages from Service Worker (e.g. user clicked notification)
-      const handleMessage = (event: MessageEvent) => {
-        if (event.data?.type === 'NAVIGATE_ROUTE' && event.data.route) {
-          window.location.hash = event.data.route;
-        }
-      };
-      navigator.serviceWorker.addEventListener('message', handleMessage);
-      return () => {
-        navigator.serviceWorker.removeEventListener('message', handleMessage);
-      };
-    }
-  }, []);
 
   // Register push subscription with backend
   const subscribeToPush = useCallback(async (reg?: ServiceWorkerRegistration): Promise<boolean> => {
@@ -107,9 +108,10 @@ export function useWebNotifications() {
         return false;
       }
 
-      // 2. Subscribe via PushManager
+      // 2. Check existing subscription or subscribe
       const convertedKey = urlBase64ToUint8Array(public_key);
       let sub = await swReg.pushManager.getSubscription();
+
       if (!sub) {
         sub = await swReg.pushManager.subscribe({
           userVisibleOnly: true,
@@ -130,16 +132,90 @@ export function useWebNotifications() {
         };
         await api.subscribePush(payload);
         setIsPushSubscribed(true);
+        console.info('[ActonOS WebPush] Push subscription synced successfully with daemon');
         return true;
       }
       return false;
     } catch (err) {
-      console.warn('[ActonOS WebPush] Failed to subscribe to Web Push:', err);
+      console.warn('[ActonOS WebPush] Subscription error, attempting fresh subscription:', err);
+      // In case of key mismatch error, try unsubscribing old and re-subscribing
+      try {
+        const swReg = reg || (await getServiceWorkerRegistration());
+        if (swReg?.pushManager) {
+          const oldSub = await swReg.pushManager.getSubscription();
+          if (oldSub) await oldSub.unsubscribe();
+          const { public_key } = await api.getVAPIDPublicKey();
+          if (public_key) {
+            const convertedKey = urlBase64ToUint8Array(public_key);
+            const freshSub = await swReg.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: convertedKey,
+            });
+            const rawSub = freshSub.toJSON();
+            if (rawSub.endpoint && rawSub.keys?.p256dh && rawSub.keys?.auth) {
+              await api.subscribePush({
+                endpoint: rawSub.endpoint,
+                keys: { p256dh: rawSub.keys.p256dh, auth: rawSub.keys.auth },
+                user_agent: navigator.userAgent,
+              });
+              setIsPushSubscribed(true);
+              return true;
+            }
+          }
+        }
+      } catch (retryErr) {
+        console.error('[ActonOS WebPush] Retry subscription failed:', retryErr);
+      }
       return false;
     } finally {
       isSubscribingRef.current = false;
     }
   }, []);
+
+  // Initialize Service Worker & check Push Subscription status
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const pushSupported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+    setIsPushSupported(pushSupported);
+
+    if ('serviceWorker' in navigator) {
+      getServiceWorkerRegistration().then(async (reg) => {
+        if (!reg) return;
+        setIsServiceWorkerReady(true);
+
+        // Auto-subscribe or sync existing subscription when permission is granted
+        if (Notification.permission === 'granted' && reg.pushManager) {
+          try {
+            await subscribeToPush(reg);
+          } catch (err) {
+            console.warn('[ActonOS SW] Auto push sync error:', err);
+          }
+        } else if (reg.pushManager) {
+          try {
+            const existingSub = await reg.pushManager.getSubscription();
+            setIsPushSubscribed(!!existingSub);
+          } catch (err) {
+            console.warn('[ActonOS SW] Failed to check push subscription:', err);
+          }
+        }
+      });
+
+      // Handle messages from Service Worker (e.g. user clicked notification or push arrived)
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data?.type === 'NAVIGATE_ROUTE' && event.data.route) {
+          window.location.hash = event.data.route;
+        }
+        if (event.data?.type === 'PUSH_NOTIFICATION_RECEIVED') {
+          playNotificationSound(event.data?.payload?.type || 'info');
+        }
+      };
+      navigator.serviceWorker.addEventListener('message', handleMessage);
+      return () => {
+        navigator.serviceWorker.removeEventListener('message', handleMessage);
+      };
+    }
+  }, [permission, subscribeToPush]);
 
   // Unsubscribe from push
   const unsubscribeFromPush = useCallback(async (): Promise<boolean> => {
@@ -189,6 +265,8 @@ export function useWebNotifications() {
         return;
       }
       try {
+        playNotificationSound(notif.type);
+
         const swReg = await getServiceWorkerRegistration();
         if (swReg && 'showNotification' in swReg) {
           await swReg.showNotification(notif.title, {
@@ -201,8 +279,9 @@ export function useWebNotifications() {
               link: notif.link || '/notifications',
               type: notif.type,
             },
-            requireInteraction: notif.type === 'approval' || notif.type === 'error',
-          });
+            requireInteraction: true,
+            silent: false,
+          } as NotificationOptions);
           return;
         }
 
@@ -211,6 +290,8 @@ export function useWebNotifications() {
           body: notif.message,
           icon: '/actonos_icon.png',
           tag: notif.id,
+          requireInteraction: true,
+          silent: false,
         });
 
         desktopNotif.onclick = () => {

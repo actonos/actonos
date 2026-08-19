@@ -225,6 +225,7 @@ func (s *Server) setupRoutes() {
 		// Public Endpoints
 		r.Get("/health", s.handleHealth)
 		r.Get("/models", s.handleGetModelsCatalog)
+		r.Get("/notifications/push/vapid-key", s.handleGetVAPIDPublicKey)
 
 		// Authentication Endpoints
 		r.Route("/auth", func(r chi.Router) {

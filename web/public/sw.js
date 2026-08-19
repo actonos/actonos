@@ -66,7 +66,9 @@ self.addEventListener('push', (event) => {
       timestamp: Date.now(),
     },
     vibrate: vibratePattern,
-    requireInteraction: notifType === 'approval' || notifType === 'error',
+    requireInteraction: true, // Keep banner on screen until user interacts/dismisses
+    renotify: true,           // Play sound and show banner even if previous notification exists
+    silent: false,            // Trigger system notification chime
     actions: actions,
   };
 
