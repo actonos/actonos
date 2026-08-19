@@ -167,6 +167,10 @@
 | `GET` | `/api/notifications/unread-count` | `handleGetUnreadNotificationsCount` | `api_notifications.go` |
 | `POST` | `/api/notifications/mark-read` | `handleMarkNotificationRead` | `api_notifications.go` |
 | `DELETE` | `/api/notifications` | `handleDeleteNotifications` | `api_notifications.go` |
+| `GET` | `/api/notifications/push/vapid-key` | `handleGetVAPIDPublicKey` | `api_notifications.go` |
+| `POST` | `/api/notifications/push/subscribe` | `handleSubscribePush` | `api_notifications.go` |
+| `POST` | `/api/notifications/push/unsubscribe` | `handleUnsubscribePush` | `api_notifications.go` |
+| `POST` | `/api/notifications/push/test` | `handleTestPushNotification` | `api_notifications.go` |
 
 #### System, HAL, Keys, Tokens & Identity
 

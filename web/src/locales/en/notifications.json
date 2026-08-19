@@ -11,8 +11,12 @@
   "unreadBadge": "{{count}} unread",
   "enableDesktop": "Enable Desktop Notifications",
   "desktopEnabled": "Desktop push notifications active",
+  "backgroundEnabled": "Background Push (SW) Active",
   "desktopBlocked": "Desktop notifications blocked in browser settings",
   "permissionPrompt": "Allow browser notifications to receive instant alerts when missions require approval or when errors occur in the background.",
+  "sendTest": "Test Push",
+  "testNotificationTitle": "ActonOS Background Alert",
+  "testNotificationBody": "Service Worker background push is working properly!",
   "filters": {
     "all": "All Types",
     "approval": "Approvals",
@@ -46,6 +50,8 @@
   "toast": {
     "markedAllRead": "All notifications marked as read",
     "clearedAll": "Notification history cleared",
-    "permissionGranted": "Desktop notifications enabled successfully!"
+    "permissionGranted": "Desktop notifications enabled successfully!",
+    "testSent": "Test push notification dispatched!",
+    "pushSubscribed": "Service Worker background push registered!"
   }
 }

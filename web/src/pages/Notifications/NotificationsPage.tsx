@@ -16,6 +16,8 @@ import {
   ChevronLeft,
   ChevronRight,
   ShieldCheck,
+  Send,
+  Zap,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/lib/api';
@@ -33,7 +35,7 @@ interface NotificationsPageProps {
 
 export function NotificationsPage({ onNavigateTab }: NotificationsPageProps) {
   const { t } = useTranslation(['notifications', 'common']);
-  const { permission, requestPermission } = useWebNotifications();
+  const { permission, isPushSubscribed, requestPermission, testPush } = useWebNotifications();
   const { snapshot } = useRealtime();
 
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -46,6 +48,8 @@ export function NotificationsPage({ onNavigateTab }: NotificationsPageProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [showClearModal, setShowClearModal] = useState(false);
+  const [testingPush, setTestingPush] = useState(false);
+  const [pushStatusMessage, setPushStatusMessage] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   const loadNotifications = useCallback(async () => {
@@ -123,6 +127,24 @@ export function NotificationsPage({ onNavigateTab }: NotificationsPageProps) {
     }
   };
 
+  const handleTestPush = async () => {
+    try {
+      setTestingPush(true);
+      await testPush({
+        title: t('testNotificationTitle', 'ActonOS Background Alert'),
+        message: t('testNotificationBody', 'Service Worker background push is working properly!'),
+        link: '/notifications',
+      });
+      setPushStatusMessage(t('toast.testSent', 'Test push notification dispatched!'));
+      setTimeout(() => setPushStatusMessage(null), 4000);
+      loadNotifications();
+    } catch (err) {
+      console.warn('Failed to send test push', err);
+    } finally {
+      setTestingPush(false);
+    }
+  };
+
   const handleNavigate = (link?: string) => {
     if (!link) return;
     const target = link.replace(/^#\/?/, '').replace(/^\//, '') as NavTab;
@@ -184,9 +206,25 @@ export function NotificationsPage({ onNavigateTab }: NotificationsPageProps) {
                 <span>{t('enableDesktop', 'Enable Desktop Notifications')}</span>
               </button>
             ) : permission === 'granted' ? (
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 text-caption font-mono">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>{t('desktopEnabled', 'Desktop alerts active')}</span>
+              <div className="flex items-center gap-2">
+                <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 text-caption font-mono">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>
+                    {isPushSubscribed
+                      ? t('backgroundEnabled', 'Background Push (SW) Active')
+                      : t('desktopEnabled', 'Desktop alerts active')}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleTestPush}
+                  disabled={testingPush}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-soft-meadow hover:bg-white text-slate hover:text-deep-ink border border-onyx/10 text-caption font-sans font-medium transition-colors cursor-pointer disabled:opacity-50"
+                  title={t('sendTest', 'Send Test Push Notification')}
+                >
+                  <Send className={`w-3.5 h-3.5 text-electric-cyan ${testingPush ? 'animate-bounce' : ''}`} />
+                  <span>{t('sendTest', 'Test Push')}</span>
+                </button>
               </div>
             ) : null}
 
@@ -223,6 +261,13 @@ export function NotificationsPage({ onNavigateTab }: NotificationsPageProps) {
           </div>
         }
       />
+
+      {pushStatusMessage && (
+        <div className="p-3 rounded-xl bg-electric-cyan/10 border border-electric-cyan/25 text-electric-cyan text-caption font-medium flex items-center gap-2 animate-in fade-in">
+          <Zap className="w-4 h-4 shrink-0" />
+          <span>{pushStatusMessage}</span>
+        </div>
+      )}
 
       {/* Metrics Banner */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

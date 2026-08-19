@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Service Worker & Web Push Background Notifications**:
+  - Full Web Push API (RFC 8030 / RFC 8291 / RFC 8292) with auto-generated P-256 VAPID keypairs and SQLite subscription persistence.
+  - Dedicated Service Worker (`sw.js`) handling background wake-ups, interactive action prompts (Review / Dismiss), vibration patterns, and active tab navigation/focus.
+  - Push subscription endpoints (`/api/notifications/push/*`) with immediate test dispatch capabilities and automatic cleanup of expired (HTTP 410/404) subscriptions.
 - **Realtime Frontend Operations Center**:
   - Responsive hardware and Docker telemetry, collapsible Thought → Action → Observation feed, Live Canvas, and read-only xterm.js observation terminal.
   - Background task pause/resume/retry/cancel controls and cron pause/resume actions.

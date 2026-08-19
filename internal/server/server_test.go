@@ -100,33 +100,38 @@ func newTestServer(t *testing.T) *Server {
 	heartbeat := agent.NewHeartbeatDaemon(agentMgr, engine, eventBus, db.SQLDB(), filepath.Join(tempDir, "workspace"), time.Hour)
 	hal := system.NewDockerHAL(tempDir)
 	tailscale := system.NewTailscaleManager(tempDir, "test-node", "")
+	notifMgr, err := system.NewNotificationManager(db.SQLDB(), eventBus)
+	if err != nil {
+		t.Fatalf("creating notification manager: %v", err)
+	}
 
 	cfg := Config{
-		AgentManager:    agentMgr,
-		Engine:          engine,
-		LLMRouter:       llmRouter,
-		ToolRegistry:    toolReg,
-		ApprovalManager: approvalMgr,
-		RunStore:        runStore,
-		TaskManager:     taskMgr,
-		AuditLogger:     auditLogger,
-		Vault:           vault,
-		ProfileManager:  profileMgr,
-		TokenTracker:    tokenTracker,
-		Memory:          hybrid,
-		CronScheduler:   cronScheduler,
-		HubManager:      hubManager,
-		MCPHost:         mcpHost,
-		PairingManager:  pairingManager,
-		ChannelManager:  channelManager,
-		HeartbeatDaemon: heartbeat,
-		HAL:             hal,
-		Tailscale:       tailscale,
-		EventBus:        eventBus,
-		WorkspaceDir:    filepath.Join(tempDir, "workspace"),
-		SkillsDir:       filepath.Join(tempDir, "skills"),
-		WASMDir:         filepath.Join(tempDir, "tools", "wasm"),
-		DataDir:         tempDir,
+		AgentManager:        agentMgr,
+		Engine:              engine,
+		LLMRouter:           llmRouter,
+		ToolRegistry:        toolReg,
+		ApprovalManager:     approvalMgr,
+		RunStore:            runStore,
+		TaskManager:         taskMgr,
+		AuditLogger:         auditLogger,
+		Vault:               vault,
+		ProfileManager:      profileMgr,
+		TokenTracker:        tokenTracker,
+		Memory:              hybrid,
+		CronScheduler:       cronScheduler,
+		HubManager:          hubManager,
+		MCPHost:             mcpHost,
+		PairingManager:      pairingManager,
+		ChannelManager:      channelManager,
+		HeartbeatDaemon:     heartbeat,
+		NotificationManager: notifMgr,
+		HAL:                 hal,
+		Tailscale:           tailscale,
+		EventBus:            eventBus,
+		WorkspaceDir:        filepath.Join(tempDir, "workspace"),
+		SkillsDir:           filepath.Join(tempDir, "skills"),
+		WASMDir:             filepath.Join(tempDir, "tools", "wasm"),
+		DataDir:             tempDir,
 	}
 
 	return NewServer(cfg)

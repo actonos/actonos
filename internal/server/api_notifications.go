@@ -3,6 +3,8 @@ package server
 import (
 	"net/http"
 	"strconv"
+
+	"github.com/actonos/actonos/internal/system"
 )
 
 func (s *Server) handleListNotifications(w http.ResponseWriter, r *http.Request) {
@@ -115,4 +117,126 @@ func (s *Server) handleDeleteNotifications(w http.ResponseWriter, r *http.Reques
 	}
 
 	s.respondJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
+func (s *Server) handleGetVAPIDPublicKey(w http.ResponseWriter, r *http.Request) {
+	if s.notifMgr == nil {
+		s.respondJSON(w, http.StatusOK, map[string]any{"public_key": ""})
+		return
+	}
+	pubKey := s.notifMgr.GetVAPIDPublicKey()
+	s.respondJSON(w, http.StatusOK, map[string]any{"public_key": pubKey})
+}
+
+func (s *Server) handleSubscribePush(w http.ResponseWriter, r *http.Request) {
+	if s.notifMgr == nil {
+		s.respondError(w, http.StatusServiceUnavailable, "NOTIF_MANAGER_NOT_READY", "notification manager unavailable")
+		return
+	}
+
+	var req struct {
+		Endpoint string `json:"endpoint"`
+		Keys     struct {
+			P256dh string `json:"p256dh"`
+			Auth   string `json:"auth"`
+		} `json:"keys"`
+		UserAgent string `json:"user_agent"`
+	}
+	if err := s.decodeJSON(r, &req); err != nil {
+		s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
+
+	if req.Endpoint == "" || req.Keys.P256dh == "" || req.Keys.Auth == "" {
+		s.respondError(w, http.StatusBadRequest, "INVALID_SUBSCRIPTION", "endpoint and keys are required")
+		return
+	}
+
+	sub := system.PushSubscription{
+		Endpoint:  req.Endpoint,
+		P256dh:    req.Keys.P256dh,
+		Auth:      req.Keys.Auth,
+		UserAgent: req.UserAgent,
+	}
+	if sub.UserAgent == "" {
+		sub.UserAgent = r.UserAgent()
+	}
+
+	if err := s.notifMgr.SubscribePush(r.Context(), sub); err != nil {
+		s.respondError(w, http.StatusInternalServerError, "SUBSCRIBE_PUSH_FAILED", err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]any{
+		"status":  "ok",
+		"message": "push subscription registered successfully",
+	})
+}
+
+func (s *Server) handleUnsubscribePush(w http.ResponseWriter, r *http.Request) {
+	if s.notifMgr == nil {
+		s.respondJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+		return
+	}
+
+	var req struct {
+		Endpoint string `json:"endpoint"`
+	}
+	if err := s.decodeJSON(r, &req); err != nil {
+		s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
+
+	if req.Endpoint != "" {
+		if err := s.notifMgr.UnsubscribePush(r.Context(), req.Endpoint); err != nil {
+			s.respondError(w, http.StatusInternalServerError, "UNSUBSCRIBE_PUSH_FAILED", err.Error())
+			return
+		}
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
+func (s *Server) handleTestPushNotification(w http.ResponseWriter, r *http.Request) {
+	if s.notifMgr == nil {
+		s.respondError(w, http.StatusServiceUnavailable, "NOTIF_MANAGER_NOT_READY", "notification manager unavailable")
+		return
+	}
+
+	var req struct {
+		Title   string `json:"title"`
+		Message string `json:"message"`
+		Link    string `json:"link"`
+	}
+	_ = s.decodeJSON(r, &req)
+
+	title := req.Title
+	if title == "" {
+		title = "ActonOS Background Alert"
+	}
+	message := req.Message
+	if message == "" {
+		message = "Service Worker background push is working properly!"
+	}
+	link := req.Link
+	if link == "" {
+		link = "/notifications"
+	}
+
+	notif, err := s.notifMgr.Create(r.Context(), system.Notification{
+		Title:    title,
+		Message:  message,
+		Type:     "info",
+		Category: "system",
+		Link:     link,
+	})
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "CREATE_TEST_NOTIF_FAILED", err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]any{
+		"status":       "ok",
+		"notification": notif,
+	})
 }

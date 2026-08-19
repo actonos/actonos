@@ -32,6 +32,10 @@ func (s *Server) RegisterStaticRoutes(overrideDir string) {
 		f, err := layered.Open(strings.TrimPrefix(path, "/"))
 		if err == nil {
 			_ = f.Close()
+			if path == "/sw.js" {
+				w.Header().Set("Service-Worker-Allowed", "/")
+				w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			}
 			fileServer.ServeHTTP(w, r)
 			return
 		}

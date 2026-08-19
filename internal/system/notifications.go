@@ -5,12 +5,15 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/SherClockHolmes/webpush-go"
 	"github.com/actonos/actonos/internal/bus"
 	"github.com/actonos/actonos/internal/tools"
 )
@@ -27,12 +30,24 @@ type Notification struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// NotificationManager handles persistence in SQLite, querying with pagination, and automatic bus dispatch.
+// PushSubscription represents a Web Push API subscription from a browser Service Worker.
+type PushSubscription struct {
+	Endpoint  string    `json:"endpoint"`
+	P256dh    string    `json:"p256dh"`
+	Auth      string    `json:"auth"`
+	UserAgent string    `json:"user_agent,omitempty"`
+	CreatedAt time.Time `json:"created_at,omitempty"`
+}
+
+// NotificationManager handles persistence in SQLite, querying with pagination, VAPID Web Push, and automatic bus dispatch.
 type NotificationManager struct {
 	mu     sync.RWMutex
 	db     *sql.DB
 	bus    *bus.EventBus
 	stopCh chan struct{}
+
+	vapidPublicKey  string
+	vapidPrivateKey string
 
 	alertMu    sync.Mutex
 	lastAlerts map[string]time.Time // dedup key -> last time an integration-health notification was created
@@ -49,6 +64,9 @@ func NewNotificationManager(db *sql.DB, eventBus *bus.EventBus) (*NotificationMa
 	if err := nm.initDB(); err != nil {
 		return nil, err
 	}
+	if err := nm.initVAPIDKeys(); err != nil {
+		slog.Warn("failed to initialize VAPID keys for web push", "error", err)
+	}
 	return nm, nil
 }
 
@@ -56,6 +74,9 @@ func (nm *NotificationManager) initDB() error {
 	if nm.db == nil {
 		return nil
 	}
+
+	_, _ = nm.db.Exec("PRAGMA busy_timeout = 5000;")
+	_, _ = nm.db.Exec("PRAGMA journal_mode = WAL;")
 
 	query := `
 	CREATE TABLE IF NOT EXISTS notifications (
@@ -70,15 +91,176 @@ func (nm *NotificationManager) initDB() error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
+
+	CREATE TABLE IF NOT EXISTS push_subscriptions (
+		endpoint TEXT PRIMARY KEY,
+		p256dh TEXT NOT NULL,
+		auth TEXT NOT NULL,
+		user_agent TEXT DEFAULT '',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS system_settings (
+		key TEXT PRIMARY KEY,
+		value TEXT NOT NULL,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
 	`
 	_, err := nm.db.Exec(query)
 	return err
 }
 
-// Create inserts a new notification and broadcasts it on the event bus.
+func (nm *NotificationManager) initVAPIDKeys() error {
+	if nm.db == nil {
+		// In-memory fallback if no DB
+		priv, pub, err := webpush.GenerateVAPIDKeys()
+		if err != nil {
+			return err
+		}
+		nm.vapidPrivateKey = priv
+		nm.vapidPublicKey = pub
+		return nil
+	}
+
+	var pubKey, privKey string
+	errPub := nm.db.QueryRow("SELECT value FROM system_settings WHERE key = 'vapid_public_key'").Scan(&pubKey)
+	errPriv := nm.db.QueryRow("SELECT value FROM system_settings WHERE key = 'vapid_private_key'").Scan(&privKey)
+
+	if errPub == nil && errPriv == nil && pubKey != "" && privKey != "" {
+		nm.vapidPublicKey = pubKey
+		nm.vapidPrivateKey = privKey
+		return nil
+	}
+
+	// Generate new VAPID keypair
+	priv, pub, err := webpush.GenerateVAPIDKeys()
+	if err != nil {
+		return fmt.Errorf("generating VAPID keys: %w", err)
+	}
+
+	ctx := context.Background()
+	_, _ = nm.db.ExecContext(ctx, "INSERT OR REPLACE INTO system_settings (key, value, updated_at) VALUES ('vapid_public_key', ?, CURRENT_TIMESTAMP)", pub)
+	_, _ = nm.db.ExecContext(ctx, "INSERT OR REPLACE INTO system_settings (key, value, updated_at) VALUES ('vapid_private_key', ?, CURRENT_TIMESTAMP)", priv)
+
+	nm.vapidPublicKey = pub
+	nm.vapidPrivateKey = priv
+	slog.Info("initialized new VAPID keypair for Web Push notifications")
+	return nil
+}
+
+// GetVAPIDPublicKey returns the public key required by browser PushManager.
+func (nm *NotificationManager) GetVAPIDPublicKey() string {
+	nm.mu.RLock()
+	defer nm.mu.RUnlock()
+	return nm.vapidPublicKey
+}
+
+// SubscribePush stores or updates a Web Push subscription.
+func (nm *NotificationManager) SubscribePush(ctx context.Context, sub PushSubscription) error {
+	if nm.db == nil {
+		return nil
+	}
+	if sub.Endpoint == "" || sub.P256dh == "" || sub.Auth == "" {
+		return fmt.Errorf("invalid push subscription: endpoint and keys are required")
+	}
+
+	query := `
+	INSERT INTO push_subscriptions (endpoint, p256dh, auth, user_agent, created_at)
+	VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+	ON CONFLICT(endpoint) DO UPDATE SET
+		p256dh = excluded.p256dh,
+		auth = excluded.auth,
+		user_agent = excluded.user_agent,
+		created_at = CURRENT_TIMESTAMP
+	`
+	_, err := nm.db.ExecContext(ctx, query, sub.Endpoint, sub.P256dh, sub.Auth, sub.UserAgent)
+	return err
+}
+
+// UnsubscribePush removes a Web Push subscription by its endpoint.
+func (nm *NotificationManager) UnsubscribePush(ctx context.Context, endpoint string) error {
+	if nm.db == nil || endpoint == "" {
+		return nil
+	}
+	_, err := nm.db.ExecContext(ctx, "DELETE FROM push_subscriptions WHERE endpoint = ?", endpoint)
+	return err
+}
+
+// ListPushSubscriptions returns all registered Web Push subscriptions.
+func (nm *NotificationManager) ListPushSubscriptions(ctx context.Context) ([]PushSubscription, error) {
+	if nm.db == nil {
+		return []PushSubscription{}, nil
+	}
+	rows, err := nm.db.QueryContext(ctx, "SELECT endpoint, p256dh, auth, user_agent, created_at FROM push_subscriptions")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var subs []PushSubscription
+	for rows.Next() {
+		var s PushSubscription
+		if err := rows.Scan(&s.Endpoint, &s.P256dh, &s.Auth, &s.UserAgent, &s.CreatedAt); err == nil {
+			subs = append(subs, s)
+		}
+	}
+	return subs, nil
+}
+
+// SendPushToAll broadcasts a notification to all registered Web Push subscriptions.
+func (nm *NotificationManager) SendPushToAll(ctx context.Context, notif Notification) {
+	nm.mu.RLock()
+	pubKey := nm.vapidPublicKey
+	privKey := nm.vapidPrivateKey
+	nm.mu.RUnlock()
+
+	if nm.db == nil || pubKey == "" || privKey == "" {
+		return
+	}
+
+	subs, err := nm.ListPushSubscriptions(ctx)
+	if err != nil || len(subs) == 0 {
+		return
+	}
+
+	payload, err := json.Marshal(notif)
+	if err != nil {
+		return
+	}
+
+	for _, sub := range subs {
+		go func(s PushSubscription) {
+			pushSub := &webpush.Subscription{
+				Endpoint: s.Endpoint,
+				Keys: webpush.Keys{
+					P256dh: s.P256dh,
+					Auth:   s.Auth,
+				},
+			}
+			resp, pushErr := webpush.SendNotification(payload, pushSub, &webpush.Options{
+				Subscriber:      "mailto:admin@actonos.local",
+				VAPIDPublicKey:  pubKey,
+				VAPIDPrivateKey: privKey,
+				TTL:             86400,
+				Urgency:         webpush.UrgencyHigh,
+			})
+			if pushErr != nil {
+				slog.Debug("failed to send web push notification", "endpoint", s.Endpoint, "error", pushErr)
+			}
+			if resp != nil {
+				_ = resp.Body.Close()
+				if resp.StatusCode == http.StatusGone || resp.StatusCode == http.StatusNotFound {
+					slog.Info("removing expired push endpoint", "endpoint", s.Endpoint, "status", resp.StatusCode)
+					_ = nm.UnsubscribePush(context.Background(), s.Endpoint)
+				}
+			}
+		}(sub)
+	}
+}
+
+// Create inserts a new notification and broadcasts it on the event bus and Web Push.
 func (nm *NotificationManager) Create(ctx context.Context, notif Notification) (*Notification, error) {
 	nm.mu.Lock()
-	defer nm.mu.Unlock()
 
 	if notif.ID == "" {
 		b := make([]byte, 8)
@@ -105,6 +287,7 @@ func (nm *NotificationManager) Create(ctx context.Context, notif Notification) (
 			notif.IsRead, notif.CreatedAt,
 		)
 		if err != nil {
+			nm.mu.Unlock()
 			return nil, fmt.Errorf("inserting notification: %w", err)
 		}
 	}
@@ -114,6 +297,11 @@ func (nm *NotificationManager) Create(ctx context.Context, notif Notification) (
 			"notification": notif,
 		}))
 	}
+
+	nm.mu.Unlock()
+
+	// Dispatch Web Push to Service Workers in background goroutine
+	go nm.SendPushToAll(context.Background(), notif)
 
 	return &notif, nil
 }

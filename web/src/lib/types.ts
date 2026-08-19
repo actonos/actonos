@@ -428,3 +428,19 @@ export interface NotificationListResponse {
   limit: number;
   unread_count: number;
 }
+
+export interface PushSubscriptionKeys {
+  p256dh: string;
+  auth: string;
+}
+
+export interface PushSubscriptionPayload {
+  endpoint: string;
+  keys: PushSubscriptionKeys;
+  user_agent?: string;
+}
+
+export interface VAPIDKeyResponse {
+  public_key: string;
+}
+

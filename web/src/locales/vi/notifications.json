@@ -11,8 +11,12 @@
   "unreadBadge": "{{count}} chưa đọc",
   "enableDesktop": "Bật thông báo trên máy tính",
   "desktopEnabled": "Thông báo đẩy trên trình duyệt đang hoạt động",
+  "backgroundEnabled": "Thông báo ngầm (SW) đang hoạt động",
   "desktopBlocked": "Thông báo đã bị chặn trong cài đặt trình duyệt",
   "permissionPrompt": "Cho phép thông báo trình duyệt để nhận cảnh báo tức thì khi có nhiệm vụ cần duyệt hoặc sự cố phát sinh dưới nền.",
+  "sendTest": "Thử thông báo",
+  "testNotificationTitle": "Cảnh báo ngầm ActonOS",
+  "testNotificationBody": "Cơ chế nhận thông báo ngầm qua Service Worker đang hoạt động tốt!",
   "filters": {
     "all": "Tất cả loại",
     "approval": "Cần phê duyệt",
@@ -46,6 +50,8 @@
   "toast": {
     "markedAllRead": "Đã đánh dấu tất cả thông báo là đã đọc",
     "clearedAll": "Đã xóa toàn bộ lịch sử thông báo",
-    "permissionGranted": "Đã kích hoạt thông báo trên trình duyệt thành công!"
+    "permissionGranted": "Đã kích hoạt thông báo trên trình duyệt thành công!",
+    "testSent": "Đã gửi thông báo đẩy thử nghiệm!",
+    "pushSubscribed": "Đã đăng ký thông báo ngầm qua Service Worker thành công!"
   }
 }

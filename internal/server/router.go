@@ -383,6 +383,10 @@ func (s *Server) setupRoutes() {
 				r.Get("/unread-count", s.handleGetUnreadNotificationsCount)
 				r.Post("/mark-read", s.handleMarkNotificationRead)
 				r.Delete("/", s.handleDeleteNotifications)
+				r.Get("/push/vapid-key", s.handleGetVAPIDPublicKey)
+				r.Post("/push/subscribe", s.handleSubscribePush)
+				r.Post("/push/unsubscribe", s.handleUnsubscribePush)
+				r.Post("/push/test", s.handleTestPushNotification)
 			})
 
 			// System, HAL, Keys, Identity, Audit & Tailscale

@@ -592,4 +592,21 @@ export const api = {
     fetchJSON<{ status: string }>('/notifications?all=true', {
       method: 'DELETE',
     }),
+  getVAPIDPublicKey: () =>
+    fetchJSON<import('./types').VAPIDKeyResponse>('/notifications/push/vapid-key'),
+  subscribePush: (payload: import('./types').PushSubscriptionPayload) =>
+    fetchJSON<{ status: string; message: string }>('/notifications/push/subscribe', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  unsubscribePush: (endpoint: string) =>
+    fetchJSON<{ status: string }>('/notifications/push/unsubscribe', {
+      method: 'POST',
+      body: JSON.stringify({ endpoint }),
+    }),
+  testPushNotification: (params?: { title?: string; message?: string; link?: string }) =>
+    fetchJSON<{ status: string; notification: import('./types').NotificationItem }>('/notifications/push/test', {
+      method: 'POST',
+      body: JSON.stringify(params || {}),
+    }),
 };

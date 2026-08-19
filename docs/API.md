@@ -595,6 +595,46 @@ Marks notifications as read. Request body: `{ "id": "notif_..." }` or `{ "all": 
 ### `DELETE /api/notifications`
 Deletes a notification (`?id=notif_...`) or clears entire history (`?all=true`).
 
+### `GET /api/notifications/push/vapid-key`
+Returns the server's VAPID public key for browser PushManager subscription.
+
+**Response:**
+```json
+{
+  "data": {
+    "public_key": "BN3..."
+  }
+}
+```
+
+### `POST /api/notifications/push/subscribe`
+Registers a browser Service Worker push subscription for background alerts.
+
+**Request:**
+```json
+{
+  "endpoint": "https://updates.push.services.mozilla.com/wpush/v2/...",
+  "keys": {
+    "p256dh": "...",
+    "auth": "..."
+  },
+  "user_agent": "Mozilla/5.0 ..."
+}
+```
+
+### `POST /api/notifications/push/unsubscribe`
+Unsubscribes a push notification endpoint.
+
+**Request:**
+```json
+{
+  "endpoint": "https://updates.push.services.mozilla.com/wpush/v2/..."
+}
+```
+
+### `POST /api/notifications/push/test`
+Dispatches a test push notification to active service worker subscriptions.
+
 ---
 
 ## Error Format

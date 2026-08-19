@@ -236,3 +236,62 @@ func TestNotificationManager_EventBusListener(t *testing.T) {
 		t.Fatalf("expected at least 1 notification generated from event, got %d", unread)
 	}
 }
+
+func TestNotificationManager_PushSubscriptionsAndVAPID(t *testing.T) {
+	tempDir := t.TempDir()
+	db, err := sql.Open("sqlite", filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	eventBus := bus.NewEventBus()
+	mgr, err := NewNotificationManager(db, eventBus)
+	if err != nil {
+		t.Fatalf("failed to create notification manager: %v", err)
+	}
+
+	// Verify VAPID public key is auto-generated and non-empty
+	pubKey := mgr.GetVAPIDPublicKey()
+	if pubKey == "" {
+		t.Fatal("expected non-empty VAPID public key")
+	}
+
+	ctx := context.Background()
+
+	// Initially empty subscriptions
+	subs, err := mgr.ListPushSubscriptions(ctx)
+	if err != nil || len(subs) != 0 {
+		t.Fatalf("expected 0 push subscriptions, got %d (err=%v)", len(subs), err)
+	}
+
+	// Register subscription
+	testSub := PushSubscription{
+		Endpoint:  "https://updates.push.services.mozilla.com/wpush/v2/test-endpoint-123",
+		P256dh:    "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckj0bMWq0WEmTEDhviVE46ir06455Q",
+		Auth:      "k80IsiHJ-m3-m2-4v9-abc",
+		UserAgent: "Mozilla/5.0 TestBrowser",
+	}
+
+	if err := mgr.SubscribePush(ctx, testSub); err != nil {
+		t.Fatalf("failed to subscribe push: %v", err)
+	}
+
+	subs, err = mgr.ListPushSubscriptions(ctx)
+	if err != nil || len(subs) != 1 {
+		t.Fatalf("expected 1 push subscription, got %d (err=%v)", len(subs), err)
+	}
+	if subs[0].Endpoint != testSub.Endpoint || subs[0].P256dh != testSub.P256dh {
+		t.Fatalf("subscription mismatch: %+v", subs[0])
+	}
+
+	// Unsubscribe
+	if err := mgr.UnsubscribePush(ctx, testSub.Endpoint); err != nil {
+		t.Fatalf("failed to unsubscribe push: %v", err)
+	}
+
+	subs, err = mgr.ListPushSubscriptions(ctx)
+	if err != nil || len(subs) != 0 {
+		t.Fatalf("expected 0 push subscriptions after unsubscribe, got %d", len(subs))
+	}
+}
