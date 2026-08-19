@@ -31,6 +31,8 @@ parted
 dosfstools
 e2fsprogs
 rsync
+whiptail
+dialog
 grub-common
 grub-pc-bin
 grub-efi-amd64-bin
