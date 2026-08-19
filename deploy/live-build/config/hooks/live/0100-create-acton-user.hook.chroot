@@ -4,7 +4,7 @@
 # ==============================================================================
 set -e
 
-echo "[ActonOS] Initializing 'acton' appliance user and /data permissions..."
+echo "[ActonOS] Initializing 'acton' appliance user, console services, and /data permissions..."
 
 # 1. Create group and user 'acton' (UID/GID 1000)
 if ! getent group acton >/dev/null 2>&1; then
@@ -13,7 +13,6 @@ fi
 
 if ! id -u acton >/dev/null 2>&1; then
     useradd -u 1000 -g acton -d /data -s /bin/bash -m -G sudo,adm,systemd-journal,dialout,plugdev,netdev acton
-    # Set default password 'acton'
     echo "acton:acton" | chpasswd
 fi
 
@@ -27,9 +26,14 @@ mkdir -p /data/config /data/workspace /data/logs /data/skills /data/releases /da
 chown -R acton:acton /data
 chmod 755 /data
 
-# 4. Enable actond systemd service
-if [ -f /etc/systemd/system/actond.service ]; then
-    systemctl enable actond.service 2>/dev/null || true
-fi
+# 4. Configure systemd targets and TTY console services
+systemctl set-default multi-user.target 2>/dev/null || true
+systemctl enable getty@tty1.service 2>/dev/null || true
+systemctl enable actond.service 2>/dev/null || true
 
-echo "[ActonOS] User 'acton' and /data hierarchy initialized successfully."
+# 5. Disable plymouth splash daemon if installed to prevent TTY hangs
+systemctl mask plymouth.service 2>/dev/null || true
+systemctl mask plymouth-quit.service 2>/dev/null || true
+systemctl mask plymouth-quit-wait.service 2>/dev/null || true
+
+echo "[ActonOS] Appliance console and services initialized successfully."
