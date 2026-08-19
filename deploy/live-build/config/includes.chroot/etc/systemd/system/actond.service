@@ -9,7 +9,7 @@ Type=simple
 User=acton
 Group=acton
 WorkingDirectory=/data
-ExecStart=/usr/local/bin/actond --data-dir=/data --port=8080 --listen=:8080
+ExecStart=/usr/local/bin/actond --data-dir=/data --listen=:8080
 Restart=always
 RestartSec=3s
 LimitNOFILE=65536
