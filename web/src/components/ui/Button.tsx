@@ -38,7 +38,7 @@ export function Button({
       {...props}
     >
       {icon && <span className="inline-flex shrink-0">{icon}</span>}
-      <span>{children}</span>
+      {children && <span>{children}</span>}
     </button>
   );
 }

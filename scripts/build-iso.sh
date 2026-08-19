@@ -50,15 +50,11 @@ cd "$WORK_DIR"
 
 # 3. Compile Go static binary for target architecture
 echo "[1/4] Compiling actond static binary for Linux (${ARCH})..."
-if [ ! -d "${ROOT_DIR}/internal/server/dist" ] || [ -z "$(ls -A "${ROOT_DIR}/internal/server/dist" 2>/dev/null)" ]; then
-    echo "[i] Building React web frontend..."
-    cd "${ROOT_DIR}/web"
-    npm ci 2>/dev/null || npm install
-    npm run build
-    mkdir -p "${ROOT_DIR}/internal/server/dist"
-    cp -r "${ROOT_DIR}/web/dist/"* "${ROOT_DIR}/internal/server/dist/"
-    cd "$WORK_DIR"
-fi
+echo "[i] Building React web frontend (React 19 + Tailwind v4)..."
+cd "${ROOT_DIR}/web"
+npm ci 2>/dev/null || npm install
+npm run build
+cd "$WORK_DIR"
 
 cd "${ROOT_DIR}"
 CGO_ENABLED=0 GOOS=linux GOARCH="${ARCH}" go build -trimpath -ldflags="-s -w" -o "${WORK_DIR}/actond" ./cmd/actond

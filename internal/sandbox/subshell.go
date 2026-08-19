@@ -47,8 +47,13 @@ func (s *SubshellSandbox) Execute(ctx context.Context, req CommandRequest) (*Com
 
 	cmd.Dir = workspace
 
+	cmd.Env = append(os.Environ(),
+		"CI=true",
+		"DEBIAN_FRONTEND=noninteractive",
+		"PAGER=cat",
+		"TERM=dumb",
+	)
 	if len(req.Env) > 0 {
-		cmd.Env = os.Environ()
 		for k, v := range req.Env {
 			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 		}

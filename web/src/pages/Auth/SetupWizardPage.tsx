@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
+import { getGroupedTimezones, detectUserTimezone } from '@/lib/timezones';
 import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -25,17 +26,19 @@ export interface SetupWizardPageProps {
 }
 
 export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
-  const { t } = useTranslation('setup');
+  const { t, i18n } = useTranslation('setup');
   const { success, error } = useToast();
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [loading, setLoading] = useState(false);
 
-  // Form State
+  const timezoneGroups = useMemo(() => getGroupedTimezones(), []);
+
+  // Form State - Default English as specified, auto-detect local timezone
   const [userName, setUserName] = useState('Operator');
   const [userRole, setUserRole] = useState('System Architect & Lead Developer');
   const [language, setLanguage] = useState<'en' | 'vi'>('en');
-  const [timezone, setTimezone] = useState('Asia/Ho_Chi_Minh');
+  const [timezone, setTimezone] = useState(() => detectUserTimezone());
   const [customInstructions, setCustomInstructions] = useState(
     'Provide intelligent, natural, and empathetic responses. Act as a trusted senior engineering partner. Proactively solve problems and avoid robotic or stiff clichés.'
   );
@@ -44,6 +47,16 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+
+  // Ensure default interface language on initial wizard mount
+  useEffect(() => {
+    i18n.changeLanguage('en');
+  }, [i18n]);
+
+  const handleLanguageChange = (newLang: 'en' | 'vi') => {
+    setLanguage(newLang);
+    i18n.changeLanguage(newLang);
+  };
 
   const handleNextFromStep1 = (e: FormEvent) => {
     e.preventDefault();
@@ -171,7 +184,7 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
                   </label>
                   <select
                     value={language}
-                    onChange={(e) => setLanguage(e.target.value as 'en' | 'vi')}
+                    onChange={(e) => handleLanguageChange(e.target.value as 'en' | 'vi')}
                     className="w-full bg-canvas text-deep-ink px-4 py-2.5 rounded-full border border-onyx/15 font-sans text-body-sm focus:outline-none focus:ring-2 focus:ring-deep-ink"
                   >
                     <option value="en">{t('wizard.english')}</option>
@@ -188,13 +201,15 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
                     onChange={(e) => setTimezone(e.target.value)}
                     className="w-full bg-canvas text-deep-ink px-4 py-2.5 rounded-full border border-onyx/15 font-sans text-body-sm focus:outline-none focus:ring-2 focus:ring-deep-ink"
                   >
-                    <option value="Asia/Ho_Chi_Minh">{t('wizard.timezones.hoChiMinh')}</option>
-                    <option value="UTC">{t('wizard.timezones.utc')}</option>
-                    <option value="America/New_York">{t('wizard.timezones.newYork')}</option>
-                    <option value="America/Los_Angeles">{t('wizard.timezones.losAngeles')}</option>
-                    <option value="Europe/London">{t('wizard.timezones.london')}</option>
-                    <option value="Asia/Tokyo">{t('wizard.timezones.tokyo')}</option>
-                    <option value="Asia/Singapore">{t('wizard.timezones.singapore')}</option>
+                    {timezoneGroups.map((group) => (
+                      <optgroup key={group.region} label={group.region}>
+                        {group.zones.map((tz) => (
+                          <option key={tz.value} value={tz.value}>
+                            {tz.label}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
                   </select>
                 </div>
               </div>

@@ -649,6 +649,9 @@ func (t *ExecTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*Too
 	}
 	if output == "" {
 		output = fmt.Sprintf("(Command completed with exit code %d, no output)", result.ExitCode)
+	} else if len(output) > 32768 {
+		truncatedMsg := fmt.Sprintf("\n\n[Output truncated: output exceeded 32KB (%d bytes total). Use head/tail/grep/jq to inspect specific sections]", len(output))
+		output = output[:32768] + truncatedMsg
 	}
 
 	return &ToolResult{

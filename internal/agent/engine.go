@@ -133,131 +133,10 @@ func (e *Engine) RecordTokenUsage(ctx context.Context, agentID, model, provider,
 	}()
 }
 
-// buildCognitivePrompt synthesizes all 4 layers of memory into a structured cognitive context:
-// 1. Agent Soul / Persona Identity
-// 2. User Profile Memory (Owner Identity, Role, Language, Preferences)
-// 3. Procedural Memory (Workflows, Tool execution best practices)
-// 4. Episodic Memory (Relevant past semantic memories from hybrid vector + BM25 search)
-// 5. Agent-specific System Instructions
+// buildCognitivePrompt synthesizes all 7 cognitive layers into a structured XML cognitive context
+// using the unified PromptBuilder architecture.
 func (e *Engine) buildCognitivePrompt(ctx context.Context, agentID string, agent *AgentManifest, userMessage string) (string, int) {
-	var sb strings.Builder
-
-	// 1. Agent Identity, Role & Operational Profile (Multi-Purpose Foundation)
-	sb.WriteString("# Agent Identity & Operational Context\n")
-	if agent != nil {
-		if agent.Name != "" {
-			fmt.Fprintf(&sb, "- **Agent Name**: %s\n", agent.Name)
-		}
-		if agent.Description != "" {
-			fmt.Fprintf(&sb, "- **Role / Position & Scope**: %s\n", agent.Description)
-		}
-	}
-	sb.WriteString("- **Platform Environment**: ActonOS Intelligent Autonomous Multi-Agent Workspace\n\n")
-
-	// 1b. Host Operating System & Execution Environment (OS & CLI Tool Awareness)
-	sb.WriteString(BuildHostEnvironmentPrompt(e.workspaceDir))
-	sb.WriteString("\n")
-
-	// 2. Base Soul Persona (isolated per agent)
-	if e.profileMgr != nil {
-		soul := e.profileMgr.GetAgentSoul(agentID)
-		if soul != "" {
-			sb.WriteString("## Core Soul & Temperament\n")
-			sb.WriteString(soul)
-			sb.WriteString("\n\n")
-		}
-
-		// 3. User Profile Memory (Owner Identity & Interaction Preferences)
-		profile := e.profileMgr.GetProfile()
-		sb.WriteString("## Collaborator Identity & Preferences\n")
-		if profile.UserName != "" {
-			fmt.Fprintf(&sb, "- **Collaborator Name**: %s\n", profile.UserName)
-		}
-		if profile.UserRole != "" {
-			fmt.Fprintf(&sb, "- **Collaborator Role**: %s\n", profile.UserRole)
-		}
-		userLang := profile.Language
-		if prefLang, ok := profile.Preferences["language"]; ok && prefLang != "" {
-			userLang = prefLang
-		}
-		if userLang != "" {
-			fmt.Fprintf(&sb, "- **Collaborator Preferred Language**: %s (Primary rule: always respond in the exact language of the user's prompt)\n", userLang)
-		}
-		if profile.Timezone != "" {
-			fmt.Fprintf(&sb, "- **Timezone**: %s (Current Time: %s)\n", profile.Timezone, time.Now().UTC().Format(time.RFC3339))
-		}
-		if profile.CommunicationStyle != "" {
-			fmt.Fprintf(&sb, "- **Communication Style**: %s\n", profile.CommunicationStyle)
-		}
-		if profile.CustomInstructions != "" {
-			fmt.Fprintf(&sb, "- **Collaborator Directives**: %s\n", profile.CustomInstructions)
-		}
-		sb.WriteString("\n")
-
-		// 4. Procedural Memory (Workflows & Execution Guidelines)
-		patterns, _ := e.profileMgr.GetRelevantPatterns(ctx, "general")
-		if len(patterns) > 0 {
-			sb.WriteString("## Procedural Knowledge & Verified Workflows\n")
-			for _, pat := range patterns {
-				fmt.Fprintf(&sb, "- **%s** (%s): %s\n", pat.PatternName, pat.Domain, pat.Workflow)
-			}
-			sb.WriteString("\n")
-		}
-	}
-
-	// 5. Agent Specific System Instructions
-	if agent != nil && agent.SystemInstructions != "" {
-		sb.WriteString("## Role Directives & Specialized Instructions\n")
-		sb.WriteString(agent.SystemInstructions)
-		sb.WriteString("\n\n")
-	}
-
-	// 5b. Headless/Unattended Execution Mode (set by the heartbeat daemon and
-	// other autonomous callers where there is no human present to greet or
-	// ask "how can I help"). See internal/agent/heartbeat.go.
-	if headless, _ := ctx.Value("heartbeat_headless_mode").(bool); headless {
-		sb.WriteString("## Autonomous Headless Execution Mode (CRITICAL)\n")
-		sb.WriteString("- This is an unattended background automation cycle. NO human is reading this in real time — there is nobody to greet, welcome, or offer help to.\n")
-		sb.WriteString("- NEVER reply with a greeting, self-introduction, capability menu, or a question like 'what would you like help with?'. That is a critical failure in this mode.\n")
-		sb.WriteString("- You MUST do exactly one of the following: (a) execute the standing directive(s) using your authorized tools and report the concrete, factual result, or (b) if there is truly nothing actionable, reply with EXACTLY `HEARTBEAT_OK` and nothing else.\n\n")
-	}
-
-	// 6. Universal Conversational Standards & Anti-Robot Principles (Multi-Purpose)
-	sb.WriteString("## Universal Operating Standards & Demeanor\n")
-	sb.WriteString("- **Language Match (CRITICAL)**: Always respond in the EXACT language used by the collaborator in their prompt (e.g. Vietnamese if asked in Vietnamese, English if asked in English).\n")
-	sb.WriteString("- **Direct Answer Delivery (CRITICAL)**: When asked for news, research, summaries, or questions, you MUST deliver the actual news, facts, and answers directly. NEVER output an introductory greeting, capability menu ('Nova here, fully operational...'), or self-introduction when an inquiry or command is given.\n")
-	sb.WriteString("- **Authentic & Empathetic Partnership**: Communicate naturally, intelligently, and respectfully. Embody your designated role and expertise with genuine dedication.\n")
-	sb.WriteString("- **Zero Robotic Clichés**: NEVER produce canned AI disclaimers ('As an AI...', 'I am just a language model...'), generic filler, or repetitive apologies. Dive straight into meaningful, high-value assistance.\n")
-	sb.WriteString("- **Clarity & Actionable Insight**: Deliver structured, clear, and beautifully formatted Markdown responses. Provide decisive recommendations, thorough analysis, or precise actions tailored to the user's specific domain.\n\n")
-
-	// 7. Tool Selection & Execution Discipline
-	sb.WriteString("## Tool Selection & Execution Discipline\n")
-	sb.WriteString("- **Domain Relevance**: ONLY invoke tools that are directly related to the user's explicit request.\n")
-	sb.WriteString("  - For web search, news, current events, or general knowledge: use `native_web_search`. NEVER explore workspace files (`native_file_read`, `native_file_list`), NEVER run shell commands (`native_exec`), and NEVER inspect host hardware telemetry (`native_sysinfo`).\n")
-	sb.WriteString("  - For workspace code or local file questions: only then inspect files in the workspace.\n")
-	sb.WriteString("  - NEVER randomly read filesystem files or query system diagnostics unless the user explicitly requested system or file operations.\n")
-	sb.WriteString("- **Synthesize Tool Results (CRITICAL)**: When `native_web_search` or other tools return observations, you MUST immediately synthesize the findings and provide the complete answer, summary, or news directly to the collaborator. Do not ask what to tackle first; you must answer the current question immediately.\n")
-	sb.WriteString("- **Immediate Convergence**: As soon as relevant information is gathered (e.g. from web search or file read), IMMEDIATELY deliver your final response to the user. Do NOT invoke extra or unrelated tools.\n")
-	sb.WriteString("- **Graceful Fallback**: If a tool returns no results, do not randomly try unrelated tools. Directly explain what you searched and provide the best available answer or summary.\n\n")
-
-	// 8. Layer 4: Episodic Memory (Past interactions & learned facts)
-	// Heartbeat mission execution sets "suppress_episodic_memory" to prevent
-	// stale memories from deleted tasks from contaminating the current context.
-	episodicCount := 0
-	suppressEpisodic, _ := ctx.Value("suppress_episodic_memory").(bool)
-	if e.memory != nil && !suppressEpisodic {
-		memories, err := e.memory.Search(ctx, agentID, memory.LayerEpisodic, userMessage, nil, 4)
-		if err == nil && len(memories) > 0 {
-			episodicCount = len(memories)
-			sb.WriteString("## Relevant Past Episodic Memories\n")
-			for _, m := range memories {
-				fmt.Fprintf(&sb, "- %s\n", m.Content)
-			}
-			sb.WriteString("\n")
-		}
-	}
-
-	return sb.String(), episodicCount
+	return BuildCognitiveSystemPrompt(ctx, agentID, agent, e.workspaceDir, e.profileMgr, e.memory, userMessage)
 }
 
 // CalculateEntropy calculates Shannon Entropy H(p) = -sum(p * log2(p)).
@@ -305,10 +184,7 @@ func (e *Engine) ExecuteAutonomousGoal(ctx context.Context, agentID, goal string
 	var last *llm.Response
 	var accumulated []llm.Message
 	err = e.planner.ExecutePlan(ctx, plan, func(stepCtx context.Context, step PlanStep) (string, error) {
-		prompt := fmt.Sprintf(
-			"[PLAN STEP %s]\nGoal: %s\nStep: %s\nRole: %s\nAcceptance: complete this step with tool evidence and explicit verification.",
-			step.ID, goal, step.Description, step.AgentRole,
-		)
+		prompt := BuildPlanStepPrompt(step.ID, goal, step.Description, step.AgentRole, "")
 		response, stepErr := e.ExecuteStepWithHistory(stepCtx, agentID, prompt, append(history, accumulated...))
 		if stepErr != nil {
 			return "", stepErr

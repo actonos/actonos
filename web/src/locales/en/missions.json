@@ -122,9 +122,9 @@
     "singleAgent": "Single Agent Execution"
   },
   "tabs": {
-    "label": "Mission sections",
-    "tasks": "Tasks & Backlog ({{count}})",
-    "directives": "Standing Directives (HEARTBEAT.md)",
+    "label": "Missions sections",
+    "tasks": "Missions & Backlog ({{count}})",
+    "directives": "Standing Directives",
     "audit": "Pulse Audit Ledger ({{count}})"
   },
   "filters": {
@@ -138,16 +138,16 @@
     "channel": "Channel:"
   },
   "empty": {
-    "title": "No Missions Found",
+    "title": "No Tasks Found",
     "description": "Your autonomous backlog is clear. Create a mission above or let the Heartbeat daemon schedule routine maintenance."
   },
   "directives": {
     "title": "Standing Autonomous Directives",
-    "description": "Instructions loaded on every cognitive pulse (`data/workspace/HEARTBEAT.md`).",
+    "description": "Task instructions executed on every periodic autonomous cycle.",
     "saving": "Saving...",
     "save": "Save Directives",
-    "instructions": "Standing Instructions (Markdown)",
-    "placeholder": "# Standing Directives\n- Continuously verify local storage and database integrity\n- If everything is nominal, reply HEARTBEAT_OK",
+    "instructions": "Standing Directives Content",
+    "placeholder": "- Continuously verify local database and storage integrity\n- If everything is nominal, reply with HEARTBEAT_OK",
     "interval": "Pulse Interval",
     "intervals": {
       "one": "Every 1 minute (High Frequency)",

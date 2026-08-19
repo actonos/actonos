@@ -28,7 +28,7 @@
     "namePlaceholder": "e.g. market_researcher",
     "descLabel": "Description",
     "descPlaceholder": "Describe when agents should use this skill...",
-    "contentLabel": "Instructions (Markdown)",
+    "contentLabel": "Skill Instructions",
     "contentPlaceholder": "Write skill instructions...",
     "submit": "Create Skill",
     "creating": "Creating..."

@@ -2,11 +2,9 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
-	"regexp"
 	"strings"
 	"time"
 
@@ -17,81 +15,20 @@ import (
 type PlanStep struct {
 	ID           string   `json:"id"`
 	Description  string   `json:"description"`
-	AgentRole    string   `json:"agent_role"` // "code", "data", "report", "general"
+	AgentRole    string   `json:"agent_role"` // "code", "data", "report", "general" or specific agent_id
 	Dependencies []string `json:"dependencies"`
 	Status       string   `json:"status"` // "pending", "in_progress", "completed", "failed"
 	Result       string   `json:"result,omitempty"`
 }
 
-// TaskPlan represents a structured execution plan for complex multi-agent goals.
+// TaskPlan represents an execution graph of subtasks for a high-level goal.
 type TaskPlan struct {
 	Goal      string     `json:"goal"`
 	Steps     []PlanStep `json:"steps"`
 	CreatedAt time.Time  `json:"created_at"`
 }
 
-// ExecutePlan runs dependency-ready steps in deterministic topological order.
-func (p *Planner) ExecutePlan(
-	ctx context.Context,
-	plan *TaskPlan,
-	execute func(context.Context, PlanStep) (string, error),
-) error {
-	if plan == nil || len(plan.Steps) == 0 {
-		return errors.New("plan has no executable steps")
-	}
-	known := make(map[string]bool, len(plan.Steps))
-	for _, step := range plan.Steps {
-		if step.ID == "" || known[step.ID] {
-			return fmt.Errorf("plan contains an empty or duplicate step id %q", step.ID)
-		}
-		known[step.ID] = true
-	}
-	for _, step := range plan.Steps {
-		for _, dependency := range step.Dependencies {
-			if !known[dependency] {
-				return fmt.Errorf("step %s references unknown dependency %s", step.ID, dependency)
-			}
-		}
-	}
-
-	completed := map[string]bool{}
-	for len(completed) < len(plan.Steps) {
-		progressed := false
-		for index := range plan.Steps {
-			step := &plan.Steps[index]
-			if completed[step.ID] {
-				continue
-			}
-			ready := true
-			for _, dependency := range step.Dependencies {
-				if !completed[dependency] {
-					ready = false
-					break
-				}
-			}
-			if !ready {
-				continue
-			}
-			progressed = true
-			step.Status = "in_progress"
-			result, err := execute(ctx, *step)
-			if err != nil {
-				step.Status = "failed"
-				step.Result = err.Error()
-				return fmt.Errorf("executing plan step %s: %w", step.ID, err)
-			}
-			step.Status = "completed"
-			step.Result = result
-			completed[step.ID] = true
-		}
-		if !progressed {
-			return errors.New("plan dependency graph contains a cycle")
-		}
-	}
-	return nil
-}
-
-// Planner handles goal decomposition and multi-agent execution planning.
+// Planner decomposes high-level goals into executable DAG plans.
 type Planner struct {
 	llmRouter *llm.ModelCascadeRouter
 }
@@ -134,22 +71,7 @@ func (p *Planner) DecomposeGoal(ctx context.Context, goal string, availableAgent
 		cascade = []string{"anthropic/claude-sonnet-4.5", "google/gemini-2.5-flash"}
 	}
 
-	prompt := fmt.Sprintf(`You are the ActonOS Orchestration Planner.
-Decompose the following complex user goal into 2 to 5 actionable, sequential steps.
-Available agent roles: code, data, report, general.
-
-Goal: %s
-
-Return ONLY valid JSON in this exact structure:
-[
-  {
-    "id": "task_1",
-    "description": "Step description",
-    "agent_role": "code",
-    "dependencies": []
-  }
-]`, goal)
-
+	prompt := BuildPlannerPrompt(goal, availableAgents)
 	messages := []llm.Message{
 		{Role: "user", Content: prompt},
 	}
@@ -162,33 +84,26 @@ Return ONLY valid JSON in this exact structure:
 	resp, err := p.llmRouter.CompleteWithCascade(ctx, cascade, messages, opts)
 	if err != nil {
 		slog.Warn("planner fallback to basic decomposition", "cascade", cascade, "error", err)
+		fallbackRole := "general"
+		if len(availableAgents) > 0 && availableAgents[0].AgentID != "" {
+			fallbackRole = availableAgents[0].AgentID
+		}
 		plan.Steps = []PlanStep{
-			{ID: "task_1", Description: "Execute initial analysis for: " + goal, AgentRole: "general", Status: "pending"},
-			{ID: "task_2", Description: "Consolidate and verify results for: " + goal, AgentRole: "report", Dependencies: []string{"task_1"}, Status: "pending"},
+			{ID: "task_1", Description: "Execute initial analysis for: " + goal, AgentRole: fallbackRole, Status: "pending"},
+			{ID: "task_2", Description: "Consolidate and verify results for: " + goal, AgentRole: fallbackRole, Dependencies: []string{"task_1"}, Status: "pending"},
 		}
 		return plan, nil
 	}
 
-	cleanedContent := strings.TrimSpace(resp.Content)
-	if strings.HasPrefix(cleanedContent, "```") {
-		lines := strings.Split(cleanedContent, "\n")
-		if len(lines) >= 2 {
-			cleanedContent = strings.Join(lines[1:len(lines)-1], "\n")
-		}
-	}
-	cleanedContent = strings.TrimSpace(cleanedContent)
-
 	var steps []PlanStep
-	if err := json.Unmarshal([]byte(cleanedContent), &steps); err != nil {
-		re := regexp.MustCompile(`(?s)\[\s*\{.*\}\s*\]`)
-		if match := re.FindString(cleanedContent); match != "" {
-			_ = json.Unmarshal([]byte(match), &steps)
+	if err := ExtractAndUnmarshalJSON(resp.Content, &steps); err != nil {
+		slog.Warn("planner failed to parse JSON, falling back to default plan", "error", err, "raw", resp.Content)
+		fallbackRole := "general"
+		if len(availableAgents) > 0 && availableAgents[0].AgentID != "" {
+			fallbackRole = availableAgents[0].AgentID
 		}
-	}
-
-	if len(steps) == 0 {
 		plan.Steps = []PlanStep{
-			{ID: "task_1", Description: goal, AgentRole: "general", Status: "pending"},
+			{ID: "task_1", Description: goal, AgentRole: fallbackRole, Status: "pending"},
 		}
 		return plan, nil
 	}
@@ -198,4 +113,62 @@ Return ONLY valid JSON in this exact structure:
 	}
 	plan.Steps = steps
 	return plan, nil
+}
+
+// ExecutePlan runs each step in topological order, respecting dependencies.
+func (p *Planner) ExecutePlan(ctx context.Context, plan *TaskPlan, stepExecutor func(ctx context.Context, step PlanStep) (string, error)) error {
+	if plan == nil || len(plan.Steps) == 0 {
+		return errors.New("cannot execute empty plan")
+	}
+
+	completed := make(map[string]bool)
+	stepMap := make(map[string]*PlanStep)
+	for i := range plan.Steps {
+		stepMap[plan.Steps[i].ID] = &plan.Steps[i]
+	}
+
+	for {
+		progressMade := false
+		allDone := true
+
+		for i := range plan.Steps {
+			step := &plan.Steps[i]
+			if step.Status == "completed" {
+				continue
+			}
+			allDone = false
+
+			// Check if all dependencies are satisfied
+			depsMet := true
+			for _, depID := range step.Dependencies {
+				if !completed[depID] {
+					depsMet = false
+					break
+				}
+			}
+
+			if depsMet && step.Status == "pending" {
+				step.Status = "in_progress"
+				res, err := stepExecutor(ctx, *step)
+				if err != nil {
+					step.Status = "failed"
+					step.Result = err.Error()
+					return fmt.Errorf("step %s (%s) failed: %w", step.ID, step.Description, err)
+				}
+				step.Status = "completed"
+				step.Result = res
+				completed[step.ID] = true
+				progressMade = true
+			}
+		}
+
+		if allDone {
+			break
+		}
+		if !progressMade {
+			return errors.New("deadlock detected in task plan dependencies")
+		}
+	}
+
+	return nil
 }

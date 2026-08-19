@@ -118,11 +118,11 @@ func (s *SwarmManager) SpawnSubAgent(ctx context.Context, parentID string, task 
 			result.AgentID = parentID + "_sub"
 		}
 
-		// Prompt preparation
-		systemPrompt := fmt.Sprintf("You are a specialized sub-agent assisting parent agent %s.\nYour task: %s", parent.Name, task.Title)
+		// Prompt preparation using unified Swarm Delegation Builder
+		systemPrompt, userPrompt := BuildSwarmDelegationPrompt(parent.Name, task.Title, task.Prompt)
 		messages := []llm.Message{
 			{Role: llm.RoleSystem, Content: systemPrompt},
-			{Role: llm.RoleUser, Content: task.Prompt},
+			{Role: llm.RoleUser, Content: userPrompt},
 		}
 
 		var cascadeOrder []string
@@ -143,7 +143,7 @@ func (s *SwarmManager) SpawnSubAgent(ctx context.Context, parentID string, task 
 			resp, err = s.engine.ExecuteStep(
 				taskCtx,
 				executionAgentID,
-				fmt.Sprintf("[AUTONOMOUS DELEGATED SUBTASK]\nRole: %s\nTask: %s\n\n%s", task.Title, systemPrompt, task.Prompt),
+				userPrompt,
 			)
 		} else {
 			resp, err = s.llmRouter.CompleteWithCascade(taskCtx, cascadeOrder, messages, llm.CompletionOptions{})

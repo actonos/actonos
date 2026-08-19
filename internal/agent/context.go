@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"time"
 
@@ -73,36 +72,22 @@ func NewContextManager(maxTokens int) *ContextManager {
 	return &ContextManager{maxTokens: maxTokens}
 }
 
-// BuildAugmentedSystemPrompt injects User Profile preferences and Procedural Memory patterns into the base prompt.
+// BuildAugmentedSystemPrompt injects User Profile preferences and Procedural Memory patterns into the base prompt
+// using the unified PromptBuilder.
 func (c *ContextManager) BuildAugmentedSystemPrompt(
 	baseInstructions string,
 	profile UserProfile,
 	patterns []ProceduralPattern,
 ) string {
-	var builder strings.Builder
-
-	builder.WriteString(baseInstructions)
-	builder.WriteString("\n\n=== USER PREFERENCES & CONVENTIONS ===\n")
-	if profile.UserName != "" {
-		builder.WriteString(fmt.Sprintf("- User: %s\n", profile.UserName))
+	b := NewPromptBuilder()
+	if baseInstructions != "" {
+		b.WithSection(&RawTextSection{Content: baseInstructions})
 	}
-	if profile.CommunicationStyle != "" {
-		builder.WriteString(fmt.Sprintf("- Communication Style: %s\n", profile.CommunicationStyle))
-	}
-	if profile.Language != "" {
-		builder.WriteString(fmt.Sprintf("- Preferred Language: %s\n", profile.Language))
-	}
-	for key, value := range profile.Preferences {
-		builder.WriteString(fmt.Sprintf("- %s: %s\n", key, value))
-	}
-
+	b.WithSection(&CollaboratorSection{Profile: profile})
 	if len(patterns) > 0 {
-		builder.WriteString("\n=== PROCEDURAL BEST PRACTICES & WORKFLOW PATTERNS ===\n")
-		for _, pattern := range patterns {
-			builder.WriteString(fmt.Sprintf("[%s]: %s\n", pattern.PatternName, pattern.Workflow))
-		}
+		b.WithSection(&ProceduralSection{Patterns: patterns})
 	}
-	return builder.String()
+	return b.Build()
 }
 
 // PruneMessages compacts history to a conservative token budget while retaining

@@ -481,25 +481,7 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) *Heartbea
 			_ = h.sessionMgr.SaveMessage(ctx, convID, assignedAgent, "user", userPrompt, nil)
 		}
 
-		prompt := fmt.Sprintf(`[AUTONOMOUS MISSION EXECUTION CYCLE]
-Task ID: %s | Title: %s | Priority: %s | Progress: %d%%
-Task Directive: %s
-Standing Directives: %s
-
-YOU ARE EXECUTING THIS MISSION AUTONOMOUSLY.
-Review your previous dialogue history for context so you do not repeat already completed actions.
-CRITICAL INSTRUCTIONS:
-1. EXECUTE ONLY the current task directive above. DO NOT reference, continue, or act on any unrelated topics, previous tasks, or stale memories. If your history mentions tasks unrelated to this directive, IGNORE them completely.
-2. Carry out the next logical action using your authorized tools.
-3. DO NOT call 'native_channel_notify' tool because the ActonOS Mission Coordinator will automatically deliver your summary and status updates to '%s'.
-4. At the end of your response, specify task progress:
-   - If completely finished, end with: "[TASK_COMPLETED]" followed by a concise executive summary of the result.
-   - If ongoing, end with: "[PROGRESS: X%%]" (where X is an integer 1-99) followed by a short note on what was accomplished.
-   - If blocked on missing requirements or errors, end with: "[TASK_BLOCKED: reason]".
-5. Keep your output professional, structured, and factual. Do not include meta-filler like "The notification has been sent".`,
-			activeTask.ID, activeTask.Title, activeTask.Priority, activeTask.Progress,
-			activeTask.Description, standingDirectives, activeTask.TargetChannel,
-		)
+		prompt := BuildHeartbeatMissionPrompt(activeTask.Title, activeTask.Description, standingDirectives)
 
 		// Suppress episodic memory for heartbeat task execution to prevent stale
 		// memories from deleted tasks from contaminating the current task context.
@@ -654,27 +636,7 @@ CRITICAL INSTRUCTIONS:
 	// https://docs.openclaw.ai/vi/gateway/heartbeat — read/execute standing
 	// directives strictly, never infer or repeat old work, and reply with the
 	// bare acknowledgement token when nothing needs attention.
-	prompt := fmt.Sprintf(`[AUTONOMOUS HEARTBEAT CYCLE]
-Current UTC Time: %s
-Backlog Status: %s
-
-═══════════════════════════════════════════════════
-STANDING DIRECTIVES (HEARTBEAT.md — HIGHEST PRIORITY):
-%s
-═══════════════════════════════════════════════════
-
-Read the standing directives above and follow them strictly. Do not infer or repeat old tasks from prior heartbeat cycles or chats — all past missions are finished.
-
-RULES:
-1. Execute only what the standing directives above actually ask for. Do not invent, assume, or expand scope beyond them.
-2. Do NOT call 'native_channel_notify' — delivery to the configured channel is handled automatically by the system after this response.
-3. NEVER create, change, list, or delete cron/scheduled jobs during a heartbeat. Recurring automations require an explicit operator request outside this routine.
-4. If nothing needs attention (directives are empty, already satisfied, or system health is nominal), reply with exactly: HEARTBEAT_OK — and nothing else of substance. Do not include HEARTBEAT_OK anywhere in an actual alert reply.
-5. If there IS something worth surfacing, reply with the alert content directly (no preamble, no meta-commentary like "notification sent").`,
-		time.Now().UTC().Format(time.RFC3339),
-		backlogSummary,
-		standingDirectives,
-	)
+	prompt := BuildHeartbeatPulsePrompt(standingDirectives, backlogSummary)
 
 	resp, execErr := h.engine.ExecuteStepWithHistory(routineCtx, primaryAgentID, prompt, nil)
 	if execErr != nil {

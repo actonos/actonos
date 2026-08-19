@@ -2,8 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"log/slog"
 	"regexp"
 	"strings"
@@ -124,22 +122,7 @@ func (r *ReflectionEngine) ReflectOnConversation(ctx context.Context, agentID, u
 		reflectCtx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 		defer cancel()
 
-		prompt := fmt.Sprintf(`You are the ActonOS Memory & Reflection Daemon.
-Analyze the following user-assistant exchange.
-Synthesize:
-1. "preference_key" & "preference_value": Genuine user preferences, coding styles, language habits (NEVER system directives, heartbeat rules, or bot standing tasks). If none, leave empty "".
-2. "episodic_memory": A concise 1-2 sentence summary of key decisions, facts, solutions, or project context learned in this exchange that should be remembered for future interactions (if trivial greeting/chit-chat with zero lasting value, leave empty "").
-
-Exchange:
-User: %s
-Assistant: %s
-
-Respond STRICTLY with valid JSON:
-{
-  "preference_key": "",
-  "preference_value": "",
-  "episodic_memory": ""
-}`, userMsg, asstResp)
+		prompt := BuildReflectionPrompt(userMsg, asstResp)
 
 		messages := []llm.Message{
 			{Role: "user", Content: prompt},
@@ -160,19 +143,13 @@ Respond STRICTLY with valid JSON:
 			return
 		}
 
-		cleanJSON := strings.TrimSpace(resp.Content)
-		if idx := strings.Index(cleanJSON, "{"); idx != -1 {
-			if lastIdx := strings.LastIndex(cleanJSON, "}"); lastIdx > idx {
-				cleanJSON = cleanJSON[idx : lastIdx+1]
-			}
-		}
-
 		var result struct {
 			PrefKey        string `json:"preference_key"`
 			PrefVal        string `json:"preference_value"`
 			EpisodicMemory string `json:"episodic_memory"`
 		}
-		if err := json.Unmarshal([]byte(cleanJSON), &result); err != nil {
+		if err := ExtractAndUnmarshalJSON(resp.Content, &result); err != nil {
+			slog.Debug("failed to parse reflection JSON", "error", err, "raw", resp.Content)
 			return
 		}
 

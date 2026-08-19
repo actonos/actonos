@@ -28,8 +28,8 @@
     "namePlaceholder": "vd. market_researcher",
     "descLabel": "Mô tả",
     "descPlaceholder": "Mô tả khi nào agent nên dùng kỹ năng này...",
-    "contentLabel": "Hướng dẫn (Markdown)",
-    "contentPlaceholder": "Viết hướng dẫn cho kỹ năng...",
+    "contentLabel": "Nội dung Hướng dẫn Kỹ năng",
+    "contentPlaceholder": "Viết hướng dẫn chi tiết cho kỹ năng...",
     "submit": "Tạo kỹ năng",
     "creating": "Đang tạo..."
   },

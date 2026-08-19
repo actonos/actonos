@@ -124,7 +124,7 @@
   "tabs": {
     "label": "Các phần nhiệm vụ",
     "tasks": "Nhiệm vụ & tồn đọng ({{count}})",
-    "directives": "Chỉ thị thường trực (HEARTBEAT.md)",
+    "directives": "Chỉ thị Tự hành Thường trực",
     "audit": "Sổ cái kiểm tra xung ({{count}})"
   },
   "filters": {
@@ -139,15 +139,15 @@
   },
   "empty": {
     "title": "Không tìm thấy nhiệm vụ nào",
-    "description": "Việc tồn đọng tự chủ của bạn đã rõ ràng. Tạo một nhiệm vụ ở trên hoặc để daemon Heartbeat lên lịch bảo trì định kỳ."
+    "description": "Danh sách tác vụ tự hành hiện đang trống. Tạo một nhiệm vụ ở trên hoặc để daemon Heartbeat lên lịch bảo trì định kỳ."
   },
   "directives": {
-    "title": "Chỉ thị tự trị thường trực",
-    "description": "Các hướng dẫn được tải trên mọi xung nhận thức (`data/workspace/HEARTBEAT.md`).",
+    "title": "Chỉ thị Tự hành Thường trực",
+    "description": "Các chỉ thị nhiệm vụ được thực thi trong mỗi chu kỳ tuần tra tự hành của hệ thống.",
     "saving": "Đang lưu...",
     "save": "Lưu chỉ thị",
-    "instructions": "Hướng dẫn thường trực (Markdown)",
-    "placeholder": "# Chỉ thị thường trực\n- Liên tục xác minh tính toàn vẹn của cơ sở dữ liệu và lưu trữ cục bộ\n- Nếu mọi thứ đều bình thường, hãy trả lời HEARTBEAT_OK",
+    "instructions": "Nội dung Chỉ thị Tự hành",
+    "placeholder": "- Định kỳ kiểm tra tính toàn vẹn của cơ sở dữ liệu và lưu trữ cục bộ\n- Nếu mọi thứ đều bình thường, hãy trả lời HEARTBEAT_OK",
     "interval": "Thời gian",
     "intervals": {
       "one": "Cứ sau 1 phút (Tần số cao)",

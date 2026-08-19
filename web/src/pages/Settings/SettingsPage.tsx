@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
+import { getGroupedTimezones } from '@/lib/timezones';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
 import { Card } from '@/components/ui/Card';
@@ -59,6 +60,8 @@ export function SettingsPage() {
     setActiveTab(tab);
     setHashParam('view', tab === 'keys' ? undefined : tab);
   };
+
+  const timezoneGroups = useMemo(() => getGroupedTimezones(), []);
 
   // Metrics & Tailscale
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
@@ -400,11 +403,21 @@ export function SettingsPage() {
                     <label className="block text-caption uppercase text-slate font-semibold mb-1.5">
                       {t('identity.timezone')}
                     </label>
-                    <Input
-                      value={identityProfile.timezone || 'Asia/Ho_Chi_Minh'}
+                    <select
+                      value={identityProfile.timezone || 'UTC'}
                       onChange={(e) => setIdentityProfile({ ...identityProfile, timezone: e.target.value })}
-                      placeholder={t('identity.timezonePlaceholder')}
-                    />
+                      className="w-full px-4 py-2.5 bg-canvas border border-onyx/15 rounded-full text-body-sm text-deep-ink font-sans focus:outline-none focus:ring-2 focus:ring-deep-ink"
+                    >
+                      {timezoneGroups.map((group) => (
+                        <optgroup key={group.region} label={group.region}>
+                          {group.zones.map((tz) => (
+                            <option key={tz.value} value={tz.value}>
+                              {tz.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
                   </div>
                 </div>
 

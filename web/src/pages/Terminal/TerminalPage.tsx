@@ -247,13 +247,13 @@ export function TerminalPage() {
   const isWindows = terminalInfo ? terminalInfo.os === 'windows' : false;
 
   return (
-    <div className={`space-y-4 ${isFullscreen ? 'fixed inset-0 z-50 bg-[#090814] p-4 m-0 flex flex-col' : ''}`}>
+    <div className={`w-full mx-auto px-4 md:px-8 py-8 md:py-12 ${isFullscreen ? 'max-w-none fixed inset-0 z-50 bg-[#090814] p-4 m-0 flex flex-col' : 'max-w-[1200px]'}`}>
       {/* Page Header */}
       {!isFullscreen && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
+          <div className='mb-6'>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold font-serif text-deep-ink dark:text-white">
+              <h1 className="font-serif text-heading text-deep-ink sm:text-heading-lg">
                 {t('title', 'Web Terminal')}
               </h1>
               <Badge variant="neutral" className="gap-1 font-mono text-[11px] uppercase">
@@ -261,7 +261,7 @@ export function TerminalPage() {
                 {terminalInfo?.os || 'System'} PTY
               </Badge>
             </div>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            <p className="mt-1 max-w-3xl text-body-sm text-slate sm:text-body">
               {t('subtitle', 'Interactive pseudo-terminal connection directly into the ActonOS runtime kernel.')}
             </p>
           </div>
@@ -290,8 +290,8 @@ export function TerminalPage() {
             <Badge
               variant={
                 status === 'connected' ? 'success' :
-                status === 'connecting' ? 'neutral' :
-                'stopped'
+                  status === 'connecting' ? 'neutral' :
+                    'stopped'
               }
               className="ml-2 hidden sm:inline-flex py-0.5 text-[11px]"
             >
@@ -362,8 +362,8 @@ export function TerminalPage() {
               onClick={handleClear}
               className="text-white/70 hover:text-white hover:bg-white/10 h-8 px-2"
               title="Clear terminal screen"
+              icon={<Trash2 className="w-3.5 h-3.5" />}
             >
-              <Trash2 className="w-3.5 h-3.5" />
               <span className="hidden lg:inline text-xs ml-1.5">{t('actions.clear', 'Clear')}</span>
             </Button>
 
@@ -374,8 +374,8 @@ export function TerminalPage() {
               onClick={() => startSession(selectedShell)}
               className="text-white/70 hover:text-white hover:bg-white/10 h-8 px-2"
               title="Reconnect terminal session"
+              icon={<RefreshCw className="w-3.5 h-3.5" />}
             >
-              <RefreshCw className="w-3.5 h-3.5" />
               <span className="hidden lg:inline text-xs ml-1.5">{t('actions.reconnect', 'Reconnect')}</span>
             </Button>
 
@@ -402,8 +402,8 @@ export function TerminalPage() {
               }}
               className="text-white/70 hover:text-white hover:bg-white/10 h-8 px-2"
               title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+              icon={isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
             >
-              {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
             </Button>
           </div>
         </div>

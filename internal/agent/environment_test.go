@@ -31,8 +31,16 @@ func TestBuildHostEnvironmentPrompt(t *testing.T) {
 		t.Fatal("expected host environment prompt to not be empty")
 	}
 
-	if !strings.Contains(prompt, "Host Operating System & Execution Environment") {
-		t.Errorf("prompt missing Host Operating System header, got:\n%s", prompt)
+	if !strings.Contains(prompt, "<environment>") {
+		t.Errorf("prompt missing <environment> XML tag, got:\n%s", prompt)
+	}
+
+	if !strings.Contains(prompt, "<operational_constraints>") {
+		t.Errorf("prompt missing <operational_constraints> XML tag, got:\n%s", prompt)
+	}
+
+	if !strings.Contains(prompt, "no_interactive_commands") {
+		t.Errorf("prompt missing no_interactive_commands rule, got:\n%s", prompt)
 	}
 
 	if !strings.Contains(prompt, "/custom/workspace") {
