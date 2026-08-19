@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -115,6 +116,52 @@ func IsApprovalBypassed(ctx context.Context) bool {
 	return val
 }
 
+type deniedToolsContextKey struct{}
+
+// ErrToolDeniedInContext is returned when a tool is barred from the current
+// execution context regardless of the agent's own authorization.
+var ErrToolDeniedInContext = errors.New("tool is not permitted in this execution context")
+
+// WithDeniedTools bars specific tools for the lifetime of this context. It is a
+// hard execution-boundary guard, not a prompt hint: autonomous loops use it so a
+// model cannot take self-directed actions (such as scheduling new cron jobs) that
+// the operator never asked for. Denials accumulate across nested calls.
+func WithDeniedTools(ctx context.Context, names ...string) context.Context {
+	if len(names) == 0 {
+		return ctx
+	}
+	denied := map[string]bool{}
+	if existing, ok := ctx.Value(deniedToolsContextKey{}).(map[string]bool); ok {
+		for name := range existing {
+			denied[name] = true
+		}
+	}
+	for _, name := range names {
+		denied[name] = true
+	}
+	return context.WithValue(ctx, deniedToolsContextKey{}, denied)
+}
+
+// IsToolDenied reports whether a tool is barred in this context.
+func IsToolDenied(ctx context.Context, name string) bool {
+	denied, ok := ctx.Value(deniedToolsContextKey{}).(map[string]bool)
+	return ok && denied[name]
+}
+
+// DeniedTools lists the tools barred in this context.
+func DeniedTools(ctx context.Context) []string {
+	denied, ok := ctx.Value(deniedToolsContextKey{}).(map[string]bool)
+	if !ok {
+		return nil
+	}
+	names := make([]string, 0, len(denied))
+	for name := range denied {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
 // TraceIDFromContext retrieves the current trace identifier.
 func TraceIDFromContext(ctx context.Context) string {
 	value, _ := ctx.Value(traceIDContextKey).(string)
@@ -206,7 +253,8 @@ func (r *ToolRegistry) ListByCategory(category string) []ToolInfo {
 }
 
 // ToLLMToolDefinitions converts authorized tools into LLM-compatible tool definitions.
-func (r *ToolRegistry) ToLLMToolDefinitions(authorizedTools []string) []llm.ToolDefinition {
+// excludedTools are omitted even when the agent has wildcard authorization.
+func (r *ToolRegistry) ToLLMToolDefinitions(authorizedTools []string, excludedTools ...string) []llm.ToolDefinition {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -219,10 +267,14 @@ func (r *ToolRegistry) ToLLMToolDefinitions(authorizedTools []string) []llm.Tool
 		}
 		authMap[a] = true
 	}
+	excluded := make(map[string]bool, len(excludedTools))
+	for _, name := range excludedTools {
+		excluded[name] = true
+	}
 
 	var defs []llm.ToolDefinition
 	for name, t := range r.tools {
-		if allowAll || authMap[name] {
+		if (allowAll || authMap[name]) && !excluded[name] {
 			defs = append(defs, llm.ToolDefinition{
 				Type: "function",
 				Function: llm.FunctionDefinition{
@@ -286,6 +338,10 @@ func NormalizeToolInput(inputJSON json.RawMessage) json.RawMessage {
 
 // Execute executes a tool by name with input JSON parameters.
 func (r *ToolRegistry) Execute(ctx context.Context, agentID, name string, inputJSON json.RawMessage) (*ToolResult, error) {
+	if IsToolDenied(ctx, name) {
+		return nil, fmt.Errorf("%w: agent=%s tool=%s", ErrToolDeniedInContext, agentID, name)
+	}
+
 	tool, err := r.Get(name)
 	if err != nil {
 		return nil, err

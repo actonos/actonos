@@ -177,13 +177,21 @@ func TestToOpenAIMessages_ToolArgumentsSerializedAsString(t *testing.T) {
 		t.Fatalf("expected string value `{\"query\":\"hot tech news 2026\"}`, got: %s", argsVal)
 	}
 
-	// Verify that reasoning_content field is present in assistant message JSON (for DeepSeek/R1 thinking mode compliance)
-	rcVal, hasRC := asstMap["reasoning_content"]
-	if !hasRC {
-		t.Fatal("expected reasoning_content field to be present in assistant message JSON")
+	// reasoning_content is an OUTPUT-only field. DeepSeek/R1 reject a request that
+	// echoes it back in an input message, so it must never be serialized here.
+	if _, hasRC := asstMap["reasoning_content"]; hasRC {
+		t.Fatal("reasoning_content must not be sent back to the provider in a request message")
 	}
-	if _, isString := rcVal.(string); !isString {
-		t.Fatalf("expected reasoning_content to be string in JSON, got %T", rcVal)
+
+	// An assistant turn carrying only tool_calls must send content as JSON null.
+	// An empty string paired with tool_calls is rejected by several
+	// OpenAI-compatible gateways.
+	contentVal, hasContent := asstMap["content"]
+	if !hasContent {
+		t.Fatal("expected content key to be present in assistant message JSON")
+	}
+	if contentVal != nil {
+		t.Fatalf("expected content to be null for a tool_calls-only assistant message, got %T: %v", contentVal, contentVal)
 	}
 }
 

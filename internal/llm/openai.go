@@ -40,12 +40,11 @@ func NewOpenAIProvider(apiKey, model, baseURL string) *OpenAIProvider {
 }
 
 type openAIMessage struct {
-	Role             string           `json:"role"`
-	Content          *string          `json:"content"`
-	ReasoningContent *string          `json:"reasoning_content,omitempty"`
-	ToolCalls        []openAIToolCall `json:"tool_calls,omitempty"`
-	ToolCallID       string           `json:"tool_call_id,omitempty"`
-	Name             string           `json:"name,omitempty"`
+	Role       string           `json:"role"`
+	Content    *string          `json:"content"`
+	ToolCalls  []openAIToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string           `json:"tool_call_id,omitempty"`
+	Name       string           `json:"name,omitempty"`
 }
 
 type openAIToolCall struct {
@@ -106,20 +105,25 @@ func toOpenAIMessages(messages []Message) []openAIMessage {
 			}
 		}
 
-		c := m.Content
-		var rcPtr *string
-		if m.Role == RoleAssistant {
-			rc := m.ReasoningContent
-			rcPtr = &rc
+		// An assistant turn that only carries tool_calls must send content as JSON
+		// null, not "". Several OpenAI-compatible gateways reject an empty string
+		// paired with tool_calls, which surfaces as a hard 400 on the very next
+		// ReAct iteration.
+		var contentPtr *string
+		if !(m.Role == RoleAssistant && m.Content == "" && len(toolCalls) > 0) {
+			c := m.Content
+			contentPtr = &c
 		}
 
+		// reasoning_content is an OUTPUT-only field. DeepSeek (and other reasoning
+		// gateways) reject requests that echo it back in an input message, so it is
+		// never replayed to the provider.
 		result = append(result, openAIMessage{
-			Role:             string(m.Role),
-			Content:          &c,
-			ReasoningContent: rcPtr,
-			ToolCalls:        toolCalls,
-			ToolCallID:       m.ToolCallID,
-			Name:             m.Name,
+			Role:       string(m.Role),
+			Content:    contentPtr,
+			ToolCalls:  toolCalls,
+			ToolCallID: m.ToolCallID,
+			Name:       m.Name,
 		})
 	}
 	return result
@@ -299,13 +303,26 @@ func (p *OpenAIProvider) StreamComplete(ctx context.Context, messages []Message,
 			sort.Ints(indexes)
 			for _, index := range indexes {
 				call := pending[index]
-				if call == nil {
+				// A call with no id or no name is an incomplete fragment: forwarding it
+				// produces an assistant tool_call that no result can ever be paired with.
+				if call == nil || call.id == "" || call.name == "" {
 					continue
+				}
+				args := strings.TrimSpace(call.arguments.String())
+				if args == "" {
+					args = "{}"
 				}
 				calls = append(calls, ToolCall{
 					ID: call.id, Type: call.callType,
-					Function: FunctionCall{Name: call.name, Arguments: json.RawMessage(call.arguments.String())},
+					Function: FunctionCall{Name: call.name, Arguments: json.RawMessage(args)},
 				})
+			}
+			// emitPending may run twice (on [DONE] and again after the scan loop);
+			// clearing prevents the same tool_calls being emitted a second time and
+			// duplicated into the transcript.
+			pending = map[int]*pendingCall{}
+			if len(calls) == 0 {
+				return
 			}
 			ch <- StreamChunk{ToolCalls: calls}
 		}

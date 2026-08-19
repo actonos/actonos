@@ -394,6 +394,19 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
       let buffer = '';
+      // SSE state that must survive across reader.read() boundaries: a single
+      // event's `event:` and `data:` lines can land in different chunks.
+      let currentEvent = 'token';
+
+      // One network read can carry many token events. Every setMessages inside the
+      // synchronous parse loop below is batched by React into a single render, so a
+      // chunk holding 40 tokens painted once instead of 40 times — the "jumping
+      // text" effect. Yielding to the event loop after each parsed event lets React
+      // commit one frame per token.
+      const yieldToRenderer = () =>
+        new Promise<void>((resolve) => {
+          requestAnimationFrame(() => resolve());
+        });
 
       while (true) {
         const { value, done } = await reader.read();
@@ -403,8 +416,9 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
 
-        let currentEvent = 'token';
-
+        // currentEvent must persist across read() chunks. Resetting it per chunk
+        // meant a `data:` line that arrived in a later TCP read than its `event:`
+        // line was mis-attributed to the default 'token' type.
         for (const line of lines) {
           const trimmed = line.trim();
           if (!trimmed) continue;
@@ -448,14 +462,24 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
               }
 
               if (currentEvent === 'thought' && parsed.thought) {
+                // Reasoning arrives as incremental deltas — append, don't replace.
                 currentAssistantMsg = {
                   ...currentAssistantMsg,
-                  thought: parsed.thought,
+                  thought: (currentAssistantMsg.thought ?? '') + parsed.thought,
                 };
               } else if (currentEvent === 'token' && parsed.content) {
                 currentAssistantMsg = {
                   ...currentAssistantMsg,
                   content: currentAssistantMsg.content + parsed.content,
+                  // A token arriving means the answer has started: clear the
+                  // transient thought line so it stops competing with the text.
+                  thought: undefined,
+                };
+              } else if (currentEvent === 'token_reset') {
+                // That iteration was a tool-calling turn; its prose was preamble.
+                currentAssistantMsg = {
+                  ...currentAssistantMsg,
+                  content: '',
                 };
               } else if (currentEvent === 'tool_call') {
                 const newToolCall: ToolCallTrace = {
@@ -482,9 +506,12 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                   auditLogs: [...(currentAssistantMsg.auditLogs || []), parsed.audit_log],
                 };
               } else if (currentEvent === 'done') {
+                // Keep the incrementally streamed text as-is. Overwriting it with
+                // the full payload made the message visibly re-render at the end;
+                // the payload is only a fallback when nothing was streamed.
                 currentAssistantMsg = {
                   ...currentAssistantMsg,
-                  content: parsed.content || currentAssistantMsg.content,
+                  content: currentAssistantMsg.content || parsed.content || '',
                   model: parsed.model,
                   tokens_used: parsed.tokens_used,
                   thought: undefined,
@@ -500,6 +527,11 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
               setMessages((prev) =>
                 prev.map((m) => (m.id === assistantMsgId ? { ...currentAssistantMsg } : m))
               );
+
+              // Let React paint this token before parsing the next one.
+              if (currentEvent === 'token') {
+                await yieldToRenderer();
+              }
             } catch (jsonErr) {
               console.error('Error parsing SSE data line:', jsonErr);
             }

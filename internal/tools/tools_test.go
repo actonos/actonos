@@ -174,6 +174,22 @@ func TestToolRegistry_ToLLMToolDefinitions(t *testing.T) {
 	if len(allDefs) < 4 {
 		t.Fatalf("expected all tools with wildcard, got %d", len(allDefs))
 	}
+
+	for _, def := range registry.ToLLMToolDefinitions([]string{"*"}, "native_cron_schedule") {
+		if def.Function.Name == "native_cron_schedule" {
+			t.Fatal("excluded cron tool was still offered to the LLM")
+		}
+	}
+
+	_, err := registry.Execute(
+		WithDeniedTools(context.Background(), "native_cron_schedule"),
+		"agent",
+		"native_cron_schedule",
+		json.RawMessage(`{"action":"list"}`),
+	)
+	if !errors.Is(err, ErrToolDeniedInContext) {
+		t.Fatalf("expected context-denied tool error, got %v", err)
+	}
 }
 
 func TestSkillWatcher_LoadSkill(t *testing.T) {

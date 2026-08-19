@@ -21,20 +21,45 @@ func SanitizeMessages(messages []Message) []Message {
 		switch msg.Role {
 		case RoleAssistant:
 			if len(msg.ToolCalls) > 0 {
+				// Drop tool_calls that carry no ID: a tool result can never be paired
+				// with them, so providers reject the whole request.
+				validCalls := make([]ToolCall, 0, len(msg.ToolCalls))
+				for _, tc := range msg.ToolCalls {
+					if tc.ID != "" {
+						validCalls = append(validCalls, tc)
+					}
+				}
+				if len(validCalls) == 0 {
+					content := strings.TrimSpace(msg.Content)
+					if content == "" {
+						content = "[Completed tool actions]"
+					}
+					cleaned = append(cleaned, Message{Role: RoleAssistant, Content: content})
+					// Skip any orphaned tool results that followed the dropped calls.
+					for i+1 < len(messages) && messages[i+1].Role == RoleTool {
+						i++
+					}
+					continue
+				}
+				msg.ToolCalls = validCalls
+
 				// Collect all expected tool_call_ids
 				expectedIDs := make(map[string]bool)
 				for _, tc := range msg.ToolCalls {
-					if tc.ID != "" {
-						expectedIDs[tc.ID] = true
-					}
+					expectedIDs[tc.ID] = true
 				}
 
-				// Look ahead for immediately following tool messages
+				// Look ahead for immediately following tool messages, keeping only
+				// results that actually belong to this assistant turn. A stray result
+				// (duplicate id, or one addressed to an earlier turn) would otherwise
+				// be forwarded and rejected by the provider.
 				var toolMsgs []Message
 				j := i + 1
 				for j < len(messages) && messages[j].Role == RoleTool {
-					toolMsgs = append(toolMsgs, messages[j])
-					delete(expectedIDs, messages[j].ToolCallID)
+					if expectedIDs[messages[j].ToolCallID] {
+						toolMsgs = append(toolMsgs, messages[j])
+						delete(expectedIDs, messages[j].ToolCallID)
+					}
 					j++
 				}
 
@@ -50,16 +75,24 @@ func SanitizeMessages(messages []Message) []Message {
 						Content:          content,
 						ReasoningContent: msg.ReasoningContent,
 					})
+					// Skip trailing tool results that no longer have an owner.
+					i = j - 1
 				} else {
 					// Assistant message with at least some tool responses
 					cleaned = append(cleaned, msg)
 					cleaned = append(cleaned, toolMsgs...)
 
-					// If any expected tool_call_ids were not responded to, inject synthetic tool responses
-					for missingID := range expectedIDs {
+					// Any tool_call left unanswered gets a synthetic result. Iterate the
+					// tool_calls slice (not the map) so ordering is deterministic, and
+					// carry Name — providers that validate it reject nameless results.
+					for _, tc := range msg.ToolCalls {
+						if !expectedIDs[tc.ID] {
+							continue
+						}
 						cleaned = append(cleaned, Message{
 							Role:       RoleTool,
-							ToolCallID: missingID,
+							Name:       tc.Function.Name,
+							ToolCallID: tc.ID,
 							Content:    "[Tool execution completed or omitted]",
 						})
 					}

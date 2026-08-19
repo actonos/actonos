@@ -372,7 +372,7 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 
 	// 3. Attach authorized tools if registry available
 	if e.tools != nil && len(agent.AuthorizedTools) > 0 {
-		opts.Tools = e.tools.ToLLMToolDefinitions(agent.AuthorizedTools)
+		opts.Tools = e.tools.ToLLMToolDefinitions(agent.AuthorizedTools, tools.DeniedTools(ctx)...)
 	}
 
 	startTime := time.Now()
@@ -396,6 +396,8 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 				Content: "Iteration limit reached. Do not call any more tools. Synthesize all observations gathered above into your final comprehensive response to the user.",
 			})
 		}
+
+		// CRITICAL FIX: Prune context BEFORE LLM call to ensure we send clean, complete message sequences
 		if e.contextManager != nil {
 			runID := ""
 			if run != nil {
@@ -403,6 +405,7 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 			}
 			messages = e.contextManager.PruneAndSnapshot(ctx, runID, messages, e.contextBudget(agent))
 		}
+
 		resp, err := e.llm.CompleteWithCascade(ctx, cascadeOrder, messages, currentOpts)
 		if err != nil {
 			if e.bus != nil {
@@ -427,15 +430,10 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 			break
 		}
 
-		// Append assistant response with requested tool calls (Content is empty so LLM generates the final answer in the next iteration)
-		messages = append(messages, llm.Message{
-			Role:             llm.RoleAssistant,
-			Content:          "",
-			ReasoningContent: resp.ReasoningContent,
-			ToolCalls:        resp.ToolCalls,
-		})
+		// CRITICAL FIX: Build assistant message + ALL tool results ATOMICALLY to prevent race conditions
+		// Collect all tool results first
+		var toolMessages []llm.Message
 
-		// Execute each tool call
 		for _, tc := range resp.ToolCalls {
 			toolResult, execErr := e.tools.Execute(ctx, agentID, tc.Function.Name, tc.Function.Arguments)
 			resultStr := ""
@@ -444,7 +442,16 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 				consecutiveFailures++
 				var approvalErr *tools.ApprovalRequiredError
 				if errors.As(execErr, &approvalErr) {
-					e.saveApprovalCheckpoint(ctx, run, agentID, userMessage, source, messages, iter+1, totalUsage, tc)
+					// Persist the in-flight block (assistant + results already produced)
+					// so the resumed transcript stays well-formed.
+					checkpointMessages := append(append([]llm.Message{}, messages...), llm.Message{
+						Role:             llm.RoleAssistant,
+						Content:          "",
+						ReasoningContent: resp.ReasoningContent,
+						ToolCalls:        resp.ToolCalls,
+					})
+					checkpointMessages = append(checkpointMessages, toolMessages...)
+					e.saveApprovalCheckpoint(ctx, run, agentID, userMessage, source, checkpointMessages, iter+1, totalUsage, tc)
 					e.finishRun(ctx, run, RunApprovalPending, "approval_required", iter+1, totalUsage)
 					return nil, execErr
 				}
@@ -470,17 +477,28 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 				})
 			}
 
-			messages = append(messages, llm.Message{
+			toolMessages = append(toolMessages, llm.Message{
 				Role:       llm.RoleTool,
 				Name:       tc.Function.Name,
 				ToolCallID: tc.ID,
 				Content:    resultStr,
 			})
+
 			if consecutiveFailures >= 3 || repeatedObservations >= 2 {
 				e.finishRun(ctx, run, RunBlocked, "no_progress", iter+1, totalUsage)
 				return nil, fmt.Errorf("agent %s stopped after repeated tool failures or observations", agentID)
 			}
 		}
+
+		// ATOMIC APPEND: assistant message + all tool results together
+		// This prevents context pruning from splitting the assistant+tool sequence
+		messages = append(messages, llm.Message{
+			Role:             llm.RoleAssistant,
+			Content:          "",
+			ReasoningContent: resp.ReasoningContent,
+			ToolCalls:        resp.ToolCalls,
+		})
+		messages = append(messages, toolMessages...)
 	}
 	if !converged {
 		e.finishRun(ctx, run, RunBlocked, "iteration_budget_exhausted", maxIterations, totalUsage)
@@ -635,7 +653,7 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 	}
 
 	if e.tools != nil && len(agent.AuthorizedTools) > 0 {
-		opts.Tools = e.tools.ToLLMToolDefinitions(agent.AuthorizedTools)
+		opts.Tools = e.tools.ToLLMToolDefinitions(agent.AuthorizedTools, tools.DeniedTools(ctx)...)
 	}
 
 	var finalResp *llm.Response
@@ -714,13 +732,16 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 			break
 		}
 
-		// Append assistant response with requested tool calls (Content is empty so LLM generates the final answer in the next iteration)
-		messages = append(messages, llm.Message{
+		// CRITICAL FIX: the assistant message and every tool result must enter the
+		// transcript as one unit. Collect results first, append atomically after the
+		// loop so pruning can never observe a half-built tool-call block.
+		assistantMsg := llm.Message{
 			Role:             llm.RoleAssistant,
 			Content:          "",
 			ReasoningContent: resp.ReasoningContent,
 			ToolCalls:        resp.ToolCalls,
-		})
+		}
+		var toolMessages []llm.Message
 
 		// Execute each tool call with AST inspection & live streaming events
 		for _, tc := range resp.ToolCalls {
@@ -772,7 +793,7 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 					Type: EventStreamToolResult, Tool: toolName, ToolCallID: tc.ID,
 					Result: resultStr, Status: "blocked",
 				}
-				messages = append(messages, llm.Message{
+				toolMessages = append(toolMessages, llm.Message{
 					Role: llm.RoleTool, Name: toolName, ToolCallID: tc.ID, Content: resultStr,
 				})
 				consecutiveFailures++
@@ -796,7 +817,11 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 				consecutiveFailures++
 				var approvalErr *tools.ApprovalRequiredError
 				if errors.As(execErr, &approvalErr) {
-					e.saveApprovalCheckpoint(ctx, run, agentID, userMessage, source, messages, iterationsCompleted, totalUsage, tc)
+					// Persist the in-flight tool-call block (assistant + results produced
+					// so far) so ResumeApproved sees a well-formed transcript.
+					checkpointMessages := append(append([]llm.Message{}, messages...), assistantMsg)
+					checkpointMessages = append(checkpointMessages, toolMessages...)
+					e.saveApprovalCheckpoint(ctx, run, agentID, userMessage, source, checkpointMessages, iterationsCompleted, totalUsage, tc)
 					eventChan <- AgentStreamEvent{
 						Type: EventStreamAudit,
 						AuditLog: &AuditLogEntry{
@@ -855,7 +880,7 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 				Thought: fmt.Sprintf("Tool '%s' returned (%d ms). Analyzing observation...", toolName, latency),
 			}
 
-			messages = append(messages, llm.Message{
+			toolMessages = append(toolMessages, llm.Message{
 				Role:       llm.RoleTool,
 				Name:       toolName,
 				ToolCallID: tc.ID,
@@ -868,6 +893,10 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 				return nil, err
 			}
 		}
+
+		// ATOMIC APPEND: assistant tool-call message plus every matching result.
+		messages = append(messages, assistantMsg)
+		messages = append(messages, toolMessages...)
 	}
 	if !converged {
 		e.finishRun(ctx, run, RunBlocked, "iteration_budget_exhausted", iterationsCompleted, totalUsage)
@@ -1027,7 +1056,7 @@ func (e *Engine) ResumeApproved(ctx context.Context, approval tools.ApprovalRequ
 	if manifest.ModelConfig.MaxTokens > 0 {
 		opts.MaxTokens = &manifest.ModelConfig.MaxTokens
 	}
-	opts.Tools = e.tools.ToLLMToolDefinitions(manifest.AuthorizedTools)
+	opts.Tools = e.tools.ToLLMToolDefinitions(manifest.AuthorizedTools, tools.DeniedTools(ctx)...)
 	usage := checkpoint.Usage
 
 	// Subsequent tool calls must not inherit the consumed approval ID, ensuring
@@ -1335,7 +1364,15 @@ func (e *Engine) completeStreamIteration(
 		response.Model = cascadeOrder[0]
 	}
 
-	var deltaTokens []string
+	// Content deltas are forwarded the moment they arrive so the UI renders a real
+	// typing effect. Buffering them until the stream closed made every token land
+	// in one burst at the end, which is what looked like "jumping text".
+	//
+	// The catch: we cannot know whether this iteration is a tool-calling turn until
+	// the stream ends, and a tool-calling turn's prose must not be shown as the
+	// final answer. So tokens are emitted live, and if tool calls do turn up we
+	// send a retraction event telling the client to discard this turn's tokens.
+	streamedTokens := false
 
 	for {
 		select {
@@ -1354,7 +1391,9 @@ func (e *Engine) completeStreamIteration(
 			}
 			if chunk.DeltaContent != "" {
 				response.Content += chunk.DeltaContent
-				deltaTokens = append(deltaTokens, chunk.DeltaContent)
+				// Emit immediately — do not accumulate.
+				eventChan <- AgentStreamEvent{Type: EventStreamToken, Content: chunk.DeltaContent}
+				streamedTokens = true
 			}
 			if len(chunk.ToolCalls) > 0 {
 				response.ToolCalls = append(response.ToolCalls, chunk.ToolCalls...)
@@ -1369,16 +1408,12 @@ func (e *Engine) completeStreamIteration(
 	}
 
 DoneStream:
-	// If no tool calls were made, this is the final answer iteration: stream tokens to user
-	if len(response.ToolCalls) == 0 {
-		for _, tok := range deltaTokens {
-			eventChan <- AgentStreamEvent{Type: EventStreamToken, Content: tok}
-		}
-	} else if len(deltaTokens) > 0 {
-		// If text was generated alongside tool calls, emit as thought so it doesn't pollute the final answer
-		combinedThought := strings.TrimSpace(strings.Join(deltaTokens, ""))
-		if combinedThought != "" {
-			eventChan <- AgentStreamEvent{Type: EventStreamThought, Thought: combinedThought}
+	// This turn called tools, so any prose already streamed was preamble rather
+	// than the answer. Retract it and surface it as reasoning instead.
+	if len(response.ToolCalls) > 0 && streamedTokens {
+		eventChan <- AgentStreamEvent{Type: EventStreamTokenReset}
+		if preamble := strings.TrimSpace(response.Content); preamble != "" {
+			eventChan <- AgentStreamEvent{Type: EventStreamThought, Thought: preamble}
 		}
 	}
 

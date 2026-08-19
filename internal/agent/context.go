@@ -114,17 +114,32 @@ func (c *ContextManager) PruneMessages(messages []llm.Message, maxTokens int) []
 
 	result := []llm.Message{messages[0]}
 	remaining := maxTokens - estimateMessagesTokens(result) - 64
+
+	// Walk backwards in whole blocks. An assistant message carrying tool_calls and
+	// the tool results answering it are one indivisible unit: dropping the assistant
+	// half orphans the results, and dropping a result half leaves an unanswered
+	// tool_call. Either shape is rejected by the provider, which is what made tool
+	// calls fail intermittently once a conversation grew past the budget.
 	var retained []llm.Message
-	for i := len(messages) - 1; i >= 1; i-- {
-		cost := estimateMessagesTokens([]llm.Message{messages[i]})
-		if cost > remaining && len(retained) > 0 {
+	for end := len(messages); end > 1; {
+		start := end - 1
+		if messages[start].Role == llm.RoleTool {
+			for start > 1 && messages[start-1].Role == llm.RoleTool {
+				start--
+			}
+			if start > 1 && len(messages[start-1].ToolCalls) > 0 {
+				start--
+			}
+		}
+		block := messages[start:end]
+		cost := estimateMessagesTokens(block)
+		if cost > remaining {
+			// A single oversized block cannot be split without corrupting it.
 			break
 		}
-		if cost > remaining {
-			continue
-		}
-		retained = append([]llm.Message{messages[i]}, retained...)
+		retained = append(append([]llm.Message{}, block...), retained...)
 		remaining -= cost
+		end = start
 	}
 	if len(retained) < len(messages)-1 {
 		result = append(result, llm.Message{

@@ -104,8 +104,12 @@ type AgentState struct {
 type StreamEventType string
 
 const (
-	EventStreamThought    StreamEventType = "thought"
-	EventStreamToken      StreamEventType = "token"
+	EventStreamThought StreamEventType = "thought"
+	EventStreamToken   StreamEventType = "token"
+	// EventStreamTokenReset tells the client to discard the tokens streamed during
+	// the current ReAct iteration. Emitted when an iteration turns out to be a
+	// tool-calling turn, so its preamble prose must not become the final answer.
+	EventStreamTokenReset StreamEventType = "token_reset"
 	EventStreamToolCall   StreamEventType = "tool_call"
 	EventStreamToolResult StreamEventType = "tool_result"
 	EventStreamAudit      StreamEventType = "audit"

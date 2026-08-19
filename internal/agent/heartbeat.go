@@ -45,22 +45,24 @@ type ApprovalListProvider interface {
 
 // HeartbeatDaemon monitors proactive trigger rules, executes cognitive self-driving checks, and manages autonomous agent pulse.
 type HeartbeatDaemon struct {
-	mu           sync.RWMutex
-	executionMu  sync.Mutex
-	agentMgr     *AgentManager
-	engine       *Engine
-	eventBus     *bus.EventBus
-	db           *sql.DB
-	taskMgr      *TaskManager
-	sessionMgr   SessionHistoryProvider
-	approvalMgr  ApprovalListProvider
-	workspaceDir string
-	interval     time.Duration
-	enabled      bool
-	stopCh       chan struct{}
-	triggerCh    chan struct{}
-	lastRun      time.Time
-	running      bool
+	mu            sync.RWMutex
+	executionMu   sync.Mutex
+	agentMgr      *AgentManager
+	engine        *Engine
+	eventBus      *bus.EventBus
+	db            *sql.DB
+	taskMgr       *TaskManager
+	sessionMgr    SessionHistoryProvider
+	approvalMgr   ApprovalListProvider
+	workspaceDir  string
+	interval      time.Duration
+	enabled       bool
+	targetChannel string
+	targetAccount string
+	stopCh        chan struct{}
+	triggerCh     chan struct{}
+	lastRun       time.Time
+	running       bool
 }
 
 // NewHeartbeatDaemon creates a new HeartbeatDaemon.
@@ -79,15 +81,17 @@ func NewHeartbeatDaemon(
 		workspaceDir = "./data/workspace"
 	}
 	return &HeartbeatDaemon{
-		agentMgr:     agentMgr,
-		engine:       engine,
-		eventBus:     eventBus,
-		db:           db,
-		workspaceDir: workspaceDir,
-		interval:     interval,
-		enabled:      true,
-		stopCh:       make(chan struct{}),
-		triggerCh:    make(chan struct{}, 1),
+		agentMgr:      agentMgr,
+		engine:        engine,
+		eventBus:      eventBus,
+		db:            db,
+		workspaceDir:  workspaceDir,
+		interval:      interval,
+		enabled:       true,
+		targetChannel: "all",
+		targetAccount: "all",
+		stopCh:        make(chan struct{}),
+		triggerCh:     make(chan struct{}, 1),
 	}
 }
 
@@ -127,6 +131,12 @@ func (h *HeartbeatDaemon) SyncConfig(cfg HeartbeatConfig) {
 		h.interval = time.Duration(cfg.IntervalMinutes) * time.Minute
 	}
 	h.enabled = cfg.Enabled
+	if cfg.TargetChannel != "" {
+		h.targetChannel = cfg.TargetChannel
+	}
+	if cfg.TargetAccountID != "" {
+		h.targetAccount = cfg.TargetAccountID
+	}
 	h.mu.Unlock()
 
 	slog.Info("heartbeat daemon synchronized with config", "interval", h.interval.String(), "enabled", cfg.Enabled)
@@ -149,6 +159,12 @@ func (h *HeartbeatDaemon) Start(ctx context.Context) {
 				h.interval = time.Duration(cfg.IntervalMinutes) * time.Minute
 			}
 			h.enabled = cfg.Enabled
+			if cfg.TargetChannel != "" {
+				h.targetChannel = cfg.TargetChannel
+			}
+			if cfg.TargetAccountID != "" {
+				h.targetAccount = cfg.TargetAccountID
+			}
 		}
 	}
 	h.mu.Unlock()
@@ -251,7 +267,7 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context) *HeartbeatRun {
 
 	// 1. Read standing directives
 	heartbeatMDPath := filepath.Join(h.workspaceDir, "HEARTBEAT.md")
-	standingDirectives := "Monitor background tasks, verify system health, maintain Zero-Noise if nominal."
+	standingDirectives := ""
 	if data, err := os.ReadFile(heartbeatMDPath); err == nil && len(data) > 0 {
 		standingDirectives = string(data)
 	}
@@ -306,6 +322,15 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context) *HeartbeatRun {
 	b := make([]byte, 8)
 	_, _ = rand.Read(b)
 	run.ID = "hb_" + hex.EncodeToString(b)
+
+	// A heartbeat without a task or an actionable scratchpad must stay entirely
+	// silent. Calling the model here lets it invent work such as a cron schedule.
+	if activeTask == nil && !hasActionableHeartbeatDirectives(standingDirectives) {
+		run.Status = "ok"
+		run.Summary = "System nominal. Zero tasks pending. No actionable heartbeat directives."
+		h.recordRun(*run)
+		return run
+	}
 
 	// CASE A: Active Task Execution with Session Resume Memory
 	if activeTask != nil {
@@ -487,6 +512,10 @@ CRITICAL INSTRUCTIONS:
 
 	// CASE B: Routine System Health & Zero-Noise Evaluation
 	routineCtx := context.WithValue(ctx, "suppress_episodic_memory", true)
+	// Recurring schedules are explicit operator automations, never work inferred
+	// by an unattended heartbeat. Exclude the tool from the LLM schema and keep a
+	// registry-level denial as a defense in depth boundary.
+	routineCtx = tools.WithDeniedTools(routineCtx, "native_cron_schedule")
 	backlogSummary := "All previous backlog missions are COMPLETED. There are ZERO pending or in-progress tasks."
 	if h.taskMgr != nil {
 		completedList, _ := h.taskMgr.ListTasks(ctx, "completed", "")
@@ -494,13 +523,7 @@ CRITICAL INSTRUCTIONS:
 			backlogSummary = fmt.Sprintf("All %d previous backlog missions have been COMPLETED. There are 0 active or pending tasks in backlog.", len(completedList))
 		}
 	}
-	hasCustomDirectives := standingDirectives != "" &&
-		standingDirectives != "Monitor background tasks, verify system health, maintain Zero-Noise if nominal." &&
-		standingDirectives != "Autonomous standing supervisor. Routinely review pending tasks in TASKS.md and monitor system stability."
-
-	var prompt string
-	if hasCustomDirectives {
-		prompt = fmt.Sprintf(`[AUTONOMOUS HEARTBEAT CYCLE — MANDATORY DIRECTIVE EXECUTION]
+	prompt := fmt.Sprintf(`[AUTONOMOUS HEARTBEAT CYCLE — MANDATORY DIRECTIVE EXECUTION]
 Current UTC Time: %s
 Backlog Status: %s
 
@@ -515,24 +538,12 @@ ABSOLUTE RULES:
 3. DO NOT reply with generic greetings like "Hey, I'm here and ready to roll" or "Everything is nominal". Execute the directive action.
 4. DO NOT call 'native_channel_notify' tool — the system will automatically route your response to the configured channels.
 5. If the standing directive asks you to send/create/generate content, produce that content directly in your response.
-6. Only reply 'HEARTBEAT_OK' if the standing directives contain ZERO actionable instructions AND system health is nominal.`,
-			time.Now().UTC().Format(time.RFC3339),
-			backlogSummary,
-			standingDirectives,
-		)
-	} else {
-		prompt = fmt.Sprintf(
-			"[AUTONOMOUS HEARTBEAT BRAIN CYCLE]\nCurrent UTC Time: %s\nBacklog Status: %s\nStanding Directives:\n%s\n\n"+
-				"ROUTINE EVALUATION INSTRUCTIONS:\n"+
-				"1. ALL past missions are finished. DO NOT restart, continue, or execute any old completed missions or past tasks.\n"+
-				"2. Only evaluate current system health and the standing directives above.\n"+
-				"3. If everything is nominal and no proactive action or user notification is needed, reply exactly 'HEARTBEAT_OK'.\n"+
-				"4. If an action or alert is necessary, execute it and provide a concise summary. DO NOT call 'native_channel_notify' tool as the system will route your response automatically.",
-			time.Now().UTC().Format(time.RFC3339),
-			backlogSummary,
-			standingDirectives,
-		)
-	}
+6. NEVER create, change, list, or delete cron schedules during a heartbeat. Recurring automations require an explicit operator request outside this routine; never infer one from a directive or prior conversation.
+7. Only reply 'HEARTBEAT_OK' if the standing directives contain ZERO actionable instructions AND system health is nominal.`,
+		time.Now().UTC().Format(time.RFC3339),
+		backlogSummary,
+		standingDirectives,
+	)
 
 	resp, execErr := h.engine.ExecuteStepWithHistory(routineCtx, primaryAgentID, prompt, nil)
 	if execErr != nil {
@@ -578,13 +589,17 @@ ABSOLUTE RULES:
 				strings.HasPrefix(trimmed, "Successfully dispatched proactive notification") ||
 				strings.HasPrefix(trimmed, "Notification sent")
 
-			if h.eventBus != nil && !alreadyNotified && !isRedundantToolReport {
+			h.mu.RLock()
+			targetChannel := h.targetChannel
+			targetAccount := h.targetAccount
+			h.mu.RUnlock()
+			if h.eventBus != nil && !alreadyNotified && !isRedundantToolReport && targetChannel != "none" && targetChannel != "" {
 				h.eventBus.Publish(bus.NewEvent(bus.EventAgentActionDone, primaryAgentID, map[string]any{
 					"type":              "proactive_cron_notification",
 					"job_name":          "Heartbeat Pulse",
 					"content":           cleanFullContent(trimmed),
-					"target_channel":    "all",
-					"target_account_id": "all",
+					"target_channel":    targetChannel,
+					"target_account_id": targetAccount,
 					"target_recipient":  "",
 				}))
 			}
@@ -610,6 +625,35 @@ func shortSummary(content string, maxLen int) string {
 		return cleaned[:maxLen-3] + "..."
 	}
 	return cleaned
+}
+
+func hasActionableHeartbeatDirectives(content string) bool {
+	inComment := false
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		for inComment || strings.HasPrefix(trimmed, "<!--") {
+			start := 0
+			if inComment {
+				start = 0
+			}
+			if end := strings.Index(trimmed[start:], "-->"); end >= 0 {
+				trimmed = strings.TrimSpace(trimmed[start+end+3:])
+				inComment = false
+				continue
+			}
+			inComment = true
+			trimmed = ""
+			break
+		}
+		if trimmed == "" ||
+			regexp.MustCompile(`^#+(\s|$)`).MatchString(trimmed) ||
+			regexp.MustCompile(`^[-*+]\s*(\[[\sXx]?\]\s*)?$`).MatchString(trimmed) ||
+			regexp.MustCompile("^```[A-Za-z0-9_-]*$").MatchString(trimmed) {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 func (h *HeartbeatDaemon) recordRun(run HeartbeatRun) {

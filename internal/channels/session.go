@@ -113,15 +113,27 @@ func (sm *ChannelSessionManager) LoadRecentHistory(ctx context.Context, convID s
 	}
 	defer rows.Close()
 
+	// Only user and assistant turns are replayed. Persisted tool_calls/tool results
+	// cannot be reconstructed faithfully here (tool_call_id is not read back), and a
+	// tool_call without its matching result — or a result without its call — makes
+	// the provider reject the entire request. Replaying prose only keeps the history
+	// useful while guaranteeing a well-formed message sequence.
 	var reversed []llm.Message
 	for rows.Next() {
 		var role, content string
-		if err := rows.Scan(&role, &content); err == nil {
-			reversed = append(reversed, llm.Message{
-				Role:    llm.Role(role),
-				Content: content,
-			})
+		if err := rows.Scan(&role, &content); err != nil {
+			continue
 		}
+		if role != string(llm.RoleUser) && role != string(llm.RoleAssistant) {
+			continue
+		}
+		if strings.TrimSpace(content) == "" {
+			continue
+		}
+		reversed = append(reversed, llm.Message{
+			Role:    llm.Role(role),
+			Content: content,
+		})
 	}
 
 	// Reverse to chronological order

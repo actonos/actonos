@@ -343,6 +343,18 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 				fmt.Fprintf(w, "event: tool_result\ndata: %s\n\n", string(dataBytes))
 				flusher.Flush()
 
+			case agent.EventStreamTokenReset:
+				// The iteration turned out to be a tool-calling turn: its prose was
+				// preamble, not the answer. Drop it here too so the persisted message
+				// does not mix preamble into the final content.
+				finalContent.Reset()
+				dataBytes, _ := json.Marshal(map[string]any{
+					"conversation_id": convID,
+					"title":           convTitle,
+				})
+				fmt.Fprintf(w, "event: token_reset\ndata: %s\n\n", string(dataBytes))
+				flusher.Flush()
+
 			case agent.EventStreamAudit:
 				if ev.AuditLog != nil {
 					dataBytes, _ := json.Marshal(map[string]any{

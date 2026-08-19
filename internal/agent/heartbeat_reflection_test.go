@@ -2,13 +2,16 @@ package agent
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/actonos/actonos/internal/bus"
 	"github.com/actonos/actonos/internal/llm"
 	"github.com/actonos/actonos/internal/memory"
+	"github.com/actonos/actonos/internal/tools"
 )
 
 func TestHeartbeatRoutineAndRunLedger(t *testing.T) {
@@ -18,12 +21,13 @@ func TestHeartbeatRoutineAndRunLedger(t *testing.T) {
 		t.Fatal(err)
 	}
 	router := llm.NewModelCascadeRouter()
-	router.RegisterProvider("openai/gpt-4o", llm.NewMockProvider("openai/gpt-4o", "HEARTBEAT_OK"))
+	provider := llm.NewMockProvider("openai/gpt-4o", "HEARTBEAT_OK")
+	router.RegisterProvider("openai/gpt-4o", provider)
 	engine := NewEngine(manager, eventBus, router, nil)
 	daemon := NewHeartbeatDaemon(manager, engine, eventBus, db.SQLDB(), t.TempDir(), time.Hour)
 
 	run, err := daemon.TriggerManualPulse(context.Background())
-	if err != nil || run.Status != "ok" || run.ID == "" || run.TokensUsed != 30 {
+	if err != nil || run.Status != "ok" || run.ID == "" || run.TokensUsed != 0 || provider.CompleteCalls != 0 {
 		t.Fatalf("unexpected heartbeat run: %+v err=%v", run, err)
 	}
 	runs, err := daemon.GetRecentRuns(context.Background(), 0)
@@ -38,6 +42,99 @@ func TestHeartbeatRoutineAndRunLedger(t *testing.T) {
 	nilDaemon := NewHeartbeatDaemon(manager, engine, nil, nil, "", 0)
 	if runs, err := nilDaemon.GetRecentRuns(context.Background(), 10); err != nil || len(runs) != 0 {
 		t.Fatalf("nil heartbeat ledger mismatch: %+v err=%v", runs, err)
+	}
+}
+
+func TestHasActionableHeartbeatDirectives(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    bool
+	}{
+		{name: "empty", content: "", want: false},
+		{name: "template comments and headings", content: "<!-- scheduler note -->\n# Heartbeat\n\n- [ ]\n```markdown\n```", want: false},
+		{name: "multiline comment", content: "<!--\nnot a directive\n-->\n## Still idle", want: false},
+		{name: "explicit directive", content: "# Ops\nCheck the deployment health endpoint.", want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := hasActionableHeartbeatDirectives(tt.content); got != tt.want {
+				t.Fatalf("hasActionableHeartbeatDirectives(%q) = %v, want %v", tt.content, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHeartbeatExcludesCronFromRoutineTools(t *testing.T) {
+	db, eventBus := setupTestDB(t)
+	manager, err := NewAgentManager(db, eventBus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "HEARTBEAT.md"), []byte("Check the deployment health endpoint."), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	provider := llm.NewMockProvider("openai/gpt-4o", "")
+	provider.CompleteFunc = func(_ context.Context, _ []llm.Message, opts llm.CompletionOptions) (*llm.Response, error) {
+		for _, tool := range opts.Tools {
+			if tool.Function.Name == "native_cron_schedule" {
+				t.Fatal("routine heartbeat exposed cron scheduling to the model")
+			}
+		}
+		return &llm.Response{Model: "openai/gpt-4o", Content: "HEARTBEAT_OK"}, nil
+	}
+	router := llm.NewModelCascadeRouter()
+	router.RegisterProvider("openai/gpt-4o", provider)
+	engine := NewEngine(manager, eventBus, router, nil)
+	registry := tools.NewToolRegistry(nil)
+	tools.RegisterNativeTools(registry, workspace)
+	engine.SetToolRegistry(registry)
+
+	daemon := NewHeartbeatDaemon(manager, engine, eventBus, db.SQLDB(), workspace, time.Hour)
+	run, err := daemon.TriggerManualPulse(context.Background())
+	if err != nil || run.Status != "ok" || provider.CompleteCalls != 1 {
+		t.Fatalf("unexpected heartbeat routine run: %+v err=%v calls=%d", run, err, provider.CompleteCalls)
+	}
+}
+
+func TestHeartbeatHonorsConfiguredSilentTarget(t *testing.T) {
+	db, eventBus := setupTestDB(t)
+	manager, err := NewAgentManager(db, eventBus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "HEARTBEAT.md"), []byte("Check the deployment health endpoint."), 0644); err != nil {
+		t.Fatal(err)
+	}
+	router := llm.NewModelCascadeRouter()
+	router.RegisterProvider("openai/gpt-4o", llm.NewMockProvider("openai/gpt-4o", "Deployment needs attention."))
+	engine := NewEngine(manager, eventBus, router, nil)
+	daemon := NewHeartbeatDaemon(manager, engine, eventBus, db.SQLDB(), workspace, time.Hour)
+	daemon.SyncConfig(HeartbeatConfig{Enabled: true, TargetChannel: "none", TargetAccountID: "all"})
+
+	notifications := eventBus.Subscribe(bus.EventAgentActionDone)
+	defer eventBus.Unsubscribe(bus.EventAgentActionDone, notifications)
+
+	run, err := daemon.TriggerManualPulse(context.Background())
+	if err != nil || run.Status != "action_taken" {
+		t.Fatalf("unexpected heartbeat routine run: %+v err=%v", run, err)
+	}
+	timeout := time.NewTimer(100 * time.Millisecond)
+	defer timeout.Stop()
+	for {
+		select {
+		case event := <-notifications:
+			payload, _ := event.Payload.(map[string]any)
+			if payload["type"] == "proactive_cron_notification" {
+				t.Fatalf("silent heartbeat unexpectedly emitted a notification: %+v", event)
+			}
+		case <-timeout.C:
+			return
+		}
 	}
 }
 
