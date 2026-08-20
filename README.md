@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="web/public/actonos_logo_bg.png" alt="ActonOS Logo" width="200" />
+
 # ActonOS
 
 **Extensible AI Agent Operating System Kernel**
