@@ -40,7 +40,7 @@ describe('RealtimeProvider', () => {
     expect(screen.getByText('online:snapshot')).toBeInTheDocument();
 
     act(() => socket.onmessage?.({ data: '{invalid' } as MessageEvent));
-    expect(socket.close).toHaveBeenCalledWith(1003, 'invalid snapshot');
+    expect(socket.close).toHaveBeenCalledWith(1003, 'invalid message');
   });
 
   it('reconnects after a bounded backoff', () => {

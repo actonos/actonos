@@ -30,6 +30,7 @@ import {
   EyeOff,
   Save,
   User,
+  Palette,
 } from 'lucide-react';
 import {
   api,
@@ -42,6 +43,8 @@ import { isApprovalRequired, type SystemMetrics, type TailscaleStatus, type LLMP
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { readHashParams, setHashParam } from '@/lib/url-state';
+import { useTheme, type UITheme } from '@/components/providers/ThemeProvider';
+import { useDensity, type UIDensity } from '@/components/providers/DensityProvider';
 
 type SettingsTab = 'identity' | 'keys' | 'tokens' | 'network' | 'maintenance';
 
@@ -50,6 +53,8 @@ import { PROVIDER_METAS, type ProviderMeta } from '@/lib/models';
 export function SettingsPage() {
   const { t } = useTranslation('settings');
   const { success, error, info } = useToast();
+  const { theme, setTheme } = useTheme();
+  const { density, setDensity } = useDensity();
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
     const value = readHashParams().get('view');
     return ['identity', 'keys', 'tokens', 'network', 'maintenance'].includes(value || '')
@@ -60,6 +65,7 @@ export function SettingsPage() {
     setActiveTab(tab);
     setHashParam('view', tab === 'keys' ? undefined : tab);
   };
+  const { resolvedTheme } = useTheme();
 
   const timezoneGroups = useMemo(() => getGroupedTimezones(), []);
 
@@ -351,6 +357,65 @@ export function SettingsPage() {
               </Button>
             </div>
 
+            {/* Appearance & Display Card */}
+            <Card className="p-6 border border-onyx/15 shadow-xs max-w-3xl">
+              <div className="flex items-center gap-2 border-b border-onyx/10 pb-3 mb-5">
+                <Palette className="w-5 h-5 text-deep-ink" />
+                <h4 className="font-serif text-subheading font-semibold text-deep-ink">
+                  {t('appearance.title', 'Appearance & Display')}
+                </h4>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Theme Selector */}
+                <div>
+                  <label className="block text-caption uppercase text-slate font-semibold mb-2">
+                    {t('appearance.theme', 'Theme Mode')}
+                  </label>
+                  <SegmentedControl
+                    value={theme}
+                    onChange={(val) => setTheme(val as UITheme)}
+                    label={t('appearance.theme', 'Theme Mode')}
+                    className="w-full"
+                    options={[
+                      { value: 'light', label: t('appearance.light', 'Light') },
+                      { value: 'dark', label: t('appearance.dark', 'Dark') },
+                      { value: 'system', label: t('appearance.system', 'System') },
+                    ]}
+                  />
+                  <p className="text-[11px] text-slate mt-2">
+                    {theme === 'system'
+                      ? t('appearance.systemHint', 'Follows your operating system color preference.')
+                      : theme === 'dark'
+                        ? t('appearance.darkHint', 'Obsidian dark theme for focused night work.')
+                        : t('appearance.lightHint', 'Sunlit Wildflower high-contrast light theme.')}
+                  </p>
+                </div>
+
+                {/* Density Selector */}
+                <div>
+                  <label className="block text-caption uppercase text-slate font-semibold mb-2">
+                    {t('appearance.density', 'UI Density')}
+                  </label>
+                  <SegmentedControl
+                    value={density}
+                    onChange={(val) => setDensity(val as UIDensity)}
+                    label={t('appearance.density', 'UI Density')}
+                    className="w-full"
+                    options={[
+                      { value: 'comfortable', label: t('appearance.comfortable', 'Comfortable') },
+                      { value: 'compact', label: t('appearance.compact', 'Compact') },
+                    ]}
+                  />
+                  <p className="text-[11px] text-slate mt-2">
+                    {density === 'compact'
+                      ? t('appearance.compactHint', 'Tighter padding and dense row heights for small screens.')
+                      : t('appearance.comfortableHint', 'Generous spacing and airy touch targets.')}
+                  </p>
+                </div>
+              </div>
+            </Card>
+
             <Card className="p-8 border border-onyx/15 shadow-sm max-w-3xl">
               <div className="flex items-center gap-2 border-b border-onyx/10 pb-4 mb-6">
                 <User className="w-5 h-5 text-deep-ink" />
@@ -518,8 +583,8 @@ export function SettingsPage() {
                   <Card
                     key={meta.id}
                     className={`p-6 border transition-all flex flex-col justify-between ${isConfigured
-                        ? 'border-emerald-500/30 bg-canvas/95 shadow-sm'
-                        : 'border-onyx/10 bg-canvas/80'
+                      ? 'border-emerald-500/30 bg-canvas/95 shadow-sm'
+                      : 'border-onyx/10 bg-canvas/80'
                       }`}
                   >
                     <div>
@@ -547,8 +612,8 @@ export function SettingsPage() {
                               setInputEnabled((prev) => ({ ...prev, [meta.id]: !isEnabled }))
                             }
                             className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer ${isEnabled
-                                ? 'bg-emerald-500/10 text-emerald-700 border border-emerald-500/20'
-                                : 'bg-onyx/5 text-slate border border-onyx/10'
+                              ? 'bg-emerald-500/10 text-emerald-700 border border-emerald-500/20'
+                              : 'bg-onyx/5 text-slate border border-onyx/10'
                               }`}
                           >
                             {isEnabled ? t('providers.active') : t('providers.disabled')}
@@ -859,7 +924,7 @@ export function SettingsPage() {
             <Card className="p-6 border border-onyx/10 bg-canvas/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-6">
               <div className="flex items-center gap-5">
                 <img
-                  src="/actonos_logo.png"
+                  src={resolvedTheme === 'light' ? "/actonos_logo.png" : "/actonos_logo_light.png"}
                   alt="ActonOS"
                   className="h-10 w-auto object-contain shrink-0"
                 />

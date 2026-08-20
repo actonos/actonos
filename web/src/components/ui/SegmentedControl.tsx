@@ -36,7 +36,7 @@ export function SegmentedControl<T extends string>({
             aria-selected={selected}
             onClick={() => onChange(option.value)}
             className={`shrink-0 rounded-full px-3.5 py-2 text-caption font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring ${
-              selected ? 'bg-deep-ink text-canvas' : 'text-slate hover:bg-canvas hover:text-deep-ink'
+              selected ? 'bg-deep-ink text-white shadow-xs' : 'text-slate hover:bg-canvas hover:text-deep-ink'
             }`}
           >
             {option.label}

@@ -26,6 +26,7 @@ import {
   Bell,
   Terminal,
 } from 'lucide-react';
+import { useTheme } from '../providers/ThemeProvider';
 
 export type NavTab =
   | 'dashboard'
@@ -78,6 +79,7 @@ export function Sidebar({
   const unreadCount = snapshot?.notifications_unread ?? 0;
   const [showLangOverlay, setShowLangOverlay] = useState(false);
   const [langSearch, setLangSearch] = useState('');
+  const { resolvedTheme } = useTheme();
 
   const currentLangCode = (i18n.language || 'en').split('-')[0].toLowerCase();
 
@@ -167,7 +169,7 @@ export function Sidebar({
                 />
               ) : (
                 <img
-                  src="/actonos_logo.png"
+                  src={resolvedTheme === 'dark' ? '/actonos_logo_light.png' : '/actonos_logo.png'}
                   alt="ActonOS"
                   className="h-8 w-auto max-w-[190px] object-contain shrink-0"
                 />
@@ -213,14 +215,14 @@ export function Sidebar({
                         onClick={() => handleSelect(item.id)}
                         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl transition-all duration-150 group cursor-pointer ${isActive
                           ? 'bg-deep-ink text-white font-semibold shadow-xs'
-                          : 'text-slate hover:text-deep-ink hover:bg-black/5'
+                          : 'text-slate hover:text-deep-ink hover:bg-black/5 dark:hover:bg-white/5'
                           } ${collapsed && !showLangOverlay ? 'justify-center' : ''}`}
                         title={collapsed && !showLangOverlay ? item.label : undefined}
                       >
                         <div
                           className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors relative ${isActive
                             ? 'bg-white/15 text-hi-yellow'
-                            : 'bg-canvas text-deep-ink group-hover:bg-white'
+                            : 'bg-canvas text-slate group-hover:text-deep-ink group-hover:bg-canvas/90 shadow-2xs'
                             }`}
                         >
                           <Icon className="w-4 h-4" />
@@ -335,7 +337,7 @@ export function Sidebar({
                       }}
                       className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left transition-all cursor-pointer select-none ${isSelected
                         ? 'bg-deep-ink text-white border-deep-ink shadow-2xs'
-                        : 'bg-canvas hover:bg-white border-onyx/5 text-deep-ink'
+                        : 'bg-canvas hover:bg-canvas/80 border-onyx/5 text-deep-ink'
                         }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -357,8 +359,8 @@ export function Sidebar({
                         {lang.coverage === '100%' && (
                           <span
                             className={`text-[9px] font-mono px-1.5 py-0.5 rounded-full font-semibold ${isSelected
-                              ? 'bg-hi-yellow text-deep-ink'
-                              : 'bg-emerald-100 text-emerald-800'
+                              ? 'bg-hi-yellow text-charcoal'
+                              : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
                               }`}
                           >
                             {t('language.full')}

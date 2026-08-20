@@ -11,6 +11,7 @@ import { ActionProgressToast } from '@/components/features/governance/ActionProg
 import { ActionProgressProvider } from '@/components/providers/ActionProgressProvider';
 import { RealtimeProvider } from '@/components/providers/RealtimeProvider';
 import { DensityProvider } from '@/components/providers/DensityProvider';
+import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { useTranslation } from 'react-i18next';
 import { CommandPalette } from '@/components/features/search/CommandPalette';
 
@@ -156,122 +157,128 @@ export function App() {
 
   if (!authStatus.initialized) {
     return (
-      <ToastProvider>
-        <SetupWizardPage onCompleted={checkAuth} />
-      </ToastProvider>
+      <ThemeProvider>
+        <ToastProvider>
+          <SetupWizardPage onCompleted={checkAuth} />
+        </ToastProvider>
+      </ThemeProvider>
     );
   }
 
   if (!authStatus.authenticated) {
     return (
-      <ToastProvider>
-        <LoginPage userName={authStatus.userName} onAuthenticated={checkAuth} />
-      </ToastProvider>
+      <ThemeProvider>
+        <ToastProvider>
+          <LoginPage userName={authStatus.userName} onAuthenticated={checkAuth} />
+        </ToastProvider>
+      </ThemeProvider>
     );
   }
 
   return (
-    <ToastProvider>
-      <DensityProvider>
-      <RealtimeProvider>
-      <ActionProgressProvider>
-      <div className="min-h-screen bg-canvas text-deep-ink selection:bg-hi-yellow selection:text-deep-ink font-sans flex">
-        <ApprovalInterruption />
-        <ActionProgressToast />
-        <CommandPalette
-          isOpen={commandOpen}
-          onClose={() => setCommandOpen(false)}
-          onNavigate={navigateTab}
-          onOpenChat={handleOpenChatWithAgent}
-          onEditAgent={handleEditAgent}
-        />
-        {/* Sleek Collapsible Left Sidebar */}
-        <Sidebar
-          activeTab={activeTab}
-          onSelectTab={navigateTab}
-          collapsed={collapsed}
-          onToggleCollapse={handleToggleCollapse}
-          mobileOpen={mobileOpen}
-          onCloseMobile={() => setMobileOpen(false)}
-        />
-
-        {/* Main Content Area */}
-        <div
-          className={`flex-1 flex flex-col min-w-0 transition-all duration-200 ease-in-out ${
-            collapsed ? 'lg:ml-20' : 'lg:ml-64'
-          }`}
-        >
-          {/* Sticky Top Header */}
-          <Header
+    <ThemeProvider>
+      <ToastProvider>
+        <DensityProvider>
+        <RealtimeProvider>
+        <ActionProgressProvider>
+        <div className="min-h-screen bg-canvas text-deep-ink selection:bg-hi-yellow selection:text-deep-ink font-sans flex">
+          <ApprovalInterruption />
+          <ActionProgressToast />
+          <CommandPalette
+            isOpen={commandOpen}
+            onClose={() => setCommandOpen(false)}
+            onNavigate={navigateTab}
+            onOpenChat={handleOpenChatWithAgent}
+            onEditAgent={handleEditAgent}
+          />
+          {/* Sleek Collapsible Left Sidebar */}
+          <Sidebar
             activeTab={activeTab}
-            onOpenMobileSidebar={() => setMobileOpen(true)}
+            onSelectTab={navigateTab}
             collapsed={collapsed}
-            onLogout={handleLogout}
-            onOpenSearch={() => setCommandOpen(true)}
-            onNavigateTab={navigateTab}
+            onToggleCollapse={handleToggleCollapse}
+            mobileOpen={mobileOpen}
+            onCloseMobile={() => setMobileOpen(false)}
           />
 
-          {/* Page Views */}
-          <main className="flex-1 w-full pb-12">
-            <ErrorBoundary>
-              <Suspense fallback={<div className="m-8 h-8 w-8 animate-spin rounded-full border-2 border-deep-ink border-t-transparent" />}>
-              {activeTab === 'dashboard' && (
-                <DashboardPage
-                  onNavigateTab={navigateTab}
-                  onOpenChat={handleOpenChatWithAgent}
-                  onEditAgent={handleEditAgent}
-                />
-              )}
-              {activeTab === 'agents' && (
-                <AgentsPage
-                  onOpenChat={handleOpenChatWithAgent}
-                  onNavigateTab={navigateTab}
-                  onEditAgent={handleEditAgent}
-                />
-              )}
-              {activeTab === 'agent-studio' && (
-                <AgentStudioPage
-                  agentID={studioAgentID}
-                  onBack={() => navigateTab('agents')}
-                  onOpenChat={handleOpenChatWithAgent}
-                />
-              )}
-              {activeTab === 'chat' && (
-                <ChatPage
-                  selectedAgentID={selectedAgentID}
-                  onSelectAgentID={setSelectedAgentID}
-                  onNavigateTab={navigateTab}
-                />
-              )}
-              {activeTab === 'missions' && (
-                <MissionsPage
-                  onOpenChat={handleOpenChatWithAgent}
-                />
-              )}
-              {activeTab === 'operations' && <OperationsPage />}
-              {activeTab === 'automations' && <AutomationsPage />}
-              {activeTab === 'channels' && <ChannelsPage />}
-              {activeTab === 'connectors' && <ConnectorsPage />}
-              {activeTab === 'tools' && <ToolHubPage />}
-              {activeTab === 'skills' && <SkillsPage />}
-              {activeTab === 'workspace' && <WorkspacePage />}
-              {activeTab === 'terminal' && <TerminalPage />}
-              {activeTab === 'notifications' && (
-                <NotificationsPage
-                  onNavigateTab={navigateTab}
-                />
-              )}
-              {activeTab === 'audit-logs' && <AuditLogsPage />}
-              {activeTab === 'settings' && <SettingsPage />}
-              </Suspense>
-            </ErrorBoundary>
-          </main>
+          {/* Main Content Area */}
+          <div
+            className={`flex-1 flex flex-col min-w-0 transition-all duration-200 ease-in-out ${
+              collapsed ? 'lg:ml-20' : 'lg:ml-64'
+            }`}
+          >
+            {/* Sticky Top Header */}
+            <Header
+              activeTab={activeTab}
+              onOpenMobileSidebar={() => setMobileOpen(true)}
+              collapsed={collapsed}
+              onLogout={handleLogout}
+              onOpenSearch={() => setCommandOpen(true)}
+              onNavigateTab={navigateTab}
+            />
+
+            {/* Page Views */}
+            <main className="flex-1 w-full pb-12">
+              <ErrorBoundary>
+                <Suspense fallback={<div className="m-8 h-8 w-8 animate-spin rounded-full border-2 border-deep-ink border-t-transparent" />}>
+                {activeTab === 'dashboard' && (
+                  <DashboardPage
+                    onNavigateTab={navigateTab}
+                    onOpenChat={handleOpenChatWithAgent}
+                    onEditAgent={handleEditAgent}
+                  />
+                )}
+                {activeTab === 'agents' && (
+                  <AgentsPage
+                    onOpenChat={handleOpenChatWithAgent}
+                    onNavigateTab={navigateTab}
+                    onEditAgent={handleEditAgent}
+                  />
+                )}
+                {activeTab === 'agent-studio' && (
+                  <AgentStudioPage
+                    agentID={studioAgentID}
+                    onBack={() => navigateTab('agents')}
+                    onOpenChat={handleOpenChatWithAgent}
+                  />
+                )}
+                {activeTab === 'chat' && (
+                  <ChatPage
+                    selectedAgentID={selectedAgentID}
+                    onSelectAgentID={setSelectedAgentID}
+                    onNavigateTab={navigateTab}
+                  />
+                )}
+                {activeTab === 'missions' && (
+                  <MissionsPage
+                    onOpenChat={handleOpenChatWithAgent}
+                  />
+                )}
+                {activeTab === 'operations' && <OperationsPage />}
+                {activeTab === 'automations' && <AutomationsPage />}
+                {activeTab === 'tools' && <ToolHubPage />}
+                {activeTab === 'skills' && <SkillsPage />}
+                {activeTab === 'workspace' && <WorkspacePage />}
+                {activeTab === 'terminal' && <TerminalPage />}
+                {activeTab === 'channels' && <ChannelsPage />}
+                {activeTab === 'connectors' && <ConnectorsPage />}
+                {activeTab === 'notifications' && (
+                  <NotificationsPage
+                    onNavigateTab={navigateTab}
+                  />
+                )}
+                {activeTab === 'audit-logs' && <AuditLogsPage />}
+                {activeTab === 'settings' && <SettingsPage />}
+                </Suspense>
+              </ErrorBoundary>
+            </main>
+          </div>
         </div>
-      </div>
-      </ActionProgressProvider>
-      </RealtimeProvider>
-      </DensityProvider>
-    </ToastProvider>
+        </ActionProgressProvider>
+        </RealtimeProvider>
+        </DensityProvider>
+      </ToastProvider>
+    </ThemeProvider>
   );
 }
 

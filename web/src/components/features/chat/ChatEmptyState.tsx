@@ -26,7 +26,7 @@ export function ChatEmptyState({
             key={prompt}
             type="button"
             onClick={() => onPrompt(prompt)}
-            className="flex items-center gap-1.5 rounded-full border border-onyx/10 bg-soft-meadow px-3.5 py-1.5 text-caption font-medium text-deep-ink transition-colors hover:bg-white"
+            className="flex items-center gap-1.5 rounded-full border border-onyx/10 bg-soft-meadow px-3.5 py-1.5 text-caption font-medium text-deep-ink transition-colors hover:bg-canvas"
           >
             <Zap className="h-3 w-3 text-hi-yellow" aria-hidden="true" />
             <span>{prompt}</span>

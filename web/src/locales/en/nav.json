@@ -44,6 +44,14 @@
     "comfortable": "Use comfortable density",
     "compact": "Use compact density"
   },
+  "theme": {
+    "toggle": "Toggle theme",
+    "switchToLight": "Switch to light mode",
+    "switchToDark": "Switch to dark mode",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
   "categories": {
     "overview": "Overview",
     "aiManagement": "AI Management",

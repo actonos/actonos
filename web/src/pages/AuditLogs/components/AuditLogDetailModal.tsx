@@ -228,7 +228,7 @@ export function AuditLogDetailModal({ log, isOpen, onClose }: AuditLogDetailModa
               <span>{copiedJson ? t('detail.copied', 'Copied!') : t('detail.copyJson', 'Copy JSON')}</span>
             </button>
           </div>
-          <pre className="p-3.5 bg-deep-ink text-canvas rounded-[18px] text-[11px] font-mono overflow-auto max-h-48">
+          <pre className="p-3.5 bg-deep-ink text-white rounded-[18px] text-[11px] font-mono overflow-auto max-h-48">
             {JSON.stringify(log, null, 2)}
           </pre>
         </div>

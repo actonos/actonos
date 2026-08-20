@@ -209,7 +209,7 @@ export function AutomationsPage() {
           <button
             onClick={() => selectSubTab('jobs')}
             className={`px-4 py-2 rounded-xl text-body-sm font-semibold transition-all cursor-pointer flex items-center gap-2 ${activeSubTab === 'jobs'
-              ? 'bg-deep-ink text-canvas shadow-xs'
+              ? 'bg-deep-ink text-white shadow-xs'
               : 'bg-soft-meadow text-slate hover:text-deep-ink'
               }`}
           >
@@ -219,7 +219,7 @@ export function AutomationsPage() {
           <button
             onClick={() => selectSubTab('history')}
             className={`px-4 py-2 rounded-xl text-body-sm font-semibold transition-all cursor-pointer flex items-center gap-2 ${activeSubTab === 'history'
-              ? 'bg-deep-ink text-canvas shadow-xs'
+              ? 'bg-deep-ink text-white shadow-xs'
               : 'bg-soft-meadow text-slate hover:text-deep-ink'
               }`}
           >

@@ -455,7 +455,7 @@ export function WorkspacePage() {
                       <a
                         href={api.workspaceRawUrl(selectedFile)}
                         download
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-deep-ink text-canvas text-body-sm font-semibold hover:bg-deep-ink/90 transition-colors"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-deep-ink text-white text-body-sm font-semibold hover:bg-deep-ink/90 transition-colors"
                       >
                         <Download className="w-4 h-4" />
                         {t('preview.downloadBinary')}
@@ -467,7 +467,7 @@ export function WorkspacePage() {
                         { key: 'before', content: originalContent },
                         { key: 'after', content: fileContent },
                       ].map((pane) => (
-                        <div key={pane.key} className="min-h-0 rounded-[16px] bg-deep-ink text-canvas overflow-auto">
+                        <div key={pane.key} className="min-h-0 rounded-[16px] bg-deep-ink text-white overflow-auto">
                           <div className="sticky top-0 bg-deep-ink border-b border-white/10 px-3 py-2 text-caption font-semibold">
                             {t(`diff.${pane.key}`)}
                           </div>

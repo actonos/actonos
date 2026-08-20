@@ -83,6 +83,21 @@
     "audit": "Nhật ký kiểm tra ({{count}})",
     "maintenance": "Lưu trữ & OTA"
   },
+  "appearance": {
+    "title": "Giao diện & Trải nghiệm",
+    "theme": "Chế độ giao diện",
+    "light": "Sáng",
+    "dark": "Tối",
+    "system": "Hệ thống",
+    "lightHint": "Giao diện sáng Sunlit Wildflower tương phản cao.",
+    "darkHint": "Giao diện tối Midnight Ink dịu mắt khi làm việc ban đêm.",
+    "systemHint": "Tự động thay đổi theo cài đặt hệ điều hành của bạn.",
+    "density": "Mật độ hiển thị",
+    "comfortable": "Thoải mái",
+    "compact": "Gọn gàng",
+    "comfortableHint": "Khoảng cách thoáng đãng và diện tích chạm rộng rãi.",
+    "compactHint": "Thu gọn viền đệm và chiều cao dòng cho màn hình nhỏ."
+  },
   "identity": {
     "title": "Danh tính & hồ sơ nhà điều hành",
     "subtitle": "Định cấu hình danh tính nhà điều hành, phong cách làm việc và chỉ thị thường trực toàn cầu của bạn cho ActonOS.",

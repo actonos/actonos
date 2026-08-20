@@ -195,7 +195,7 @@ export function NotificationBell({ onNavigateTab }: NotificationBellProps) {
               <button
                 type="button"
                 onClick={requestPermission}
-                className="px-2.5 py-1 rounded-lg bg-deep-ink text-canvas hover:bg-onyx text-caption font-medium shrink-0 transition-colors cursor-pointer"
+                className="px-2.5 py-1 rounded-lg bg-deep-ink text-white hover:bg-onyx text-caption font-semibold shrink-0 transition-colors cursor-pointer"
               >
                 {t('actions.confirm', 'Allow')}
               </button>

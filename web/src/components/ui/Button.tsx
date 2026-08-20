@@ -25,9 +25,9 @@ export function Button({
   };
 
   const variantStyles = {
-    primary: 'bg-hi-yellow text-deep-ink hover:brightness-95 active:brightness-90 font-semibold',
+    primary: 'bg-hi-yellow text-[#130e30] hover:brightness-95 active:brightness-90 font-semibold',
     secondary: 'bg-deep-ink text-white hover:bg-opacity-90 active:bg-opacity-95',
-    ghost: 'bg-transparent text-deep-ink border border-deep-ink hover:bg-soft-meadow',
+    ghost: 'bg-transparent text-deep-ink border border-onyx/20 hover:bg-soft-meadow',
     danger: 'bg-red-600 text-white hover:bg-red-700 active:bg-red-800',
   };
 

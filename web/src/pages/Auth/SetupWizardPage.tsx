@@ -20,6 +20,7 @@ import {
   EyeOff,
   CheckCircle2,
 } from 'lucide-react';
+import { useTheme } from '@/components/providers/ThemeProvider';
 
 export interface SetupWizardPageProps {
   onCompleted: () => void;
@@ -42,6 +43,7 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
   const [customInstructions, setCustomInstructions] = useState(
     'Provide intelligent, natural, and empathetic responses. Act as a trusted senior engineering partner. Proactively solve problems and avoid robotic or stiff clichés.'
   );
+  const { resolvedTheme } = useTheme();
 
   // Password State
   const [password, setPassword] = useState('');
@@ -109,7 +111,7 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
         {/* Top Branding Header */}
         <div className="text-center mb-8">
           <img
-            src="/actonos_logo.png"
+            src={resolvedTheme === 'light' ? "/actonos_logo.png" : "/actonos_logo_light.png"}
             alt="ActonOS"
             className="h-12 w-auto mx-auto mb-5 object-contain"
           />

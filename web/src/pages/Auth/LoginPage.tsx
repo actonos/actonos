@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { api } from '@/lib/api';
 import { Lock, Sparkles, Key, Eye, EyeOff, ShieldAlert } from 'lucide-react';
+import { useTheme } from '@/components/providers/ThemeProvider';
 
 export interface LoginPageProps {
   userName?: string;
@@ -21,6 +22,7 @@ export function LoginPage({ userName, onAuthenticated }: LoginPageProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const { resolvedTheme } = useTheme();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -49,7 +51,7 @@ export function LoginPage({ userName, onAuthenticated }: LoginPageProps) {
         {/* Lock Screen Emblem & Logo */}
         <div className="text-center mb-8">
           <img
-            src="/actonos_logo.png"
+            src={resolvedTheme === 'light' ? "/actonos_logo.png" : "/actonos_logo_light.png"}
             alt="ActonOS"
             className="h-12 w-auto mx-auto mb-5 object-contain"
           />

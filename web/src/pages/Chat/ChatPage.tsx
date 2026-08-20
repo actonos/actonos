@@ -86,7 +86,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const isAutoScrollEnabled = useRef(true);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown on outside click
@@ -693,7 +693,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                 <button
                   type="button"
                   onClick={() => setAgentDropdownOpen(!agentDropdownOpen)}
-                  className="w-full flex items-center justify-between p-2.5 px-3 rounded-[18px] bg-soft-meadow hover:bg-white border border-onyx/15 transition-all text-left cursor-pointer group"
+                  className="w-full flex items-center justify-between p-2.5 px-3 rounded-[18px] bg-soft-meadow hover:bg-canvas border border-onyx/15 transition-all text-left cursor-pointer group"
                 >
                   <div className="flex items-center gap-2.5 truncate">
                     <div className="w-8 h-8 rounded-full bg-deep-ink text-hi-yellow flex items-center justify-center border border-deep-ink shrink-0 shadow-xs">

@@ -1,11 +1,13 @@
 # ActonOS — UI/UX Design System
 > Controlled evolution of the ActonOS identity: calm, airy, operational, and readable at a glance.
 
-**Theme:** light
+**Theme:** Light (Sunlit Wildflower) · Dark (Midnight Ink) · System (Auto OS sync)
 
-The current product UI uses Manrope for display and Noto Sans for functional text, with warm cream surfaces, deep ink, and yellow accents retained from the ActonOS identity. New screens should use shared primitives (`PageHeader`, `Card`, `Button`, `Input`, `Badge`, `EmptyState`, `IconButton`, `SegmentedControl`) and semantic status colors. Emoji are not used in product UI; use Lucide icons with accessible labels.
+The product UI uses Manrope for display and Noto Sans for functional text, with dynamic themes managed via CSS variables and dataset tokens (`data-theme="dark"` / `data-theme="light"`). New screens should use shared primitives (`PageHeader`, `Card`, `Button`, `Input`, `Badge`, `EmptyState`, `IconButton`, `SegmentedControl`) and semantic status colors. Emoji are not used in product UI; use Lucide icons with accessible labels.
 
 ## Tokens — Colors
+
+### Light Theme (Sunlit Wildflower)
 
 | Name | Value | Token | Role |
 |------|-------|-------|------|
@@ -18,6 +20,18 @@ The current product UI uses Manrope for display and Noto Sans for functional tex
 | Soft Meadow | `#eff2e5` | `--color-soft-meadow` | Card surfaces, nav background, elevated panels, hero backdrop — green-tinted off-white for soft surface separation |
 | Charcoal | `#222222` | `--color-charcoal` | Secondary dark button text and borders, nav dividers — softer than pure black for dark UI elements |
 | Onyx | `#000000` | `--color-onyx` | Logo mark, nav text, input borders, fine stroke details — true black for highest-contrast elements |
+
+### Dark Theme (Midnight Ink)
+
+| Name | Value | Token | Role |
+|------|-------|-------|------|
+| Canvas | `#0e0c19` | `--color-canvas` | Deep obsidian violet-black page backdrop |
+| Soft Meadow | `#18152c` | `--color-soft-meadow` | Elevated card surfaces, panel backgrounds |
+| Deep Ink | `#f5f4fb` | `--color-deep-ink` | High-contrast heading and primary text |
+| Slate | `#9c99b2` | `--color-slate` | Secondary lavender-gray text, muted icons, subtle borders |
+| Charcoal | `#272342` | `--color-charcoal` | Secondary panel borders, dark button fills |
+| Onyx | `#ffffff` | `--color-onyx` | Pure white accent lines, icons, high-contrast borders |
+| Hi-Yellow | `#ffe228` | `--color-hi-yellow` | Signature highlighter yellow brand CTA and active highlights |
 
 ## Tokens — Typography
 

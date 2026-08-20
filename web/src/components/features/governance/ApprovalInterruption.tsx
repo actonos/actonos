@@ -110,7 +110,7 @@ export function ApprovalInterruption() {
         <p className="text-body-sm text-slate mt-1">
           {t('approval.description', { tool: approval.tool_name, agent: approval.agent_id })}
         </p>
-        <pre className="my-4 max-h-60 overflow-auto rounded-[18px] bg-deep-ink text-canvas p-4 text-xs">
+        <pre className="my-4 max-h-60 overflow-auto rounded-[18px] bg-deep-ink text-white p-4 text-xs">
           {JSON.stringify(approval.input, null, 2)}
         </pre>
         <label className="block text-caption font-semibold text-deep-ink mb-1">{t('approval.feedbackLabel')}</label>

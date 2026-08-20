@@ -219,7 +219,7 @@ export function NotificationsPage({ onNavigateTab }: NotificationsPageProps) {
                   type="button"
                   onClick={handleTestPush}
                   disabled={testingPush}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-soft-meadow hover:bg-white text-slate hover:text-deep-ink border border-onyx/10 text-caption font-sans font-medium transition-colors cursor-pointer disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-soft-meadow hover:bg-canvas text-slate hover:text-deep-ink border border-onyx/10 text-caption font-sans font-medium transition-colors cursor-pointer disabled:opacity-50"
                   title={t('sendTest', 'Send Test Push Notification')}
                 >
                   <Send className={`w-3.5 h-3.5 text-electric-cyan ${testingPush ? 'animate-bounce' : ''}`} />
@@ -232,7 +232,7 @@ export function NotificationsPage({ onNavigateTab }: NotificationsPageProps) {
               <button
                 type="button"
                 onClick={handleMarkAllRead}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-soft-meadow hover:bg-white text-slate hover:text-deep-ink border border-onyx/10 text-caption font-sans font-medium transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-soft-meadow hover:bg-canvas text-slate hover:text-deep-ink border border-onyx/10 text-caption font-sans font-medium transition-colors cursor-pointer"
               >
                 <CheckCheck className="w-4 h-4" />
                 <span>{t('markAllRead', 'Mark all read')}</span>
@@ -243,7 +243,7 @@ export function NotificationsPage({ onNavigateTab }: NotificationsPageProps) {
               <button
                 type="button"
                 onClick={() => setShowClearModal(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-soft-meadow hover:bg-rose-50 text-slate hover:text-crimson border border-onyx/10 text-caption font-sans font-medium transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-soft-meadow hover:bg-rose-50 dark:hover:bg-rose-950/30 text-slate hover:text-crimson border border-onyx/10 text-caption font-sans font-medium transition-colors cursor-pointer"
               >
                 <Trash2 className="w-4 h-4" />
                 <span>{t('clearAll', 'Clear history')}</span>
@@ -253,7 +253,7 @@ export function NotificationsPage({ onNavigateTab }: NotificationsPageProps) {
             <button
               type="button"
               onClick={loadNotifications}
-              className="p-2 rounded-xl bg-soft-meadow hover:bg-white text-slate hover:text-deep-ink border border-onyx/10 transition-colors cursor-pointer"
+              className="p-2 rounded-xl bg-soft-meadow hover:bg-canvas text-slate hover:text-deep-ink border border-onyx/10 transition-colors cursor-pointer"
               title={t('actions.refresh', 'Refresh')}
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -325,9 +325,9 @@ export function NotificationsPage({ onNavigateTab }: NotificationsPageProps) {
                 setSelectedType(tab.id);
                 setPage(1);
               }}
-              className={`px-3 py-1.5 rounded-xl text-caption font-medium transition-colors cursor-pointer ${
+              className={`px-3 py-1.5 rounded-xl text-caption font-semibold transition-colors cursor-pointer ${
                 selectedType === tab.id
-                  ? 'bg-deep-ink text-canvas shadow-2xs'
+                  ? 'bg-deep-ink text-white shadow-2xs'
                   : 'bg-canvas/80 text-slate hover:text-deep-ink border border-onyx/5'
               }`}
             >
@@ -429,7 +429,7 @@ export function NotificationsPage({ onNavigateTab }: NotificationsPageProps) {
                   <button
                     type="button"
                     onClick={() => handleNavigate(notif.link)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-soft-meadow hover:bg-deep-ink hover:text-canvas text-deep-ink border border-onyx/10 text-caption font-medium transition-colors cursor-pointer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-soft-meadow hover:bg-deep-ink hover:text-white text-deep-ink border border-onyx/10 text-caption font-medium transition-colors cursor-pointer"
                   >
                     <span>{t('actions.goToLink', 'View Target')}</span>
                     <ExternalLink className="w-3.5 h-3.5" />

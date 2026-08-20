@@ -83,6 +83,21 @@
     "audit": "Audit Logs ({{count}})",
     "maintenance": "Storage & OTA"
   },
+  "appearance": {
+    "title": "Appearance & Display",
+    "theme": "Theme Mode",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System",
+    "lightHint": "Sunlit Wildflower high-contrast light theme.",
+    "darkHint": "Midnight Ink obsidian dark theme for focused work.",
+    "systemHint": "Follows your operating system color preference.",
+    "density": "UI Density",
+    "comfortable": "Comfortable",
+    "compact": "Compact",
+    "comfortableHint": "Generous spacing and airy touch targets.",
+    "compactHint": "Tighter padding and dense row heights for small screens."
+  },
   "identity": {
     "title": "Operator Identity & Profile",
     "subtitle": "Configure your operator identity, working style, and global standing directives for ActonOS.",

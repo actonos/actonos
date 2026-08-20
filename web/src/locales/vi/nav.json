@@ -41,8 +41,16 @@
     "task": "Trạng thái tác vụ: {{status}}"
   },
   "density": {
-    "comfortable": "Dùng mật độ thoáng",
-    "compact": "Dùng mật độ gọn"
+    "comfortable": "Chế độ thoải mái",
+    "compact": "Chế độ gọn gàng"
+  },
+  "theme": {
+    "toggle": "Chuyển giao diện",
+    "switchToLight": "Chuyển sang giao diện sáng",
+    "switchToDark": "Chuyển sang giao diện tối",
+    "light": "Sáng",
+    "dark": "Tối",
+    "system": "Hệ thống"
   },
   "categories": {
     "overview": "Tổng quan",

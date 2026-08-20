@@ -3,25 +3,25 @@
 @import "tailwindcss";
 
 @theme {
-  /* Colors */
-  --color-deep-ink: #130e30;
-  --color-hi-yellow: #ffe228;
-  --color-moss-green: #59e25d;
-  --color-fuchsia: #e261e5;
-  --color-slate: #5f5c6e;
-  --color-canvas: #f9fbf2;
-  --color-soft-meadow: #eff2e5;
-  --color-charcoal: #222222;
-  --color-onyx: #000000;
-  --color-status-success: #176b43;
-  --color-status-success-soft: #e2f5e9;
-  --color-status-warning: #8a4b08;
-  --color-status-warning-soft: #fff2d6;
-  --color-status-danger: #b42318;
-  --color-status-danger-soft: #fee9e7;
-  --color-status-info: #3157a4;
-  --color-status-info-soft: #e8eefc;
-  --color-focus-ring: #3157a4;
+  /* Colors mapping to dynamic theme variables */
+  --color-deep-ink: var(--color-deep-ink);
+  --color-hi-yellow: var(--color-hi-yellow);
+  --color-moss-green: var(--color-moss-green);
+  --color-fuchsia: var(--color-fuchsia);
+  --color-slate: var(--color-slate);
+  --color-canvas: var(--color-canvas);
+  --color-soft-meadow: var(--color-soft-meadow);
+  --color-charcoal: var(--color-charcoal);
+  --color-onyx: var(--color-onyx);
+  --color-status-success: var(--color-status-success);
+  --color-status-success-soft: var(--color-status-success-soft);
+  --color-status-warning: var(--color-status-warning);
+  --color-status-warning-soft: var(--color-status-warning-soft);
+  --color-status-danger: var(--color-status-danger);
+  --color-status-danger-soft: var(--color-status-danger-soft);
+  --color-status-info: var(--color-status-info);
+  --color-status-info-soft: var(--color-status-info-soft);
+  --color-focus-ring: var(--color-focus-ring);
 
   /* Typography */
   --font-serif: "Manrope Variable", "Noto Sans Variable", ui-sans-serif, system-ui, sans-serif;
@@ -42,20 +42,117 @@
   --radius-pill: 1440px;
 }
 
-/* Base typography and body defaults */
-body {
-  background-color: var(--color-canvas);
-  color: var(--color-deep-ink);
-  font-family: var(--font-sans);
-  font-feature-settings: "ss01" on, "cv11" on;
-  -webkit-font-smoothing: antialiased;
-}
-
+/* -----------------------------------------------------------------------------
+ * Theme Tokens — Sunlit Wildflower (Light Default)
+ * ----------------------------------------------------------------------------- */
 :root {
+  --color-deep-ink: #130e30;
+  --color-hi-yellow: #ffe228;
+  --color-moss-green: #59e25d;
+  --color-fuchsia: #e261e5;
+  --color-slate: #5f5c6e;
+  --color-canvas: #f9fbf2;
+  --color-soft-meadow: #eff2e5;
+  --color-charcoal: #222222;
+  --color-onyx: #000000;
+  --color-status-success: #176b43;
+  --color-status-success-soft: #e2f5e9;
+  --color-status-warning: #8a4b08;
+  --color-status-warning-soft: #fff2d6;
+  --color-status-danger: #b42318;
+  --color-status-danger-soft: #fee9e7;
+  --color-status-info: #3157a4;
+  --color-status-info-soft: #e8eefc;
+  --color-focus-ring: #3157a4;
+
   --density-control-height: 44px;
   --density-row-height: 52px;
   --density-card-padding: 24px;
   --density-section-gap: 24px;
+}
+
+/* -----------------------------------------------------------------------------
+ * Theme Tokens — Midnight Ink (Dark Theme)
+ * ----------------------------------------------------------------------------- */
+:root[data-theme="dark"] {
+  --color-deep-ink: #f5f4fb;
+  --color-hi-yellow: #ffe228;
+  --color-moss-green: #59e25d;
+  --color-fuchsia: #e261e5;
+  --color-slate: #9c99b2;
+  --color-canvas: #0e0c19;
+  --color-soft-meadow: #18152c;
+  --color-charcoal: #272342;
+  --color-onyx: #ffffff;
+  --color-status-success: #34d399;
+  --color-status-success-soft: rgba(52, 211, 153, 0.16);
+  --color-status-warning: #fbbf24;
+  --color-status-warning-soft: rgba(251, 191, 36, 0.16);
+  --color-status-danger: #f87171;
+  --color-status-danger-soft: rgba(248, 113, 113, 0.16);
+  --color-status-info: #60a5fa;
+  --color-status-info-soft: rgba(96, 165, 250, 0.16);
+  --color-focus-ring: #818cf8;
+}
+
+/* In Dark mode, containers with .bg-deep-ink remain dark elevated pills/surfaces */
+:root[data-theme="dark"] .bg-deep-ink {
+  background-color: #272342;
+}
+
+/* Any element using .text-canvas as high-contrast light text is bright in dark mode */
+:root[data-theme="dark"] .text-canvas {
+  color: #f5f4fb !important;
+}
+
+/* Ensure vibrant, readable status colors across all badges/cards in Dark Mode */
+:root[data-theme="dark"] .text-emerald-700,
+:root[data-theme="dark"] .text-emerald-800,
+:root[data-theme="dark"] .text-emerald-900 {
+  color: #34d399 !important;
+}
+
+:root[data-theme="dark"] .text-amber-700,
+:root[data-theme="dark"] .text-amber-800,
+:root[data-theme="dark"] .text-amber-900 {
+  color: #fbbf24 !important;
+}
+
+:root[data-theme="dark"] .text-red-700,
+:root[data-theme="dark"] .text-red-800,
+:root[data-theme="dark"] .text-red-900 {
+  color: #f87171 !important;
+}
+
+:root[data-theme="dark"] .text-indigo-700,
+:root[data-theme="dark"] .text-indigo-800,
+:root[data-theme="dark"] .text-indigo-900 {
+  color: #818cf8 !important;
+}
+
+:root[data-theme="dark"] .text-blue-700,
+:root[data-theme="dark"] .text-blue-800,
+:root[data-theme="dark"] .text-blue-900 {
+  color: #60a5fa !important;
+}
+
+:root[data-theme="dark"] .bg-emerald-100 {
+  background-color: rgba(52, 211, 153, 0.16) !important;
+}
+
+:root[data-theme="dark"] .bg-amber-100 {
+  background-color: rgba(251, 191, 36, 0.16) !important;
+}
+
+:root[data-theme="dark"] .bg-red-100,
+:root[data-theme="dark"] .bg-red-50 {
+  background-color: rgba(248, 113, 113, 0.16) !important;
+}
+
+/* Elements with .bg-hi-yellow always retain dark ink text in all themes */
+.bg-hi-yellow,
+.bg-hi-yellow * {
+  color: #130e30 !important;
 }
 
 :root[data-density="compact"] {
@@ -122,6 +219,14 @@ body {
   background-color: rgba(19, 14, 48, 0.35);
 }
 
+:root[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background-color: rgba(245, 244, 251, 0.2);
+}
+
+:root[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(245, 244, 251, 0.4);
+}
+
 ::-webkit-scrollbar-corner {
   background: transparent;
 }
@@ -130,6 +235,19 @@ body {
 * {
   scrollbar-width: thin;
   scrollbar-color: rgba(19, 14, 48, 0.18) transparent;
+}
+
+:root[data-theme="dark"] * {
+  scrollbar-color: rgba(245, 244, 251, 0.2) transparent;
+}
+
+body {
+  background-color: var(--color-canvas);
+  color: var(--color-deep-ink);
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01" on, "cv11" on;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 h1,
@@ -197,6 +315,16 @@ h3,
   overflow-x: auto;
   margin: 0.75rem 0;
   border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+:root[data-theme="dark"] .tiptap-renderer .tiptap pre {
+  background-color: #12101e;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+:root[data-theme="dark"] .tiptap-renderer:not(.tiptap-user) .tiptap code {
+  background-color: rgba(245, 244, 251, 0.12);
+  color: var(--color-deep-ink);
 }
 
 .tiptap-renderer:not(.tiptap-user) .tiptap code {

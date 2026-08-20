@@ -23,7 +23,7 @@ export function IconButton({
   const tones = {
     default: 'border-onyx/10 bg-soft-meadow text-deep-ink hover:bg-canvas',
     danger: 'border-status-danger/25 bg-status-danger-soft text-status-danger hover:bg-status-danger/10',
-    primary: 'border-deep-ink bg-deep-ink text-canvas hover:bg-deep-ink/90',
+    primary: 'border-deep-ink bg-deep-ink text-white hover:bg-deep-ink/90',
   };
 
   return (
