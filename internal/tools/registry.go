@@ -299,12 +299,42 @@ func (r *ToolRegistry) Unregister(name string) {
 	delete(r.tools, name)
 }
 
-// Get retrieves a tool by name.
-func (r *ToolRegistry) Get(name string) (Tool, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+// NormalizeToolName aliases common LLM hallucinated tool names to registered native tools.
+func NormalizeToolName(name string) string {
+	clean := strings.TrimSpace(name)
+	lower := strings.ToLower(clean)
+	switch lower {
+	case "websearch", "web_search", "google_search", "search", "browse", "web":
+		return "native_web_search"
+	case "readfile", "read_file", "read", "file_read", "fetch_file", "open_file":
+		return "native_file_read"
+	case "writefile", "write_file", "create_file", "file_write", "save_file", "put_file":
+		return "native_file_write"
+	case "listfiles", "list_files", "list_dir", "ls", "dir", "file_list":
+		return "native_file_list"
+	case "deletefile", "delete_file", "remove_file", "file_delete", "rm":
+		return "native_file_delete"
+	case "subshell", "bash", "sh", "exec", "powershell", "terminal", "run_command", "shell":
+		return "native_subshell"
+	case "browser", "browser_open", "web_browser":
+		return "native_browser"
+	case "view_skill", "read_skill":
+		return "skill_view"
+	}
+	return clean
+}
 
-	tool, ok := r.tools[name]
+// Get retrieves a tool by name (supporting canonical aliases).
+func (r *ToolRegistry) Get(name string) (Tool, error) {
+	canonicalName := NormalizeToolName(name)
+
+	r.mu.RLock()
+	tool, ok := r.tools[canonicalName]
+	if !ok {
+		tool, ok = r.tools[name]
+	}
+	r.mu.RUnlock()
+
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrToolNotFound, name)
 	}

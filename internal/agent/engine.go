@@ -615,7 +615,7 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 		}
 
 		currentOpts := opts
-		if iter >= 3 || iter == maxIterations-1 {
+		if iter == maxIterations-1 {
 			currentOpts.Tools = nil
 			messages = append(messages, llm.Message{
 				Role:    llm.RoleSystem,
@@ -1370,6 +1370,8 @@ func (e *Engine) completeStreamIteration(
 	}
 
 DoneStream:
+	rawStreamedContent := response.Content
+
 	if response.Content != "" {
 		cleanedContent, thinking := llm.ExtractThinkingContent(response.Content, response.ReasoningContent)
 		if thinking != "" && response.ReasoningContent == "" {
@@ -1382,18 +1384,25 @@ DoneStream:
 	// If the model produced embedded tool calls (e.g. DeepSeek DSML or XML tool calls) in content
 	if len(response.ToolCalls) == 0 && response.Content != "" {
 		cleaned, embeddedCalls := llm.ExtractEmbeddedToolCalls(response.Content)
-		if len(embeddedCalls) > 0 && opts.Tools != nil {
+		if len(embeddedCalls) > 0 {
 			response.ToolCalls = embeddedCalls
 		}
 		response.Content = cleaned
 	}
 
-	// This turn called tools, so any prose already streamed was preamble rather
+	// This turn called tools, so any prose already streamed was preamble/DSML rather
 	// than the answer. Retract it and surface it as reasoning instead.
 	if len(response.ToolCalls) > 0 && streamedTokens {
 		eventChan <- AgentStreamEvent{Type: EventStreamTokenReset}
 		if preamble := strings.TrimSpace(response.Content); preamble != "" {
 			eventChan <- AgentStreamEvent{Type: EventStreamReasoning, Reasoning: preamble}
+		}
+	} else if len(response.ToolCalls) == 0 && streamedTokens && response.Content != rawStreamedContent {
+		// Tokens were streamed live, but DSML/thinking tags were stripped at stream end.
+		// Retract the raw stream and re-emit the clean content!
+		eventChan <- AgentStreamEvent{Type: EventStreamTokenReset}
+		if response.Content != "" {
+			eventChan <- AgentStreamEvent{Type: EventStreamToken, Content: response.Content}
 		}
 	}
 

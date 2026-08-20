@@ -175,6 +175,31 @@ func ExtractThinkingContent(content string, existingReasoning string) (string, s
 	return cleaned, combinedReasoning
 }
 
+// NormalizeToolName aliases common LLM hallucinated tool names to registered native tools.
+func NormalizeToolName(name string) string {
+	clean := strings.TrimSpace(name)
+	lower := strings.ToLower(clean)
+	switch lower {
+	case "websearch", "web_search", "google_search", "search", "browse", "web":
+		return "native_web_search"
+	case "readfile", "read_file", "read", "file_read", "fetch_file", "open_file":
+		return "native_file_read"
+	case "writefile", "write_file", "create_file", "file_write", "save_file", "put_file":
+		return "native_file_write"
+	case "listfiles", "list_files", "list_dir", "ls", "dir", "file_list":
+		return "native_file_list"
+	case "deletefile", "delete_file", "remove_file", "file_delete", "rm":
+		return "native_file_delete"
+	case "subshell", "bash", "sh", "exec", "powershell", "terminal", "run_command", "shell":
+		return "native_subshell"
+	case "browser", "browser_open", "web_browser":
+		return "native_browser"
+	case "view_skill", "read_skill":
+		return "skill_view"
+	}
+	return clean
+}
+
 // ExtractEmbeddedToolCalls inspects model content for embedded tool calling markup
 // (DeepSeek DSML, DeepSeek token markup, Anthropic XML, Qwen/Llama markdown blocks),
 // extracts them into structured ToolCalls, and returns the clean prose content.
@@ -195,7 +220,7 @@ func ExtractEmbeddedToolCalls(content string) (string, []ToolCall) {
 
 	for _, match := range dsmlInvokeRe.FindAllStringSubmatch(content, -1) {
 		if len(match) > 2 {
-			toolName := strings.TrimSpace(match[1])
+			toolName := NormalizeToolName(match[1])
 			paramBlock := match[2]
 
 			argsMap := make(map[string]any)
@@ -237,7 +262,7 @@ func ExtractEmbeddedToolCalls(content string) (string, []ToolCall) {
 	dsTokenRe := regexp.MustCompile(`(?s)<[|｜]{1,2}tool call begin[|｜]{1,2}>(?:function:)?([a-zA-Z0-9_-]+)\s*(\{[\s\S]*?\})<[|｜]{1,2}tool call end[|｜]{1,2}>`)
 	for _, match := range dsTokenRe.FindAllStringSubmatch(content, -1) {
 		if len(match) > 2 {
-			toolName := strings.TrimSpace(match[1])
+			toolName := NormalizeToolName(match[1])
 			argsStr := strings.TrimSpace(match[2])
 			randBytes := make([]byte, 4)
 			_, _ = rand.Read(randBytes)
@@ -256,7 +281,7 @@ func ExtractEmbeddedToolCalls(content string) (string, []ToolCall) {
 	anthropicFuncRe := regexp.MustCompile(`(?s)<function=([a-zA-Z0-9_-]+)>\s*(\{[\s\S]*?\})\s*</function>`)
 	for _, match := range anthropicFuncRe.FindAllStringSubmatch(content, -1) {
 		if len(match) > 2 {
-			toolName := strings.TrimSpace(match[1])
+			toolName := NormalizeToolName(match[1])
 			argsStr := strings.TrimSpace(match[2])
 			randBytes := make([]byte, 4)
 			_, _ = rand.Read(randBytes)
@@ -286,6 +311,7 @@ func ExtractEmbeddedToolCalls(content string) (string, []ToolCall) {
 				if toolName == "" {
 					toolName = jsonObj.Tool
 				}
+				toolName = NormalizeToolName(toolName)
 				args := jsonObj.Arguments
 				if len(args) == 0 {
 					args = jsonObj.Parameters
@@ -313,7 +339,7 @@ func ExtractEmbeddedToolCalls(content string) (string, []ToolCall) {
 	genericInvokeRe := regexp.MustCompile(`(?s)<(?:tool_call|function_call|invoke)\s*(?:name="([^"]+)")?>\s*(.*?)\s*</(?:tool_call|function_call|invoke)>`)
 	for _, match := range genericInvokeRe.FindAllStringSubmatch(content, -1) {
 		if len(match) > 2 {
-			toolName := strings.TrimSpace(match[1])
+			toolName := NormalizeToolName(match[1])
 			body := strings.TrimSpace(match[2])
 			randBytes := make([]byte, 4)
 			_, _ = rand.Read(randBytes)
@@ -331,6 +357,7 @@ func ExtractEmbeddedToolCalls(content string) (string, []ToolCall) {
 					if tName == "" {
 						tName = jsonObj.Tool
 					}
+					tName = NormalizeToolName(tName)
 					args := jsonObj.Arguments
 					if len(args) == 0 {
 						args = jsonObj.Parameters

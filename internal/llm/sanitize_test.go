@@ -198,3 +198,40 @@ func TestExtractEmbeddedToolCalls_MarkdownBlock(t *testing.T) {
 		t.Errorf("unexpected cleaned content: %q", cleaned)
 	}
 }
+
+func TestExtractEmbeddedToolCalls_UserReportedDeepSeekSnippet(t *testing.T) {
+	raw := `Tôi sẽ xem file email kiến trúc ActonOS đã có sẵn để nắm thông tin sản phẩm, sau đó tạo email marketing mới hoàn chỉnh trong workspace.
+
+<｜｜DSML｜｜tool_calls>
+
+<｜｜DSML｜｜invoke name="WebSearch">
+
+<｜｜DSML｜｜parameter name="query" string="true">ActonOS</｜｜DSML｜｜parameter>
+
+</｜｜DSML｜｜invoke>
+
+<｜｜DSML｜｜invoke name="ReadFile">
+
+<｜｜DSML｜｜parameter name="file" string="true">data/workspace/agent_system_core/actonos-architecture-email.html</｜｜DSML｜｜parameter>
+
+</｜｜DSML｜｜invoke>
+
+</｜｜DSML｜｜tool_calls>`
+
+	cleaned, calls := ExtractEmbeddedToolCalls(raw)
+	if len(calls) != 2 {
+		t.Fatalf("expected 2 extracted calls, got %d", len(calls))
+	}
+	if calls[0].Function.Name != "native_web_search" {
+		t.Errorf("expected native_web_search, got %q", calls[0].Function.Name)
+	}
+	if calls[1].Function.Name != "native_file_read" {
+		t.Errorf("expected native_file_read, got %q", calls[1].Function.Name)
+	}
+	if strings.Contains(cleaned, "<｜｜DSML") || strings.Contains(cleaned, "invoke") {
+		t.Errorf("cleaned content still contains DSML tags: %q", cleaned)
+	}
+	if !strings.Contains(cleaned, "Tôi sẽ xem file email kiến trúc ActonOS") {
+		t.Errorf("cleaned content missing original prose: %q", cleaned)
+	}
+}
