@@ -45,7 +45,11 @@ export function MessageBubble({
               <span>{t('thinkingProcess', 'Thinking Process')}</span>
             </summary>
             <div className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap border-t border-onyx/5 pt-2 text-[11px] leading-relaxed text-deep-ink/80">
-              {message.reasoning}
+              {message.reasoning
+                .replace(/<[|｜]{1,2}DSML[|｜]{1,2}[\s\S]*?<\/[|｜]{1,2}DSML[|｜]{1,2}tool_calls>/g, '')
+                .replace(/<[|｜]{1,2}[\s\S]*?>/g, '')
+                .replace(/<\/?(?:tool_call|function_call|invoke|parameter)[^>]*>/g, '')
+                .trim()}
             </div>
           </details>
         )}

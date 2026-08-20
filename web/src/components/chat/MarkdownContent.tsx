@@ -18,9 +18,17 @@ export interface MarkdownContentProps {
 export function parseMarkdownToHTML(markdown: string): string {
   if (!markdown) return '';
 
+  const cleanMarkdown = markdown
+    .replace(/<[|｜]{1,2}DSML[|｜]{1,2}[\s\S]*?<\/[|｜]{1,2}DSML[|｜]{1,2}tool_calls>/g, '')
+    .replace(/<[|｜]{1,2}[\s\S]*?>/g, '')
+    .replace(/<\/?(?:tool_call|function_call|invoke|parameter)[^>]*>/g, '')
+    .trim();
+
+  if (!cleanMarkdown) return '';
+
   // 1. Extract and protect code blocks so formatting doesn't alter code block content
   const codeBlocks: string[] = [];
-  let processed = markdown.replace(/```([a-zA-Z0-9_-]*)\r?\n([\s\S]*?)```/g, (_match, lang, code) => {
+  let processed = cleanMarkdown.replace(/```([a-zA-Z0-9_-]*)\r?\n([\s\S]*?)```/g, (_match, lang, code) => {
     const placeholder = `__ACTON_CODE_BLOCK_${codeBlocks.length}__`;
     const escapedCode = code
       .replace(/&/g, '&amp;')

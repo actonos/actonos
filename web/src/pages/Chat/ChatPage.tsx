@@ -524,13 +524,17 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                   thought: undefined,
                 };
               } else if (currentEvent === 'token_reset') {
-                // If this turn called tools, shift any streamed preamble into reasoning
-                // so the user doesn't lose what they were reading, while keeping content clean for the final answer.
-                const preamble = currentAssistantMsg.content;
+                // If this turn called tools, shift any streamed preamble into reasoning (stripping any raw DSML/XML markup)
+                const rawPreamble = currentAssistantMsg.content;
+                const cleanPreamble = rawPreamble
+                  .replace(/<[|｜]{1,2}DSML[|｜]{1,2}[\s\S]*?<\/[|｜]{1,2}DSML[|｜]{1,2}tool_calls>/g, '')
+                  .replace(/<[|｜]{1,2}[\s\S]*?>/g, '')
+                  .replace(/<\/?(?:tool_call|function_call|invoke|parameter)[^>]*>/g, '')
+                  .trim();
                 currentAssistantMsg = {
                   ...currentAssistantMsg,
-                  reasoning: preamble
-                    ? (currentAssistantMsg.reasoning ? currentAssistantMsg.reasoning + '\n\n' + preamble : preamble)
+                  reasoning: cleanPreamble
+                    ? (currentAssistantMsg.reasoning ? currentAssistantMsg.reasoning + '\n\n' + cleanPreamble : cleanPreamble)
                     : currentAssistantMsg.reasoning,
                   content: '',
                 };

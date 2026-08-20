@@ -1353,9 +1353,12 @@ func (e *Engine) completeStreamIteration(
 			}
 			if chunk.DeltaContent != "" {
 				response.Content += chunk.DeltaContent
-				// Emit immediately — do not accumulate.
-				eventChan <- AgentStreamEvent{Type: EventStreamToken, Content: chunk.DeltaContent}
-				streamedTokens = true
+				// Only emit prose if we are NOT inside a DSML or internal markup tag block.
+				// This prevents raw <｜｜DSML... tokens from ever flashing on the user's screen.
+				if !isInsideMarkupTag(response.Content) {
+					eventChan <- AgentStreamEvent{Type: EventStreamToken, Content: chunk.DeltaContent}
+					streamedTokens = true
+				}
 			}
 			if len(chunk.ToolCalls) > 0 {
 				response.ToolCalls = append(response.ToolCalls, chunk.ToolCalls...)
@@ -1404,9 +1407,42 @@ DoneStream:
 		if response.Content != "" {
 			eventChan <- AgentStreamEvent{Type: EventStreamToken, Content: response.Content}
 		}
+	} else if len(response.ToolCalls) == 0 && !streamedTokens && response.Content != "" {
+		// Content was suppressed during streaming because of tag filtering, emit clean final content now.
+		eventChan <- AgentStreamEvent{Type: EventStreamToken, Content: response.Content}
 	}
 
 	return response, nil
+}
+
+// isInsideMarkupTag reports if accumulated stream text is currently inside a DSML, thinking, or tool call markup block.
+func isInsideMarkupTag(accumulated string) bool {
+	// 1. DeepSeek DSML tool calls block
+	if (strings.Contains(accumulated, "DSML｜｜tool_calls>") || strings.Contains(accumulated, "DSML||tool_calls>")) &&
+		!strings.Contains(accumulated, "/DSML｜｜tool_calls>") && !strings.Contains(accumulated, "/DSML||tool_calls>") &&
+		!strings.Contains(accumulated, "</｜｜DSML｜｜tool_calls>") && !strings.Contains(accumulated, "</||DSML||tool_calls>") {
+		return true
+	}
+
+	// 2. Unclosed tag fragment
+	lastOpen := strings.LastIndex(accumulated, "<")
+	if lastOpen != -1 {
+		lastClose := strings.LastIndex(accumulated, ">")
+		if lastClose < lastOpen {
+			fragment := strings.ToLower(accumulated[lastOpen:])
+			if strings.HasPrefix(fragment, "<｜") ||
+				strings.HasPrefix(fragment, "<|") ||
+				strings.Contains(fragment, "dsml") ||
+				strings.HasPrefix(fragment, "<think") ||
+				strings.HasPrefix(fragment, "<thought") ||
+				strings.HasPrefix(fragment, "<tool_call") ||
+				strings.HasPrefix(fragment, "<function=") ||
+				strings.HasPrefix(fragment, "<invoke") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (e *Engine) blockTaskOnResumeFailure(ctx context.Context, checkpoint *RunCheckpoint, reason string) {

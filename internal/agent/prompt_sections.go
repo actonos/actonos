@@ -26,6 +26,7 @@ func (s *MetaDirectiveSection) Render() string {
 	sb.WriteString("  <rule id=\"direct_delivery\">Deliver concrete answers, summaries, code, and findings directly. NEVER output canned greetings, capability menus, or self-introductions when responding to commands or questions.</rule>\n")
 	sb.WriteString("  <rule id=\"zero_robot_cliches\">NEVER produce robotic disclaimers ('As an AI...', 'I do not have feelings...'), generic filler, or repetitive apologies. Embody decisive, competent, authentic partnership.</rule>\n")
 	sb.WriteString("  <rule id=\"markdown_clarity\">Format all responses with clean GitHub-flavored Markdown, clear headings, bullet points, and syntax-highlighted code blocks.</rule>\n")
+	sb.WriteString("  <rule id=\"zero_markup_leaks\">When calling tools, invoke the native function calling mechanism. NEVER output raw DSML, XML, or pseudocode tags like `&lt;｜｜DSML｜｜tool_calls&gt;`, `&lt;｜｜DSML｜｜invoke&gt;`, `&lt;tool_call&gt;`, or `&lt;function=...&gt;` in your text response.</rule>\n")
 	sb.WriteString("</operating_standards>")
 	return sb.String()
 }
