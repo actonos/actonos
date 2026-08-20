@@ -73,11 +73,23 @@ export interface ChatMessageRecord {
   created_at: string;
 }
 
+export interface SkillRequirements {
+  config?: string[];
+  env?: string[];
+  bins?: string[];
+  tools?: string[];
+  os?: string[];
+}
+
 export interface ToolInfo {
   name: string;
   description: string;
   category: 'native' | 'mcp' | 'wasm' | 'skill';
   schema: Record<string, unknown>;
+  enabled?: boolean;
+  requirements_met?: boolean;
+  requirements?: SkillRequirements;
+  missing_requirements?: string[];
 }
 
 export interface ContainerStatus {

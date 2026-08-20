@@ -12,12 +12,21 @@ func BuildCognitiveSystemPrompt(
 	ctx context.Context,
 	agentID string,
 	agent *AgentManifest,
+	dataDir string,
 	workspaceDir string,
 	profileMgr *UserProfileManager,
 	mem *memory.HybridEngine,
 	userMessage string,
 ) (string, int) {
 	builder := NewPromptBuilder()
+
+	agentSlug := agentID
+	if agent != nil && agent.AgentID != "" {
+		agentSlug = agent.AgentID
+	}
+	if agentSlug == "" {
+		agentSlug = DefaultSystemAgentID
+	}
 
 	// Layer 0: Universal Demeanor & Directness Standards
 	builder.WithSection(&MetaDirectiveSection{})
@@ -35,7 +44,9 @@ func BuildCognitiveSystemPrompt(
 
 	// Layer 2: Hardware & Environment Grounding
 	builder.WithSection(&EnvironmentSection{
+		DataDir:      dataDir,
 		WorkspaceDir: workspaceDir,
+		AgentSlug:    agentSlug,
 	})
 
 	// Layer 3: Agent Soul (if available)
@@ -63,7 +74,11 @@ func BuildCognitiveSystemPrompt(
 	}
 
 	// Layer 6: Operational & Safety Constraints
-	builder.WithSection(&ConstraintsSection{})
+	builder.WithSection(&ConstraintsSection{
+		DataDir:      dataDir,
+		AgentSlug:    agentSlug,
+		WorkspaceDir: workspaceDir,
+	})
 
 	// Layer 7b: Headless Autonomous Mode Check
 	if headless, _ := ctx.Value("heartbeat_headless_mode").(bool); headless {

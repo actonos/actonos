@@ -35,16 +35,25 @@ func TestBuildHostEnvironmentPrompt(t *testing.T) {
 		t.Errorf("prompt missing <environment> XML tag, got:\n%s", prompt)
 	}
 
-	if !strings.Contains(prompt, "<operational_constraints>") {
-		t.Errorf("prompt missing <operational_constraints> XML tag, got:\n%s", prompt)
+	if !strings.Contains(prompt, "<workspace_storage_policy>") {
+		t.Errorf("prompt missing <workspace_storage_policy> XML tag, got:\n%s", prompt)
 	}
 
-	if !strings.Contains(prompt, "no_interactive_commands") {
-		t.Errorf("prompt missing no_interactive_commands rule, got:\n%s", prompt)
+	if !strings.Contains(prompt, "dedicated_workspace_default") {
+		t.Errorf("prompt missing dedicated_workspace_default rule, got:\n%s", prompt)
 	}
 
-	if !strings.Contains(prompt, "/custom/workspace") {
-		t.Errorf("prompt missing workspace directory /custom/workspace, got:\n%s", prompt)
+	if !strings.Contains(prompt, "permitted_global_data_access") {
+		t.Errorf("prompt missing permitted_global_data_access rule, got:\n%s", prompt)
+	}
+
+	if !strings.Contains(prompt, "<execution_best_practices>") {
+		t.Errorf("prompt missing <execution_best_practices> XML tag, got:\n%s", prompt)
+	}
+
+	customAgentPrompt := BuildAgentEnvironmentPrompt("/custom", "/custom/workspace", "agent_custom_coder")
+	if !strings.Contains(customAgentPrompt, "agent_dir=\"/custom/workspace/agent_custom_coder\"") && !strings.Contains(customAgentPrompt, "agent_custom_coder") {
+		t.Errorf("expected custom agent slug in agent_dir prompt, got:\n%s", customAgentPrompt)
 	}
 
 	if runtime.GOOS == "windows" {

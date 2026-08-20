@@ -121,7 +121,7 @@ func TestEngineDurableApprovalResumeEndToEnd(t *testing.T) {
 	if !errors.As(err, &approvalRequired) {
 		t.Fatalf("expected durable approval pause, got %v", err)
 	}
-	if _, statErr := os.Stat(filepath.Join(workspace, "result.txt")); !os.IsNotExist(statErr) {
+	if _, statErr := os.Stat(filepath.Join(workspace, manifest.AgentID, "result.txt")); !os.IsNotExist(statErr) {
 		t.Fatalf("tool executed before approval: %v", statErr)
 	}
 	pendingRuns, err := runStore.List(context.Background(), 10)
@@ -140,7 +140,10 @@ func TestEngineDurableApprovalResumeEndToEnd(t *testing.T) {
 	if response.Content == "" || response.Usage.TotalTokens != 11 || provider.CompleteCalls != 2 {
 		t.Fatalf("unexpected resumed response: response=%+v calls=%d", response, provider.CompleteCalls)
 	}
-	data, err := os.ReadFile(filepath.Join(workspace, "result.txt"))
+	data, err := os.ReadFile(filepath.Join(workspace, manifest.AgentID, "result.txt"))
+	if err != nil {
+		data, err = os.ReadFile(filepath.Join(workspace, "result.txt"))
+	}
 	if err != nil || string(data) != "exactly once" {
 		t.Fatalf("approved tool result mismatch: data=%q err=%v", data, err)
 	}

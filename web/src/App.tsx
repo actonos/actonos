@@ -7,6 +7,8 @@ import { SetupWizardPage } from '@/pages/Auth/SetupWizardPage';
 import { LoginPage } from '@/pages/Auth/LoginPage';
 import { api } from '@/lib/api';
 import { ApprovalInterruption } from '@/components/features/governance/ApprovalInterruption';
+import { ActionProgressToast } from '@/components/features/governance/ActionProgressToast';
+import { ActionProgressProvider } from '@/components/providers/ActionProgressProvider';
 import { RealtimeProvider } from '@/components/providers/RealtimeProvider';
 import { DensityProvider } from '@/components/providers/DensityProvider';
 import { useTranslation } from 'react-i18next';
@@ -172,8 +174,10 @@ export function App() {
     <ToastProvider>
       <DensityProvider>
       <RealtimeProvider>
+      <ActionProgressProvider>
       <div className="min-h-screen bg-canvas text-deep-ink selection:bg-hi-yellow selection:text-deep-ink font-sans flex">
         <ApprovalInterruption />
+        <ActionProgressToast />
         <CommandPalette
           isOpen={commandOpen}
           onClose={() => setCommandOpen(false)}
@@ -264,6 +268,7 @@ export function App() {
           </main>
         </div>
       </div>
+      </ActionProgressProvider>
       </RealtimeProvider>
       </DensityProvider>
     </ToastProvider>

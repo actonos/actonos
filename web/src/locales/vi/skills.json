@@ -1,7 +1,7 @@
 {
   "eyebrow": "Kỹ năng",
   "title": "Kỹ năng Agent",
-  "subtitle": "Cài đặt và quản lý kỹ năng cho agent. Khám phá kỹ năng từ cộng đồng.",
+  "subtitle": "Cài đặt, cấu hình và quản lý kỹ năng cho các agent tự hành.",
   "tabs": {
     "installed": "Đã cài ({{count}})",
     "hub": "Cộng đồng ({{count}})"
@@ -20,7 +20,93 @@
   "actions": {
     "newSkill": "Tạo kỹ năng",
     "refresh": "Làm mới",
-    "search": "Tìm kỹ năng..."
+    "search": "Tìm theo tên, mô tả, tác giả, thẻ tags...",
+    "clearFilters": "Xóa bộ lọc"
+  },
+  "categories": {
+    "all": "Tất cả",
+    "software-dev": "Phát triển phần mềm",
+    "data-research": "Dữ liệu & Nghiên cứu",
+    "marketing-sales": "Marketing & Bán hàng",
+    "finance-legal": "Tài chính & Pháp lý",
+    "customer-support": "Hỗ trợ khách hàng",
+    "developer": "Lập trình viên",
+    "utility": "Tiện ích",
+    "sre": "SRE & DevOps",
+    "devops": "DevOps",
+    "research": "Nghiên cứu",
+    "human-resources": "Nhân sự (HR)",
+    "hr": "Nhân sự (HR)",
+    "education": "Giáo dục & Đào tạo",
+    "productivity": "Hiệu suất công việc",
+    "design": "Thiết kế",
+    "creative": "Sáng tạo",
+    "security": "Bảo mật",
+    "communication": "Giao tiếp & Liên lạc",
+    "ecommerce": "Thương mại điện tử",
+    "writing": "Viết & Nội dung",
+    "automation": "Tự động hóa",
+    "analytics": "Phân tích",
+    "media": "Truyền thông & Đa phương tiện",
+    "general": "Chung",
+    "finance": "Tài chính",
+    "marketing": "Marketing",
+    "sales": "Bán hàng",
+    "legal": "Pháp lý",
+    "support": "Hỗ trợ",
+    "operations": "Vận hành"
+  },
+  "statusFilter": {
+    "all": "Tất cả trạng thái",
+    "installed": "Đã cài",
+    "available": "Có sẵn"
+  },
+  "sort": {
+    "label": "Sắp xếp:",
+    "stars": "Phổ biến nhất",
+    "recent": "Mới cập nhật",
+    "name": "Tên (A-Z)"
+  },
+  "requirements": {
+    "met": "Đủ điều kiện",
+    "missing": "Thiếu điều kiện",
+    "env": "Biến môi trường",
+    "bins": "File thực thi (Binary)",
+    "os": "Hệ điều hành",
+    "unmetExplanation": "Hệ thống đang thiếu các yêu cầu bắt buộc cho kỹ năng này. Không thể sử dụng cho đến khi được cấu hình.",
+    "disabledExplanation": "Kỹ năng đang tắt. Bật lại để cho phép agent sử dụng."
+  },
+  "toggle": {
+    "enabled": "Đang bật",
+    "disabled": "Đang tắt",
+    "enable": "Bật",
+    "disable": "Tắt",
+    "successEnabled": "Kỹ năng {{name}} đã được bật.",
+    "successDisabled": "Kỹ năng {{name}} đã được tắt."
+  },
+  "pagination": {
+    "showing": "Hiển thị {{shown}} trên {{total}} kỹ năng",
+    "loadMore": "Xem thêm kỹ năng"
+  },
+  "card": {
+    "multiFile": "{{count}} tệp",
+    "singleFile": "1 tệp",
+    "viewDetails": "Chi tiết",
+    "sourceRepo": "GitHub",
+    "skillUrl": "SkillsMP",
+    "stars": "{{count}} sao"
+  },
+  "detailModal": {
+    "title": "Chi tiết kỹ năng",
+    "overview": "Tổng quan",
+    "filesList": "Danh sách tệp ({{count}})",
+    "requirements": "Yêu cầu hệ thống",
+    "noRequirements": "Không yêu cầu điều kiện đặc biệt. Sẵn sàng thực thi.",
+    "author": "Tác giả",
+    "category": "Danh mục",
+    "version": "Phiên bản",
+    "openGithub": "Xem mã nguồn GitHub",
+    "openMarketplace": "Xem trên Marketplace"
   },
   "createModal": {
     "title": "Tạo kỹ năng mới",
@@ -35,8 +121,9 @@
   },
   "empty": {
     "title": "Không tìm thấy kỹ năng",
-    "subtitle": "Tạo kỹ năng mới hoặc cài đặt từ cộng đồng."
+    "subtitle": "Tạo kỹ năng mới hoặc cài đặt từ cộng đồng.",
+    "noMatches": "Không có kỹ năng nào phù hợp với bộ lọc hiện tại."
   },
-  "loading": "Đang tải...",
+  "loading": "Đang tải danh mục kỹ năng...",
   "byAuthor": "Bởi {{author}}"
 }

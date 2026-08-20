@@ -1,7 +1,24 @@
 {
   "approval": {
     "queuedTitle": "Approval required",
-    "queuedDescription": "The action is waiting for operator approval and has not been executed yet."
+    "queuedDescription": "The action is waiting for operator approval and has not been executed yet.",
+    "feedbackPlaceholder": "Optional feedback or approval reason..."
+  },
+  "actionProgress": {
+    "title": "Action Execution",
+    "approving": "Authorizing...",
+    "approveAndExecute": "Approve & Execute",
+    "reject": "Reject",
+    "done": "Done",
+    "completed": "Completed Successfully",
+    "failed": "Execution Failed",
+    "steps": {
+      "auth": "Security Authorization",
+      "download": "Package Acquisition & Download",
+      "verify": "Requirements & Registration",
+      "executing": "Executing Operation",
+      "finalizing": "Hot-Reloading Kernel"
+    }
   },
   "appName": "ActonOS",
   "startup": "Starting ActonOS Kernel...",

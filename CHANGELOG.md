@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Dynamic Community Skills Registry, Requirements Verification & Skill Management**:
+  - Live fetching of community skills from official GitHub registry (`https://raw.githubusercontent.com/actonos/actonos-skills/refs/heads/master/registry.json`) with multi-file package downloads and 1-hour TTL caching.
+  - Metadata `requires` verification (`env`, `bins`, `os`, `config`) with execution gating and LLM prompt filtering to prevent broken tool invocations.
+  - Enable / Disable skill toggle API (`PUT /api/tools/skills/{name}/toggle`) with persistent `.disabled` filesystem state.
+  - Fully modernized Community Skills Hub UI with dynamic category pills, installation status filters, popularity/stars sorting, multi-field search, inspect modal, and complete English/Vietnamese localization.
 - **Service Worker & Web Push Background Notifications**:
   - Full Web Push API (RFC 8030 / RFC 8291 / RFC 8292) with auto-generated P-256 VAPID keypairs and SQLite subscription persistence.
   - Dedicated Service Worker (`sw.js`) handling background wake-ups, interactive action prompts (Review / Dismiss), vibration patterns, and active tab navigation/focus.

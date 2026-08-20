@@ -89,13 +89,22 @@ export interface StorageInfoData {
 
 export interface HubSkillItem {
   id: string;
+  slug?: string;
   name: string;
   description: string;
   category: string;
   author: string;
-  version: string;
-  icon: string;
-  tags: string[];
+  version?: string;
+  icon?: string;
+  tags?: string[];
+  stars?: number;
+  updatedAt?: number | string;
+  contentLanguage?: string;
+  path?: string;
+  files?: string[];
+  isMultiFile?: boolean;
+  skillUrl?: string;
+  sourceGithubUrl?: string;
   installed: boolean;
   skill_md?: string;
 }
@@ -342,6 +351,12 @@ export const api = {
     fetchJSON<MutationResult<{ status: string; skill: string }>>('/tools/hub/uninstall', {
       method: 'POST',
       body: JSON.stringify({ skill_id: skillId }),
+    }),
+  toggleSkill: (name: string, enabled: boolean) =>
+    fetchJSON<{ name: string; enabled: boolean; status: string }>(`/tools/skills/${encodeURIComponent(name)}/toggle`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled }),
     }),
 
   // Sandboxed Workspace

@@ -233,8 +233,8 @@ func (t *BrowserScreenshotTool) Execute(ctx context.Context, inputJSON json.RawM
 		return nil, fmt.Errorf("screenshot capture failed: %w", err)
 	}
 
-	// Save to workspace
-	targetPath, err := security.ResolvePath(t.workspaceDir, input.OutputPath, true)
+	// Save to workspace or data directory
+	targetPath, err := security.ResolvePathWithBase(filepath.Dir(t.workspaceDir), t.workspaceDir, input.OutputPath, true)
 	if err != nil {
 		return nil, fmt.Errorf("validating screenshot path: %w", err)
 	}

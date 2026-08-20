@@ -30,31 +30,25 @@ func (c *ContextManager) PruneAndSnapshot(
 	maxTokens int,
 ) []llm.Message {
 	pruned := c.PruneMessages(messages, maxTokens)
-	if c.db == nil || runID == "" || len(pruned) == len(messages) {
+	if c.db == nil || runID == "" || len(pruned) >= len(messages) {
 		return pruned
 	}
-	retained := map[string]bool{}
-	for _, message := range pruned {
-		retained[string(message.Role)+"\x00"+message.Content] = true
-	}
 	var summary strings.Builder
-	for _, message := range messages {
-		if retained[string(message.Role)+"\x00"+message.Content] {
-			continue
-		}
-		content := strings.TrimSpace(message.Content)
+	droppedCount := len(messages) - len(pruned)
+	for i := 0; i < len(messages) && i <= droppedCount+1; i++ {
+		content := strings.TrimSpace(messages[i].Content)
 		if len(content) > 600 {
 			content = content[:600] + "…"
 		}
 		if content != "" {
-			summary.WriteString(string(message.Role))
+			summary.WriteString(string(messages[i].Role))
 			summary.WriteString(": ")
 			summary.WriteString(content)
 			summary.WriteString("\n")
 		}
 	}
 	if summary.Len() == 0 {
-		return pruned
+		summary.WriteString("Compacted older dialogue history to fit model token budget.")
 	}
 	_, _ = c.db.ExecContext(ctx, `
 		INSERT INTO context_snapshots (
@@ -91,20 +85,34 @@ func (c *ContextManager) BuildAugmentedSystemPrompt(
 }
 
 // PruneMessages compacts history to a conservative token budget while retaining
-// the system prompt and the newest complete observations.
+// the system prompt, the active user goal, and the newest complete observations.
 func (c *ContextManager) PruneMessages(messages []llm.Message, maxTokens int) []llm.Message {
 	if len(messages) <= 2 || estimateMessagesTokens(messages) <= maxTokens {
 		return messages
 	}
 
-	result := []llm.Message{messages[0]}
-	remaining := maxTokens - estimateMessagesTokens(result) - 64
+	// 1. Identify the active User message initiating the current turn
+	lastUserIdx := -1
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == llm.RoleUser {
+			lastUserIdx = i
+			break
+		}
+	}
 
-	// Walk backwards in whole blocks. An assistant message carrying tool_calls and
-	// the tool results answering it are one indivisible unit: dropping the assistant
-	// half orphans the results, and dropping a result half leaves an unanswered
-	// tool_call. Either shape is rejected by the provider, which is what made tool
-	// calls fail intermittently once a conversation grew past the budget.
+	// 2. Base anchors: System Prompt (index 0) and the active User Prompt (lastUserIdx)
+	result := []llm.Message{messages[0]}
+	userPromptCost := 0
+	if lastUserIdx > 0 {
+		userPromptCost = estimateMessagesTokens([]llm.Message{messages[lastUserIdx]})
+	}
+	remaining := maxTokens - estimateMessagesTokens(result) - userPromptCost - 64
+	if remaining < 128 {
+		remaining = 128
+	}
+
+	// 3. Walk backwards in whole blocks. An assistant message carrying tool_calls and
+	// the tool results answering it are one indivisible unit.
 	var retained []llm.Message
 	for end := len(messages); end > 1; {
 		start := end - 1
@@ -118,7 +126,7 @@ func (c *ContextManager) PruneMessages(messages []llm.Message, maxTokens int) []
 		}
 		block := messages[start:end]
 		cost := estimateMessagesTokens(block)
-		if cost > remaining {
+		if cost > remaining && len(retained) > 0 {
 			// A single oversized block cannot be split without corrupting it.
 			break
 		}
@@ -126,6 +134,19 @@ func (c *ContextManager) PruneMessages(messages []llm.Message, maxTokens int) []
 		remaining -= cost
 		end = start
 	}
+
+	// 4. Ensure the active user message is NEVER lost
+	hasActiveUser := false
+	for _, m := range retained {
+		if lastUserIdx > 0 && m.Role == llm.RoleUser && m.Content == messages[lastUserIdx].Content {
+			hasActiveUser = true
+			break
+		}
+	}
+	if !hasActiveUser && lastUserIdx > 0 {
+		retained = append([]llm.Message{messages[lastUserIdx]}, retained...)
+	}
+
 	if len(retained) < len(messages)-1 {
 		result = append(result, llm.Message{
 			Role:    llm.RoleSystem,

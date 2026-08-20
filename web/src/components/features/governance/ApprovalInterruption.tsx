@@ -63,9 +63,20 @@ export function ApprovalInterruption() {
       if (approved) {
         await api.approveAction(approval.id, feedback.trim() || t('approval.approvedFeedback'));
         success(t('approval.approved'), approval.tool_name);
+        window.dispatchEvent(
+          new CustomEvent('actonos:approval-decided', {
+            detail: { id: approval.id, approved: true, tool: approval.tool_name },
+          })
+        );
+        window.dispatchEvent(new CustomEvent('actonos:tools-updated'));
       } else {
         await api.rejectAction(approval.id, feedback.trim() || t('approval.defaultFeedback'));
         info(t('approval.rejected'), approval.tool_name);
+        window.dispatchEvent(
+          new CustomEvent('actonos:approval-decided', {
+            detail: { id: approval.id, approved: false, tool: approval.tool_name },
+          })
+        );
       }
       setApproval(null);
       setFeedback('');

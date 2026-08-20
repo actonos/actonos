@@ -429,6 +429,28 @@ graph LR
     LLM --> T3
 ```
 
+### Community Skills Registry & Requirements Verification
+
+ActonOS connects dynamically to the OpenClaw / ActonOS Community Skills Registry (`https://raw.githubusercontent.com/actonos/actonos-skills/refs/heads/master/registry.json`) for 1-click discovery and multi-file package installation:
+
+1. **Dynamic Remote Catalog (`HubManager`)**:
+   - Queries the official repository with in-memory TTL caching (1 hour) and non-blocking background synchronization.
+   - Installs multi-file skills (including `SKILL.md`, executable scripts in `scripts/`, and documentation in `references/`) into `/data/skills/<slug>/`.
+   - Dynamic hot-reloading via `fsnotify` in `SkillWatcher`.
+
+2. **Metadata Requirements Verification (`requires`)**:
+   - Skills declare system dependencies in YAML frontmatter (`requires` / `metadata.openclaw.requires`):
+     - `env`: Required environment variables (e.g. `TAVILY_API_KEY`).
+     - `bins`: Required CLI binaries on host PATH (e.g. `python3`, `node`, `git`).
+     - `os`: Supported host operating systems (`linux`, `darwin`, `windows`).
+     - `config`: Required system configurations or plugins.
+   - Gated Execution: `ToolRegistry.Execute` and `SkillTool.Execute` verify requirements at runtime. If requirements are not satisfied (`requirements_met = false`), the skill cannot be run and returns a descriptive error detailing missing dependencies.
+   - LLM Guard: `ToLLMToolDefinitions` automatically hides requirement-unmet or disabled skills from LLM prompts to prevent hallucinated invocation.
+
+3. **Enable / Disable Toggle & State Persistence**:
+   - Individual installed skills can be toggled on/off via `PUT /api/tools/skills/{name}/toggle`.
+   - State is persisted via a filesystem marker (`/data/skills/<slug>/.disabled`).
+
 ### OAuth 2.1 & Token Refresh Daemon
 
 All SaaS connections (Gmail, Notion, Figma, GitHub) authenticate via OAuth 2.1 with PKCE (S256). The `token_refresher.go` daemon automatically renews access tokens **5 minutes before expiry** to maintain seamless connectivity.

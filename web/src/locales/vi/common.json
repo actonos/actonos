@@ -1,7 +1,24 @@
 {
   "approval": {
     "queuedTitle": "Cần phê duyệt",
-    "queuedDescription": "Thao tác đang chờ người vận hành phê duyệt và chưa được thực thi."
+    "queuedDescription": "Thao tác đang chờ người vận hành phê duyệt và chưa được thực thi.",
+    "feedbackPlaceholder": "Ý kiến hoặc lý do phê duyệt (tùy chọn)..."
+  },
+  "actionProgress": {
+    "title": "Tiến trình Thực thi Thao tác",
+    "approving": "Đang xác thực...",
+    "approveAndExecute": "Phê duyệt & Thực thi",
+    "reject": "Từ chối",
+    "done": "Hoàn tất",
+    "completed": "Thực thi thành công",
+    "failed": "Thực thi thất bại",
+    "steps": {
+      "auth": "Xác thực & Phê duyệt Bảo mật",
+      "download": "Tải Package & Mã nguồn",
+      "verify": "Kiểm tra Yêu cầu & Đăng ký",
+      "executing": "Đang thực thi thao tác",
+      "finalizing": "Tải lại Kernel & Đồng bộ"
+    }
   },
   "appName": "ActonOS",
   "startup": "Đang khởi động ActonOS Kernel...",

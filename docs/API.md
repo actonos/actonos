@@ -637,6 +637,46 @@ Dispatches a test push notification to active service worker subscriptions.
 
 ---
 
+## Tools & Skills Hub
+
+### `GET /api/tools`
+Lists all registered tools (Native, MCP, WASM, Skills) along with their execution parameters and requirements. Query params: `category` (optional: `native`, `mcp`, `wasm`, `skill`).
+
+### `PUT /api/tools/skills/{name}/toggle`
+Enables or disables an installed skill tool.
+
+**Request:**
+```json
+{
+  "enabled": false
+}
+```
+
+### `GET /api/tools/hub/catalog`
+Fetches the live Community Skills registry with metadata, stars, categories, and tags.
+
+### `POST /api/tools/hub/install`
+Installs a community skill package (downloads all declared files into `/data/skills/<slug>/`).
+
+**Request:**
+```json
+{
+  "skill_id": "tavily"
+}
+```
+
+### `POST /api/tools/hub/uninstall`
+Removes an installed community skill directory.
+
+**Request:**
+```json
+{
+  "skill_id": "tavily"
+}
+```
+
+---
+
 ## Error Format
 
 All error responses adhere to the standard envelope:

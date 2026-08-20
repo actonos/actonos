@@ -195,6 +195,7 @@ func main() {
 	}
 	defer skillWatcher.Stop()
 	hubMgr := tools.NewHubManager(skillsDir)
+	hubMgr.SetEventBus(eventBus)
 	slog.Info("dynamic tooling hub initialized", "tools_registered", len(toolReg.List()))
 
 	// 8. Initialize Agent Manager, User Profile & Cognitive Memory
@@ -232,6 +233,7 @@ func main() {
 	contextMgr.SetDB(db.SQLDB())
 	engine.SetContextManager(contextMgr)
 	engine.SetToolRegistry(toolReg)
+	engine.SetDataDir(*dataDir)
 	engine.SetWorkspaceDir(workspaceDir)
 	runStore := agent.NewRunStore(db.SQLDB())
 	engine.SetRunStore(runStore)
@@ -535,11 +537,10 @@ func main() {
 	apiServer.RegisterStaticRoutes(overridesDir)
 
 	httpServer := &http.Server{
-		Addr:         *listenAddr,
-		Handler:      apiServer.Router(),
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 60 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		Addr:              *listenAddr,
+		Handler:           apiServer.Router(),
+		ReadHeaderTimeout: 30 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	go func() {

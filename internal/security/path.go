@@ -11,20 +11,26 @@ import (
 // ErrPathEscape indicates that a requested path is outside the configured root.
 var ErrPathEscape = errors.New("path escapes authorized root")
 
-// ResolvePath resolves a relative path beneath root while preventing absolute
-// paths, lexical traversal, sibling-prefix confusion, and symlink escapes.
-func ResolvePath(root, requested string, allowMissing bool) (string, error) {
+// ResolvePathWithBase resolves a relative path starting from baseDir while ensuring
+// the resulting canonical path remains strictly contained within allowedRoot.
+func ResolvePathWithBase(allowedRoot, baseDir, requested string, allowMissing bool) (string, error) {
 	if filepath.IsAbs(requested) {
 		return "", ErrPathEscape
 	}
 
-	absRoot, err := filepath.Abs(root)
+	absAllowedRoot, err := filepath.Abs(allowedRoot)
 	if err != nil {
 		return "", fmt.Errorf("resolving root: %w", err)
 	}
-	absRoot = canonicalizePotentialPath(absRoot)
+	absAllowedRoot = canonicalizePotentialPath(absAllowedRoot)
 
-	candidate := filepath.Join(absRoot, filepath.Clean(requested))
+	absBaseDir, err := filepath.Abs(baseDir)
+	if err != nil {
+		return "", fmt.Errorf("resolving base dir: %w", err)
+	}
+	absBaseDir = canonicalizePotentialPath(absBaseDir)
+
+	candidate := filepath.Join(absBaseDir, filepath.Clean(requested))
 	checkPath := candidate
 	if allowMissing {
 		checkPath = nearestExistingParent(candidate)
@@ -43,7 +49,7 @@ func ResolvePath(root, requested string, allowMissing bool) (string, error) {
 		return "", fmt.Errorf("resolving requested path: %w", resolveErr)
 	}
 
-	rel, err := filepath.Rel(absRoot, candidate)
+	rel, err := filepath.Rel(absAllowedRoot, candidate)
 	if err != nil {
 		return "", fmt.Errorf("checking path containment: %w", err)
 	}
@@ -51,6 +57,12 @@ func ResolvePath(root, requested string, allowMissing bool) (string, error) {
 		return "", ErrPathEscape
 	}
 	return candidate, nil
+}
+
+// ResolvePath resolves a relative path beneath root while preventing absolute
+// paths, lexical traversal, sibling-prefix confusion, and symlink escapes.
+func ResolvePath(root, requested string, allowMissing bool) (string, error) {
+	return ResolvePathWithBase(root, root, requested, allowMissing)
 }
 
 func canonicalizePotentialPath(path string) string {

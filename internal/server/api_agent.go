@@ -277,6 +277,8 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
 		w.Header().Set("X-Accel-Buffering", "no")
+		fmt.Fprintf(w, ": ready\n\n")
+		flusher.Flush()
 
 		eventChan := make(chan agent.AgentStreamEvent, 64)
 		go func() {
@@ -300,6 +302,15 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 					"thought":         ev.Thought,
 				})
 				fmt.Fprintf(w, "event: thought\ndata: %s\n\n", string(dataBytes))
+				flusher.Flush()
+
+			case agent.EventStreamReasoning:
+				dataBytes, _ := json.Marshal(map[string]any{
+					"conversation_id": convID,
+					"title":           convTitle,
+					"reasoning":       ev.Reasoning,
+				})
+				fmt.Fprintf(w, "event: reasoning\ndata: %s\n\n", string(dataBytes))
 				flusher.Flush()
 
 			case agent.EventStreamToken:

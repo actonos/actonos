@@ -31,7 +31,7 @@ func TestBuildCognitiveSystemPrompt(t *testing.T) {
 		SystemInstructions: "Deliver clean, maintainable code with unit tests.",
 	}
 
-	prompt, _ := BuildCognitiveSystemPrompt(ctx, agent.AgentID, agent, "/workspace", nil, nil, "Hello")
+	prompt, _ := BuildCognitiveSystemPrompt(ctx, agent.AgentID, agent, "/data", "/data/workspace", nil, nil, "Hello")
 
 	requiredTags := []string{
 		"<operating_standards>",

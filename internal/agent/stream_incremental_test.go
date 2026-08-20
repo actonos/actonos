@@ -152,7 +152,7 @@ func TestStreamNoResetOnPlainAnswer(t *testing.T) {
 	}
 }
 
-func TestStreamReasoningEmittedAsThought(t *testing.T) {
+func TestStreamReasoningEmitted(t *testing.T) {
 	e := newScriptedEngine([]llm.StreamChunk{
 		{DeltaReasoning: "thinking..."},
 		{DeltaContent: "answer"},
@@ -163,13 +163,13 @@ func TestStreamReasoningEmittedAsThought(t *testing.T) {
 	if resp.ReasoningContent != "thinking..." {
 		t.Fatalf("reasoning not accumulated: %q", resp.ReasoningContent)
 	}
-	var thoughts int
+	var reasonings int
 	for _, ev := range events {
-		if ev.Type == EventStreamThought {
-			thoughts++
+		if ev.Type == EventStreamReasoning || ev.Type == EventStreamThought {
+			reasonings++
 		}
 	}
-	if thoughts == 0 {
-		t.Fatal("reasoning deltas must surface as thought events")
+	if reasonings == 0 {
+		t.Fatal("reasoning deltas must surface as reasoning or thought events")
 	}
 }

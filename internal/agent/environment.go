@@ -118,13 +118,36 @@ func scanWorkspaceOverview(workspaceDir string) string {
 // BuildHostEnvironmentPrompt generates a structured XML-tagged prompt block informing the Agent
 // of its exact Host Operating System, Shell syntax, Workspace layout, and Available CLI tools.
 func BuildHostEnvironmentPrompt(workspaceDir string) string {
-	if workspaceDir == "" {
-		if _, err := os.Stat("/data/workspace"); err == nil {
-			workspaceDir = "/data/workspace"
-		} else {
-			workspaceDir = "."
-		}
+	dataDir := filepath.Dir(workspaceDir)
+	if filepath.Base(workspaceDir) != "workspace" {
+		dataDir = workspaceDir
+		workspaceDir = filepath.Join(dataDir, "workspace")
 	}
+	return BuildAgentEnvironmentPrompt(dataDir, workspaceDir, DefaultSystemAgentID)
+}
+
+// BuildAgentEnvironmentPrompt generates a structured XML-tagged prompt block with explicit dataDir, workspaceDir, and dedicated agent directory.
+func BuildAgentEnvironmentPrompt(dataDir, workspaceDir, agentSlug string) string {
+	if dataDir == "" && workspaceDir == "" {
+		dataDir = "./data"
+		workspaceDir = "./data/workspace"
+	} else if dataDir == "" {
+		if filepath.Base(workspaceDir) == "workspace" {
+			dataDir = filepath.Dir(workspaceDir)
+		} else {
+			dataDir = workspaceDir
+			workspaceDir = filepath.Join(dataDir, "workspace")
+		}
+	} else if workspaceDir == "" {
+		workspaceDir = filepath.Join(dataDir, "workspace")
+	}
+
+	if agentSlug == "" {
+		agentSlug = DefaultSystemAgentID
+	}
+
+	agentWorkspace := filepath.Join(workspaceDir, agentSlug)
+	_ = os.MkdirAll(agentWorkspace, 0755)
 
 	var sb strings.Builder
 
@@ -149,8 +172,15 @@ func BuildHostEnvironmentPrompt(workspaceDir string) string {
 		sb.WriteString("  <shell path=\"/bin/bash\" syntax=\"POSIX / Bash (pipes '|', forward slashes '/', redirection)\" />\n")
 	}
 
-	fmt.Fprintf(&sb, "  <workspace root=\"%s\" />\n", workspaceDir)
-	sb.WriteString("  <data_dir path=\"/data\" config=\"/data/config\" logs=\"/data/logs\" skills=\"/data/skills\" />\n")
+	configDir := filepath.Join(dataDir, "config")
+	logsDir := filepath.Join(dataDir, "logs")
+	skillsDir := filepath.Join(dataDir, "skills")
+	storageDir := filepath.Join(dataDir, "storage")
+	pluginsDir := filepath.Join(dataDir, "plugins")
+
+	fmt.Fprintf(&sb, "  <workspace root=\"%s\" agent_dir=\"%s\" agent_slug=\"%s\" />\n", workspaceDir, agentWorkspace, agentSlug)
+	fmt.Fprintf(&sb, "  <data_dir path=\"%s\" config=\"%s\" logs=\"%s\" skills=\"%s\" storage=\"%s\" plugins=\"%s\" />\n",
+		dataDir, configDir, logsDir, skillsDir, storageDir, pluginsDir)
 
 	// 2. Probed System Capabilities & Batteries-Included CLI Tools
 	caps := ProbeSystemCapabilities()
@@ -164,7 +194,10 @@ func BuildHostEnvironmentPrompt(workspaceDir string) string {
 	sb.WriteString("  </installed_runtimes_and_tools>\n")
 
 	// 3. Workspace Overview State (if available)
-	wsOverview := scanWorkspaceOverview(workspaceDir)
+	wsOverview := scanWorkspaceOverview(agentWorkspace)
+	if wsOverview == "" {
+		wsOverview = scanWorkspaceOverview(workspaceDir)
+	}
 	if wsOverview != "" {
 		sb.WriteString("  <workspace_state>\n")
 		sb.WriteString(wsOverview)
@@ -173,19 +206,36 @@ func BuildHostEnvironmentPrompt(workspaceDir string) string {
 
 	sb.WriteString("</environment>\n\n")
 
-	// 4. Operational Constraints & Anti-Hanging Safety Rules
-	sb.WriteString("<operational_constraints>\n")
-	sb.WriteString("  <rule id=\"no_interactive_commands\">NEVER execute interactive blocking commands (e.g. `vim`, `nano`, `vi`, `top`, `htop`, `less` without `-F`, `more`, or interactive `python` REPL without `-c`). They will hang the subshell execution.</rule>\n")
-	sb.WriteString("  <rule id=\"limit_output_volume\">When inspecting files or command outputs, ALWAYS limit volume (e.g. `head -n 50`, `tail -n 50`, `rg -m 20`, `jq '.[:5]'`). Do NOT cat multi-megabyte files into the context window.</rule>\n")
-	sb.WriteString("  <rule id=\"path_consistency\">Always use valid host OS paths matching `<workspace root>` and avoid guessing external package manager states.</rule>\n")
-	sb.WriteString("  <rule id=\"verify_modifications\">After modifying a file or executing a build/test script, verify the status code and observations before concluding the task.</rule>\n")
-	sb.WriteString("</operational_constraints>\n\n")
+	// 4. Dedicated Storage Policy & Global Data Access
+	sb.WriteString("<workspace_storage_policy>\n")
+	fmt.Fprintf(&sb, "  <rule id=\"dedicated_workspace_default\">DEFAULT STORAGE LOCATION: Your designated working folder is `%s` (or relative `%s/...`). By default, store your intermediate files, scripts, downloads, research notes, and outputs in this folder to avoid cluttering other directories.</rule>\n", agentWorkspace, agentSlug)
+	fmt.Fprintf(&sb, "  <rule id=\"permitted_global_data_access\">CROSS-DIRECTORY DATA ACCESS: When explicitly requested by the user, or necessary for tasks such as editing skills in `%s`, modifying configs in `%s`, or managing shared files in `%s`, you are FULLY AUTHORIZED and permitted to read, write, and execute files anywhere within `%s`.</rule>\n", skillsDir, configDir, workspaceDir, dataDir)
+	sb.WriteString("</workspace_storage_policy>\n\n")
 
-	// 5. Execution Best Practices
+	// 5. Dynamic Execution Best Practices based on detected environment tools
+	hasTool := func(bin string) bool {
+		for _, c := range caps {
+			if c.Installed && (c.Binary == bin || c.Name == bin) {
+				return true
+			}
+		}
+		return false
+	}
+
 	sb.WriteString("<execution_best_practices>\n")
-	sb.WriteString("  <practice>Search Efficiency: ALWAYS prioritize `ripgrep` (`rg`) for rapid regex/text searches over iterating through files manually.</practice>\n")
-	sb.WriteString("  <practice>JSON Extraction: Utilize `jq` for filtering and extracting structured data from API responses.</practice>\n")
-	sb.WriteString("  <practice>Computation & Parsing: Prefer executing concise Python (`python3 -c \"...\"`) or Node.js scripts for mathematical calculations, regex transformations, or data conversions rather than guessing.</practice>\n")
+	if hasTool("rg") || hasTool("ripgrep") {
+		sb.WriteString("  <practice>Search Efficiency: ALWAYS prioritize `ripgrep` (`rg`) for rapid regex/text searches over iterating through files manually.</practice>\n")
+	} else {
+		sb.WriteString("  <practice>Search Efficiency: Utilize native file search tools or concise Python/PowerShell scripts to search and inspect files efficiently.</practice>\n")
+	}
+	if hasTool("jq") {
+		sb.WriteString("  <practice>JSON Extraction: Utilize `jq` for filtering and extracting structured data from API responses.</practice>\n")
+	} else if hasTool("python") || hasTool("python3") || hasTool("node") {
+		sb.WriteString("  <practice>JSON Extraction: Utilize concise Python (`python3 -c \"import sys, json...\"`) or Node.js scripts for filtering and extracting structured data.</practice>\n")
+	}
+	if hasTool("python") || hasTool("python3") || hasTool("node") {
+		sb.WriteString("  <practice>Computation & Parsing: Prefer executing concise Python (`python3 -c \"...\"`) or Node.js scripts for mathematical calculations, regex transformations, or data conversions rather than guessing.</practice>\n")
+	}
 	sb.WriteString("</execution_best_practices>\n")
 
 	return sb.String()

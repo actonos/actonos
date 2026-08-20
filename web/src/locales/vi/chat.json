@@ -19,6 +19,7 @@
   "renameSession": "Đổi tên phiên",
   "deleteSession": "Xóa phiên",
   "deleteConfirm": "Bạn có chắc chắn muốn xóa phiên trò chuyện này không?",
+  "scrollToBottom": "Cuộn xuống dưới",
   "viewSoul": "Xem Tính cách (Persona)",
   "tokens": "Tokens: {{count}}",
   "model": "Mô hình: {{name}}",
@@ -56,5 +57,6 @@
   "noToolCalls": "Không có lệnh gọi công cụ rõ ràng nào được thực hiện trong lần lặp này.",
   "milliseconds": "{{value}} ms",
   "copyResponse": "Sao chép phản hồi",
-  "connecting": "Đang kết nối với tầng mô hình..."
+  "connecting": "Đang kết nối với tầng mô hình...",
+  "thinkingProcess": "Quá trình suy nghĩ"
 }

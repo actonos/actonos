@@ -25,6 +25,7 @@ export interface ChatMessage {
   model?: string;
   tokens_used?: number;
   thought?: string;
+  reasoning?: string;
   toolCalls?: ToolCallTrace[];
   auditLogs?: AuditLogItem[];
 }

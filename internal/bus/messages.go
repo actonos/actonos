@@ -22,10 +22,13 @@ const (
 	EventSubTaskCompleted = "swarm.subtask_completed"
 	EventSubTaskFailed    = "swarm.subtask_failed"
 
-	// Tool events
+	// Tool & Skill events
 	EventToolExecutionStarted = "tool.started"
 	EventToolExecutionResult  = "tool.result"
 	EventToolExecutionError   = "tool.error"
+	EventSkillProgress        = "skill.progress"
+	EventSkillInstalled       = "skill.installed"
+	EventSkillUninstalled     = "skill.uninstalled"
 
 	// Auth & Token events
 	EventTokenRefreshed = "auth.token_refreshed"

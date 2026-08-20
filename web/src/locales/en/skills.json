@@ -1,7 +1,7 @@
 {
   "eyebrow": "Skills",
   "title": "Agent Skills",
-  "subtitle": "Install and manage skills for agents. Explore community skills.",
+  "subtitle": "Install, configure, and manage skills for autonomous agents.",
   "tabs": {
     "installed": "Installed ({{count}})",
     "hub": "Community Hub ({{count}})"
@@ -20,7 +20,93 @@
   "actions": {
     "newSkill": "Create Skill",
     "refresh": "Refresh",
-    "search": "Search skills..."
+    "search": "Search by name, description, author, tags...",
+    "clearFilters": "Clear Filters"
+  },
+  "categories": {
+    "all": "All",
+    "software-dev": "Software Dev",
+    "data-research": "Data & Research",
+    "marketing-sales": "Marketing & Sales",
+    "finance-legal": "Finance & Legal",
+    "customer-support": "Customer Support",
+    "developer": "Developer",
+    "utility": "Utility",
+    "sre": "SRE & DevOps",
+    "devops": "DevOps",
+    "research": "Research",
+    "human-resources": "Human Resources",
+    "hr": "Human Resources",
+    "education": "Education",
+    "productivity": "Productivity",
+    "design": "Design",
+    "creative": "Creative",
+    "security": "Security",
+    "communication": "Communication",
+    "ecommerce": "E-Commerce",
+    "writing": "Writing",
+    "automation": "Automation",
+    "analytics": "Analytics",
+    "media": "Media",
+    "general": "General",
+    "finance": "Finance",
+    "marketing": "Marketing",
+    "sales": "Sales",
+    "legal": "Legal",
+    "support": "Support",
+    "operations": "Operations"
+  },
+  "statusFilter": {
+    "all": "All Status",
+    "installed": "Installed",
+    "available": "Available"
+  },
+  "sort": {
+    "label": "Sort:",
+    "stars": "Most Popular",
+    "recent": "Recently Updated",
+    "name": "Name (A-Z)"
+  },
+  "requirements": {
+    "met": "Requirements Met",
+    "missing": "Missing Requirements",
+    "env": "Environment Variables",
+    "bins": "Binaries",
+    "os": "Operating System",
+    "unmetExplanation": "System is missing requirements for this skill. It cannot be run until dependencies are configured.",
+    "disabledExplanation": "Skill is disabled. Enable to allow agent execution."
+  },
+  "toggle": {
+    "enabled": "Active",
+    "disabled": "Disabled",
+    "enable": "Enable",
+    "disable": "Disable",
+    "successEnabled": "Skill {{name}} is now enabled.",
+    "successDisabled": "Skill {{name}} is now disabled."
+  },
+  "pagination": {
+    "showing": "Showing {{shown}} of {{total}} skills",
+    "loadMore": "Load More Skills"
+  },
+  "card": {
+    "multiFile": "{{count}} files",
+    "singleFile": "1 file",
+    "viewDetails": "Inspect",
+    "sourceRepo": "GitHub",
+    "skillUrl": "SkillsMP",
+    "stars": "{{count}} stars"
+  },
+  "detailModal": {
+    "title": "Skill Details",
+    "overview": "Overview",
+    "filesList": "Package Files ({{count}})",
+    "requirements": "System Prerequisites",
+    "noRequirements": "No special prerequisites required. Ready to execute.",
+    "author": "Author",
+    "category": "Category",
+    "version": "Version",
+    "openGithub": "View GitHub Source",
+    "openMarketplace": "View on Marketplace"
   },
   "createModal": {
     "title": "Create New Skill",
@@ -35,8 +121,9 @@
   },
   "empty": {
     "title": "No skills found",
-    "subtitle": "Create a custom skill or install one from the community hub."
+    "subtitle": "Create a custom skill or install one from the community hub.",
+    "noMatches": "No skills match the current search filters."
   },
-  "loading": "Loading...",
+  "loading": "Loading skills catalog...",
   "byAuthor": "By {{author}}"
 }

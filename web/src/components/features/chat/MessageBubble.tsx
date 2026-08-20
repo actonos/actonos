@@ -1,4 +1,4 @@
-import { Activity, Bot, Check, Clock, Copy, Cpu, User } from 'lucide-react';
+import { Activity, Bot, Check, Clock, Copy, Cpu, Sparkles, User } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { MarkdownContent } from '@/components/chat/MarkdownContent';
 import type { ChatMessage } from '@/pages/Chat/chatTypes';
@@ -33,13 +33,24 @@ export function MessageBubble({
           <span>{isUser ? t('you') : t('assistant')}</span>
         </div>
         {message.thought && (
-          <div className="mb-3 flex items-center gap-2 rounded-xl border border-onyx/10 bg-canvas/80 p-2.5 font-mono text-caption text-deep-ink">
+          <div className="mb-3 flex items-center gap-2 rounded-xl border border-onyx/10 bg-canvas/90 p-2.5 font-mono text-caption text-deep-ink shadow-xs">
             <Activity className="h-4 w-4 shrink-0 animate-spin text-hi-yellow" aria-hidden="true" />
-            <span className="line-clamp-2">{message.thought}</span>
+            <span className="line-clamp-2 leading-tight">{message.thought}</span>
           </div>
         )}
+        {message.reasoning && (
+          <details className="group mb-3 rounded-xl border border-onyx/10 bg-canvas/60 p-2.5 font-mono text-caption text-slate" open={!message.content}>
+            <summary className="flex cursor-pointer select-none items-center gap-2 font-semibold text-deep-ink">
+              <Sparkles className="h-3.5 w-3.5 text-hi-yellow" />
+              <span>{t('thinkingProcess', 'Thinking Process')}</span>
+            </summary>
+            <div className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap border-t border-onyx/5 pt-2 text-[11px] leading-relaxed text-deep-ink/80">
+              {message.reasoning}
+            </div>
+          </details>
+        )}
         <div className="font-sans text-body-sm leading-relaxed">
-          {message.content ? <MarkdownContent content={message.content} isUser={isUser} /> : <span>{message.thought ? '' : t('connecting')}</span>}
+          {message.content ? <MarkdownContent content={message.content} isUser={isUser} /> : <span>{message.thought || message.reasoning ? '' : t('connecting')}</span>}
         </div>
         <TraceDisclosure
           message={message}

@@ -1,6 +1,12 @@
 package llm
 
-import "strings"
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"regexp"
+	"strings"
+)
 
 // SanitizeMessages guarantees that message sequences strictly comply with LLM API contracts:
 // 1. Every assistant message with tool_calls is strictly followed by tool messages for each tool_call_id.
@@ -123,4 +129,251 @@ func SanitizeMessages(messages []Message) []Message {
 	}
 
 	return cleaned
+}
+
+// ExtractThinkingContent inspects content for inline thinking/monologue tags
+// (e.g. <think>...</think>, <thought>...</thought>, <thinking>...</thinking>, [THINK]...[/THINK]),
+// extracts the reasoning, strips the tags from content, and returns both clean content and reasoning.
+func ExtractThinkingContent(content string, existingReasoning string) (string, string) {
+	if content == "" {
+		return content, existingReasoning
+	}
+
+	var extractedReasoning []string
+	if strings.TrimSpace(existingReasoning) != "" {
+		extractedReasoning = append(extractedReasoning, strings.TrimSpace(existingReasoning))
+	}
+
+	// 1. Match <think>...</think>, <thought>...</thought>, <thinking>...</thinking>
+	thinkTagRe := regexp.MustCompile(`(?s)<(?:think|thought|thinking)>([\s\S]*?)</(?:think|thought|thinking)>`)
+	for _, match := range thinkTagRe.FindAllStringSubmatch(content, -1) {
+		if len(match) > 1 {
+			t := strings.TrimSpace(match[1])
+			if t != "" {
+				extractedReasoning = append(extractedReasoning, t)
+			}
+		}
+	}
+
+	// 2. Match [THINK]...[/THINK] or [REASONING]...[/REASONING]
+	bracketThinkRe := regexp.MustCompile(`(?s)\[(?:THINK|REASONING)\]([\s\S]*?)\[/(?:THINK|REASONING)\]`)
+	for _, match := range bracketThinkRe.FindAllStringSubmatch(content, -1) {
+		if len(match) > 1 {
+			t := strings.TrimSpace(match[1])
+			if t != "" {
+				extractedReasoning = append(extractedReasoning, t)
+			}
+		}
+	}
+
+	// Clean all think tags from content
+	cleaned := thinkTagRe.ReplaceAllString(content, "")
+	cleaned = bracketThinkRe.ReplaceAllString(cleaned, "")
+	cleaned = strings.TrimSpace(cleaned)
+
+	combinedReasoning := strings.Join(extractedReasoning, "\n\n")
+	return cleaned, combinedReasoning
+}
+
+// ExtractEmbeddedToolCalls inspects model content for embedded tool calling markup
+// (DeepSeek DSML, DeepSeek token markup, Anthropic XML, Qwen/Llama markdown blocks),
+// extracts them into structured ToolCalls, and returns the clean prose content.
+func ExtractEmbeddedToolCalls(content string) (string, []ToolCall) {
+	if content == "" {
+		return content, nil
+	}
+
+	var calls []ToolCall
+	cleaned := content
+
+	// 1. DeepSeek DSML format:
+	// <｜｜DSML｜｜invoke name="...">
+	// <｜｜DSML｜｜parameter name="..." string="true">value</｜｜DSML｜｜parameter>
+	// </｜｜DSML｜｜invoke>
+	dsmlInvokeRe := regexp.MustCompile(`(?s)<[|｜]{1,2}DSML[|｜]{1,2}invoke\s+name="([^"]+)">\s*(.*?)\s*</[|｜]{1,2}DSML[|｜]{1,2}invoke>`)
+	dsmlParamRe := regexp.MustCompile(`(?s)<[|｜]{1,2}DSML[|｜]{1,2}parameter\s+name="([^"]+)"(?:\s+string="([^"]*)")?>\s*(.*?)\s*</[|｜]{1,2}DSML[|｜]{1,2}parameter>`)
+
+	for _, match := range dsmlInvokeRe.FindAllStringSubmatch(content, -1) {
+		if len(match) > 2 {
+			toolName := strings.TrimSpace(match[1])
+			paramBlock := match[2]
+
+			argsMap := make(map[string]any)
+			for _, pMatch := range dsmlParamRe.FindAllStringSubmatch(paramBlock, -1) {
+				if len(pMatch) > 3 {
+					paramName := strings.TrimSpace(pMatch[1])
+					isString := pMatch[2]
+					paramVal := strings.TrimSpace(pMatch[3])
+
+					if isString == "true" {
+						argsMap[paramName] = paramVal
+					} else {
+						var jsonVal any
+						if err := json.Unmarshal([]byte(paramVal), &jsonVal); err == nil {
+							argsMap[paramName] = jsonVal
+						} else {
+							argsMap[paramName] = paramVal
+						}
+					}
+				}
+			}
+
+			argsBytes, _ := json.Marshal(argsMap)
+			randBytes := make([]byte, 4)
+			_, _ = rand.Read(randBytes)
+			calls = append(calls, ToolCall{
+				ID:   "call_" + hex.EncodeToString(randBytes),
+				Type: "function",
+				Function: FunctionCall{
+					Name:      toolName,
+					Arguments: argsBytes,
+				},
+			})
+		}
+	}
+
+	// 2. DeepSeek native token tool call format:
+	// <｜tool calls｜><｜tool call begin｜>function:native_file_read{"path":"..."}<｜tool call end｜><｜tool calls end｜>
+	dsTokenRe := regexp.MustCompile(`(?s)<[|｜]{1,2}tool call begin[|｜]{1,2}>(?:function:)?([a-zA-Z0-9_-]+)\s*(\{[\s\S]*?\})<[|｜]{1,2}tool call end[|｜]{1,2}>`)
+	for _, match := range dsTokenRe.FindAllStringSubmatch(content, -1) {
+		if len(match) > 2 {
+			toolName := strings.TrimSpace(match[1])
+			argsStr := strings.TrimSpace(match[2])
+			randBytes := make([]byte, 4)
+			_, _ = rand.Read(randBytes)
+			calls = append(calls, ToolCall{
+				ID:   "call_" + hex.EncodeToString(randBytes),
+				Type: "function",
+				Function: FunctionCall{
+					Name:      toolName,
+					Arguments: json.RawMessage(argsStr),
+				},
+			})
+		}
+	}
+
+	// 3. Anthropic XML <function=name>{...}</function>
+	anthropicFuncRe := regexp.MustCompile(`(?s)<function=([a-zA-Z0-9_-]+)>\s*(\{[\s\S]*?\})\s*</function>`)
+	for _, match := range anthropicFuncRe.FindAllStringSubmatch(content, -1) {
+		if len(match) > 2 {
+			toolName := strings.TrimSpace(match[1])
+			argsStr := strings.TrimSpace(match[2])
+			randBytes := make([]byte, 4)
+			_, _ = rand.Read(randBytes)
+			calls = append(calls, ToolCall{
+				ID:   "call_" + hex.EncodeToString(randBytes),
+				Type: "function",
+				Function: FunctionCall{
+					Name:      toolName,
+					Arguments: json.RawMessage(argsStr),
+				},
+			})
+		}
+	}
+
+	// 4. Markdown code blocks: ```tool_call\n{"name": ..., "arguments": ...}\n```
+	markdownToolRe := regexp.MustCompile("(?s)```(?:tool_call|function_call|tool)\n\\s*(\\{[\\s\\S]*?\\})\\s*\n```")
+	for _, match := range markdownToolRe.FindAllStringSubmatch(content, -1) {
+		if len(match) > 1 {
+			var jsonObj struct {
+				Name       string          `json:"name"`
+				Tool       string          `json:"tool"`
+				Arguments  json.RawMessage `json:"arguments"`
+				Parameters json.RawMessage `json:"parameters"`
+			}
+			if err := json.Unmarshal([]byte(match[1]), &jsonObj); err == nil {
+				toolName := jsonObj.Name
+				if toolName == "" {
+					toolName = jsonObj.Tool
+				}
+				args := jsonObj.Arguments
+				if len(args) == 0 {
+					args = jsonObj.Parameters
+				}
+				if toolName != "" {
+					if len(args) == 0 {
+						args = json.RawMessage("{}")
+					}
+					randBytes := make([]byte, 4)
+					_, _ = rand.Read(randBytes)
+					calls = append(calls, ToolCall{
+						ID:   "call_" + hex.EncodeToString(randBytes),
+						Type: "function",
+						Function: FunctionCall{
+							Name:      toolName,
+							Arguments: args,
+						},
+					})
+				}
+			}
+		}
+	}
+
+	// 5. Generic XML <tool_call> or <invoke name="...">
+	genericInvokeRe := regexp.MustCompile(`(?s)<(?:tool_call|function_call|invoke)\s*(?:name="([^"]+)")?>\s*(.*?)\s*</(?:tool_call|function_call|invoke)>`)
+	for _, match := range genericInvokeRe.FindAllStringSubmatch(content, -1) {
+		if len(match) > 2 {
+			toolName := strings.TrimSpace(match[1])
+			body := strings.TrimSpace(match[2])
+			randBytes := make([]byte, 4)
+			_, _ = rand.Read(randBytes)
+			callID := "call_" + hex.EncodeToString(randBytes)
+
+			if toolName == "" {
+				var jsonObj struct {
+					Name       string          `json:"name"`
+					Tool       string          `json:"tool"`
+					Arguments  json.RawMessage `json:"arguments"`
+					Parameters json.RawMessage `json:"parameters"`
+				}
+				if err := json.Unmarshal([]byte(body), &jsonObj); err == nil {
+					tName := jsonObj.Name
+					if tName == "" {
+						tName = jsonObj.Tool
+					}
+					args := jsonObj.Arguments
+					if len(args) == 0 {
+						args = jsonObj.Parameters
+					}
+					if tName != "" {
+						if len(args) == 0 {
+							args = json.RawMessage("{}")
+						}
+						calls = append(calls, ToolCall{
+							ID:   callID,
+							Type: "function",
+							Function: FunctionCall{
+								Name:      tName,
+								Arguments: args,
+							},
+						})
+					}
+				}
+			} else {
+				var argsRaw json.RawMessage = []byte(body)
+				if !strings.HasPrefix(body, "{") {
+					argsMap := map[string]string{"input": body}
+					b, _ := json.Marshal(argsMap)
+					argsRaw = b
+				}
+				calls = append(calls, ToolCall{
+					ID:   callID,
+					Type: "function",
+					Function: FunctionCall{
+						Name:      toolName,
+						Arguments: argsRaw,
+					},
+				})
+			}
+		}
+	}
+
+	// Clean all DSML / tool_call / invoke / markdown blocks from content
+	cleanBlockRe := regexp.MustCompile(`(?s)<[|｜]{1,2}DSML[|｜]{1,2}tool_calls>.*?</[|｜]{1,2}DSML[|｜]{1,2}tool_calls>|<[|｜]{1,2}tool call begin[|｜]{1,2}>.*?<[|｜]{1,2}tool call end[|｜]{1,2}>|<[|｜]{1,2}tool calls[|｜]{1,2}>.*?</[|｜]{1,2}tool calls[|｜]{1,2}>|<tool_call>.*?</tool_call>|<function_call>.*?</function_call>|<function=[^>]+>.*?</function>|` + "```(?:tool_call|function_call|tool)[\\s\\S]*?```")
+	cleaned = cleanBlockRe.ReplaceAllString(cleaned, "")
+	cleanSingleTagRe := regexp.MustCompile(`(?s)</?[|｜]{1,2}[^>]*>|</?(?:tool_call|function_call|invoke|parameter)[^>]*>`)
+	cleaned = cleanSingleTagRe.ReplaceAllString(cleaned, "")
+	cleaned = strings.TrimSpace(cleaned)
+
+	return cleaned, calls
 }

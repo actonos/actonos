@@ -88,6 +88,7 @@
 | `PUT` | `/api/tools/mcp/{serverID}` | `handleToggleMCPServer` | `api_tools.go` |
 | `POST` | `/api/tools/execute` | `handleExecuteTool` | `api_tools.go` |
 | `POST` | `/api/tools/skill` | `handleCreateSkill` | `api_tools.go` |
+| `PUT` | `/api/tools/skills/{name}/toggle` | `handleToggleSkill` | `api_tools.go` |
 | `POST` | `/api/tools/wasm` | `handleUploadWASM` | `api_tools.go` |
 | `GET` | `/api/tools/hub/catalog` | `handleListHubCatalog` | `api_tools.go` |
 | `POST` | `/api/tools/hub/install` | `handleInstallHubSkill` | `api_tools.go` |

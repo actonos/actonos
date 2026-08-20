@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/actonos/actonos/internal/bus"
 	"github.com/coder/websocket"
 )
 
@@ -68,16 +69,45 @@ func (s *Server) handleRealtimeStream(w http.ResponseWriter, r *http.Request) {
 	defer conn.CloseNow()
 
 	ctx := conn.CloseRead(r.Context())
+
+	// Write initial snapshot immediately upon connection
+	if err := s.writeRealtimeSnapshot(ctx, conn); err != nil {
+		return
+	}
+
+	var eventSub <-chan bus.Event
+	if s.bus != nil {
+		ch := s.bus.Subscribe("*")
+		defer s.bus.Unsubscribe("*", ch)
+		eventSub = ch
+	}
+
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
+
 	for {
-		if err := s.writeRealtimeSnapshot(ctx, conn); err != nil {
-			return
-		}
 		select {
 		case <-ctx.Done():
 			return
+		case ev, ok := <-eventSub:
+			if ok {
+				msg := map[string]any{
+					"type":  "event",
+					"event": ev,
+				}
+				if payload, err := json.Marshal(msg); err == nil {
+					writeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+					writeErr := conn.Write(writeCtx, websocket.MessageText, payload)
+					cancel()
+					if writeErr != nil {
+						return
+					}
+				}
+			}
 		case <-ticker.C:
+			if err := s.writeRealtimeSnapshot(ctx, conn); err != nil {
+				return
+			}
 		}
 	}
 }

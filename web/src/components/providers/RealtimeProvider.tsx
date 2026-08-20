@@ -33,10 +33,20 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       };
       socket.onmessage = (message) => {
         try {
-          const next = JSON.parse(String(message.data)) as RealtimeSnapshot;
-          if (next.type === 'snapshot') setSnapshot(next);
+          const next = JSON.parse(String(message.data));
+          if (next.type === 'snapshot') {
+            setSnapshot(next as RealtimeSnapshot);
+          } else if (next.type === 'event' && next.event) {
+            window.dispatchEvent(new CustomEvent('actonos:backend-event', { detail: next.event }));
+            if (next.event.type === 'skill.progress') {
+              window.dispatchEvent(new CustomEvent('actonos:skill-progress', { detail: next.event }));
+            }
+            if (next.event.type === 'skill.installed' || next.event.type === 'skill.uninstalled') {
+              window.dispatchEvent(new CustomEvent('actonos:tools-updated', { detail: next.event }));
+            }
+          }
         } catch {
-          socket?.close(1003, 'invalid snapshot');
+          socket?.close(1003, 'invalid message');
         }
       };
       socket.onclose = () => {

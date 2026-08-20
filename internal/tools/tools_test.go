@@ -55,11 +55,26 @@ func TestToolRegistry_RegisterAndExecute(t *testing.T) {
 		t.Fatalf("expected 'Hello ActonOS Tools', got '%s'", readRes.Content)
 	}
 
-	// Test Path Escape protection
+	// Test Path Escape protection (2 levels up escape)
 	escapeInput := json.RawMessage(`{"path": "../../etc/passwd"}`)
 	_, err = registry.Execute(ctx, "test_agent", "native_file_read", escapeInput)
 	if err == nil {
-		t.Fatal("expected path escape error, got nil")
+		t.Fatal("expected path escape error for 2 levels up, got nil")
+	}
+
+	// Test 1-level-up access (e.g. ../skills/skill.md)
+	oneLevelWrite := json.RawMessage(`{"path": "../skills/skill.md", "content": "Skill definition content"}`)
+	if _, err := registry.Execute(ctx, "test_agent", "native_file_write", oneLevelWrite); err != nil {
+		t.Fatalf("native_file_write failed for 1 level up: %v", err)
+	}
+
+	oneLevelRead := json.RawMessage(`{"path": "../skills/skill.md"}`)
+	oneLevelReadRes, err := registry.Execute(ctx, "test_agent", "native_file_read", oneLevelRead)
+	if err != nil {
+		t.Fatalf("native_file_read failed for 1 level up: %v", err)
+	}
+	if oneLevelReadRes.Content != "Skill definition content" {
+		t.Fatalf("expected 'Skill definition content', got '%s'", oneLevelReadRes.Content)
 	}
 
 	// Test native_file_list
@@ -578,5 +593,112 @@ func TestWASMToolAndPluginManagerFailureLifecycle(t *testing.T) {
 	empty := NewWASMPluginManager(registry, "")
 	if err := empty.ScanAndRegisterPlugins(ctx); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestFileWriteTool_RobustParsing(t *testing.T) {
+	tempDir := t.TempDir()
+	workspaceDir := filepath.Join(tempDir, "workspace")
+	_ = os.MkdirAll(workspaceDir, 0755)
+
+	tool := NewFileWriteTool(workspaceDir)
+	ctx := context.Background()
+
+	// 1. Standard JSON
+	_, err := tool.Execute(ctx, json.RawMessage(`{"path": "email1.html", "content": "<h1>Hello</h1>"}`))
+	if err != nil {
+		t.Fatalf("standard json failed: %v", err)
+	}
+
+	// 2. Multiline raw string JSON with unescaped newlines in HTML
+	multilineInput := json.RawMessage("{\"path\": \"email2.html\", \"content\": \"<!doctype html>\n<html>\n<body>\n<h1>Title</h1>\n</body>\n</html>\"}")
+	_, err = tool.Execute(ctx, multilineInput)
+	if err != nil {
+		t.Fatalf("multiline unescaped html failed: %v", err)
+	}
+
+	// 3. Stringified JSON literal
+	stringifiedInput := json.RawMessage(`"{\"path\": \"email3.html\", \"content\": \"<h1>Stringified</h1>\"}"`)
+	_, err = tool.Execute(ctx, stringifiedInput)
+	if err != nil {
+		t.Fatalf("stringified json failed: %v", err)
+	}
+
+	// Verify written files
+	data1, _ := os.ReadFile(filepath.Join(workspaceDir, "email1.html"))
+	if string(data1) != "<h1>Hello</h1>" {
+		t.Fatalf("unexpected content in email1: %q", string(data1))
+	}
+	data2, _ := os.ReadFile(filepath.Join(workspaceDir, "email2.html"))
+	if !strings.Contains(string(data2), "<h1>Title</h1>") {
+		t.Fatalf("unexpected content in email2: %q", string(data2))
+	}
+	data3, _ := os.ReadFile(filepath.Join(workspaceDir, "email3.html"))
+	if string(data3) != "<h1>Stringified</h1>" {
+		t.Fatalf("unexpected content in email3: %q", string(data3))
+	}
+}
+
+func TestAgentSpecificWorkspaceFileOperations(t *testing.T) {
+	tempDir := t.TempDir()
+	workspaceDir := filepath.Join(tempDir, "workspace")
+	_ = os.MkdirAll(workspaceDir, 0755)
+
+	eventBus := bus.NewEventBus()
+	defer eventBus.Close()
+	registry := NewToolRegistry(eventBus)
+	RegisterNativeTools(registry, workspaceDir)
+
+	ctx := context.Background()
+	agentID := "agent_system_core"
+
+	// 1. Agent writes a file with relative path "note.txt"
+	writeInput := json.RawMessage(`{"path": "note.txt", "content": "agent note"}`)
+	_, err := registry.Execute(ctx, agentID, "native_file_write", writeInput)
+	if err != nil {
+		t.Fatalf("native_file_write failed: %v", err)
+	}
+
+	// Verify it was written inside workspace/agent_system_core/note.txt
+	expectedAgentFile := filepath.Join(workspaceDir, agentID, "note.txt")
+	data, err := os.ReadFile(expectedAgentFile)
+	if err != nil {
+		t.Fatalf("expected file in agent workspace %s: %v", expectedAgentFile, err)
+	}
+	if string(data) != "agent note" {
+		t.Fatalf("expected 'agent note', got %q", string(data))
+	}
+
+	// 2. Agent reads back "note.txt"
+	readInput := json.RawMessage(`{"path": "note.txt"}`)
+	readRes, err := registry.Execute(ctx, agentID, "native_file_read", readInput)
+	if err != nil {
+		t.Fatalf("native_file_read failed: %v", err)
+	}
+	if readRes.Content != "agent note" {
+		t.Fatalf("expected 'agent note', got %q", readRes.Content)
+	}
+
+	// 3. Shared file in root workspace can also be read by agent if not in agent subfolder
+	sharedFile := filepath.Join(workspaceDir, "DELIVERIES.md")
+	_ = os.WriteFile(sharedFile, []byte("# Deliveries Shared"), 0644)
+
+	sharedReadInput := json.RawMessage(`{"path": "DELIVERIES.md"}`)
+	sharedReadRes, err := registry.Execute(ctx, agentID, "native_file_read", sharedReadInput)
+	if err != nil {
+		t.Fatalf("reading shared DELIVERIES.md failed: %v", err)
+	}
+	if !strings.Contains(sharedReadRes.Content, "# Deliveries Shared") {
+		t.Fatalf("expected shared content, got %q", sharedReadRes.Content)
+	}
+
+	// 4. Non-existent file read returns "reading file" error, not "access denied / path escapes"
+	missingInput := json.RawMessage(`{"path": "MISSING.md"}`)
+	_, missingErr := registry.Execute(ctx, agentID, "native_file_read", missingInput)
+	if missingErr == nil {
+		t.Fatal("expected error on missing file")
+	}
+	if strings.Contains(missingErr.Error(), "access denied") || strings.Contains(missingErr.Error(), "escapes") {
+		t.Fatalf("missing file returned security escape error instead of not-exist: %v", missingErr)
 	}
 }

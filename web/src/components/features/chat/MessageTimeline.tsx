@@ -14,6 +14,8 @@ export function MessageTimeline({
   expandedTraces,
   traceTabs,
   endRef,
+  containerRef,
+  onScroll,
   onPrompt,
   onCopy,
   onToggleTrace,
@@ -27,6 +29,8 @@ export function MessageTimeline({
   expandedTraces: Record<string, boolean>;
   traceTabs: Record<string, 'traces' | 'audit'>;
   endRef: RefObject<HTMLDivElement | null>;
+  containerRef?: RefObject<HTMLDivElement | null>;
+  onScroll?: () => void;
   onPrompt: (prompt: string) => void;
   onCopy: (content: string, index: number) => void;
   onToggleTrace: (messageID: string) => void;
@@ -34,7 +38,12 @@ export function MessageTimeline({
 }) {
   const { t } = useTranslation('chat');
   return (
-    <div className="my-4 flex-1 space-y-4 overflow-y-auto pr-2 min-h-0" aria-live="polite">
+    <div
+      ref={containerRef}
+      onScroll={onScroll}
+      className="my-4 flex-1 space-y-4 overflow-y-auto pr-2 min-h-0 relative"
+      aria-live="polite"
+    >
       {messages.length === 0 ? (
         <ChatEmptyState agentName={agentName} prompts={prompts} onPrompt={onPrompt} />
       ) : messages.map((message, index) => (

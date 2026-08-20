@@ -308,6 +308,7 @@ func (s *Server) setupRoutes() {
 				r.Put("/mcp/{serverID}", s.handleToggleMCPServer)
 				r.Post("/execute", s.handleExecuteTool)
 				r.Post("/skill", s.handleCreateSkill)
+				r.Put("/skills/{name}/toggle", s.handleToggleSkill)
 				r.Post("/wasm", s.handleUploadWASM)
 				r.Get("/hub/catalog", s.handleListHubCatalog)
 				r.Post("/hub/install", s.handleInstallHubSkill)

@@ -22,6 +22,40 @@ func TestResolvePath(t *testing.T) {
 	}
 }
 
+func TestResolvePathWithBase_AllowOneLevelUp(t *testing.T) {
+	dataDir := t.TempDir()
+	workspaceDir := filepath.Join(dataDir, "workspace")
+	skillsDir := filepath.Join(dataDir, "skills")
+	_ = os.MkdirAll(workspaceDir, 0755)
+	_ = os.MkdirAll(skillsDir, 0755)
+
+	// Writing a file inside skills (1 level up from workspace)
+	skillFile := filepath.Join(skillsDir, "SKILL.md")
+	_ = os.WriteFile(skillFile, []byte("test"), 0644)
+
+	// Allowed root is dataDir (1 level up from workspaceDir)
+	allowedRoot := filepath.Dir(workspaceDir)
+
+	// 1. Accessing file inside workspace
+	expectedPath1, _ := ResolvePath(workspaceDir, "file.txt", true)
+	res1, err := ResolvePathWithBase(allowedRoot, workspaceDir, "file.txt", true)
+	if err != nil || res1 != expectedPath1 {
+		t.Fatalf("expected %s, got %s (err: %v)", expectedPath1, res1, err)
+	}
+
+	// 2. Accessing file 1 level up in ../skills/SKILL.md
+	expectedPath2, _ := ResolvePath(skillsDir, "SKILL.md", false)
+	res2, err := ResolvePathWithBase(allowedRoot, workspaceDir, "../skills/SKILL.md", false)
+	if err != nil || res2 != expectedPath2 {
+		t.Fatalf("expected %s, got %s (err: %v)", expectedPath2, res2, err)
+	}
+
+	// 3. Rejecting file 2 levels up (../../outside.txt)
+	if _, err := ResolvePathWithBase(allowedRoot, workspaceDir, "../../outside.txt", true); !errors.Is(err, ErrPathEscape) {
+		t.Fatalf("expected 2 levels up escape to be rejected, got err: %v", err)
+	}
+}
+
 func TestResolvePathRejectsSymlinkEscape(t *testing.T) {
 	root := t.TempDir()
 	outside := t.TempDir()

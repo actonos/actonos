@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -70,13 +71,15 @@ func (s *IdentitySection) Render() string {
 // -----------------------------------------------------------------------------
 
 type EnvironmentSection struct {
+	DataDir      string
 	WorkspaceDir string
+	AgentSlug    string
 }
 
 func (s *EnvironmentSection) Name() string { return "environment" }
 func (s *EnvironmentSection) IsEmpty() bool { return false }
 func (s *EnvironmentSection) Render() string {
-	return strings.TrimSpace(BuildHostEnvironmentPrompt(s.WorkspaceDir))
+	return strings.TrimSpace(BuildAgentEnvironmentPrompt(s.DataDir, s.WorkspaceDir, s.AgentSlug))
 }
 
 // -----------------------------------------------------------------------------
@@ -168,6 +171,9 @@ func (s *ProceduralSection) Render() string {
 // -----------------------------------------------------------------------------
 
 type ConstraintsSection struct {
+	DataDir         string
+	AgentSlug       string
+	WorkspaceDir    string
 	AdditionalRules []string
 }
 
@@ -178,8 +184,29 @@ func (s *ConstraintsSection) Render() string {
 	sb.WriteString("<operational_constraints>\n")
 	sb.WriteString("  <rule id=\"no_interactive_commands\">NEVER execute interactive blocking commands (e.g. `vim`, `nano`, `vi`, `top`, `htop`, `less` without `-F`, `more`, or interactive `python` REPL without `-c`). They will hang subshell execution.</rule>\n")
 	sb.WriteString("  <rule id=\"limit_output_volume\">When inspecting files or running commands, ALWAYS limit output volume (e.g. `head -n 50`, `tail -n 50`, `rg -m 20`, `jq '.[:5]'`). Do NOT cat multi-megabyte files into the context window.</rule>\n")
+	sb.WriteString("  <rule id=\"path_consistency\">Always use valid host OS paths matching `<workspace root>` and avoid guessing external package manager states.</rule>\n")
 	sb.WriteString("  <rule id=\"tool_domain_relevance\">Only invoke tools directly related to the user request. For web searches, use `native_web_search`; do NOT randomly inspect workspace files or hardware telemetry unless requested.</rule>\n")
 	sb.WriteString("  <rule id=\"verify_modifications\">After modifying code, files, or executing system changes, verify the status code and observations before declaring task completion.</rule>\n")
+	if s.AgentSlug != "" {
+		dataRoot := s.DataDir
+		ws := s.WorkspaceDir
+		if ws == "" {
+			if dataRoot != "" {
+				ws = filepath.Join(dataRoot, "workspace")
+			} else {
+				ws = "./data/workspace"
+				dataRoot = "./data"
+			}
+		} else if dataRoot == "" {
+			if filepath.Base(ws) == "workspace" {
+				dataRoot = filepath.Dir(ws)
+			} else {
+				dataRoot = ws
+			}
+		}
+		agentWs := filepath.Join(ws, s.AgentSlug)
+		fmt.Fprintf(&sb, "  <rule id=\"agent_workspace_discipline\">Default to reading and writing working files within `%s`. Access to other locations under `%s` is allowed whenever explicitly requested or necessary for the task.</rule>\n", agentWs, dataRoot)
+	}
 	for _, r := range s.AdditionalRules {
 		if r != "" {
 			fmt.Fprintf(&sb, "  <rule>%s</rule>\n", r)

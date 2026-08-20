@@ -37,6 +37,7 @@ type Engine struct {
 	planner          *Planner
 	taskMgr          *TaskManager
 	sessionMgr       SessionHistoryProvider
+	dataDir          string
 	workspaceDir     string
 	theta            float64 // Entropy threshold
 }
@@ -104,6 +105,11 @@ func (e *Engine) SetSessionManager(sm SessionHistoryProvider) {
 	e.sessionMgr = sm
 }
 
+// SetDataDir sets the root data directory.
+func (e *Engine) SetDataDir(dir string) {
+	e.dataDir = dir
+}
+
 // SetWorkspaceDir sets the primary workspace directory for file sandbox and environment prompt.
 func (e *Engine) SetWorkspaceDir(dir string) {
 	e.workspaceDir = dir
@@ -136,7 +142,7 @@ func (e *Engine) RecordTokenUsage(ctx context.Context, agentID, model, provider,
 // buildCognitivePrompt synthesizes all 7 cognitive layers into a structured XML cognitive context
 // using the unified PromptBuilder architecture.
 func (e *Engine) buildCognitivePrompt(ctx context.Context, agentID string, agent *AgentManifest, userMessage string) (string, int) {
-	return BuildCognitiveSystemPrompt(ctx, agentID, agent, e.workspaceDir, e.profileMgr, e.memory, userMessage)
+	return BuildCognitiveSystemPrompt(ctx, agentID, agent, e.dataDir, e.workspaceDir, e.profileMgr, e.memory, userMessage)
 }
 
 // CalculateEntropy calculates Shannon Entropy H(p) = -sum(p * log2(p)).
@@ -240,6 +246,7 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 
 	// 1. Build unified cognitive system prompt
 	fullSystemPrompt, _ := e.buildCognitivePrompt(ctx, agentID, agent, userMessage)
+	// fmt.Printf("\n================ [DEBUG SYSTEM PROMPT (%s)] ================\n%s\n============================================================\n\n", agentID, fullSystemPrompt)
 
 	messages := []llm.Message{
 		{Role: llm.RoleSystem, Content: fullSystemPrompt},
@@ -322,6 +329,20 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 			})
 		}
 
+		if resp.Content != "" {
+			cleanedContent, thinking := llm.ExtractThinkingContent(resp.Content, resp.ReasoningContent)
+			resp.Content = cleanedContent
+			resp.ReasoningContent = thinking
+		}
+
+		if len(resp.ToolCalls) == 0 && resp.Content != "" {
+			cleaned, embeddedCalls := llm.ExtractEmbeddedToolCalls(resp.Content)
+			if len(embeddedCalls) > 0 && currentOpts.Tools != nil {
+				resp.ToolCalls = embeddedCalls
+			}
+			resp.Content = cleaned
+		}
+
 		finalResp = resp
 
 		// If no tool calls requested, we reached the final response
@@ -339,6 +360,9 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 			resultStr := ""
 			if execErr != nil {
 				resultStr = fmt.Sprintf("Error executing tool %s: %v", tc.Function.Name, execErr)
+				if toolResult != nil && toolResult.Content != "" && toolResult.Content != resultStr {
+					resultStr = fmt.Sprintf("%s\n%s", resultStr, toolResult.Content)
+				}
 				consecutiveFailures++
 				var approvalErr *tools.ApprovalRequiredError
 				if errors.As(execErr, &approvalErr) {
@@ -384,9 +408,10 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 				Content:    resultStr,
 			})
 
-			if consecutiveFailures >= 3 || repeatedObservations >= 2 {
-				e.finishRun(ctx, run, RunBlocked, "no_progress", iter+1, totalUsage)
-				return nil, fmt.Errorf("agent %s stopped after repeated tool failures or observations", agentID)
+			if consecutiveFailures >= 5 || repeatedObservations >= 3 || iter >= maxIterations-2 {
+				// Don't cut off abruptly! Disable further tool calls so LLM processes the error
+				// observations and synthesizes a direct diagnostic answer to the user in the next iteration.
+				opts.Tools = nil
 			}
 		}
 
@@ -401,8 +426,18 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 		messages = append(messages, toolMessages...)
 	}
 	if !converged {
-		e.finishRun(ctx, run, RunBlocked, "iteration_budget_exhausted", maxIterations, totalUsage)
-		return nil, fmt.Errorf("agent %s reached the maximum of %d ReAct iterations without convergence", agentID, maxIterations)
+		// Attempt a final recovery turn with tools disabled so LLM explains the errors to the user
+		finalOpts := opts
+		finalOpts.Tools = nil
+		lastResp, genErr := e.llm.CompleteWithCascade(ctx, cascadeOrder, messages, finalOpts)
+		if genErr == nil && lastResp != nil && lastResp.Content != "" {
+			finalResp = lastResp
+			converged = true
+			totalUsage = addUsage(totalUsage, lastResp.Usage)
+		} else {
+			e.finishRun(ctx, run, RunBlocked, "iteration_budget_exhausted", maxIterations, totalUsage)
+			return nil, fmt.Errorf("agent %s reached the maximum of %d ReAct iterations without convergence", agentID, maxIterations)
+		}
 	}
 	if finalResp == nil || !e.verifier.VerifySemanticConsistency(ctx, userMessage, finalResp.Content) {
 		e.finishRun(ctx, run, RunFailed, "verification_failed", maxIterations, totalUsage)
@@ -512,6 +547,9 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 	memStart := time.Now()
 	fullSystemPrompt, episodicCount := e.buildCognitivePrompt(ctx, agentID, agent, userMessage)
 	memDuration := time.Since(memStart).Milliseconds()
+
+	// Using for debug only, don't remove it
+	// fmt.Printf("\n================ [DEBUG STREAM SYSTEM PROMPT (%s)] ================\n%s\n===================================================================\n\n", agentID, fullSystemPrompt)
 
 	if episodicCount > 0 {
 		eventChan <- AgentStreamEvent{
@@ -718,6 +756,9 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 			if execErr != nil {
 				statusStr = "error"
 				resultStr = fmt.Sprintf("Error executing tool %s: %v", toolName, execErr)
+				if toolResult != nil && toolResult.Content != "" && toolResult.Content != resultStr {
+					resultStr = fmt.Sprintf("%s\n%s", resultStr, toolResult.Content)
+				}
 				consecutiveFailures++
 				var approvalErr *tools.ApprovalRequiredError
 				if errors.As(execErr, &approvalErr) {
@@ -790,11 +831,10 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 				ToolCallID: tc.ID,
 				Content:    resultStr,
 			})
-			if consecutiveFailures >= 3 || repeatedObservations >= 2 {
-				e.finishRun(ctx, run, RunBlocked, "no_progress", iterationsCompleted, totalUsage)
-				err := fmt.Errorf("agent %s stopped after repeated tool failures or observations", agentID)
-				eventChan <- AgentStreamEvent{Type: EventStreamError, Error: err.Error()}
-				return nil, err
+			if consecutiveFailures >= 5 || repeatedObservations >= 3 || iterationsCompleted >= maxIterations-2 {
+				// Don't kill the stream abruptly! Disable tools so LLM processes the error
+				// and streams its concluding explanation directly to the user.
+				opts.Tools = nil
 			}
 		}
 
@@ -803,10 +843,24 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 		messages = append(messages, toolMessages...)
 	}
 	if !converged {
-		e.finishRun(ctx, run, RunBlocked, "iteration_budget_exhausted", iterationsCompleted, totalUsage)
-		err := fmt.Errorf("agent %s reached the maximum of %d ReAct iterations without convergence", agentID, maxIterations)
-		eventChan <- AgentStreamEvent{Type: EventStreamError, Error: err.Error()}
-		return nil, err
+		// Stream a final recovery turn with tools disabled so LLM explains the outcome to the user
+		finalOpts := opts
+		finalOpts.Tools = nil
+		eventChan <- AgentStreamEvent{
+			Type:    EventStreamThought,
+			Thought: "Synthesizing final findings and reporting observations...",
+		}
+		resp, streamErr := e.completeStreamIteration(ctx, cascadeOrder, messages, finalOpts, eventChan)
+		if streamErr == nil && resp != nil {
+			finalResp = resp
+			converged = true
+			totalUsage = addUsage(totalUsage, resp.Usage)
+		} else {
+			e.finishRun(ctx, run, RunBlocked, "iteration_budget_exhausted", iterationsCompleted, totalUsage)
+			err := fmt.Errorf("agent %s reached the maximum of %d ReAct iterations without convergence", agentID, maxIterations)
+			eventChan <- AgentStreamEvent{Type: EventStreamError, Error: err.Error()}
+			return nil, err
+		}
 	}
 	if finalResp == nil || !e.verifier.VerifySemanticConsistency(ctx, userMessage, finalResp.Content) {
 		e.finishRun(ctx, run, RunFailed, "verification_failed", iterationsCompleted, totalUsage)
@@ -1109,9 +1163,9 @@ func (e *Engine) ResumeApproved(ctx context.Context, approval tools.ApprovalRequ
 			messages = append(messages, llm.Message{
 				Role: llm.RoleTool, Name: call.Function.Name, ToolCallID: call.ID, Content: content,
 			})
-			if consecutiveFailures >= 3 || repeatedObservations >= 2 {
-				e.finishRun(execCtx, run, RunBlocked, "no_progress", absoluteStep, usage)
-				return nil, fmt.Errorf("resumed agent %s stopped after repeated tool failures or observations", checkpoint.AgentID)
+			if consecutiveFailures >= 5 || repeatedObservations >= 3 {
+				// Prevent hard crashing by disabling tools on next step so LLM reports the failure
+				currentOpts.Tools = nil
 			}
 		}
 	}
@@ -1295,7 +1349,7 @@ func (e *Engine) completeStreamIteration(
 			}
 			if chunk.DeltaReasoning != "" {
 				response.ReasoningContent += chunk.DeltaReasoning
-				eventChan <- AgentStreamEvent{Type: EventStreamThought, Thought: chunk.DeltaReasoning}
+				eventChan <- AgentStreamEvent{Type: EventStreamReasoning, Reasoning: chunk.DeltaReasoning}
 			}
 			if chunk.DeltaContent != "" {
 				response.Content += chunk.DeltaContent
@@ -1316,12 +1370,30 @@ func (e *Engine) completeStreamIteration(
 	}
 
 DoneStream:
+	if response.Content != "" {
+		cleanedContent, thinking := llm.ExtractThinkingContent(response.Content, response.ReasoningContent)
+		if thinking != "" && response.ReasoningContent == "" {
+			eventChan <- AgentStreamEvent{Type: EventStreamReasoning, Reasoning: thinking}
+		}
+		response.Content = cleanedContent
+		response.ReasoningContent = thinking
+	}
+
+	// If the model produced embedded tool calls (e.g. DeepSeek DSML or XML tool calls) in content
+	if len(response.ToolCalls) == 0 && response.Content != "" {
+		cleaned, embeddedCalls := llm.ExtractEmbeddedToolCalls(response.Content)
+		if len(embeddedCalls) > 0 && opts.Tools != nil {
+			response.ToolCalls = embeddedCalls
+		}
+		response.Content = cleaned
+	}
+
 	// This turn called tools, so any prose already streamed was preamble rather
 	// than the answer. Retract it and surface it as reasoning instead.
 	if len(response.ToolCalls) > 0 && streamedTokens {
 		eventChan <- AgentStreamEvent{Type: EventStreamTokenReset}
 		if preamble := strings.TrimSpace(response.Content); preamble != "" {
-			eventChan <- AgentStreamEvent{Type: EventStreamThought, Thought: preamble}
+			eventChan <- AgentStreamEvent{Type: EventStreamReasoning, Reasoning: preamble}
 		}
 	}
 

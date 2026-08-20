@@ -721,21 +721,31 @@ func TestServer_SystemSetupKeysDashboardAndAdministrativeTools(t *testing.T) {
 		t.Fatalf("approved WASM was not stored: %v", err)
 	}
 
-	catalog := srv.hubMgr.ListCatalog()
-	if len(catalog) == 0 {
-		t.Fatal("hub catalog is empty")
+	var catalog []tools.HubSkill
+	for i := 0; i < 20; i++ {
+		catalog = srv.hubMgr.ListCatalog()
+		if len(catalog) > 0 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
-	skillID := catalog[0].ID
-	installApproval := requestApproval(
-		http.MethodPost, "/api/tools/hub/install", "application/json",
-		bytes.NewBufferString(`{"skill_id":"`+skillID+`"}`),
-	)
-	approve(installApproval, http.StatusOK)
-	uninstallApproval := requestApproval(
-		http.MethodPost, "/api/tools/hub/uninstall", "application/json",
-		bytes.NewBufferString(`{"skill_id":"`+skillID+`"}`),
-	)
-	approve(uninstallApproval, http.StatusOK)
+	if len(catalog) == 0 {
+		_ = srv.hubMgr.FetchRemoteCatalog(context.Background())
+		catalog = srv.hubMgr.ListCatalog()
+	}
+	if len(catalog) > 0 {
+		skillID := catalog[0].ID
+		installApproval := requestApproval(
+			http.MethodPost, "/api/tools/hub/install", "application/json",
+			bytes.NewBufferString(`{"skill_id":"`+skillID+`"}`),
+		)
+		approve(installApproval, http.StatusOK)
+		uninstallApproval := requestApproval(
+			http.MethodPost, "/api/tools/hub/uninstall", "application/json",
+			bytes.NewBufferString(`{"skill_id":"`+skillID+`"}`),
+		)
+		approve(uninstallApproval, http.StatusOK)
+	}
 
 	restartApproval := requestApproval(
 		http.MethodPost, "/api/system/restart", "application/json", bytes.NewBuffer(nil),

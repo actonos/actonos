@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -174,7 +175,7 @@ func NewFileReadTool(workspaceDir string) *FileReadTool {
 
 func (t *FileReadTool) Name() string { return "native_file_read" }
 func (t *FileReadTool) Description() string {
-	return "Read contents of a file within the authorized workspace."
+	return "Read contents of a file within the authorized workspace or data directory (e.g. '../skills/...' or '../config/...')."
 }
 func (t *FileReadTool) Category() string { return "native" }
 
@@ -182,46 +183,189 @@ func (t *FileReadTool) ParametersSchema() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {
-			"path": { "type": "string", "description": "Relative path to file in workspace" }
+			"path": { "type": "string", "description": "Relative path to file in workspace or 1 level up (e.g. '../skills/...')" }
 		},
 		"required": ["path"]
 	}`)
 }
 
 func (t *FileReadTool) validatePath(relPath string) (string, error) {
-	targetPath, err := security.ResolvePath(t.workspaceDir, relPath, false)
+	allowedRoot := filepath.Dir(t.workspaceDir)
+	targetPath, err := security.ResolvePathWithBase(allowedRoot, t.workspaceDir, relPath, false)
 	if err != nil {
 		return "", fmt.Errorf("%w: %v", ErrPathEscape, err)
 	}
 	return targetPath, nil
 }
 
-func (t *FileReadTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {
+// parseFilePathInput safely parses the target file path from JSON or raw input.
+func parseFilePathInput(inputJSON json.RawMessage) (string, error) {
 	inputJSON = NormalizeToolInput(inputJSON)
+	raw := strings.TrimSpace(string(inputJSON))
+
 	var input struct {
-		Path string `json:"path"`
+		Path     string `json:"path"`
+		File     string `json:"file"`
+		Filename string `json:"filename"`
 	}
-	if err := json.Unmarshal(inputJSON, &input); err != nil || input.Path == "" {
-		var strPath string
-		if strErr := json.Unmarshal(inputJSON, &strPath); strErr == nil && strPath != "" {
-			input.Path = strPath
-		} else {
-			var m map[string]any
-			if mapErr := json.Unmarshal(inputJSON, &m); mapErr == nil {
-				if p, ok := m["path"].(string); ok && p != "" {
-					input.Path = p
-				}
-			}
+	if err := json.Unmarshal(inputJSON, &input); err == nil && input.Path != "" {
+		return input.Path, nil
+	}
+	if input.File != "" {
+		return input.File, nil
+	}
+	if input.Filename != "" {
+		return input.Filename, nil
+	}
+
+	var strPath string
+	if err := json.Unmarshal(inputJSON, &strPath); err == nil && strPath != "" {
+		if !strings.HasPrefix(strPath, "{") && !strings.Contains(strPath, `":`) {
+			return strPath, nil
+		}
+		raw = strPath
+	}
+
+	pathRe := regexp.MustCompile(`"(?:path|file|filename|filepath|target)"\s*:\s*"([^"]+)"`)
+	if m := pathRe.FindStringSubmatch(raw); len(m) > 1 {
+		return m[1], nil
+	}
+
+	if !strings.ContainsAny(raw, "{}\"\r\n") && len(raw) > 0 {
+		return raw, nil
+	}
+
+	return "", errors.New("path parameter is required")
+}
+
+// parseFileWriteInput safely extracts path and content even if JSON contains unescaped newlines or quotes.
+func parseFileWriteInput(inputJSON json.RawMessage) (string, string, error) {
+	inputJSON = NormalizeToolInput(inputJSON)
+	raw := strings.TrimSpace(string(inputJSON))
+
+	var input struct {
+		Path     string `json:"path"`
+		File     string `json:"file"`
+		Filename string `json:"filename"`
+		Content  string `json:"content"`
+		Data     string `json:"data"`
+		Text     string `json:"text"`
+	}
+	if err := json.Unmarshal(inputJSON, &input); err == nil {
+		path := input.Path
+		if path == "" {
+			path = input.File
+		}
+		if path == "" {
+			path = input.Filename
+		}
+		content := input.Content
+		if content == "" {
+			content = input.Data
+		}
+		if content == "" {
+			content = input.Text
+		}
+		if path != "" && !strings.HasPrefix(strings.TrimSpace(path), "{") && !strings.Contains(path, `":`) {
+			return strings.TrimSpace(path), content, nil
 		}
 	}
 
-	if input.Path == "" {
-		return nil, errors.New("path parameter is required")
+	var m map[string]any
+	if err := json.Unmarshal(inputJSON, &m); err == nil {
+		var path, content string
+		for _, k := range []string{"path", "file", "filename", "filepath", "target"} {
+			if v, ok := m[k].(string); ok && v != "" {
+				path = v
+				break
+			}
+		}
+		for _, k := range []string{"content", "data", "text", "body"} {
+			if v, ok := m[k].(string); ok {
+				content = v
+				break
+			}
+		}
+		if path != "" && !strings.HasPrefix(strings.TrimSpace(path), "{") && !strings.Contains(path, `":`) {
+			return strings.TrimSpace(path), content, nil
+		}
 	}
 
-	targetPath, err := t.validatePath(input.Path)
+	// Regex fallback for unescaped multiline content
+	var path, content string
+	pathRe := regexp.MustCompile(`"(?:path|file|filename|filepath|target)"\s*:\s*"([^"]+)"`)
+	if match := pathRe.FindStringSubmatch(raw); len(match) > 1 {
+		path = match[1]
+	}
+
+	contentRe := regexp.MustCompile(`"(?:content|data|text|body)"\s*:\s*"([\s\S]*)`)
+	if match := contentRe.FindStringSubmatch(raw); len(match) > 1 {
+		extracted := match[1]
+		if strings.HasSuffix(extracted, `"}`) {
+			extracted = extracted[:len(extracted)-2]
+		} else if strings.HasSuffix(extracted, `"`) {
+			extracted = extracted[:len(extracted)-1]
+		}
+		extracted = strings.ReplaceAll(extracted, `\n`, "\n")
+		extracted = strings.ReplaceAll(extracted, `\t`, "\t")
+		extracted = strings.ReplaceAll(extracted, `\"`, `"`)
+		extracted = strings.ReplaceAll(extracted, `\\`, `\`)
+		content = extracted
+	}
+
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", "", errors.New("path parameter is required")
+	}
+	if strings.ContainsAny(path, "{}\"\r\n") {
+		return "", "", fmt.Errorf("invalid file path: %q", path)
+	}
+
+	return path, content, nil
+}
+
+// resolveTargetBaseDir determines the root and base directory for file operations.
+// Default relative paths are placed within the agent's dedicated workspace (workspaceDir/agentSlug).
+// Explicit paths like "../skills/..." or "agentSlug/..." resolve cleanly within allowedRoot.
+func resolveTargetBaseDir(ctx context.Context, workspaceDir string, relPath string) (allowedRoot string, baseDir string) {
+	allowedRoot = filepath.Dir(workspaceDir)
+	baseDir = workspaceDir
+
+	agentID := AgentIDFromContext(ctx)
+	if agentID != "" {
+		agentWs := filepath.Join(workspaceDir, agentID)
+		_ = os.MkdirAll(agentWs, 0755)
+
+		cleanRel := filepath.Clean(relPath)
+		if strings.HasPrefix(cleanRel, agentID+string(filepath.Separator)) || cleanRel == agentID {
+			baseDir = workspaceDir
+		} else if !strings.HasPrefix(cleanRel, "..") {
+			baseDir = agentWs
+		}
+	}
+	return allowedRoot, baseDir
+}
+
+func (t *FileReadTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {
+	relPath, err := parseFilePathInput(inputJSON)
 	if err != nil {
 		return nil, err
+	}
+
+	allowedRoot, baseDir := resolveTargetBaseDir(ctx, t.workspaceDir, relPath)
+	targetPath, err := security.ResolvePathWithBase(allowedRoot, baseDir, relPath, true)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrPathEscape, err)
+	}
+
+	// If file not found in agent's dedicated workspace, check shared workspace
+	if _, statErr := os.Stat(targetPath); os.IsNotExist(statErr) && baseDir != t.workspaceDir {
+		sharedPath, sharedErr := security.ResolvePathWithBase(allowedRoot, t.workspaceDir, relPath, true)
+		if sharedErr == nil {
+			if _, sharedStatErr := os.Stat(sharedPath); sharedStatErr == nil {
+				targetPath = sharedPath
+			}
+		}
 	}
 
 	data, err := os.ReadFile(targetPath)
@@ -233,7 +377,7 @@ func (t *FileReadTool) Execute(ctx context.Context, inputJSON json.RawMessage) (
 		Content: string(data),
 		Data: map[string]any{
 			"bytes": len(data),
-			"path":  input.Path,
+			"path":  relPath,
 		},
 	}, nil
 }
@@ -252,7 +396,7 @@ func NewFileWriteTool(workspaceDir string) *FileWriteTool {
 
 func (t *FileWriteTool) Name() string { return "native_file_write" }
 func (t *FileWriteTool) Description() string {
-	return "Write or overwrite a file within the authorized workspace."
+	return "Write or overwrite a file within the authorized workspace or data directory."
 }
 func (t *FileWriteTool) Category() string { return "native" }
 
@@ -260,7 +404,7 @@ func (t *FileWriteTool) ParametersSchema() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {
-			"path": { "type": "string", "description": "Relative path to file in workspace" },
+			"path": { "type": "string", "description": "Relative path to file in workspace or 1 level up" },
 			"content": { "type": "string", "description": "Text content to write into the file" }
 		},
 		"required": ["path", "content"]
@@ -268,28 +412,13 @@ func (t *FileWriteTool) ParametersSchema() json.RawMessage {
 }
 
 func (t *FileWriteTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {
-	inputJSON = NormalizeToolInput(inputJSON)
-	var input struct {
-		Path    string `json:"path"`
-		Content string `json:"content"`
-	}
-	if err := json.Unmarshal(inputJSON, &input); err != nil || input.Path == "" {
-		var m map[string]any
-		if mapErr := json.Unmarshal(inputJSON, &m); mapErr == nil {
-			if p, ok := m["path"].(string); ok {
-				input.Path = p
-			}
-			if c, ok := m["content"].(string); ok {
-				input.Content = c
-			}
-		}
+	relPath, content, err := parseFileWriteInput(inputJSON)
+	if err != nil {
+		return nil, err
 	}
 
-	if input.Path == "" {
-		return nil, errors.New("path parameter is required")
-	}
-
-	targetPath, err := security.ResolvePath(t.workspaceDir, input.Path, true)
+	allowedRoot, baseDir := resolveTargetBaseDir(ctx, t.workspaceDir, relPath)
+	targetPath, err := security.ResolvePathWithBase(allowedRoot, baseDir, relPath, true)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrPathEscape, err)
 	}
@@ -298,15 +427,15 @@ func (t *FileWriteTool) Execute(ctx context.Context, inputJSON json.RawMessage) 
 		return nil, fmt.Errorf("creating parent directory: %w", err)
 	}
 
-	if err := os.WriteFile(targetPath, []byte(input.Content), 0644); err != nil {
+	if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil {
 		return nil, fmt.Errorf("writing file: %w", err)
 	}
 
 	return &ToolResult{
-		Content: fmt.Sprintf("Successfully wrote %d bytes to %s", len(input.Content), input.Path),
+		Content: fmt.Sprintf("Successfully wrote %d bytes to %s", len(content), relPath),
 		Data: map[string]any{
-			"path":  input.Path,
-			"bytes": len(input.Content),
+			"path":  relPath,
+			"bytes": len(content),
 		},
 	}, nil
 }
@@ -325,7 +454,7 @@ func NewFileListTool(workspaceDir string) *FileListTool {
 
 func (t *FileListTool) Name() string { return "native_file_list" }
 func (t *FileListTool) Description() string {
-	return "List files and directories within the authorized workspace."
+	return "List files and directories within the authorized workspace or data directory."
 }
 func (t *FileListTool) Category() string { return "native" }
 
@@ -333,7 +462,7 @@ func (t *FileListTool) ParametersSchema() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {
-			"path": { "type": "string", "description": "Relative subdirectory in workspace (optional, default root '')" },
+			"path": { "type": "string", "description": "Relative subdirectory in workspace or data directory (optional, default root '')" },
 			"recursive": { "type": "boolean", "description": "Whether to list subdirectories recursively (default false)" }
 		}
 	}`)
@@ -347,11 +476,12 @@ func (t *FileListTool) Execute(ctx context.Context, inputJSON json.RawMessage) (
 	}
 	_ = json.Unmarshal(inputJSON, &input)
 
-	targetDir, err := security.ResolvePath(t.workspaceDir, input.Path, true)
+	allowedRoot, baseDir := resolveTargetBaseDir(ctx, t.workspaceDir, input.Path)
+	targetDir, err := security.ResolvePathWithBase(allowedRoot, baseDir, input.Path, true)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrPathEscape, err)
 	}
-	absWorkspace, _ := filepath.Abs(t.workspaceDir)
+	absWorkspace, _ := filepath.Abs(baseDir)
 
 	_ = os.MkdirAll(targetDir, 0755)
 
@@ -430,7 +560,7 @@ func NewFileDeleteTool(workspaceDir string) *FileDeleteTool {
 
 func (t *FileDeleteTool) Name() string { return "native_file_delete" }
 func (t *FileDeleteTool) Description() string {
-	return "Delete a file or empty directory in the authorized workspace."
+	return "Delete a file or empty directory in the authorized workspace or data directory."
 }
 func (t *FileDeleteTool) Category() string { return "native" }
 
@@ -445,21 +575,29 @@ func (t *FileDeleteTool) ParametersSchema() json.RawMessage {
 }
 
 func (t *FileDeleteTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {
-	inputJSON = NormalizeToolInput(inputJSON)
-	var input struct {
-		Path string `json:"path"`
-	}
-	if err := json.Unmarshal(inputJSON, &input); err != nil || input.Path == "" {
-		return nil, errors.New("path is required")
+	relPath, err := parseFilePathInput(inputJSON)
+	if err != nil {
+		return nil, err
 	}
 
-	cleanRel := filepath.Clean(input.Path)
+	cleanRel := filepath.Clean(relPath)
 	if cleanRel == "." || cleanRel == "" {
 		return nil, ErrPathEscape
 	}
-	targetPath, err := security.ResolvePath(t.workspaceDir, input.Path, false)
+	allowedRoot, baseDir := resolveTargetBaseDir(ctx, t.workspaceDir, relPath)
+	targetPath, err := security.ResolvePathWithBase(allowedRoot, baseDir, relPath, true)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrPathEscape, err)
+	}
+
+	// If file not found in agent's dedicated workspace, check shared workspace
+	if _, statErr := os.Stat(targetPath); os.IsNotExist(statErr) && baseDir != t.workspaceDir {
+		sharedPath, sharedErr := security.ResolvePathWithBase(allowedRoot, t.workspaceDir, relPath, true)
+		if sharedErr == nil {
+			if _, sharedStatErr := os.Stat(sharedPath); sharedStatErr == nil {
+				targetPath = sharedPath
+			}
+		}
 	}
 
 	if err := os.Remove(targetPath); err != nil {
@@ -467,8 +605,8 @@ func (t *FileDeleteTool) Execute(ctx context.Context, inputJSON json.RawMessage)
 	}
 
 	return &ToolResult{
-		Content: fmt.Sprintf("Successfully deleted %s", input.Path),
-		Data:    map[string]any{"deleted": input.Path},
+		Content: fmt.Sprintf("Successfully deleted %s", relPath),
+		Data:    map[string]any{"deleted": relPath},
 	}, nil
 }
 

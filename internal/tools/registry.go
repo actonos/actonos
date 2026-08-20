@@ -28,7 +28,24 @@ type executionContextKey string
 const (
 	traceIDContextKey  executionContextKey = "trace_id"
 	approvalContextKey executionContextKey = "approval_id"
+	agentIDContextKey  executionContextKey = "agent_id"
 )
+
+// WithAgentID attaches the calling agent ID to context.
+func WithAgentID(ctx context.Context, agentID string) context.Context {
+	return context.WithValue(ctx, agentIDContextKey, agentID)
+}
+
+// AgentIDFromContext retrieves the calling agent ID from context.
+func AgentIDFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	if val, ok := ctx.Value(agentIDContextKey).(string); ok {
+		return val
+	}
+	return ""
+}
 
 // AgentToolPolicy is the execution-boundary projection of an agent manifest.
 type AgentToolPolicy struct {
@@ -58,10 +75,35 @@ type Tool interface {
 
 // ToolInfo is a serializable representation of a registered tool for APIs and dashboards.
 type ToolInfo struct {
-	Name        string          `json:"name"`
-	Description string          `json:"description"`
-	Category    string          `json:"category"`
-	Schema      json.RawMessage `json:"schema"`
+	Name                string             `json:"name"`
+	Description         string             `json:"description"`
+	Category            string             `json:"category"`
+	Schema              json.RawMessage    `json:"schema"`
+	Enabled             bool               `json:"enabled"`
+	RequirementsMet     bool               `json:"requirements_met"`
+	Requirements        *SkillRequirements `json:"requirements,omitempty"`
+	MissingRequirements []string           `json:"missing_requirements,omitempty"`
+}
+
+func toolToInfo(t Tool) ToolInfo {
+	info := ToolInfo{
+		Name:            t.Name(),
+		Description:     t.Description(),
+		Category:        t.Category(),
+		Schema:          t.ParametersSchema(),
+		Enabled:         true,
+		RequirementsMet: true,
+	}
+
+	if st, ok := t.(*SkillTool); ok {
+		info.Enabled = st.IsEnabled()
+		info.RequirementsMet = st.RequirementsMet()
+		reqs := st.Requirements()
+		info.Requirements = &reqs
+		info.MissingRequirements = st.MissingRequirements()
+	}
+
+	return info
 }
 
 // ToolAuditLogger defines interface for writing tool audit logs.
@@ -276,12 +318,7 @@ func (r *ToolRegistry) List() []ToolInfo {
 
 	out := make([]ToolInfo, 0, len(r.tools))
 	for _, t := range r.tools {
-		out = append(out, ToolInfo{
-			Name:        t.Name(),
-			Description: t.Description(),
-			Category:    t.Category(),
-			Schema:      t.ParametersSchema(),
-		})
+		out = append(out, toolToInfo(t))
 	}
 	return out
 }
@@ -294,15 +331,27 @@ func (r *ToolRegistry) ListByCategory(category string) []ToolInfo {
 	var out []ToolInfo
 	for _, t := range r.tools {
 		if t.Category() == category {
-			out = append(out, ToolInfo{
-				Name:        t.Name(),
-				Description: t.Description(),
-				Category:    t.Category(),
-				Schema:      t.ParametersSchema(),
-			})
+			out = append(out, toolToInfo(t))
 		}
 	}
 	return out
+}
+
+// SetToolEnabled enables or disables an installed skill tool.
+func (r *ToolRegistry) SetToolEnabled(name string, enabled bool) error {
+	r.mu.RLock()
+	tool, ok := r.tools[name]
+	r.mu.RUnlock()
+
+	if !ok {
+		return fmt.Errorf("%w: %s", ErrToolNotFound, name)
+	}
+
+	if st, ok := tool.(*SkillTool); ok {
+		return st.SetEnabled(enabled)
+	}
+
+	return fmt.Errorf("tool '%s' does not support enable/disable toggle", name)
 }
 
 // ToLLMToolDefinitions converts authorized tools into LLM-compatible tool definitions.
@@ -327,6 +376,12 @@ func (r *ToolRegistry) ToLLMToolDefinitions(authorizedTools []string, excludedTo
 
 	var defs []llm.ToolDefinition
 	for name, t := range r.tools {
+		if st, ok := t.(*SkillTool); ok {
+			if !st.IsEnabled() || !st.RequirementsMet() {
+				continue // Skip disabled or unsatisfied skills for LLM
+			}
+		}
+
 		if (allowAll || authMap[name]) && !excluded[name] {
 			defs = append(defs, llm.ToolDefinition{
 				Type: "function",
@@ -348,7 +403,7 @@ func NormalizeToolInput(inputJSON json.RawMessage) json.RawMessage {
 		return json.RawMessage(`{}`)
 	}
 
-	// 1. If wrapped in outer quotes (JSON string literal like "\"{\\\"url\\\": ...}\"" or "\"https://example.com\"")
+	// 1. If wrapped in outer quotes (JSON string literal like "\"{\\\"path\\\": ...}\"" or "\"https://example.com\"")
 	if strings.HasPrefix(trimmed, `"`) && strings.HasSuffix(trimmed, `"`) {
 		var unescaped string
 		if err := json.Unmarshal([]byte(trimmed), &unescaped); err == nil {
@@ -363,7 +418,11 @@ func NormalizeToolInput(inputJSON json.RawMessage) json.RawMessage {
 				obj, _ := json.Marshal(map[string]any{"url": unescapedTrimmed})
 				return json.RawMessage(obj)
 			}
-			// Wrap raw string with universal property names
+			// If it starts with { or contains JSON keys, return as raw unescaped JSON without wrapping
+			if strings.HasPrefix(unescapedTrimmed, "{") || strings.Contains(unescapedTrimmed, `":`) {
+				return json.RawMessage(unescapedTrimmed)
+			}
+			// Wrap simple plain string with universal property names
 			obj, _ := json.Marshal(map[string]any{
 				"url":     unescapedTrimmed,
 				"path":    unescapedTrimmed,
@@ -374,12 +433,18 @@ func NormalizeToolInput(inputJSON json.RawMessage) json.RawMessage {
 		}
 	}
 
-	// 2. If it's already a JSON object { ... }
-	if strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}") {
+	// 2. If it's already a JSON object or array
+	if (strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}")) ||
+		(strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]")) {
 		return inputJSON
 	}
 
-	// 3. Fallback: Wrap raw string
+	// If it starts with { or contains JSON keys, return as raw message rather than wrapping
+	if strings.HasPrefix(trimmed, "{") || strings.Contains(trimmed, `":`) {
+		return json.RawMessage(trimmed)
+	}
+
+	// 3. Fallback: Wrap raw plain string
 	obj, _ := json.Marshal(map[string]any{
 		"url":     trimmed,
 		"path":    trimmed,
@@ -391,6 +456,9 @@ func NormalizeToolInput(inputJSON json.RawMessage) json.RawMessage {
 
 // Execute executes a tool by name with input JSON parameters.
 func (r *ToolRegistry) Execute(ctx context.Context, agentID, name string, inputJSON json.RawMessage) (*ToolResult, error) {
+	if agentID != "" && AgentIDFromContext(ctx) == "" {
+		ctx = WithAgentID(ctx, agentID)
+	}
 	if IsToolDenied(ctx, name) {
 		return nil, fmt.Errorf("%w: agent=%s tool=%s", ErrToolDeniedInContext, agentID, name)
 	}
@@ -401,6 +469,15 @@ func (r *ToolRegistry) Execute(ctx context.Context, agentID, name string, inputJ
 	tool, err := r.Get(name)
 	if err != nil {
 		return nil, err
+	}
+
+	if st, ok := tool.(*SkillTool); ok {
+		if !st.IsEnabled() {
+			return nil, fmt.Errorf("skill '%s' is currently disabled", name)
+		}
+		if met, missing := st.CheckRequirements(); !met {
+			return nil, fmt.Errorf("skill '%s' requirements not satisfied: %s", name, strings.Join(missing, "; "))
+		}
 	}
 
 	// Normalize input to handle string-encoded or malformed LLM tool arguments

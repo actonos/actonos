@@ -104,8 +104,9 @@ type AgentState struct {
 type StreamEventType string
 
 const (
-	EventStreamThought StreamEventType = "thought"
-	EventStreamToken   StreamEventType = "token"
+	EventStreamThought    StreamEventType = "thought"
+	EventStreamReasoning  StreamEventType = "reasoning"
+	EventStreamToken      StreamEventType = "token"
 	// EventStreamTokenReset tells the client to discard the tokens streamed during
 	// the current ReAct iteration. Emitted when an iteration turns out to be a
 	// tool-calling turn, so its preamble prose must not become the final answer.
@@ -123,7 +124,7 @@ type AuditLogEntry struct {
 	AgentID      string    `json:"agent_id"`
 	Action       string    `json:"action"`
 	ToolName     string    `json:"tool_name,omitempty"`
-	Parameters   any       `json:"parameters,omitempty"`
+	Parameters   string    `json:"parameters,omitempty"`
 	Status       string    `json:"status"`
 	Verification string    `json:"verification"` // e.g. "Tier 1 AST Clean", "Memory Search", "Sandbox Isolation"
 	DurationMs   int64     `json:"duration_ms"`
@@ -132,17 +133,18 @@ type AuditLogEntry struct {
 // AgentStreamEvent encapsulates an event emitted during ReAct cognitive execution.
 type AgentStreamEvent struct {
 	Type           StreamEventType `json:"type"`
-	Content        string          `json:"content,omitempty"`
 	Thought        string          `json:"thought,omitempty"`
+	Reasoning      string          `json:"reasoning,omitempty"`
+	Content        string          `json:"content,omitempty"`
 	Tool           string          `json:"tool,omitempty"`
 	ToolCallID     string          `json:"tool_call_id,omitempty"`
-	Args           any             `json:"args,omitempty"`
+	Args           string          `json:"args,omitempty"`
 	Result         string          `json:"result,omitempty"`
 	Status         string          `json:"status,omitempty"`
 	LatencyMs      int64           `json:"latency_ms,omitempty"`
 	AuditLog       *AuditLogEntry  `json:"audit_log,omitempty"`
-	Usage          *llm.Usage      `json:"usage,omitempty"`
 	Model          string          `json:"model,omitempty"`
+	Usage          *llm.Usage      `json:"usage,omitempty"`
 	ConversationID string          `json:"conversation_id,omitempty"`
 	Title          string          `json:"title,omitempty"`
 	Error          string          `json:"error,omitempty"`

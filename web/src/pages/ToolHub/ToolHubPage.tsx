@@ -9,6 +9,7 @@ import { useToast } from '@/components/ui/Toast';
 import { ToolCard } from '@/components/features/tools/ToolCard';
 import { McpServerModal } from '@/components/features/tools/McpServerModal';
 import { ToolTestModal } from '@/components/features/tools/ToolTestModal';
+import { Card } from '@/components/ui/Card';
 import {
   Plus,
   RefreshCw,
@@ -17,13 +18,12 @@ import {
   Wrench,
 } from 'lucide-react';
 import { api } from '@/lib/api';
-import type { ToolInfo } from '@/lib/types';
-import { isApprovalRequired, type MCPServerStatus } from '@/lib/types';
-import { Card } from '@/components/ui/Card';
+import type { ToolInfo, MCPServerStatus } from '@/lib/types';
+import { useActionProgress } from '@/lib/useActionProgress';
 
 export function ToolHubPage() {
   const { t } = useTranslation('tools');
-  const { error, success, info } = useToast();
+  const { error, success } = useToast();
   const [tools, setTools] = useState<ToolInfo[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -31,7 +31,7 @@ export function ToolHubPage() {
   const [testingTool, setTestingTool] = useState<ToolInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [servers, setServers] = useState<MCPServerStatus[]>([]);
-
+  const { executeAction, isExecuting } = useActionProgress();
   const wasmInputRef = useRef<HTMLInputElement>(null);
 
   const loadTools = async () => {
@@ -54,51 +54,70 @@ export function ToolHubPage() {
 
   useEffect(() => {
     loadTools();
+    const handleUpdates = () => {
+      loadTools();
+    };
+    window.addEventListener('actonos:tools-updated', handleUpdates);
+    window.addEventListener('actonos:approval-decided', handleUpdates);
+    return () => {
+      window.removeEventListener('actonos:tools-updated', handleUpdates);
+      window.removeEventListener('actonos:approval-decided', handleUpdates);
+    };
   }, [activeCategory]);
 
   const handleConnectMCP = async (cfg: { id: string; transport: string; command?: string; args?: string[]; url?: string; env?: Record<string, string> }) => {
-    try {
-      const result = await api.connectMCP(cfg);
-      if (isApprovalRequired(result)) {
-        info(t('common:approval.queuedTitle'), t('common:approval.queuedDescription'));
-        return;
-      }
-      success('MCP Connected', `Server ${cfg.id} registered.`);
-      loadTools();
-    } catch (err) {
-      error('MCP Connection Failed', getErrorMessage(err));
-    }
+    setIsMcpModalOpen(false);
+    await executeAction({
+      targetId: cfg.id,
+      title: t('actions.connectingMCP', { name: cfg.id, defaultValue: `Connecting MCP Server: ${cfg.id}` }),
+      steps: [
+        { id: 'auth', label: t('actionProgress.steps.auth', { defaultValue: 'Security Authorization & Approval' }) },
+        { id: 'connect', label: t('mcp.establishingConnection', { defaultValue: 'Initializing Transport & Discovering Tools' }) },
+      ],
+      action: () => api.connectMCP(cfg),
+      onSuccess: () => {
+        success('MCP Connected', `Server ${cfg.id} registered.`);
+        loadTools();
+      },
+    });
   };
 
-  const handleToggleMCP = async (server: MCPServerStatus) => {
-    try {
-      const result = await api.toggleMCPServer(server.id, !server.enabled);
-      if (isApprovalRequired(result)) {
-        info(t('common:approval.queuedTitle'), t('common:approval.queuedDescription'));
-        return;
-      }
-      success(t('mcp.updated'), server.id);
-      loadTools();
-    } catch (cause) {
-      error(t('mcp.updateFailed'), cause instanceof Error ? getErrorMessage(cause) : String(cause));
-    }
+  const handleToggleMCP = (server: MCPServerStatus) => {
+    const nextEnabled = !server.enabled;
+    executeAction({
+      targetId: server.id,
+      title: nextEnabled
+        ? t('mcp.enablingTitle', { name: server.id, defaultValue: `Enabling MCP Server: ${server.id}` })
+        : t('mcp.disablingTitle', { name: server.id, defaultValue: `Disabling MCP Server: ${server.id}` }),
+      steps: [
+        { id: 'auth', label: t('actionProgress.steps.auth', { defaultValue: 'Security Authorization & Approval' }) },
+        { id: 'toggle', label: t('mcp.updatingState', { defaultValue: 'Updating server lifecycle state' }) },
+      ],
+      action: () => api.toggleMCPServer(server.id, nextEnabled),
+      onSuccess: () => {
+        success(t('mcp.updated', { defaultValue: 'MCP Status Updated' }), server.id);
+        loadTools();
+      },
+    });
   };
 
-  const handleUploadWASM = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUploadWASM = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    try {
-      const result = await api.uploadWASM(file);
-      if (isApprovalRequired(result)) {
-        info(t('common:approval.queuedTitle'), t('common:approval.queuedDescription'));
-        return;
-      }
-      success('WASM Uploaded', `Plugin ${file.name} installed.`);
-      loadTools();
-    } catch (err) {
-      error('Upload failed', getErrorMessage(err));
-    }
+    executeAction({
+      targetId: file.name,
+      title: t('wasm.uploadingTitle', { name: file.name, defaultValue: `Uploading WASM Plugin: ${file.name}` }),
+      steps: [
+        { id: 'auth', label: t('actionProgress.steps.auth', { defaultValue: 'Security Authorization & Approval' }) },
+        { id: 'verify', label: t('wasm.verifyingModule', { defaultValue: 'Validating WebAssembly Module & Loading' }) },
+      ],
+      action: () => api.uploadWASM(file),
+      onSuccess: () => {
+        success('WASM Uploaded', `Plugin ${file.name} installed.`);
+        loadTools();
+      },
+    });
   };
 
   const categories = [
@@ -225,8 +244,9 @@ export function ToolHubPage() {
                     type="button"
                     role="switch"
                     aria-checked={server.enabled}
+                    disabled={isExecuting(server.id)}
                     onClick={() => handleToggleMCP(server)}
-                    className={`w-11 h-6 rounded-full p-0.5 transition-colors ${server.enabled ? 'bg-deep-ink' : 'bg-slate/30'}`}
+                    className={`w-11 h-6 rounded-full p-0.5 transition-colors ${server.enabled ? 'bg-deep-ink' : 'bg-slate/30'} ${isExecuting(server.id) ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <span className={`block w-5 h-5 rounded-full bg-canvas transition-transform ${server.enabled ? 'translate-x-5' : ''}`} />
                   </button>

@@ -83,6 +83,9 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
   const [editingConvTitle, setEditingConvTitle] = useState('');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const isAutoScrollEnabled = useRef(true);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -313,10 +316,32 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
     };
   }, [snapshot?.timestamp, activeConvID]);
 
+  const handleScroll = () => {
+    if (!messagesContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    const atBottom = distanceFromBottom < 80;
+    isAutoScrollEnabled.current = atBottom;
+    setShowScrollBottom(!atBottom);
+  };
+
   const scrollToBottom = (behavior: ScrollBehavior = 'auto') => {
     requestAnimationFrame(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior, block: 'end' });
+      if (messagesContainerRef.current) {
+        messagesContainerRef.current.scrollTo({
+          top: messagesContainerRef.current.scrollHeight,
+          behavior,
+        });
+      } else {
+        messagesEndRef.current?.scrollIntoView({ behavior, block: 'end' });
+      }
     });
+  };
+
+  const handleScrollToBottomClick = () => {
+    isAutoScrollEnabled.current = true;
+    setShowScrollBottom(false);
+    scrollToBottom('smooth');
   };
 
   // Scroll to bottom when conversation is selected or messages are loaded
@@ -324,6 +349,8 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
   useEffect(() => {
     if (activeConvID !== activeConvRef.current || messages.length > 0) {
       activeConvRef.current = activeConvID;
+      isAutoScrollEnabled.current = true;
+      setShowScrollBottom(false);
       scrollToBottom('auto');
       const timer = setTimeout(() => scrollToBottom('auto'), 60);
       const timer2 = setTimeout(() => scrollToBottom('auto'), 200);
@@ -340,8 +367,24 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
     const justSent = lastMsg?.role === 'user';
     const justFinished = wasLoadingRef.current && !loading;
     wasLoadingRef.current = loading;
-    if (justSent || justFinished || loading) {
-      scrollToBottom(justFinished ? 'smooth' : 'auto');
+
+    if (justSent) {
+      isAutoScrollEnabled.current = true;
+      setShowScrollBottom(false);
+      scrollToBottom('smooth');
+      return;
+    }
+
+    if (justFinished) {
+      if (isAutoScrollEnabled.current) {
+        scrollToBottom('smooth');
+      }
+      return;
+    }
+
+    // While streaming tokens / reasoning, ONLY autoscroll if user has NOT scrolled up!
+    if (loading && isAutoScrollEnabled.current) {
+      scrollToBottom('auto');
     }
   }, [messages, loading]);
 
@@ -462,23 +505,33 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
               }
 
               if (currentEvent === 'thought' && parsed.thought) {
-                // Reasoning arrives as incremental deltas — append, don't replace.
+                // Operational status update: update to the latest step in real-time
                 currentAssistantMsg = {
                   ...currentAssistantMsg,
-                  thought: (currentAssistantMsg.thought ?? '') + parsed.thought,
+                  thought: parsed.thought,
+                };
+              } else if (currentEvent === 'reasoning' && parsed.reasoning) {
+                // Streaming CoT reasoning tokens
+                currentAssistantMsg = {
+                  ...currentAssistantMsg,
+                  reasoning: (currentAssistantMsg.reasoning ?? '') + parsed.reasoning,
                 };
               } else if (currentEvent === 'token' && parsed.content) {
                 currentAssistantMsg = {
                   ...currentAssistantMsg,
                   content: currentAssistantMsg.content + parsed.content,
-                  // A token arriving means the answer has started: clear the
-                  // transient thought line so it stops competing with the text.
+                  // A token arriving means the answer has started: clear transient status
                   thought: undefined,
                 };
               } else if (currentEvent === 'token_reset') {
-                // That iteration was a tool-calling turn; its prose was preamble.
+                // If this turn called tools, shift any streamed preamble into reasoning
+                // so the user doesn't lose what they were reading, while keeping content clean for the final answer.
+                const preamble = currentAssistantMsg.content;
                 currentAssistantMsg = {
                   ...currentAssistantMsg,
+                  reasoning: preamble
+                    ? (currentAssistantMsg.reasoning ? currentAssistantMsg.reasoning + '\n\n' + preamble : preamble)
+                    : currentAssistantMsg.reasoning,
                   content: '',
                 };
               } else if (currentEvent === 'tool_call') {
@@ -963,6 +1016,8 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
               expandedTraces={expandedTrace}
               traceTabs={activeTab}
               endRef={messagesEndRef}
+              containerRef={messagesContainerRef}
+              onScroll={handleScroll}
               onPrompt={handlePromptChip}
               onCopy={handleCopy}
               onToggleTrace={toggleTrace}
@@ -1190,13 +1245,27 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
               <div />
             </div>
 
-            <ChatComposer
-              value={input}
-              loading={loading}
-              inputRef={inputRef}
-              onChange={setInput}
-              onSubmit={handleSend}
-            />
+            <div className="relative">
+              {showScrollBottom && (
+                <button
+                  type="button"
+                  onClick={handleScrollToBottomClick}
+                  className="absolute -top-11 right-4 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-deep-ink/90 hover:bg-deep-ink text-white text-caption shadow-md border border-white/10 backdrop-blur-xs transition-all animate-in fade-in slide-in-from-bottom-2 duration-200 cursor-pointer"
+                  title={t('scrollToBottom', 'Scroll to bottom')}
+                >
+                  <ChevronDown className="w-3.5 h-3.5 text-hi-yellow" />
+                  <span className="text-[11px] font-medium">{t('scrollToBottom', 'Scroll to bottom')}</span>
+                </button>
+              )}
+
+              <ChatComposer
+                value={input}
+                loading={loading}
+                inputRef={inputRef}
+                onChange={setInput}
+                onSubmit={handleSend}
+              />
+            </div>
           </Card>
         </div>
       </PageContainer>

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"strings"
 
 	"github.com/actonos/actonos/internal/tools"
 	"github.com/go-chi/chi/v5"
@@ -294,3 +295,41 @@ func (s *Server) handleUninstallHubSkill(w http.ResponseWriter, r *http.Request)
 	}
 	s.respondJSON(w, http.StatusAccepted, map[string]any{"status": "approval_required", "approval": approval})
 }
+
+func (s *Server) handleToggleSkill(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", "skill name is required")
+		return
+	}
+
+	var req struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := s.decodeJSON(r, &req); err != nil {
+		s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
+
+	if s.toolReg == nil {
+		s.respondError(w, http.StatusNotImplemented, "TOOLS_NOT_AVAILABLE", "tool registry not configured")
+		return
+	}
+
+	err := s.toolReg.SetToolEnabled(name, req.Enabled)
+	if err != nil && !strings.HasPrefix(name, "skill_") {
+		err = s.toolReg.SetToolEnabled("skill_"+name, req.Enabled)
+	}
+
+	if err != nil {
+		s.respondError(w, http.StatusNotFound, "SKILL_NOT_FOUND", err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]any{
+		"name":    name,
+		"enabled": req.Enabled,
+		"status":  "updated",
+	})
+}
+
