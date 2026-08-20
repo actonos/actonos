@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 )
 
 // GeminiProvider implements LLMProvider for Google Gemini API.
@@ -26,12 +25,10 @@ func NewGeminiProvider(apiKey, model string) *GeminiProvider {
 		model = "gemini-2.5-flash"
 	}
 	return &GeminiProvider{
-		BaseURL: "https://generativelanguage.googleapis.com/v1beta",
-		APIKey:  apiKey,
-		Model:   model,
-		HTTPClient: &http.Client{
-			Timeout: 60 * time.Second,
-		},
+		BaseURL:    "https://generativelanguage.googleapis.com/v1beta",
+		APIKey:     apiKey,
+		Model:      model,
+		HTTPClient: NewDefaultHTTPClient(),
 	}
 }
 

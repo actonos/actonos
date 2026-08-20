@@ -61,7 +61,7 @@ func (c *ContextManager) PruneAndSnapshot(
 // NewContextManager creates a new ContextManager instance.
 func NewContextManager(maxTokens int) *ContextManager {
 	if maxTokens <= 0 {
-		maxTokens = 8192
+		maxTokens = 128000
 	}
 	return &ContextManager{maxTokens: maxTokens}
 }

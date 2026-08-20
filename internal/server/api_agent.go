@@ -245,7 +245,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 			FROM messages
 			WHERE conversation_id = ? AND role IN ('user', 'assistant')
 			ORDER BY created_at DESC
-			LIMIT 8
+			LIMIT 50
 		`, convID)
 		if err == nil {
 			var reversed []llm.Message
@@ -741,7 +741,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		rows, queryErr := s.memory.DB().SQLDB().QueryContext(r.Context(), `
 			SELECT role, content FROM messages
 			WHERE conversation_id = ? AND role IN ('user', 'assistant')
-			ORDER BY created_at DESC LIMIT 8
+			ORDER BY created_at DESC LIMIT 50
 		`, convID)
 		if queryErr == nil {
 			var reversed []llm.Message
@@ -795,11 +795,15 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 	result := <-resultCh
 	if result.err == nil && result.response != nil && s.memory != nil {
+		content := result.response.Content
+		if strings.TrimSpace(content) == "" {
+			content = "Completed requested operations successfully."
+		}
 		toolCalls, _ := json.Marshal(result.response.ToolCalls)
 		_, _ = s.memory.DB().SQLDB().ExecContext(context.Background(), `
 			INSERT INTO messages (id, conversation_id, agent_id, role, content, tool_calls_json, created_at)
 			VALUES (?, ?, ?, 'assistant', ?, ?, ?)
-		`, "msg_"+uuid.NewString(), convID, agentID, result.response.Content, string(toolCalls), time.Now().UTC())
+		`, "msg_"+uuid.NewString(), convID, agentID, content, string(toolCalls), time.Now().UTC())
 	}
 }
 

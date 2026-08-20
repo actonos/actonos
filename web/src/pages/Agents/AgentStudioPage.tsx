@@ -171,7 +171,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             setPrimaryModel(pMod);
             setFallbackModel(fMod);
             setTemperature(agent.model_config.temperature ?? 0.2);
-            setMaxTokens(agent.model_config.max_tokens ?? 4096);
+            setMaxTokens(agent.model_config.max_tokens ?? 32768);
 
             // Check if models are not in the standard catalog to switch to custom text input
             if (!LATEST_MODEL_CATALOG.some((m) => m.id === pMod)) {
@@ -995,15 +995,15 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               <div className="p-4 bg-soft-meadow rounded-2xl border border-onyx/5 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-body-sm font-semibold text-deep-ink">
-                    {t('studio.model.maxTokens')} <strong className="font-mono">{maxTokens}</strong>
+                    {t('studio.model.maxTokens')} <strong className="font-mono">{maxTokens.toLocaleString()}</strong>
                   </span>
-                  <span className="text-caption text-slate font-mono">1,024 - 16,384</span>
+                  <span className="text-caption text-slate font-mono">1,024 - 65,536</span>
                 </div>
                 <input
                   type="range"
                   min="1024"
-                  max="16384"
-                  step="512"
+                  max="65536"
+                  step="1024"
                   value={maxTokens}
                   onChange={(e) => setMaxTokens(parseInt(e.target.value, 10))}
                   className="w-full accent-deep-ink cursor-pointer"

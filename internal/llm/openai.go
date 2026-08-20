@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"sort"
 	"strings"
-	"time"
 )
 
 // OpenAIProvider interacts with OpenAI-compatible chat completion and embedding APIs.
@@ -30,12 +29,10 @@ func NewOpenAIProvider(apiKey, model, baseURL string) *OpenAIProvider {
 		model = "gpt-4o"
 	}
 	return &OpenAIProvider{
-		BaseURL: baseURL,
-		APIKey:  apiKey,
-		Model:   model,
-		HTTPClient: &http.Client{
-			Timeout: 60 * time.Second,
-		},
+		BaseURL:    baseURL,
+		APIKey:     apiKey,
+		Model:      model,
+		HTTPClient: NewDefaultHTTPClient(),
 	}
 }
 

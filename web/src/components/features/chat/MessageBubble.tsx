@@ -54,7 +54,18 @@ export function MessageBubble({
           </details>
         )}
         <div className="font-sans text-body-sm leading-relaxed">
-          {message.content ? <MarkdownContent content={message.content} isUser={isUser} /> : <span>{message.thought || message.reasoning ? '' : t('connecting')}</span>}
+          {message.content ? (
+            <MarkdownContent content={message.content} isUser={isUser} />
+          ) : message.toolCalls && message.toolCalls.length > 0 ? (
+            <span className="text-slate italic font-mono text-[11px]">{t('operationsCompleted', 'Completed operations successfully.')}</span>
+          ) : (
+            !message.thought && !message.reasoning && (
+              <div className="flex items-center gap-2 text-caption font-mono text-slate animate-pulse py-1">
+                <Sparkles className="h-3.5 w-3.5 text-hi-yellow animate-spin" />
+                <span>{t('connecting')}</span>
+              </div>
+            )
+          )}
         </div>
         <TraceDisclosure
           message={message}

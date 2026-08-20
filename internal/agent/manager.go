@@ -270,6 +270,10 @@ func (m *AgentManager) EnsureDefaultAgent(ctx context.Context) error {
 			existing.SystemInstructions = defaultSysInstructions
 			needUpdate = true
 		}
+		if existing.ModelConfig.MaxTokens <= 4096 {
+			existing.ModelConfig.MaxTokens = 32768
+			needUpdate = true
+		}
 		if needUpdate {
 			now := time.Now().UTC()
 			existing.UpdatedAt = now
@@ -291,7 +295,7 @@ func (m *AgentManager) EnsureDefaultAgent(ctx context.Context) error {
 			PrimaryModel:  "anthropic/claude-sonnet-4-6",
 			FallbackModel: "openai/gpt-5-mini",
 			Temperature:   0.2,
-			MaxTokens:     4096,
+			MaxTokens:     32768,
 		},
 		SystemInstructions: defaultSysInstructions,
 		AuthorizedTools:    []string{"*"},

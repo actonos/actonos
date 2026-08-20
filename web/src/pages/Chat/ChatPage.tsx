@@ -4,9 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { ChatHeader } from '@/components/features/chat/ChatHeader';
 import { ChatComposer } from '@/components/features/chat/ChatComposer';
-import { ChatEmptyState } from '@/components/features/chat/ChatEmptyState';
-import { TraceDisclosure } from '@/components/features/chat/TraceDisclosure';
-import { MessageBubble } from '@/components/features/chat/MessageBubble';
 import { MessageTimeline } from '@/components/features/chat/MessageTimeline';
 import { ChatSessionRail } from '@/components/features/chat/ChatSessionRail';
 import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
@@ -20,18 +17,9 @@ import {
   Bot,
   Sparkles,
   Trash2,
-  Copy,
-  Check,
-  Terminal,
   ChevronDown,
-  ChevronRight,
-  ShieldCheck,
   Plus,
   MessageSquare,
-  Clock,
-  Activity,
-  Cpu,
-  FileCode,
   Search,
   Edit3,
   X,
@@ -39,7 +27,6 @@ import {
 import { api } from '@/lib/api';
 import type { AgentManifest, ConversationItem } from '@/lib/types';
 import type { NavTab } from '@/components/layout/Sidebar';
-import { MarkdownContent } from '@/components/chat/MarkdownContent';
 import {
   formatRelativeTime,
   type ChatMessage,
@@ -70,7 +57,6 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<Record<string, 'traces' | 'audit'>>({});
   const [expandedTrace, setExpandedTrace] = useState<Record<string, boolean>>({});
-  const renderLegacyTrace = false as boolean;
 
   // Search & Filter
   const [sessionSearch, setSessionSearch] = useState('');
@@ -568,7 +554,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                 // the payload is only a fallback when nothing was streamed.
                 currentAssistantMsg = {
                   ...currentAssistantMsg,
-                  content: currentAssistantMsg.content || parsed.content || '',
+                  content: currentAssistantMsg.content || parsed.content || (currentAssistantMsg.toolCalls?.length ? 'Completed operations successfully.' : ''),
                   model: parsed.model,
                   tokens_used: parsed.tokens_used,
                   thought: undefined,
@@ -1028,237 +1014,18 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
               onTraceTabChange={(messageID, tab) => setActiveTab((previous) => ({ ...previous, [messageID]: tab }))}
             />
 
-            {/* Legacy message renderer is disabled while migration is verified. */}
-            <div className="hidden flex-1 overflow-y-auto my-4 space-y-4 pr-2 max-h-[480px]" aria-hidden="true">
-              {messages.length === 0 ? (
-                <ChatEmptyState
-                  agentName={activeAgent?.name || t('defaultAgent')}
-                  prompts={promptChips}
-                  onPrompt={handlePromptChip}
-                />
-              ) : (
-                messages.map((msg, idx) => {
-                  const hasTraces = (msg.toolCalls && msg.toolCalls.length > 0) || !!msg.thought;
-                  const hasAudits = msg.auditLogs && msg.auditLogs.length > 0;
-                  const currentMsgTab = activeTab[msg.id] || 'traces';
 
-                  if (!renderLegacyTrace) {
-                    return (
-                      <MessageBubble
-                        key={msg.id || idx}
-                        message={msg}
-                        copied={copiedIdx === idx}
-                        traceExpanded={Boolean(expandedTrace[msg.id])}
-                        traceTab={currentMsgTab}
-                        onCopy={() => handleCopy(msg.content, idx)}
-                        onToggleTrace={() => toggleTrace(msg.id)}
-                        onTraceTabChange={(tab) => setActiveTab((previous) => ({ ...previous, [msg.id]: tab }))}
-                      />
-                    );
-                  }
-
-                  return (
-                    <div
-                      key={msg.id || idx}
-                      className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
-                    >
-                      <div
-                        className={`max-w-[90%] sm:max-w-[80%] p-4 rounded-[20px] transition-all shadow-xs relative group ${msg.role === 'user'
-                          ? 'bg-deep-ink text-white rounded-br-none'
-                          : 'bg-soft-meadow text-deep-ink border border-onyx/10 rounded-bl-none'
-                          }`}
-                      >
-                        {/* Live Thought Banner */}
-                        {msg.thought && (
-                          <div className="mb-3 p-2.5 bg-canvas/80 backdrop-blur-xs rounded-xl border border-onyx/10 text-caption font-mono flex items-center gap-2 text-deep-ink shadow-xs">
-                            <Activity className="w-4 h-4 text-hi-yellow animate-spin shrink-0" />
-                            <span className="truncate">{msg.thought}</span>
-                          </div>
-                        )}
-
-                        {/* Message Content */}
-                        <div className="font-sans text-body-sm leading-relaxed">
-                          {msg.content ? (
-                            <MarkdownContent content={msg.content} isUser={msg.role === 'user'} />
-                          ) : msg.thought ? (
-                            ''
-                          ) : (
-                            '...'
-                          )}
-                        </div>
-
-                        <TraceDisclosure
-                          message={msg}
-                          expanded={Boolean(expandedTrace[msg.id])}
-                          activeTab={currentMsgTab}
-                          onToggle={() => toggleTrace(msg.id)}
-                          onTabChange={(tab) => setActiveTab((previous) => ({ ...previous, [msg.id]: tab }))}
-                        />
-
-                        {renderLegacyTrace && (hasTraces || hasAudits) && (
-                          <div className="hidden">
-                            <div className="flex items-center justify-between">
-                              <button
-                                onClick={() => toggleTrace(msg.id)}
-                                className="flex items-center gap-1.5 text-slate hover:text-deep-ink font-semibold cursor-pointer font-mono text-[11px]"
-                              >
-                                <Terminal className="w-3.5 h-3.5 text-deep-ink" />
-                                <span>
-                                  {msg.toolCalls?.length ? `${msg.toolCalls?.length || 0} Tool Execution(s)` : 'Execution Details'}
-                                  {hasAudits ? ` • ${msg.auditLogs?.length} Audit Logs` : ''}
-                                </span>
-                                {expandedTrace[msg.id] ? (
-                                  <ChevronDown className="w-3.5 h-3.5" />
-                                ) : (
-                                  <ChevronRight className="w-3.5 h-3.5" />
-                                )}
-                              </button>
-
-                              {expandedTrace[msg.id] && hasAudits && (
-                                <div className="flex items-center gap-1 bg-canvas p-0.5 rounded-lg border border-onyx/5">
-                                  <button
-                                    onClick={() => setActiveTab((prev) => ({ ...prev, [msg.id]: 'traces' }))}
-                                    className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer transition-colors ${currentMsgTab === 'traces'
-                                      ? 'bg-deep-ink text-white'
-                                      : 'text-slate hover:text-deep-ink'
-                                      }`}
-                                  >
-                                    {t('traces')}
-                                  </button>
-                                  <button
-                                    onClick={() => setActiveTab((prev) => ({ ...prev, [msg.id]: 'audit' }))}
-                                    className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer transition-colors ${currentMsgTab === 'audit'
-                                      ? 'bg-deep-ink text-white'
-                                      : 'text-slate hover:text-deep-ink'
-                                      }`}
-                                  >
-                                    {t('auditLogs')}
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-
-                            {expandedTrace[msg.id] && (
-                              <div className="mt-2 p-3 bg-canvas rounded-[14px] border border-onyx/10 space-y-2 text-slate text-caption font-mono">
-                                {currentMsgTab === 'traces' ? (
-                                  <div className="space-y-2">
-                                    {msg.toolCalls && msg.toolCalls.length > 0 ? (
-                                      msg.toolCalls?.map((tc, tcIdx) => (
-                                        <div
-                                          key={tcIdx}
-                                          className="p-2 bg-soft-meadow rounded-xl border border-onyx/5 space-y-1 text-[11px]"
-                                        >
-                                          <div className="flex items-center justify-between text-deep-ink font-semibold">
-                                            <div className="flex items-center gap-1.5">
-                                              <FileCode className="w-3.5 h-3.5 text-hi-yellow shrink-0" />
-                                              <span>{tc.tool}</span>
-                                            </div>
-                                            {tc.latency_ms !== undefined && (
-                                              <span className="text-[10px] bg-canvas px-1.5 py-0.5 rounded text-slate">
-                                                {t('milliseconds', { value: tc.latency_ms })}
-                                              </span>
-                                            )}
-                                          </div>
-
-                                          {tc.args != null && (
-                                            <div className="text-slate text-[10px] truncate">
-                                              <strong>{t('arguments')}</strong> {typeof tc.args === 'string' ? tc.args : JSON.stringify(tc.args)}
-                                            </div>
-                                          )}
-
-                                          {tc.result && (
-                                            <div className="text-deep-ink text-[10px] bg-canvas p-1.5 rounded max-h-24 overflow-y-auto whitespace-pre-wrap">
-                                              {tc.result}
-                                            </div>
-                                          )}
-                                        </div>
-                                      ))
-                                    ) : (
-                                      <div className="text-[11px] text-slate italic">
-                                        {t('noToolCalls')}
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                                    {msg.auditLogs?.map((al, alIdx) => (
-                                      <div
-                                        key={alIdx}
-                                        className="p-2 bg-soft-meadow rounded-xl border border-onyx/5 text-[10px] space-y-0.5"
-                                      >
-                                        <div className="flex items-center justify-between font-semibold text-deep-ink">
-                                          <div className="flex items-center gap-1">
-                                            <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                                            <span>{al.action}</span>
-                                            {al.tool_name && <code className="text-[9px] bg-canvas px-1 rounded">{al.tool_name}</code>}
-                                          </div>
-                                          <span className="text-emerald-700 font-sans">{al.status}</span>
-                                        </div>
-                                        <div className="text-slate flex items-center justify-between">
-                                          <span>{al.verification}</span>
-                                          <span>{t('milliseconds', { value: al.duration_ms })}</span>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Bottom bar: Timestamp, Model & Copy Button */}
-                        <div className="flex items-center justify-between mt-2 pt-1 text-[11px] opacity-70 gap-3">
-                          <div className="flex items-center gap-2">
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              <span>{msg.timestamp}</span>
-                            </span>
-                            {msg.model && (
-                              <span className="flex items-center gap-1 font-mono text-[10px]">
-                                <Cpu className="w-3 h-3" />
-                                <span>{msg.model}</span>
-                              </span>
-                            )}
-                          </div>
-
-                          <button
-                            onClick={() => handleCopy(msg.content, idx)}
-                            className="hover:opacity-100 flex items-center gap-1 cursor-pointer p-0.5"
-                            title={t('copyResponse')}
-                          >
-                            {copiedIdx === idx ? (
-                              <Check className="w-3 h-3 text-emerald-500" />
-                            ) : (
-                              <Copy className="w-3 h-3" />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-
-              {loading && !messages.some((m) => m.role === 'assistant' && m.thought) && (
-                <div className="flex items-center gap-2 text-body-sm text-slate animate-pulse p-2">
-                  <Bot className="w-4 h-4 text-hi-yellow" />
-                  <span>{t('connecting')}</span>
-                </div>
-              )}
-              <div />
-            </div>
 
             <div className="relative">
               {showScrollBottom && (
                 <button
                   type="button"
                   onClick={handleScrollToBottomClick}
-                  className="absolute -top-11 right-4 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-deep-ink/90 hover:bg-deep-ink text-white text-caption shadow-md border border-white/10 backdrop-blur-xs transition-all animate-in fade-in slide-in-from-bottom-2 duration-200 cursor-pointer"
+                  className="absolute -top-11 right-4 z-20 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-soft-meadow dark:bg-charcoal hover:bg-canvas dark:hover:bg-charcoal/80 text-deep-ink dark:text-white text-caption shadow-md border border-onyx/15 dark:border-white/15 backdrop-blur-md transition-all animate-in fade-in slide-in-from-bottom-2 duration-200 cursor-pointer"
                   title={t('scrollToBottom', 'Scroll to bottom')}
                 >
-                  <ChevronDown className="w-3.5 h-3.5 text-hi-yellow" />
-                  <span className="text-[11px] font-medium">{t('scrollToBottom', 'Scroll to bottom')}</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate dark:text-hi-yellow" />
+                  <span className="text-[11px] font-semibold">{t('scrollToBottom', 'Scroll to bottom')}</span>
                 </button>
               )}
 

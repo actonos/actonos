@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"sort"
 	"strings"
-	"time"
 )
 
 // AnthropicProvider implements LLMProvider for Anthropic's Claude API.
@@ -27,12 +26,10 @@ func NewAnthropicProvider(apiKey, model string) *AnthropicProvider {
 		model = "claude-3-7-sonnet-20250219"
 	}
 	return &AnthropicProvider{
-		BaseURL: "https://api.anthropic.com/v1",
-		APIKey:  apiKey,
-		Model:   model,
-		HTTPClient: &http.Client{
-			Timeout: 60 * time.Second,
-		},
+		BaseURL:    "https://api.anthropic.com/v1",
+		APIKey:     apiKey,
+		Model:      model,
+		HTTPClient: NewDefaultHTTPClient(),
 	}
 }
 
@@ -82,7 +79,7 @@ func (p *AnthropicProvider) Complete(ctx context.Context, messages []Message, op
 		model = opts.Model
 	}
 
-	maxTokens := 4096
+	maxTokens := 32768
 	if opts.MaxTokens != nil && *opts.MaxTokens > 0 {
 		maxTokens = *opts.MaxTokens
 	}
@@ -199,7 +196,7 @@ func (p *AnthropicProvider) StreamComplete(ctx context.Context, messages []Messa
 	if opts.Model != "" {
 		model = opts.Model
 	}
-	maxTokens := 4096
+	maxTokens := 32768
 	if opts.MaxTokens != nil && *opts.MaxTokens > 0 {
 		maxTokens = *opts.MaxTokens
 	}

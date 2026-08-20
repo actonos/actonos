@@ -1,13 +1,10 @@
 import type { RefObject } from 'react';
-import { Bot } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
 import type { ChatMessage } from '@/pages/Chat/chatTypes';
 import { ChatEmptyState } from './ChatEmptyState';
 import { MessageBubble } from './MessageBubble';
 
 export function MessageTimeline({
   messages,
-  loading,
   agentName,
   prompts,
   copiedIndex,
@@ -22,7 +19,7 @@ export function MessageTimeline({
   onTraceTabChange,
 }: {
   messages: ChatMessage[];
-  loading: boolean;
+  loading?: boolean;
   agentName: string;
   prompts: string[];
   copiedIndex: number | null;
@@ -36,7 +33,6 @@ export function MessageTimeline({
   onToggleTrace: (messageID: string) => void;
   onTraceTabChange: (messageID: string, tab: 'traces' | 'audit') => void;
 }) {
-  const { t } = useTranslation('chat');
   return (
     <div
       ref={containerRef}
@@ -58,12 +54,6 @@ export function MessageTimeline({
           onTraceTabChange={(tab) => onTraceTabChange(message.id, tab)}
         />
       ))}
-      {loading && !messages.some((message) => message.role === 'assistant' && message.thought) && (
-        <div className="flex items-center gap-2 p-2 text-body-sm text-slate" role="status">
-          <Bot className="h-4 w-4 text-hi-yellow" aria-hidden="true" />
-          <span>{t('connecting')}</span>
-        </div>
-      )}
       <div ref={endRef} />
     </div>
   );
