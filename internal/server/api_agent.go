@@ -837,8 +837,10 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			if strings.TrimSpace(content) == "" {
 				content = "Completed requested operations successfully."
 			}
-			toolCalls, _ := json.Marshal(result.response.ToolCalls)
-			toolCallsJSON = string(toolCalls)
+			if len(result.response.ToolCalls) > 0 {
+				toolCalls, _ := json.Marshal(result.response.ToolCalls)
+				toolCallsJSON = string(toolCalls)
+			}
 		} else if result.err != nil {
 			content = fmt.Sprintf("Execution error: %v", result.err)
 		}
@@ -847,6 +849,9 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 				INSERT INTO messages (id, conversation_id, agent_id, role, content, tool_calls_json, created_at)
 				VALUES (?, ?, ?, 'assistant', ?, ?, ?)
 			`, "msg_"+uuid.NewString(), convID, agentID, content, toolCallsJSON, time.Now().UTC())
+			_, _ = s.memory.DB().SQLDB().ExecContext(context.Background(), `
+				UPDATE conversations SET updated_at = ? WHERE id = ?
+			`, time.Now().UTC(), convID)
 		}
 	}
 }

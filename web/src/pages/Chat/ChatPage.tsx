@@ -104,8 +104,10 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
       const res = await api.listConversations();
       const list = res.conversations || [];
       setConversations(list);
-      if (list.length > 0 && !activeConvID) {
-        selectConversation(list[0].id);
+      if (list.length > 0) {
+        const savedID = localStorage.getItem('actonos_active_conv_id');
+        const target = (savedID && list.find((c) => c.id === savedID)) ? savedID : list[0].id;
+        selectConversation(target);
       }
     } catch (err) {
       error('Failed to load conversations', getErrorMessage(err));
@@ -114,6 +116,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
 
   const selectConversation = async (convID: string) => {
     setActiveConvID(convID);
+    localStorage.setItem('actonos_active_conv_id', convID);
     try {
       const res = await api.getConversation(convID);
       if (res.conversation?.agent_id) {
@@ -165,6 +168,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
 
   const handleNewChat = () => {
     setActiveConvID(null);
+    localStorage.removeItem('actonos_active_conv_id');
     setMessages([]);
     info(t('newSession', 'New Chat Session'), 'Type a message to start a real-time streamed session.');
     inputRef.current?.focus();
@@ -470,6 +474,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
               // Update session ID and title
               if (parsed.conversation_id) {
                 setActiveConvID(parsed.conversation_id);
+                localStorage.setItem('actonos_active_conv_id', parsed.conversation_id);
                 setConversations((prev) => {
                   const exists = prev.some((c) => c.id === parsed.conversation_id);
                   if (exists) {

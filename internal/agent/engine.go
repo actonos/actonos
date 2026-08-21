@@ -289,9 +289,9 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 		}
 		opts.Tools = e.tools.ToLLMToolDefinitions(authorizedTools, tools.DeniedTools(ctx)...)
 	}
-
 	startTime := time.Now()
 	var finalResp *llm.Response
+	var allExecutedToolCalls []llm.ToolCall
 	totalUsage := llm.Usage{}
 	maxIterations := 20
 	consecutiveFailures := 0
@@ -300,8 +300,13 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 	converged := false
 	iterationsCompleted := 0
 
-	for iter := range maxIterations {
+	for iter := 0; iter < maxIterations; iter++ {
 		iterationsCompleted = iter + 1
+		targetModel := agent.ModelConfig.PrimaryModel
+		if targetModel == "" {
+			targetModel = "cascade-llm"
+		}
+
 		currentOpts := opts
 		// On the final iteration, force convergence by omitting tools
 		if iter == maxIterations-1 {
@@ -337,6 +342,10 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 			})
 		}
 
+		finalResp = resp
+		if len(resp.ToolCalls) > 0 {
+			allExecutedToolCalls = append(allExecutedToolCalls, resp.ToolCalls...)
+		}
 		if resp.Content != "" {
 			cleanedContent, thinking := llm.ExtractThinkingContent(resp.Content, resp.ReasoningContent)
 			resp.Content = cleanedContent
@@ -461,6 +470,9 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 		finalResp.Content = "I have processed your request and completed the authorized actions."
 	}
 	finalResp.Usage = totalUsage
+	if finalResp != nil && len(allExecutedToolCalls) > 0 {
+		finalResp.ToolCalls = allExecutedToolCalls
+	}
 
 	// 4. Trigger reflection daemon asynchronously (updates MEMORY.md, preferences, and episodic memory)
 	if finalResp != nil && finalResp.Content != "" {
@@ -619,6 +631,7 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 	}
 
 	var finalResp *llm.Response
+	var allExecutedToolCalls []llm.ToolCall
 	totalUsage := llm.Usage{}
 	maxIterations := 20
 	converged := false
@@ -676,6 +689,9 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 		}
 
 		finalResp = resp
+		if len(resp.ToolCalls) > 0 {
+			allExecutedToolCalls = append(allExecutedToolCalls, resp.ToolCalls...)
+		}
 
 		// If no tool calls requested, stream tokens preserving exact whitespace and newlines
 		if len(resp.ToolCalls) == 0 || e.tools == nil || currentOpts.Tools == nil {
@@ -895,6 +911,9 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 		finalResp.Content = "I have processed your request and completed the authorized actions."
 	}
 	finalResp.Usage = totalUsage
+	if finalResp != nil && len(allExecutedToolCalls) > 0 {
+		finalResp.ToolCalls = allExecutedToolCalls
+	}
 
 	// 4. Trigger reflection daemon asynchronously (updates MEMORY.md, preferences, and episodic memory)
 	if finalResp != nil && finalResp.Content != "" {
