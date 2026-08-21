@@ -189,6 +189,12 @@
       "refreshed": "Memory refreshed",
       "refreshedDescription": "Loaded the latest memory diary reflections.",
       "refreshFailed": "Failed to refresh memory",
+      "clear": "Clear Memory",
+      "clearConfirmTitle": "Clear Memory Diary?",
+      "clearConfirmDescription": "Are you sure you want to clear all accumulated long-term memory reflections for this agent? This action cannot be undone.",
+      "cleared": "Memory Cleared",
+      "clearedDescription": "All memory diary reflections have been erased.",
+      "clearFailed": "Failed to clear memory",
       "empty": "No Episodic Memory Recorded Yet",
       "emptyDescription": "As you interact with this agent in Chat and background tasks, the ReAct reflection daemon will synthesize key decisions, project conventions, and user preferences into persistent timestamped memory here.",
       "longTerm": "Autonomous Long-Term Memory"
@@ -203,7 +209,15 @@
       "fallback": "Fallback Recovery Model",
       "fallbackPlaceholder": "e.g. google/gemini-2.5-flash",
       "fallbackDescription": "If primary model encounters rate limits or errors, cascade automatically recovers using this model.",
-      "maxTokens": "Max Generation Tokens:"
+      "maxTokens": "Max Generation Tokens:",
+      "reasoningEffort": "Reasoning Effort",
+      "reasoningEffortHelp": "Controls reasoning depth and token expenditure for models with dynamic thinking capabilities.",
+      "reasoningLow": "Low",
+      "reasoningLowDesc": "Fast responses, minimal chain of thought, lowest token usage",
+      "reasoningMedium": "Medium",
+      "reasoningMediumDesc": "Balanced analytical reasoning for general agent tasks",
+      "reasoningHigh": "High",
+      "reasoningHighDesc": "Deep multi-step reasoning, thorough verification, and complex planning"
     },
     "tools": {
       "title": "Authorized Tools",
@@ -271,6 +285,7 @@
       "channelsRequired": "Select at least one channel or listen to all channels.",
       "identity": "Identity",
       "models": "Models",
+      "reasoningEffort": "Reasoning Effort",
       "tools": "Tools",
       "channels": "Channels",
       "approval": "Approval",

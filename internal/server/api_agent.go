@@ -712,6 +712,31 @@ func (s *Server) handleGetMemoryMD(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleClearMemoryMD(w http.ResponseWriter, r *http.Request) {
+	if s.profileMgr == nil {
+		s.respondJSON(w, http.StatusOK, map[string]string{"status": "cleared"})
+		return
+	}
+
+	agentID := chi.URLParam(r, "agentID")
+	if agentID == "" {
+		agentID = r.URL.Query().Get("agent_id")
+	}
+	if agentID == "" {
+		agentID = agent.DefaultSystemAgentID
+	}
+
+	if err := s.profileMgr.ClearAgentMemoryMD(r.Context(), agentID); err != nil {
+		s.respondError(w, http.StatusInternalServerError, "CLEAR_MEMORY_FAILED", err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]string{
+		"status":   "cleared",
+		"agent_id": agentID,
+	})
+}
+
 func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	agentID := chi.URLParam(r, "agentID")
 	if agentID == "" || agentID == "default" {

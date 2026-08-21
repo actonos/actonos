@@ -240,6 +240,12 @@ export const api = {
     const url = agentID ? `/agents/${agentID}/memory-md` : '/agents/memory-md';
     return fetchJSON<{ memory_md: string; agent_id?: string }>(url);
   },
+  clearMemoryMD: (agentID?: string) => {
+    const url = agentID ? `/agents/${agentID}/memory-md` : '/agents/memory-md';
+    return fetchJSON<{ status: string; agent_id?: string }>(url, {
+      method: 'DELETE',
+    });
+  },
   listCronJobs: () => fetchJSON<{ jobs: CronJobItem[]; count: number }>('/cron'),
   saveCronJob: (job: Partial<CronJobItem> & { target_channel?: string; target_account_id?: string; target_recipient?: string }) =>
     fetchJSON<{ status: string; job?: CronJobItem; job_id?: string }>('/cron', {

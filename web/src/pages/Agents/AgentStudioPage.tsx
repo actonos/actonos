@@ -82,6 +82,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [refreshingMemory, setRefreshingMemory] = useState(false);
+  const [clearingMemory, setClearingMemory] = useState(false);
   const baselineRef = useRef('');
   const [toolsList, setToolsList] = useState<ToolInfo[]>([]);
 
@@ -101,6 +102,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
   // Model & Reasoning
   const [primaryModel, setPrimaryModel] = useState('openai/gpt-5.4-mini');
   const [fallbackModel, setFallbackModel] = useState('openai/gpt-5.4-mini');
+  const [reasoningEffort, setReasoningEffort] = useState<'low' | 'medium' | 'high'>('medium');
   const [maxTokens, setMaxTokens] = useState(4096);
 
   // Prompt & Soul & Memory
@@ -123,11 +125,11 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
 
   const formSignature = useMemo(() => JSON.stringify({
     name, idSlug, description, avatarIcon, status, isSystem, primaryModel, fallbackModel,
-    maxTokens, systemInstructions, soul, memoryMD, authorizedTools,
+    reasoningEffort, maxTokens, systemInstructions, soul, memoryMD, authorizedTools,
     listenAllChannels, selectedChannels, maxBudget, approvalLevel, allowedPaths,
   }), [
     name, idSlug, description, avatarIcon, status, isSystem, primaryModel, fallbackModel,
-    maxTokens, systemInstructions, soul, memoryMD, authorizedTools,
+    reasoningEffort, maxTokens, systemInstructions, soul, memoryMD, authorizedTools,
     listenAllChannels, selectedChannels, maxBudget, approvalLevel, allowedPaths,
   ]);
   const isDirty = baselineRef.current !== '' && baselineRef.current !== formSignature;
@@ -170,6 +172,9 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             setPrimaryModel(pMod);
             setFallbackModel(fMod);
             setMaxTokens(agent.model_config.max_tokens ?? 32768);
+            if (agent.model_config.reasoning_effort === 'low' || agent.model_config.reasoning_effort === 'medium' || agent.model_config.reasoning_effort === 'high') {
+              setReasoningEffort(agent.model_config.reasoning_effort);
+            }
 
             // Check if models are not in the standard catalog to switch to custom text input
             if (!LATEST_MODEL_CATALOG.some((m) => m.id === pMod)) {
@@ -237,6 +242,24 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
     return () => window.removeEventListener('beforeunload', warn);
   }, [isDirty]);
 
+  const handleClearMemory = async () => {
+    if (!agentID || isNew) {
+      setMemoryMD('');
+      success(t('studio.memory.cleared'), t('studio.memory.clearedDescription'));
+      return;
+    }
+    setClearingMemory(true);
+    try {
+      await api.clearMemoryMD(agentID);
+      setMemoryMD('');
+      success(t('studio.memory.cleared'), t('studio.memory.clearedDescription'));
+    } catch (err) {
+      error(t('studio.memory.clearFailed'), getErrorMessage(err));
+    } finally {
+      setClearingMemory(false);
+    }
+  };
+
   const handleSave = async () => {
     if (validationErrors.length > 0) {
       setActiveTab('review');
@@ -257,7 +280,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
         model_config: {
           primary_model: primaryModel,
           fallback_model: fallbackModel,
-          reasoning_effort: 'medium',
+          reasoning_effort: reasoningEffort,
           max_tokens: maxTokens,
         },
         system_instructions: systemInstructions,
@@ -711,6 +734,8 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
           <AgentMemorySection
             value={memoryMD}
             refreshing={refreshingMemory}
+            clearing={clearingMemory}
+            onClear={handleClearMemory}
             onRefresh={async () => {
               if (!agentID || isNew) return;
               setRefreshingMemory(true);
@@ -786,7 +811,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
         {activeTab === 'model' && (
           <div className="space-y-6">
             {/* Live LLM Provider Sync Status Banner */}
-            <div className="p-4 rounded-2xl bg-soft-meadow border border-onyx/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+            <div className="p-4 rounded-2xl bg-soft-meadow border border-onyx/15 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full bg-deep-ink text-hi-yellow flex items-center justify-center shrink-0">
                   <Cpu className="w-4 h-4" />
@@ -808,7 +833,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               </div>
             </div>
 
-            <Card className="p-6 border border-onyx/10 bg-canvas/90 space-y-6">
+            <Card className="p-6 border border-onyx/15 bg-soft-meadow shadow-xs space-y-6">
               <h3 className="font-serif text-heading-sm text-deep-ink flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-deep-ink" />
                 <span>{t('studio.model.architecture')}</span>
@@ -841,7 +866,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                     <select
                       value={primaryModel}
                       onChange={(e) => setPrimaryModel(e.target.value)}
-                      className="w-full bg-soft-meadow text-deep-ink p-2.5 rounded-full border border-onyx/10 text-body-sm font-sans focus:outline-none"
+                      className="w-full bg-canvas text-deep-ink px-4 py-2.5 rounded-full border border-onyx/20 text-body-sm font-sans focus:border-deep-ink focus:outline-none focus:ring-2 focus:ring-deep-ink/10 transition-all shadow-xs"
                     >
                       {readyModels.length > 0 && (
                         <optgroup label="Ready to Use (Active Keys in Settings)">
@@ -865,23 +890,23 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
 
                   {/* Primary Model Provider Diagnostics */}
                   <div
-                    className={`p-3 rounded-xl border text-caption font-sans flex items-start gap-2 ${primaryIsReady
-                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-900'
-                      : 'bg-amber-500/10 border-amber-500/20 text-amber-900'
+                    className={`p-3 rounded-xl border text-caption font-sans flex items-start gap-2 shadow-xs ${primaryIsReady
+                      ? 'bg-status-success-soft border-status-success/30 text-status-success'
+                      : 'bg-status-warning-soft border-status-warning/30 text-status-warning'
                       }`}
                   >
                     {primaryIsReady ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+                      <CheckCircle2 className="w-4 h-4 text-status-success shrink-0 mt-0.5" />
                     ) : (
-                      <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                      <AlertTriangle className="w-4 h-4 text-status-warning shrink-0 mt-0.5" />
                     )}
                     <div>
-                      <span className="font-semibold block">
+                      <span className="font-semibold block text-deep-ink">
                         {primaryIsReady
                           ? `Active: ${primaryProviderConfig?.name || 'Local Inference'} is ready`
                           : `Setup Required: API key for ${primaryModel.split('/')[0]} is not set`}
                       </span>
-                      <span className="text-[11px] opacity-80 block mt-0.5">
+                      <span className="text-[11px] text-slate block mt-0.5">
                         {primaryIsReady
                           ? `Requests to "${primaryModel}" will execute with native tool use & reasoning.`
                           : `Configure this key in System > Settings to enable inference.`}
@@ -916,7 +941,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                     <select
                       value={fallbackModel}
                       onChange={(e) => setFallbackModel(e.target.value)}
-                      className="w-full bg-soft-meadow text-deep-ink p-2.5 rounded-full border border-onyx/10 text-body-sm font-sans focus:outline-none"
+                      className="w-full bg-canvas text-deep-ink px-4 py-2.5 rounded-full border border-onyx/20 text-body-sm font-sans focus:border-deep-ink focus:outline-none focus:ring-2 focus:ring-deep-ink/10 transition-all shadow-xs"
                     >
                       {readyModels.length > 0 && (
                         <optgroup label="Ready to Use (Active Keys in Settings)">
@@ -940,23 +965,23 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
 
                   {/* Fallback Model Diagnostics */}
                   <div
-                    className={`p-3 rounded-xl border text-caption font-sans flex items-start gap-2 ${fallbackIsReady
-                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-900'
-                      : 'bg-amber-500/10 border-amber-500/20 text-amber-900'
+                    className={`p-3 rounded-xl border text-caption font-sans flex items-start gap-2 shadow-xs ${fallbackIsReady
+                      ? 'bg-status-success-soft border-status-success/30 text-status-success'
+                      : 'bg-status-warning-soft border-status-warning/30 text-status-warning'
                       }`}
                   >
                     {fallbackIsReady ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+                      <CheckCircle2 className="w-4 h-4 text-status-success shrink-0 mt-0.5" />
                     ) : (
-                      <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                      <AlertTriangle className="w-4 h-4 text-status-warning shrink-0 mt-0.5" />
                     )}
                     <div>
-                      <span className="font-semibold block">
+                      <span className="font-semibold block text-deep-ink">
                         {fallbackIsReady
                           ? `Fallback: ${fallbackProviderConfig?.name || 'Local Inference'} is ready`
                           : `Setup Required: Fallback provider key is missing`}
                       </span>
-                      <span className="text-[11px] opacity-80 block mt-0.5">
+                      <span className="text-[11px] text-slate block mt-0.5">
                         {t('studio.model.fallbackDescription')}
                       </span>
                     </div>
@@ -964,8 +989,64 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                 </div>
               </div>
 
+              {/* REASONING EFFORT SELECTION */}
+              <div className="space-y-3 rounded-2xl border border-onyx/10 bg-canvas p-5 shadow-xs">
+                <div>
+                  <label className="text-body-sm font-semibold text-deep-ink block">
+                    {t('studio.model.reasoningEffort')}
+                  </label>
+                  <span className="text-caption text-slate block mt-0.5">
+                    {t('studio.model.reasoningEffortHelp')}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                  {(['low', 'medium', 'high'] as const).map((effort) => {
+                    const isSelected = reasoningEffort === effort;
+                    return (
+                      <button
+                        key={effort}
+                        type="button"
+                        onClick={() => setReasoningEffort(effort)}
+                        className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                          isSelected
+                            ? 'border-2 border-deep-ink bg-soft-meadow shadow-xs ring-1 ring-deep-ink/10'
+                            : 'border border-onyx/15 bg-canvas/60 text-slate opacity-75 hover:opacity-100 hover:border-onyx/35 hover:bg-canvas'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="font-semibold text-body-sm text-deep-ink">
+                            {effort === 'low'
+                              ? t('studio.model.reasoningLow')
+                              : effort === 'medium'
+                              ? t('studio.model.reasoningMedium')
+                              : t('studio.model.reasoningHigh')}
+                          </span>
+                          <span
+                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-all ${
+                              isSelected
+                                ? 'border-deep-ink bg-deep-ink text-hi-yellow'
+                                : 'border-onyx/30 bg-transparent'
+                            }`}
+                          >
+                            {isSelected && <Check className="h-2.5 w-2.5 stroke-[3]" />}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate leading-relaxed">
+                          {effort === 'low'
+                            ? t('studio.model.reasoningLowDesc')
+                            : effort === 'medium'
+                            ? t('studio.model.reasoningMediumDesc')
+                            : t('studio.model.reasoningHighDesc')}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Max Tokens Slider */}
-              <div className="p-4 bg-soft-meadow rounded-2xl border border-onyx/5 space-y-3">
+              <div className="p-4 bg-canvas rounded-2xl border border-onyx/10 space-y-3 shadow-xs">
                 <div className="flex items-center justify-between">
                   <span className="text-body-sm font-semibold text-deep-ink">
                     {t('studio.model.maxTokens')} <strong className="font-mono">{maxTokens.toLocaleString()}</strong>
@@ -1197,6 +1278,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             items={[
               { label: t('studio.review.identity'), value: `${name || t('studio.untitled')} (${idSlug || '-'})` },
               { label: t('studio.review.models'), value: `${primaryModel} / ${fallbackModel}` },
+              { label: t('studio.review.reasoningEffort'), value: reasoningEffort.toUpperCase() },
               { label: t('studio.review.tools'), value: isAllToolsSelected ? t('studio.allTools') : String(authorizedTools.length) },
               { label: t('studio.review.channels'), value: listenAllChannels ? t('studio.all') : String(selectedChannels.length) },
               { label: t('studio.review.approval'), value: approvalLevel },

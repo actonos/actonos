@@ -1,4 +1,3 @@
-import { Bot } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -8,7 +7,6 @@ export function AgentIdentitySection({
   name,
   identifier,
   description,
-  avatarIcon,
   status,
   identifierLocked,
   onNameChange,
@@ -19,7 +17,7 @@ export function AgentIdentitySection({
   name: string;
   identifier: string;
   description: string;
-  avatarIcon: string;
+  avatarIcon?: string;
   status: 'active' | 'stopped';
   identifierLocked: boolean;
   onNameChange: (value: string) => void;
@@ -29,7 +27,7 @@ export function AgentIdentitySection({
 }) {
   const { t } = useTranslation('agents');
   return (
-    <Card className="mb-8 space-y-4 border border-onyx/10 bg-canvas/90 p-6">
+    <Card className="mb-8 space-y-4 border border-onyx/15 bg-soft-meadow p-6 shadow-xs">
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         <div className="space-y-4 md:col-span-2">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -47,23 +45,17 @@ export function AgentIdentitySection({
             <Input value={description} onChange={(event) => onDescriptionChange(event.target.value)} placeholder={t('studio.descriptionPlaceholder')} />
           </label>
         </div>
-        <div className="flex flex-col justify-between rounded-[20px] border border-onyx/5 bg-soft-meadow p-4">
-          <div>
-            <p className="mb-2 text-caption font-semibold text-deep-ink">{t('studio.lifecycle')}</p>
-            <SegmentedControl
-              value={status}
-              onChange={onStatusChange}
-              label={t('studio.lifecycle')}
-              options={[
-                { value: 'active', label: t('studio.active') },
-                { value: 'stopped', label: t('studio.stopped') },
-              ]}
-            />
-          </div>
-          <div className="mt-4 flex items-center justify-between border-t border-onyx/10 pt-3 text-caption font-mono text-slate">
-            <span>{t('studio.avatar', { icon: avatarIcon })}</span>
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-deep-ink text-hi-yellow"><Bot className="h-4 w-4" /></span>
-          </div>
+        <div className="flex flex-col justify-center rounded-[20px] border border-onyx/10 bg-canvas p-4 shadow-xs">
+          <p className="mb-2.5 text-caption font-semibold text-deep-ink">{t('studio.lifecycle')}</p>
+          <SegmentedControl
+            value={status}
+            onChange={onStatusChange}
+            label={t('studio.lifecycle')}
+            options={[
+              { value: 'active', label: t('studio.active') },
+              { value: 'stopped', label: t('studio.stopped') },
+            ]}
+          />
         </div>
       </div>
     </Card>

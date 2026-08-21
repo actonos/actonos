@@ -188,6 +188,19 @@ func TestUserProfileProceduralSoulAndMemoryLifecycle(t *testing.T) {
 		t.Fatalf("system memory mismatch: %q", got)
 	}
 
+	if err := mgr.ClearAgentMemoryMD(ctx, "agent-a"); err != nil {
+		t.Fatal(err)
+	}
+	if got := mgr.GetAgentMemoryMD("agent-a"); got != "" {
+		t.Fatalf("expected empty memory after clear, got %q", got)
+	}
+	if err := mgr.ClearMemoryMD(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := mgr.GetMemoryMD(); got != "" {
+		t.Fatalf("expected empty system memory after clear, got %q", got)
+	}
+
 	reloaded, err := NewUserProfileManager(db, tempDir)
 	if err != nil {
 		t.Fatal(err)

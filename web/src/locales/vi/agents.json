@@ -189,6 +189,12 @@
       "refreshed": "Đã làm mới ký ức",
       "refreshedDescription": "Đã tải các nội dung nhật ký ký ức mới nhất.",
       "refreshFailed": "Không thể làm mới ký ức",
+      "clear": "Xóa ký ức",
+      "clearConfirmTitle": "Xóa nhật ký ký ức?",
+      "clearConfirmDescription": "Bạn có chắc chắn muốn xóa toàn bộ ký ức dài hạn đã tích lũy của Agent này không? Hành động này không thể hoàn tác.",
+      "cleared": "Đã xóa ký ức",
+      "clearedDescription": "Toàn bộ nhật ký ký ức của Agent đã được xóa sạch.",
+      "clearFailed": "Không thể xóa ký ức",
       "empty": "Chưa có ký ức nào được ghi nhận",
       "emptyDescription": "Khi bạn tương tác với Agent này trong Chat hoặc các tác vụ tự hành, hệ thống sẽ tự động trích xuất các quyết định chính, quy ước và sở thích của bạn vào nhật ký ký ức tại đây.",
       "longTerm": "Ký ức Dài hạn Tự trị"
@@ -203,7 +209,15 @@
       "fallback": "Mô hình khôi phục dự phòng",
       "fallbackPlaceholder": "ví dụ. google/gemini-2.5-flash",
       "fallbackDescription": "Nếu mô hình chính gặp phải giới hạn tốc độ hoặc lỗi, tầng sẽ tự động phục hồi bằng mô hình này.",
-      "maxTokens": "Mã thông báo thế hệ tối đa:"
+      "maxTokens": "Mã thông báo thế hệ tối đa:",
+      "reasoningEffort": "Mức độ suy luận (Reasoning Effort)",
+      "reasoningEffortHelp": "Kiểm soát độ sâu tư duy và mức tiêu thụ token cho các mô hình có khả năng suy luận mở rộng.",
+      "reasoningLow": "Thấp",
+      "reasoningLowDesc": "Phản hồi nhanh, ít tốn token, phù hợp tác vụ đơn giản",
+      "reasoningMedium": "Trung bình",
+      "reasoningMediumDesc": "Cân bằng giữa tốc độ và độ sâu tư duy cho các tác vụ tổng hợp",
+      "reasoningHigh": "Cao",
+      "reasoningHighDesc": "Tư duy đa bước chuyên sâu, xác minh kỹ lưỡng và lập kế hoạch phức tạp"
     },
     "tools": {
       "title": "Công cụ được ủy quyền",
@@ -271,6 +285,7 @@
       "channelsRequired": "Hãy chọn ít nhất một kênh hoặc lắng nghe tất cả kênh.",
       "identity": "Danh tính",
       "models": "Mô hình",
+      "reasoningEffort": "Mức độ suy luận",
       "tools": "Công cụ",
       "channels": "Kênh",
       "approval": "Phê duyệt",

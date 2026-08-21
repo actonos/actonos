@@ -21,7 +21,7 @@ export function AgentGovernanceSection({
 }) {
   const { t } = useTranslation('agents');
   return (
-    <Card className="space-y-6 border border-onyx/10 bg-canvas/90 p-6">
+    <Card className="space-y-6 border border-onyx/15 bg-soft-meadow p-6 shadow-xs">
       <h3 className="flex items-center gap-2 font-serif text-heading-sm text-deep-ink">
         <Shield className="h-5 w-5" aria-hidden="true" />
         {t('studio.governance.title')}
@@ -34,7 +34,11 @@ export function AgentGovernanceSection({
         </label>
         <label className="text-caption font-semibold text-deep-ink">
           <span className="mb-1 block">{t('studio.governance.approval')}</span>
-          <select value={approvalLevel} onChange={(event) => onApprovalLevelChange(event.target.value as ApprovalLevel)} className="density-control w-full rounded-full border border-onyx/10 bg-soft-meadow px-4 text-body-sm">
+          <select
+            value={approvalLevel}
+            onChange={(event) => onApprovalLevelChange(event.target.value as ApprovalLevel)}
+            className="density-control w-full rounded-full border border-onyx/20 bg-canvas px-4 text-body-sm text-deep-ink focus:border-deep-ink focus:outline-none focus:ring-2 focus:ring-deep-ink/10 transition-all"
+          >
             <option value="Low">{t('studio.governance.low')}</option>
             <option value="Medium">{t('studio.governance.medium')}</option>
             <option value="High">{t('studio.governance.high')}</option>

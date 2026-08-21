@@ -348,7 +348,43 @@ func (m *UserProfileManager) GetMemoryMD() string {
 	return m.GetAgentMemoryMD(DefaultSystemAgentID)
 }
 
+// ClearAgentMemoryMD clears the isolated persistent markdown memory diary for a specific agent.
+func (m *UserProfileManager) ClearAgentMemoryMD(ctx context.Context, agentID string) error {
+	if agentID == "" {
+		agentID = DefaultSystemAgentID
+	}
+	if !validAgentProfileID(agentID) {
+		return fmt.Errorf("invalid agent id %q", agentID)
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var targetPath string
+	if m.dataDir != "" {
+		agentDir := filepath.Join(m.dataDir, "agents", agentID)
+		_ = os.MkdirAll(agentDir, 0750)
+		targetPath = filepath.Join(agentDir, "MEMORY.md")
+	} else {
+		targetPath = m.memoryMDPath
+	}
+
+	if targetPath == "" {
+		return nil
+	}
+
+	if err := os.WriteFile(targetPath, []byte(""), 0644); err != nil {
+		return fmt.Errorf("clear agent memory failed: %w", err)
+	}
+	return nil
+}
+
+// ClearMemoryMD clears the persistent markdown memory diary for default system agent.
+func (m *UserProfileManager) ClearMemoryMD(ctx context.Context) error {
+	return m.ClearAgentMemoryMD(ctx, DefaultSystemAgentID)
+}
+
 // AppendMemoryMD appends a timestamped reflection entry to MEMORY.md.
 func (m *UserProfileManager) AppendMemoryMD(ctx context.Context, entry string) error {
 	return m.AppendAgentMemoryMD(ctx, DefaultSystemAgentID, entry)
 }
+

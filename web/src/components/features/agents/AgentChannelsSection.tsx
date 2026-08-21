@@ -23,7 +23,7 @@ export function AgentChannelsSection({
 }) {
   const { t } = useTranslation('agents');
   return (
-    <Card className="space-y-6 border border-onyx/10 bg-canvas/90 p-6">
+    <Card className="space-y-6 border border-onyx/15 bg-soft-meadow p-6 shadow-xs">
       <div className="border-b border-onyx/5 pb-3">
         <h3 className="flex items-center gap-2 font-serif text-heading-sm text-deep-ink"><Radio className="h-5 w-5" />{t('studio.channels.title')}</h3>
         <p className="text-caption text-slate">{t('studio.channels.description')}</p>
@@ -50,8 +50,10 @@ export function AgentChannelsSection({
                   type="button"
                   aria-pressed={selected}
                   onClick={() => onToggleChannel(id)}
-                  className={`flex items-center justify-between rounded-[18px] border p-3.5 text-left transition-colors ${
-                    selected ? 'border-deep-ink/30 bg-soft-meadow' : 'border-onyx/10 bg-canvas text-slate'
+                  className={`flex items-center justify-between rounded-[20px] p-3.5 text-left transition-all cursor-pointer ${
+                    selected
+                      ? 'border-2 border-deep-ink bg-canvas shadow-xs ring-1 ring-deep-ink/10'
+                      : 'border border-onyx/15 bg-canvas/60 text-slate opacity-75 hover:opacity-100 hover:border-onyx/35 hover:bg-canvas'
                   }`}
                 >
                   <span className="flex min-w-0 items-center gap-3">
@@ -61,8 +63,8 @@ export function AgentChannelsSection({
                       <span className="block text-[11px] text-slate">{t(`studio.channels.catalog.${id}.description`)}</span>
                     </span>
                   </span>
-                  <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${selected ? 'border-success bg-success text-white' : 'border-onyx/20'}`}>
-                    {selected && <Check className="h-3 w-3" />}
+                  <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-all ${selected ? 'border-deep-ink bg-deep-ink text-hi-yellow' : 'border-onyx/25'}`}>
+                    {selected && <Check className="h-3 w-3 stroke-[3]" />}
                   </span>
                 </button>
               );

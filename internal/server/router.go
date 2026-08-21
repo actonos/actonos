@@ -273,6 +273,7 @@ func (s *Server) setupRoutes() {
 				r.Get("/soul", s.handleGetSoul)
 				r.Put("/soul", s.handleSaveSoul)
 				r.Get("/memory-md", s.handleGetMemoryMD)
+				r.Delete("/memory-md", s.handleClearMemoryMD)
 
 				r.Route("/{agentID}", func(r chi.Router) {
 					r.Get("/", s.handleGetAgent)
@@ -281,6 +282,7 @@ func (s *Server) setupRoutes() {
 					r.Get("/soul", s.handleGetSoul)
 					r.Put("/soul", s.handleSaveSoul)
 					r.Get("/memory-md", s.handleGetMemoryMD)
+					r.Delete("/memory-md", s.handleClearMemoryMD)
 					r.Post("/start", s.handleStartAgent)
 					r.Post("/stop", s.handleStopAgent)
 					r.Post("/chat", s.handleChat)

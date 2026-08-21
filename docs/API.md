@@ -294,8 +294,8 @@ Start or stop an agent.
 ### `GET /api/agents/{agentID}/soul` | `PUT /api/agents/{agentID}/soul`
 Get or save raw `SOUL.md` system personality prompt for an agent.
 
-### `GET /api/agents/{agentID}/memory-md`
-Inspect long-term episodic reflections from `MEMORY.md`.
+### `GET /api/agents/{agentID}/memory-md` | `DELETE /api/agents/{agentID}/memory-md`
+Inspect or clear long-term episodic reflections from `MEMORY.md`.
 
 ---
 
