@@ -1131,17 +1131,6 @@ func (t *ChannelNotifyTool) Execute(ctx context.Context, inputJSON json.RawMessa
 		input.AccountID = "all"
 	}
 
-	if t.bus != nil {
-		t.bus.Publish(bus.NewEvent(bus.EventAgentActionDone, "channel_notify", map[string]any{
-			"type":              "proactive_cron_notification",
-			"job_name":          "Direct Agent Notification",
-			"content":           input.Message,
-			"target_channel":    input.Channel,
-			"target_account_id": input.AccountID,
-			"target_recipient":  input.Recipient,
-		}))
-	}
-
 	if t.sender != nil {
 		if err := t.sender.Send(ctx, input.Channel, input.AccountID, input.Recipient, input.Message); err != nil {
 			slog.Warn("channel notify direct send failed", "channel", input.Channel, "error", err)
