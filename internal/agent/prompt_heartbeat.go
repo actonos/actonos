@@ -28,7 +28,8 @@ func BuildHeartbeatMissionPrompt(taskTitle, taskDesc, standingDirectives string)
 func BuildHeartbeatPulsePrompt(standingDirectives, backlogSummary string) string {
 	var sb strings.Builder
 	sb.WriteString("<autonomous_heartbeat_pulse>\n")
-	if standingDirectives != "" {
+	hasDirectives := strings.TrimSpace(standingDirectives) != ""
+	if hasDirectives {
 		fmt.Fprintf(&sb, "  <standing_directives>\n%s\n  </standing_directives>\n", indentContent(strings.TrimSpace(standingDirectives), "    "))
 	} else {
 		sb.WriteString("  <standing_directives>Inspect system health and autonomously verify local workspace integrity.</standing_directives>\n")
@@ -37,8 +38,13 @@ func BuildHeartbeatPulsePrompt(standingDirectives, backlogSummary string) string
 		fmt.Fprintf(&sb, "  <backlog_state>\n%s\n  </backlog_state>\n", indentContent(strings.TrimSpace(backlogSummary), "    "))
 	}
 	sb.WriteString("  <execution_protocol>\n")
-	sb.WriteString("    <rule>If all systems and state are healthy with NO pending actionable tasks, reply with EXACTLY `HEARTBEAT_OK`.</rule>\n")
-	sb.WriteString("    <rule>If an anomaly or actionable task is identified, execute corrective tools and report findings.</rule>\n")
+	if hasDirectives {
+		sb.WriteString("    <rule>Autonomously execute the standing directives above, perform any requested actions, and report substantive findings or output.</rule>\n")
+		sb.WriteString("    <rule>Only reply with `HEARTBEAT_OK` if there are no pending tasks AND the standing directives require no action or new output.</rule>\n")
+	} else {
+		sb.WriteString("    <rule>If all systems and state are healthy with NO pending actionable tasks, reply with EXACTLY `HEARTBEAT_OK`.</rule>\n")
+		sb.WriteString("    <rule>If an anomaly or actionable task is identified, execute corrective tools and report findings.</rule>\n")
+	}
 	sb.WriteString("  </execution_protocol>\n")
 	sb.WriteString("</autonomous_heartbeat_pulse>")
 	return sb.String()

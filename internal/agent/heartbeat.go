@@ -786,25 +786,22 @@ var idleChatterPatterns = []string{
 	"i am ready to help", "ready to assist", "what can i do for you",
 }
 
-// looksLikeIdleChatter reports whether content is a conversational
-// greeting/self-introduction with no substantive directive execution result
-// (numbers, findings, errors, etc). Used only as a last-resort safety net
-// when the model neither called a tool nor emitted the HEARTBEAT_OK
-// acknowledgement — such replies must never be forwarded as a user-facing
-// alert, since they answer nobody's question and report nothing real.
+// looksLikeIdleChatter reports whether content is a short conversational
+// greeting/self-introduction with no substantive directive execution result.
+// Substantive content (e.g. stories, reports, analysis longer than 250 characters)
+// is never treated as idle chatter.
 func looksLikeIdleChatter(content string) bool {
-	lower := strings.ToLower(strings.TrimSpace(content))
-	if lower == "" {
+	trimmed := strings.TrimSpace(content)
+	if trimmed == "" {
 		return false
 	}
-	// Only consider the opening of the reply: a greeting used as a genuine
-	// preamble deep inside a real report is not what this guards against.
-	head := lower
-	if len(head) > 120 {
-		head = head[:120]
+	// Substantive content is not idle chatter
+	if len([]rune(trimmed)) > 250 {
+		return false
 	}
+	lower := strings.ToLower(trimmed)
 	for _, pat := range idleChatterPatterns {
-		if strings.Contains(head, pat) {
+		if strings.Contains(lower, pat) {
 			return true
 		}
 	}
