@@ -27,7 +27,8 @@ type openAIResponsesRequest struct {
 }
 
 type openAIReasoning struct {
-	Effort string `json:"effort"`
+	Effort  string `json:"effort"`
+	Summary string `json:"summary,omitempty"`
 }
 
 type openAIResponseItem struct {
@@ -78,7 +79,7 @@ func toOpenAIResponsesRequest(messages []Message, model string, opts CompletionO
 	request := openAIResponsesRequest{
 		Model:           model,
 		Input:           make([]json.RawMessage, 0, len(messages)),
-		Reasoning:       &openAIReasoning{Effort: opts.ReasoningEffort},
+		Reasoning:       &openAIReasoning{Effort: opts.ReasoningEffort, Summary: "detailed"},
 		MaxOutputTokens: opts.MaxTokens,
 		Stream:          stream,
 		Store:           false,
