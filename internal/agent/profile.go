@@ -63,13 +63,13 @@ const DefaultAgentSoul = `You are an autonomous, highly capable, and dedicated A
 func NewUserProfileManager(db *memory.DB, dataDir string) (*UserProfileManager, error) {
 	configDir := filepath.Join(dataDir, "config")
 	agentsDir := filepath.Join(dataDir, "agents")
-	systemWorkspaceDir := filepath.Join(agentsDir, DefaultSystemAgentID, "workspace")
+	systemAgentDir := filepath.Join(agentsDir, DefaultSystemAgentID)
 	_ = os.MkdirAll(configDir, 0755)
-	_ = os.MkdirAll(systemWorkspaceDir, 0750)
+	_ = os.MkdirAll(systemAgentDir, 0750)
 
 	configPath := filepath.Join(configDir, "profile.json")
 	soulPath := filepath.Join(configDir, "SOUL.md")
-	memoryMDPath := filepath.Join(systemWorkspaceDir, "MEMORY.md")
+	memoryMDPath := filepath.Join(systemAgentDir, "MEMORY.md")
 
 	var sqlDB *sql.DB
 	if db != nil {
@@ -287,34 +287,16 @@ func (m *UserProfileManager) GetAgentMemoryMD(agentID string) string {
 	if !validAgentProfileID(agentID) {
 		return ""
 	}
-	m.migrateLegacyAgentMemory(agentID)
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	if m.dataDir != "" {
-		agentMemPath := filepath.Join(m.dataDir, "agents", agentID, "workspace", "MEMORY.md")
+		agentMemPath := filepath.Join(m.dataDir, "agents", agentID, "MEMORY.md")
 		if data, err := os.ReadFile(agentMemPath); err == nil {
 			return string(data)
 		}
 	}
 	return ""
-}
-
-func (m *UserProfileManager) migrateLegacyAgentMemory(agentID string) {
-	if m.dataDir == "" {
-		return
-	}
-	target := filepath.Join(m.dataDir, "agents", agentID, "workspace", "MEMORY.md")
-	if _, err := os.Stat(target); err == nil {
-		return
-	}
-	legacy := filepath.Join(m.dataDir, "agents", agentID, "MEMORY.md")
-	data, err := os.ReadFile(legacy)
-	if err != nil {
-		return
-	}
-	_ = os.MkdirAll(filepath.Dir(target), 0750)
-	_ = os.WriteFile(target, data, 0640)
 }
 
 // AppendAgentMemoryMD appends a timestamped reflection entry to the isolated MEMORY.md for a specific agent.
@@ -330,7 +312,7 @@ func (m *UserProfileManager) AppendAgentMemoryMD(ctx context.Context, agentID st
 
 	var targetPath string
 	if m.dataDir != "" {
-		agentDir := filepath.Join(m.dataDir, "agents", agentID, "workspace")
+		agentDir := filepath.Join(m.dataDir, "agents", agentID)
 		_ = os.MkdirAll(agentDir, 0750)
 		targetPath = filepath.Join(agentDir, "MEMORY.md")
 	} else {
