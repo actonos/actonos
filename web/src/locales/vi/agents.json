@@ -91,7 +91,7 @@
       "actions": "Thao tác"
     },
     "root": "Gốc",
-    "modelDetails": "nhiệt độ: {{temperature}} • tối đa: {{maxTokens}}",
+    "modelDetails": "suy luận: {{reasoningEffort}} • tối đa: {{maxTokens}}",
     "allChannels": "Tất cả kênh (*)",
     "approval": "Phê duyệt {{level}}",
     "medium": "Trung bình",
@@ -123,7 +123,6 @@
     "instructionsPlaceholder": "Hướng dẫn thực thi cho agent...",
     "primaryModelLabel": "Mô hình chính",
     "fallbackModelLabel": "Mô hình phụ",
-    "temperatureLabel": "Nhiệt độ sáng tạo",
     "toolsLabel": "Công cụ cho phép",
     "budgetLabel": "Ngân sách tháng ($)",
     "approvalLabel": "Mức phê duyệt",
@@ -204,7 +203,6 @@
       "fallback": "Mô hình khôi phục dự phòng",
       "fallbackPlaceholder": "ví dụ. google/gemini-2.5-flash",
       "fallbackDescription": "Nếu mô hình chính gặp phải giới hạn tốc độ hoặc lỗi, tầng sẽ tự động phục hồi bằng mô hình này.",
-      "temperature": "Nhiệt độ sáng tạo:",
       "maxTokens": "Mã thông báo thế hệ tối đa:"
     },
     "tools": {

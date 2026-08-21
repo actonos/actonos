@@ -91,7 +91,7 @@
       "actions": "Actions"
     },
     "root": "Root",
-    "modelDetails": "temp: {{temperature}} • max: {{maxTokens}}",
+    "modelDetails": "reasoning: {{reasoningEffort}} • max: {{maxTokens}}",
     "allChannels": "All channels (*)",
     "approval": "{{level}} approval",
     "medium": "Medium",
@@ -123,7 +123,6 @@
     "instructionsPlaceholder": "Instructions for the agent...",
     "primaryModelLabel": "Primary Model",
     "fallbackModelLabel": "Fallback Model",
-    "temperatureLabel": "Temperature",
     "toolsLabel": "Tools",
     "budgetLabel": "Monthly Budget ($)",
     "approvalLabel": "Approval Level",
@@ -204,7 +203,6 @@
       "fallback": "Fallback Recovery Model",
       "fallbackPlaceholder": "e.g. google/gemini-2.5-flash",
       "fallbackDescription": "If primary model encounters rate limits or errors, cascade automatically recovers using this model.",
-      "temperature": "Creativity Temperature:",
       "maxTokens": "Max Generation Tokens:"
     },
     "tools": {

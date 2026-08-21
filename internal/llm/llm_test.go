@@ -195,3 +195,34 @@ func TestToOpenAIMessages_ToolArgumentsSerializedAsString(t *testing.T) {
 	}
 }
 
+func TestIsOpenAIEndpoint(t *testing.T) {
+	if !isOpenAIEndpoint("https://api.openai.com/v1") {
+		t.Error("expected true for api.openai.com")
+	}
+	if !isOpenAIEndpoint("") {
+		t.Error("expected true for empty baseURL")
+	}
+	if isOpenAIEndpoint("http://localhost:11434/v1") {
+		t.Error("expected false for localhost ollama")
+	}
+	if isOpenAIEndpoint("https://api.deepseek.com/v1") {
+		t.Error("expected false for deepseek")
+	}
+}
+
+func TestOpenAIProviderProtocolSelection(t *testing.T) {
+	native := NewOpenAIProvider("", "gpt-5", "https://api.openai.com/v1")
+	if !native.UseResponsesAPI {
+		t.Fatal("native OpenAI provider must use Responses API")
+	}
+	for _, baseURL := range []string{
+		"https://api.deepseek.com/v1",
+		"https://openrouter.ai/api/v1",
+		"http://localhost:8000/v1",
+	} {
+		compatible := NewOpenAIProvider("", "model", baseURL)
+		if compatible.UseResponsesAPI {
+			t.Fatalf("compatible endpoint %q must keep Chat Completions", baseURL)
+		}
+	}
+}

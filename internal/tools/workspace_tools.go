@@ -161,21 +161,26 @@ func NewWorkspaceWriteTool(store *workspacepkg.Store) *WorkspaceWriteTool {
 
 func (t *WorkspaceWriteTool) Name() string { return "native_workspace_write" }
 func (t *WorkspaceWriteTool) Description() string {
-	return "Create or update a user-owned workspace file. Create with parent_id and any Unicode name; update with file_id and expected_version."
+	return "Create or update a user-owned workspace file. Provide exactly one payload: content for UTF-8 text (including code, JSON, Markdown, and CSV), or content_base64 only for binary/non-UTF-8 bytes such as PDF, images, archives, and office files. Never send both fields. Create with parent_id and name; update with file_id and expected_version."
 }
 func (t *WorkspaceWriteTool) Category() string { return "native" }
 func (t *WorkspaceWriteTool) ParametersSchema() json.RawMessage {
 	return json.RawMessage(`{
 		"type":"object",
+		"description":"Write exactly one content representation. Use content for UTF-8 text. Use content_base64 only when the file bytes are binary or not valid UTF-8 (for example PDF, image, ZIP, or DOCX).",
 		"properties":{
 			"file_id":{"type":"string","description":"Opaque ID when updating an existing file"},
 			"parent_id":{"type":"string","description":"Opaque parent folder ID when creating; omit for root"},
 			"name":{"type":"string","description":"Exact user-visible name when creating; extension is optional"},
-			"content":{"type":"string","description":"UTF-8 content"},
-			"content_base64":{"type":"string","description":"Base64 bytes for format-agnostic binary content"},
+			"content":{"type":"string","description":"UTF-8 text content. Use this for plain text, source code, JSON, Markdown, CSV, and other text files. Do not use for binary files."},
+			"content_base64":{"type":"string","description":"Base64-encoded raw file bytes. Use this only for binary or non-UTF-8 files such as PDF, images, ZIP, DOCX, and XLSX. Do not use for ordinary text."},
 			"mime_type":{"type":"string","description":"Optional MIME hint; content sniffing is authoritative"},
 			"expected_version":{"type":"integer","minimum":1,"description":"Required for conflict-safe updates"}
-		}
+		},
+		"oneOf":[
+			{"required":["content"],"not":{"required":["content_base64"]}},
+			{"required":["content_base64"],"not":{"required":["content"]}}
+		]
 	}`)
 }
 func (t *WorkspaceWriteTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {

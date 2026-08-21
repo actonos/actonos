@@ -80,6 +80,7 @@ func SanitizeMessages(messages []Message) []Message {
 						Role:             RoleAssistant,
 						Content:          content,
 						ReasoningContent: msg.ReasoningContent,
+						ProviderItems:    msg.ProviderItems,
 					})
 					// Skip trailing tool results that no longer have an owner.
 					i = j - 1
@@ -115,6 +116,7 @@ func SanitizeMessages(messages []Message) []Message {
 					Role:             RoleAssistant,
 					Content:          content,
 					ReasoningContent: msg.ReasoningContent,
+					ProviderItems:    msg.ProviderItems,
 				})
 			}
 

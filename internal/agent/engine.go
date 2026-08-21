@@ -204,7 +204,7 @@ func (e *Engine) ExecuteAutonomousGoal(ctx context.Context, agentID, goal string
 		total = addUsage(total, response.Usage)
 		accumulated = append(accumulated,
 			llm.Message{Role: llm.RoleUser, Content: prompt},
-			llm.Message{Role: llm.RoleAssistant, Content: response.Content, ToolCalls: response.ToolCalls},
+			llm.Message{Role: llm.RoleAssistant, Content: response.Content, ToolCalls: response.ToolCalls, ProviderItems: response.ProviderItems},
 		)
 		return response.Content, nil
 	})
@@ -272,7 +272,7 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 	}
 
 	opts := llm.CompletionOptions{
-		Temperature: &agent.ModelConfig.Temperature,
+		ReasoningEffort: agent.ModelConfig.EffectiveReasoningEffort(),
 	}
 	defaultMaxTokens := 32768
 	if agent.ModelConfig.MaxTokens > 0 {
@@ -381,6 +381,7 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 						Content:          "",
 						ReasoningContent: resp.ReasoningContent,
 						ToolCalls:        resp.ToolCalls,
+						ProviderItems:    resp.ProviderItems,
 					})
 					checkpointMessages = append(checkpointMessages, toolMessages...)
 					e.saveApprovalCheckpoint(ctx, run, agentID, userMessage, source, checkpointMessages, iter+1, totalUsage, tc)
@@ -430,6 +431,7 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 			Content:          "",
 			ReasoningContent: resp.ReasoningContent,
 			ToolCalls:        resp.ToolCalls,
+			ProviderItems:    resp.ProviderItems,
 		})
 		messages = append(messages, toolMessages...)
 	}
@@ -599,7 +601,7 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 	}
 
 	opts := llm.CompletionOptions{
-		Temperature: &agent.ModelConfig.Temperature,
+		ReasoningEffort: agent.ModelConfig.EffectiveReasoningEffort(),
 	}
 	defaultStreamMaxTokens := 32768
 	if agent.ModelConfig.MaxTokens > 0 {
@@ -700,6 +702,7 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 			Content:          "",
 			ReasoningContent: resp.ReasoningContent,
 			ToolCalls:        resp.ToolCalls,
+			ProviderItems:    resp.ProviderItems,
 		}
 		var toolMessages []llm.Message
 
@@ -1033,7 +1036,7 @@ func (e *Engine) ResumeApproved(ctx context.Context, approval tools.ApprovalRequ
 	if manifest.ModelConfig.FallbackModel != "" {
 		cascade = append(cascade, manifest.ModelConfig.FallbackModel)
 	}
-	opts := llm.CompletionOptions{Temperature: &manifest.ModelConfig.Temperature}
+	opts := llm.CompletionOptions{ReasoningEffort: manifest.ModelConfig.EffectiveReasoningEffort()}
 	defaultDirectMaxTokens := 32768
 	if manifest.ModelConfig.MaxTokens > 0 {
 		opts.MaxTokens = &manifest.ModelConfig.MaxTokens
@@ -1154,6 +1157,7 @@ func (e *Engine) ResumeApproved(ctx context.Context, approval tools.ApprovalRequ
 			Content:          response.Content,
 			ReasoningContent: response.ReasoningContent,
 			ToolCalls:        response.ToolCalls,
+			ProviderItems:    response.ProviderItems,
 		})
 		for _, call := range response.ToolCalls {
 			toolResult, toolErr := e.tools.Execute(execCtx, checkpoint.AgentID, call.Function.Name, call.Function.Arguments)
@@ -1388,6 +1392,9 @@ func (e *Engine) completeStreamIteration(
 			}
 			if len(chunk.ToolCalls) > 0 {
 				response.ToolCalls = append(response.ToolCalls, chunk.ToolCalls...)
+			}
+			if len(chunk.ProviderItems) > 0 {
+				response.ProviderItems = append(response.ProviderItems, chunk.ProviderItems...)
 			}
 			if chunk.Usage != nil {
 				response.Usage = *chunk.Usage

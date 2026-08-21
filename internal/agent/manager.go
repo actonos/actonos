@@ -88,6 +88,9 @@ func (m *AgentManager) loadAll() error {
 		}
 		manifest.CreatedAt = createdAt
 		manifest.UpdatedAt = updatedAt
+		if manifest.ModelConfig.ReasoningEffort == "" {
+			manifest.ModelConfig.ReasoningEffort = llm.DefaultReasoningEffort
+		}
 
 		m.agents[id] = &manifest
 	}
@@ -130,6 +133,9 @@ func (m *AgentManager) Create(ctx context.Context, manifest AgentManifest) (*Age
 	manifest.UpdatedAt = now
 	if manifest.Status == "" {
 		manifest.Status = StatusActive
+	}
+	if manifest.ModelConfig.ReasoningEffort == "" {
+		manifest.ModelConfig.ReasoningEffort = llm.DefaultReasoningEffort
 	}
 	if len(manifest.ListenChannels) == 0 {
 		manifest.ListenChannels = []string{"*"}
@@ -215,6 +221,9 @@ func (m *AgentManager) Update(ctx context.Context, manifest AgentManifest) (*Age
 			manifest.Status = StatusActive
 		}
 	}
+	if manifest.ModelConfig.ReasoningEffort == "" {
+		manifest.ModelConfig.ReasoningEffort = llm.DefaultReasoningEffort
+	}
 
 	manifestJSON, err := json.Marshal(manifest)
 	if err != nil {
@@ -292,10 +301,10 @@ func (m *AgentManager) EnsureDefaultAgent(ctx context.Context) error {
 		Status:      StatusActive,
 		IsSystem:    true,
 		ModelConfig: llm.ModelConfig{
-			PrimaryModel:  "openai/gpt-5.4-mini",
-			FallbackModel: "openai/gpt-5.4-mini",
-			Temperature:   0.2,
-			MaxTokens:     32768,
+			PrimaryModel:    "openai/gpt-5.4-mini",
+			FallbackModel:   "openai/gpt-5.4-mini",
+			ReasoningEffort: llm.DefaultReasoningEffort,
+			MaxTokens:       32768,
 		},
 		SystemInstructions: defaultSysInstructions,
 		AuthorizedTools:    []string{"*"},

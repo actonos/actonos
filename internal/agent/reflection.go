@@ -128,9 +128,8 @@ func (r *ReflectionEngine) ReflectOnConversation(ctx context.Context, agentID, u
 			{Role: "user", Content: prompt},
 		}
 
-		temp := 0.1
 		opts := llm.CompletionOptions{
-			Temperature: &temp,
+			ReasoningEffort: llm.DefaultReasoningEffort,
 		}
 
 		if r.llmRouter == nil {

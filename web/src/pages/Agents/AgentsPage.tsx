@@ -351,7 +351,7 @@ export function AgentsPage({
                             </div>
                             <div className="text-[10px] font-mono text-slate pl-1">
                               {t('list.modelDetails', {
-                                temperature: agent.model_config?.temperature ?? 0.2,
+                                reasoningEffort: agent.model_config?.reasoning_effort || 'medium',
                                 maxTokens: agent.model_config?.max_tokens || 32768,
                               })}
                             </div>

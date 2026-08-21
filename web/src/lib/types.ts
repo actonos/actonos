@@ -4,7 +4,7 @@ export type ApprovalLevel = 'Low' | 'Medium' | 'High';
 export interface ModelConfig {
   primary_model: string;
   fallback_model?: string;
-  temperature?: number;
+  reasoning_effort?: string;
   max_tokens?: number;
 }
 

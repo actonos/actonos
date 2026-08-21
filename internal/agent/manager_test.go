@@ -42,7 +42,6 @@ func TestAgentManager_CRUD(t *testing.T) {
 		AvatarIcon:  "code-bracket",
 		ModelConfig: llm.ModelConfig{
 			PrimaryModel: "claude-3-7-sonnet",
-			Temperature:  0.2,
 		},
 		SystemInstructions: "You are a software architect.",
 		AuthorizedTools:    []string{"bash", "web_search"},
@@ -63,6 +62,9 @@ func TestAgentManager_CRUD(t *testing.T) {
 	}
 	if created.Status != StatusActive {
 		t.Fatalf("expected StatusActive, got %s", created.Status)
+	}
+	if created.ModelConfig.ReasoningEffort != llm.DefaultReasoningEffort {
+		t.Fatalf("expected default reasoning effort %q, got %q", llm.DefaultReasoningEffort, created.ModelConfig.ReasoningEffort)
 	}
 
 	// 2. Get Agent

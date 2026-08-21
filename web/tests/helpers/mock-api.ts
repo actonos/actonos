@@ -57,7 +57,7 @@ function response(pathname: string) {
           is_system: true,
           authorized_tools: ['*'],
           listen_channels: ['*'],
-          model_config: { primary_model: 'openai/gpt-5', temperature: 0.2, max_tokens: 4096 },
+          model_config: { primary_model: 'openai/gpt-5', reasoning_effort: 'medium', max_tokens: 4096 },
           delegation_scope: { require_human_approval_level: 'Medium', max_monthly_budget_usd: 50 },
         },
       ],

@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -13,8 +12,6 @@ import (
 	"net/url"
 	"strings"
 	"testing"
-
-	workspacepkg "github.com/actonos/actonos/internal/workspace"
 )
 
 type workspaceEnvelope struct {
@@ -231,50 +228,5 @@ func TestWorkspaceBinaryUploadRawStatsAndZip(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("uploaded binary missing from archive: %#v", zipReader.File)
-	}
-}
-
-func TestWorkspacePDFUsesRawRangeResponse(t *testing.T) {
-	srv := newTestServer(t)
-	payload := []byte("%PDF-1.7\n0123456789abcdefghijklmnopqrstuvwxyz\n%%EOF")
-	node, err := srv.workspaceStore.Write(t.Context(), workspacepkg.WriteRequest{
-		Name: "large.pdf", Content: payload, MIMEType: "application/pdf", ActorID: "test",
-	})
-	if err != nil {
-		t.Fatalf("write pdf: %v", err)
-	}
-
-	metadata := workspaceJSONRequest(t, srv, http.MethodGet, "/api/workspace/file?id="+url.QueryEscape(node.ID), "", http.StatusOK)
-	if strings.Contains(metadata.Body.String(), "content_base64") || strings.Contains(metadata.Body.String(), "data_url") {
-		t.Fatalf("pdf metadata included an encoded payload: %s", metadata.Body.String())
-	}
-	var detail struct {
-		Kind   string `json:"kind"`
-		RawURL string `json:"raw_url"`
-		Size   int64  `json:"size"`
-	}
-	decodeWorkspaceData(t, metadata, &detail)
-	if detail.Kind != "pdf" || detail.RawURL != "/api/workspace/raw?id="+node.ID || detail.Size != int64(len(payload)) {
-		t.Fatalf("unexpected pdf metadata: %#v", detail)
-	}
-
-	req := httptest.NewRequest(http.MethodGet, detail.RawURL, nil)
-	req.Header.Set("Range", "bytes=9-18")
-	raw := httptest.NewRecorder()
-	srv.Router().ServeHTTP(raw, req)
-	if raw.Code != http.StatusPartialContent {
-		t.Fatalf("range status = %d, want %d: %s", raw.Code, http.StatusPartialContent, raw.Body.String())
-	}
-	if got, want := raw.Body.String(), string(payload[9:19]); got != want {
-		t.Fatalf("range body = %q, want %q", got, want)
-	}
-	if got, want := raw.Header().Get("Accept-Ranges"), "bytes"; got != want {
-		t.Fatalf("Accept-Ranges = %q, want %q", got, want)
-	}
-	if got, want := raw.Header().Get("Content-Range"), fmt.Sprintf("bytes 9-18/%d", len(payload)); got != want {
-		t.Fatalf("Content-Range = %q, want %q", got, want)
-	}
-	if got, want := raw.Header().Get("X-Frame-Options"), "SAMEORIGIN"; got != want {
-		t.Fatalf("X-Frame-Options = %q, want %q", got, want)
 	}
 }

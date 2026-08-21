@@ -29,7 +29,6 @@ export function AgentFormModal({
   const [systemInstructions, setSystemInstructions] = useState('');
   const [primaryModel, setPrimaryModel] = useState('openai/gpt-5.4-mini');
   const [fallbackModel, setFallbackModel] = useState('openai/gpt-5.4-mini');
-  const [temperature, setTemperature] = useState(0.2);
   const [authorizedTools, setAuthorizedTools] = useState<string[]>(['native_file_read', 'native_sysinfo']);
   const [monthlyBudget, setMonthlyBudget] = useState(50);
   const [approvalLevel, setApprovalLevel] = useState<ApprovalLevel>('Medium');
@@ -42,7 +41,6 @@ export function AgentFormModal({
       setSystemInstructions(initialAgent.system_instructions || '');
       setPrimaryModel(initialAgent.model_config?.primary_model || 'openai/gpt-5.4-mini');
       setFallbackModel(initialAgent.model_config?.fallback_model || 'openai/gpt-5.4-mini');
-      setTemperature(initialAgent.model_config?.temperature ?? 0.2);
       setAuthorizedTools(initialAgent.authorized_tools || ['native_file_read', 'native_sysinfo']);
       setMonthlyBudget(initialAgent.delegation_scope?.max_monthly_budget_usd ?? 50);
       setApprovalLevel(initialAgent.delegation_scope?.require_human_approval_level || 'Medium');
@@ -52,7 +50,6 @@ export function AgentFormModal({
       setSystemInstructions('');
       setPrimaryModel('openai/gpt-5.4-mini');
       setFallbackModel('openai/gpt-5.4-mini');
-      setTemperature(0.2);
       setAuthorizedTools(['native_file_read', 'native_sysinfo']);
       setMonthlyBudget(50);
       setApprovalLevel('Medium');
@@ -78,7 +75,7 @@ export function AgentFormModal({
         model_config: {
           primary_model: primaryModel,
           fallback_model: fallbackModel,
-          temperature,
+          reasoning_effort: 'medium',
         },
         authorized_tools: authorizedTools,
         delegation_scope: {
@@ -167,25 +164,6 @@ export function AgentFormModal({
               ))}
             </select>
           </div>
-        </div>
-
-        {/* Temperature */}
-        <div className="flex flex-col gap-1.5">
-          <div className="flex justify-between items-center">
-            <label className="text-caption uppercase tracking-wider text-slate font-medium">
-              {t('modal.temperatureLabel')}
-            </label>
-            <span className="font-semibold text-body-sm">{temperature}</span>
-          </div>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
-            value={temperature}
-            onChange={(e) => setTemperature(parseFloat(e.target.value))}
-            className="w-full accent-deep-ink cursor-pointer"
-          />
         </div>
 
         {/* Authorized Tools Selector */}

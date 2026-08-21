@@ -76,9 +76,8 @@ func (p *Planner) DecomposeGoal(ctx context.Context, goal string, availableAgent
 		{Role: "user", Content: prompt},
 	}
 
-	temp := 0.1
 	opts := llm.CompletionOptions{
-		Temperature: &temp,
+		ReasoningEffort: llm.DefaultReasoningEffort,
 	}
 
 	resp, err := p.llmRouter.CompleteWithCascade(ctx, cascade, messages, opts)

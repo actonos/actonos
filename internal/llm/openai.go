@@ -8,32 +8,50 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 )
 
-// OpenAIProvider interacts with OpenAI-compatible chat completion and embedding APIs.
+// OpenAIProvider normalizes native OpenAI Responses and OpenAI-compatible Chat
+// Completions APIs behind the provider-neutral LLM interface.
 type OpenAIProvider struct {
 	BaseURL    string
 	APIKey     string
 	Model      string
 	HTTPClient *http.Client
+	// UseResponsesAPI is enabled only for native OpenAI endpoints. Compatible
+	// gateways keep the Chat Completions transport even when they serve OpenAI
+	// models behind a custom base URL.
+	UseResponsesAPI bool
 }
 
-// NewOpenAIProvider creates a new provider instance for OpenAI or compatible endpoints (e.g. Ollama, Groq, DeepSeek).
+// NewOpenAIProvider creates a provider for OpenAI or a compatible endpoint. The
+// official api.openai.com endpoint uses Responses; every other endpoint uses
+// Chat Completions unless UseResponsesAPI is explicitly enabled by the caller.
 func NewOpenAIProvider(apiKey, model, baseURL string) *OpenAIProvider {
 	if baseURL == "" {
 		baseURL = "https://api.openai.com/v1"
 	}
+	baseURL = strings.TrimRight(baseURL, "/")
 	if model == "" {
 		model = "gpt-4o"
 	}
 	return &OpenAIProvider{
-		BaseURL:    baseURL,
-		APIKey:     apiKey,
-		Model:      model,
-		HTTPClient: NewDefaultHTTPClient(),
+		BaseURL:         baseURL,
+		APIKey:          apiKey,
+		Model:           model,
+		HTTPClient:      NewDefaultHTTPClient(),
+		UseResponsesAPI: isOpenAIEndpoint(baseURL),
 	}
+}
+
+func isOpenAIEndpoint(baseURL string) bool {
+	if baseURL == "" {
+		return true
+	}
+	parsed, err := url.Parse(baseURL)
+	return err == nil && strings.EqualFold(parsed.Hostname(), "api.openai.com")
 }
 
 type openAIMessage struct {
@@ -57,12 +75,12 @@ type openAIFunctionCall struct {
 }
 
 type openAIChatRequest struct {
-	Model       string           `json:"model"`
-	Messages    []openAIMessage  `json:"messages"`
-	Temperature *float64         `json:"temperature,omitempty"`
-	MaxTokens   *int             `json:"max_tokens,omitempty"`
-	Tools       []ToolDefinition `json:"tools,omitempty"`
-	Stream      bool             `json:"stream,omitempty"`
+	Model               string           `json:"model"`
+	Messages            []openAIMessage  `json:"messages"`
+	MaxTokens           *int             `json:"max_tokens,omitempty"`
+	MaxCompletionTokens *int             `json:"max_completion_tokens,omitempty"`
+	Tools               []ToolDefinition `json:"tools,omitempty"`
+	Stream              bool             `json:"stream,omitempty"`
 }
 
 func normalizeToolArguments(raw json.RawMessage) string {
@@ -156,6 +174,14 @@ type openAIChatResponse struct {
 }
 
 func (p *OpenAIProvider) Complete(ctx context.Context, messages []Message, opts CompletionOptions) (*Response, error) {
+	if p.UseResponsesAPI {
+		return p.completeResponses(ctx, messages, opts)
+	}
+	return p.completeChat(ctx, messages, opts)
+}
+
+func (p *OpenAIProvider) completeChat(ctx context.Context, messages []Message, opts CompletionOptions) (*Response, error) {
+	opts = opts.WithDefaults()
 	messages = SanitizeMessages(messages)
 	model := p.Model
 	if opts.Model != "" {
@@ -163,12 +189,11 @@ func (p *OpenAIProvider) Complete(ctx context.Context, messages []Message, opts 
 	}
 
 	reqBody := openAIChatRequest{
-		Model:       model,
-		Messages:    toOpenAIMessages(messages),
-		Temperature: opts.Temperature,
-		MaxTokens:   opts.MaxTokens,
-		Tools:       opts.Tools,
-		Stream:      false,
+		Model:     model,
+		Messages:  toOpenAIMessages(messages),
+		Tools:     opts.Tools,
+		Stream:    false,
+		MaxTokens: opts.MaxTokens,
 	}
 
 	jsonData, err := json.Marshal(reqBody)
@@ -245,14 +270,25 @@ func (p *OpenAIProvider) Complete(ctx context.Context, messages []Message, opts 
 }
 
 func (p *OpenAIProvider) StreamComplete(ctx context.Context, messages []Message, opts CompletionOptions) (<-chan StreamChunk, error) {
+	if p.UseResponsesAPI {
+		return p.streamResponses(ctx, messages, opts)
+	}
+	return p.streamChat(ctx, messages, opts)
+}
+
+func (p *OpenAIProvider) streamChat(ctx context.Context, messages []Message, opts CompletionOptions) (<-chan StreamChunk, error) {
+	opts = opts.WithDefaults()
 	messages = SanitizeMessages(messages)
 	model := p.Model
 	if opts.Model != "" {
 		model = opts.Model
 	}
 	reqBody := openAIChatRequest{
-		Model: model, Messages: toOpenAIMessages(messages), Temperature: opts.Temperature,
-		MaxTokens: opts.MaxTokens, Tools: opts.Tools, Stream: true,
+		Model:     model,
+		Messages:  toOpenAIMessages(messages),
+		Tools:     opts.Tools,
+		Stream:    true,
+		MaxTokens: opts.MaxTokens,
 	}
 	payload, err := json.Marshal(reqBody)
 	if err != nil {

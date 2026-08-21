@@ -125,6 +125,7 @@ func (r *ModelCascadeRouter) CompleteWithCascade(
 	messages []Message,
 	opts CompletionOptions,
 ) (*Response, error) {
+	opts = opts.WithDefaults()
 	messages = SanitizeMessages(messages)
 	if len(cascadeOrder) == 0 {
 		r.mu.RLock()
@@ -174,6 +175,7 @@ func (r *ModelCascadeRouter) StreamCompleteWithCascade(
 	messages []Message,
 	opts CompletionOptions,
 ) (<-chan StreamChunk, error) {
+	opts = opts.WithDefaults()
 	messages = SanitizeMessages(messages)
 	if len(cascadeOrder) == 0 {
 		r.mu.RLock()

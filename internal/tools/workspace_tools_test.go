@@ -100,6 +100,44 @@ func TestWorkspaceToolsRoundTripBinaryWithoutHostPaths(t *testing.T) {
 	assertNoHostPath(t, dataDir, deleteResult)
 }
 
+func TestWorkspaceWriteSchemaDisambiguatesTextAndBinary(t *testing.T) {
+	registry, _, _ := newWorkspaceToolRegistry(t)
+	tool, ok := registry.tools["native_workspace_write"]
+	if !ok {
+		t.Fatal("native_workspace_write was not registered")
+	}
+	var schema struct {
+		Description string `json:"description"`
+		OneOf       []struct {
+			Required []string `json:"required"`
+		} `json:"oneOf"`
+	}
+	if err := json.Unmarshal(tool.ParametersSchema(), &schema); err != nil {
+		t.Fatalf("invalid workspace write schema: %v", err)
+	}
+	if !strings.Contains(schema.Description, "exactly one") || len(schema.OneOf) != 2 {
+		t.Fatalf("schema does not explain the mutually exclusive payloads: %+v", schema)
+	}
+	seen := map[string]bool{}
+	for _, branch := range schema.OneOf {
+		if len(branch.Required) != 1 {
+			t.Fatalf("expected one required payload per branch, got %#v", branch.Required)
+		}
+		seen[branch.Required[0]] = true
+	}
+	if !seen["content"] || !seen["content_base64"] {
+		t.Fatalf("schema branches do not cover both payloads: %#v", seen)
+	}
+}
+
+func TestWorkspaceWriteRejectsAmbiguousPayload(t *testing.T) {
+	registry, _, _ := newWorkspaceToolRegistry(t)
+	_, err := registry.Execute(context.Background(), "agent_alpha", "native_workspace_write", json.RawMessage(`{"name":"ambiguous","content":"text","content_base64":"dGV4dA=="}`))
+	if !errors.Is(err, ErrExecutionFailed) || !strings.Contains(err.Error(), "provide only one") {
+		t.Fatalf("ambiguous payload error = %v", err)
+	}
+}
+
 func TestPrivateAgentFileToolsAreMutuallyIsolated(t *testing.T) {
 	registry, _, dataDir := newWorkspaceToolRegistry(t)
 	ctx := context.Background()

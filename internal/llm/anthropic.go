@@ -45,13 +45,12 @@ type anthropicTool struct {
 }
 
 type anthropicRequest struct {
-	Model       string             `json:"model"`
-	Messages    []anthropicMessage `json:"messages"`
-	System      string             `json:"system,omitempty"`
-	MaxTokens   int                `json:"max_tokens"`
-	Temperature *float64           `json:"temperature,omitempty"`
-	Tools       []anthropicTool    `json:"tools,omitempty"`
-	Stream      bool               `json:"stream,omitempty"`
+	Model     string             `json:"model"`
+	Messages  []anthropicMessage `json:"messages"`
+	System    string             `json:"system,omitempty"`
+	MaxTokens int                `json:"max_tokens"`
+	Tools     []anthropicTool    `json:"tools,omitempty"`
+	Stream    bool               `json:"stream,omitempty"`
 }
 
 type anthropicResponse struct {
@@ -74,6 +73,7 @@ type anthropicResponse struct {
 }
 
 func (p *AnthropicProvider) Complete(ctx context.Context, messages []Message, opts CompletionOptions) (*Response, error) {
+	opts = opts.WithDefaults()
 	model := p.Model
 	if opts.Model != "" {
 		model = opts.Model
@@ -116,12 +116,11 @@ func (p *AnthropicProvider) Complete(ctx context.Context, messages []Message, op
 	}
 
 	reqBody := anthropicRequest{
-		Model:       model,
-		Messages:    anthropicMsgs,
-		System:      systemPrompt,
-		MaxTokens:   maxTokens,
-		Temperature: opts.Temperature,
-		Tools:       anthropicTools,
+		Model:     model,
+		Messages:  anthropicMsgs,
+		System:    systemPrompt,
+		MaxTokens: maxTokens,
+		Tools:     anthropicTools,
 	}
 
 	jsonData, err := json.Marshal(reqBody)
@@ -192,6 +191,7 @@ func (p *AnthropicProvider) Complete(ctx context.Context, messages []Message, op
 }
 
 func (p *AnthropicProvider) StreamComplete(ctx context.Context, messages []Message, opts CompletionOptions) (<-chan StreamChunk, error) {
+	opts = opts.WithDefaults()
 	model := p.Model
 	if opts.Model != "" {
 		model = opts.Model
@@ -222,7 +222,7 @@ func (p *AnthropicProvider) StreamComplete(ctx context.Context, messages []Messa
 	}
 	payload, err := json.Marshal(anthropicRequest{
 		Model: model, Messages: anthropicMsgs, System: strings.TrimSpace(systemPrompt),
-		MaxTokens: maxTokens, Temperature: opts.Temperature, Tools: anthropicTools, Stream: true,
+		MaxTokens: maxTokens, Tools: anthropicTools, Stream: true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("marshalling anthropic stream request: %w", err)

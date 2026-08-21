@@ -637,6 +637,13 @@ func RegisterProviderInRouter(router *llm.ModelCascadeRouter, rec LLMProviderRec
 				baseProv = llm.NewDeepSeekProvider(rec.APIKey, defaultModel)
 			default:
 				baseProv = llm.NewOpenAIProvider(rec.APIKey, defaultModel, baseURL)
+				// Responses is native to the OpenAI provider only. A custom provider
+				// may point at api.openai.com while still exposing Chat Completions.
+				if rec.ID != "openai" {
+					if compatible, ok := baseProv.(*llm.OpenAIProvider); ok {
+						compatible.UseResponsesAPI = false
+					}
+				}
 			}
 
 			router.RegisterProvider(rec.ID, baseProv)
@@ -652,6 +659,11 @@ func RegisterProviderInRouter(router *llm.ModelCascadeRouter, rec LLMProviderRec
 					p = llm.NewDeepSeekProvider(rec.APIKey, m.ID)
 				default:
 					p = llm.NewOpenAIProvider(rec.APIKey, m.ID, baseURL)
+					if rec.ID != "openai" {
+						if compatible, ok := p.(*llm.OpenAIProvider); ok {
+							compatible.UseResponsesAPI = false
+						}
+					}
 				}
 				router.RegisterProvider(m.ID, p)
 			}
@@ -667,6 +679,9 @@ func RegisterProviderInRouter(router *llm.ModelCascadeRouter, rec LLMProviderRec
 		baseURL = "http://localhost:8000/v1"
 	}
 	prov := llm.NewOpenAIProvider(rec.APIKey, defaultModel, baseURL)
+	if rec.ID != "openai" {
+		prov.UseResponsesAPI = false
+	}
 	router.RegisterProvider(rec.ID, prov)
 	router.RegisterProvider(rec.ID+"/"+defaultModel, prov)
 }
@@ -732,6 +747,11 @@ func (s *Server) handleTestAPIKey(w http.ResponseWriter, r *http.Request) {
 	default:
 		// OpenAI-compatible (OpenAI, Grok, OpenRouter, Custom)
 		provider = llm.NewOpenAIProvider(key, model, baseURL)
+		if req.Provider != "openai" {
+			if compatible, ok := provider.(*llm.OpenAIProvider); ok {
+				compatible.UseResponsesAPI = false
+			}
+		}
 	}
 
 	testMsg := []llm.Message{{Role: llm.RoleUser, Content: "Say 'OK' in one word."}}

@@ -101,7 +101,6 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
   // Model & Reasoning
   const [primaryModel, setPrimaryModel] = useState('openai/gpt-5.4-mini');
   const [fallbackModel, setFallbackModel] = useState('openai/gpt-5.4-mini');
-  const [temperature, setTemperature] = useState(0.2);
   const [maxTokens, setMaxTokens] = useState(4096);
 
   // Prompt & Soul & Memory
@@ -124,11 +123,11 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
 
   const formSignature = useMemo(() => JSON.stringify({
     name, idSlug, description, avatarIcon, status, isSystem, primaryModel, fallbackModel,
-    temperature, maxTokens, systemInstructions, soul, memoryMD, authorizedTools,
+    maxTokens, systemInstructions, soul, memoryMD, authorizedTools,
     listenAllChannels, selectedChannels, maxBudget, approvalLevel, allowedPaths,
   }), [
     name, idSlug, description, avatarIcon, status, isSystem, primaryModel, fallbackModel,
-    temperature, maxTokens, systemInstructions, soul, memoryMD, authorizedTools,
+    maxTokens, systemInstructions, soul, memoryMD, authorizedTools,
     listenAllChannels, selectedChannels, maxBudget, approvalLevel, allowedPaths,
   ]);
   const isDirty = baselineRef.current !== '' && baselineRef.current !== formSignature;
@@ -170,7 +169,6 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             const fMod = agent.model_config.fallback_model || 'openai/gpt-5.4-mini';
             setPrimaryModel(pMod);
             setFallbackModel(fMod);
-            setTemperature(agent.model_config.temperature ?? 0.2);
             setMaxTokens(agent.model_config.max_tokens ?? 32768);
 
             // Check if models are not in the standard catalog to switch to custom text input
@@ -259,7 +257,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
         model_config: {
           primary_model: primaryModel,
           fallback_model: fallbackModel,
-          temperature,
+          reasoning_effort: 'medium',
           max_tokens: maxTokens,
         },
         system_instructions: systemInstructions,
@@ -964,31 +962,6 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                     </div>
                   </div>
                 </div>
-              </div>
-
-              {/* Temperature Slider */}
-              <div className="p-4 bg-soft-meadow rounded-2xl border border-onyx/5 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-body-sm font-semibold text-deep-ink">
-                    {t('studio.model.temperature')} <strong className="font-mono">{temperature.toFixed(2)}</strong>
-                  </span>
-                  <span className="text-caption text-slate">
-                    {temperature <= 0.2
-                      ? 'Deterministic & Precise Coding'
-                      : temperature <= 0.7
-                        ? 'Balanced Reasoning'
-                        : 'Creative'}
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min="0.0"
-                  max="1.0"
-                  step="0.05"
-                  value={temperature}
-                  onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                  className="w-full accent-deep-ink cursor-pointer"
-                />
               </div>
 
               {/* Max Tokens Slider */}
