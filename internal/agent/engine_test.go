@@ -121,7 +121,7 @@ func TestEngineDurableApprovalResumeEndToEnd(t *testing.T) {
 	if !errors.As(err, &approvalRequired) {
 		t.Fatalf("expected durable approval pause, got %v", err)
 	}
-	privateFile := filepath.Join(workspace, "agents", manifest.AgentID, "workspace", "result.txt")
+	privateFile := filepath.Join(workspace, "result.txt")
 	if _, statErr := os.Stat(privateFile); !os.IsNotExist(statErr) {
 		t.Fatalf("tool executed before approval: %v", statErr)
 	}
@@ -215,11 +215,7 @@ func TestEngineStreamingReActToolExecutionAndEvents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	privateDir := filepath.Join(workspace, "agents", manifest.AgentID, "workspace")
-	if err := os.MkdirAll(privateDir, 0750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(privateDir, "input.txt"), []byte("stream observation"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspace, "input.txt"), []byte("stream observation"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	events := make(chan AgentStreamEvent, 64)

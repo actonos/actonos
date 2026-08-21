@@ -379,58 +379,33 @@ func parseFileWriteInput(inputJSON json.RawMessage) (string, string, string, err
 	return path, content, "overwrite", nil
 }
 
-// resolveTargetBaseDir returns the allowed root (the full data directory) and the base directory for path resolution.
-// Agents have full access across the entire data directory (skills, config, plugins, logs, workspace, etc.).
+// resolveTargetBaseDir returns the allowed root (dataDir) and base directory (dataDir) for path resolution.
+// All relative paths resolve directly inside the system data directory (e.g. 'skills/...', 'config/...', 'plugins/...', 'logs/...').
 func resolveTargetBaseDir(ctx context.Context, dataDir, agentsDir, requestedPath string) (allowedRoot string, baseDir string, targetRelPath string, err error) {
 	if dataDir == "" {
 		dataDir = "./data"
-	}
-	if agentsDir == "" {
-		agentsDir = filepath.Join(dataDir, "agents")
-	}
-
-	agentID := AgentIDFromContext(ctx)
-	if !validAgentWorkspaceSlug(agentID) {
-		agentID = "default"
-	}
-
-	agentWorkspace := filepath.Join(agentsDir, agentID, "workspace")
-	if err := os.MkdirAll(agentWorkspace, 0750); err != nil {
-		return "", "", "", fmt.Errorf("creating private agent workspace: %w", err)
 	}
 
 	absDataDir, err := filepath.Abs(dataDir)
 	if err != nil {
 		return "", "", "", fmt.Errorf("resolving data root: %w", err)
 	}
-
-	absWorkspace, err := filepath.Abs(agentWorkspace)
-	if err != nil {
-		return "", "", "", fmt.Errorf("resolving agent workspace: %w", err)
+	if err := os.MkdirAll(absDataDir, 0750); err != nil {
+		return "", "", "", fmt.Errorf("creating data directory: %w", err)
 	}
 
 	cleanReq := strings.TrimSpace(requestedPath)
 	cleanReq = strings.ReplaceAll(cleanReq, "\\", "/")
 	cleanReq = strings.TrimPrefix(cleanReq, "./")
 
-	// If the path explicitly targets data/ or a top-level data folder (skills, config, plugins, logs, storage, agents)
-	// resolve starting from dataDir. Otherwise resolve from the agent's private workspace.
 	if strings.HasPrefix(cleanReq, "data/") {
 		cleanReq = strings.TrimPrefix(cleanReq, "data/")
-		return absDataDir, absDataDir, cleanReq, nil
 	}
-	if cleanReq == "data" {
-		return absDataDir, absDataDir, ".", nil
-	}
-
-	topLevelFolders := []string{"skills", "config", "plugins", "logs", "storage", "agents"}
-	for _, folder := range topLevelFolders {
-		if cleanReq == folder || strings.HasPrefix(cleanReq, folder+"/") {
-			return absDataDir, absDataDir, cleanReq, nil
-		}
+	if cleanReq == "data" || cleanReq == "" {
+		cleanReq = "."
 	}
 
-	return absDataDir, absWorkspace, cleanReq, nil
+	return absDataDir, absDataDir, cleanReq, nil
 }
 
 func validAgentWorkspaceSlug(agentID string) bool {
@@ -452,9 +427,6 @@ func parseDataAndAgentsDir(dataOrAgentsDir string, agentsDir ...string) (string,
 	d := dataOrAgentsDir
 	if d == "" {
 		d = "./data"
-	}
-	if filepath.Base(d) == "agents" || filepath.Base(d) == "workspace" {
-		return filepath.Dir(d), d
 	}
 	return d, filepath.Join(d, "agents")
 }

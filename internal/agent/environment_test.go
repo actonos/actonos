@@ -39,8 +39,8 @@ func TestBuildHostEnvironmentPrompt(t *testing.T) {
 		t.Errorf("prompt missing <workspace_storage_policy> XML tag, got:\n%s", prompt)
 	}
 
-	if !strings.Contains(prompt, "dedicated_workspace_default") {
-		t.Errorf("prompt missing dedicated_workspace_default rule, got:\n%s", prompt)
+	if !strings.Contains(prompt, "agent_private_workspace") {
+		t.Errorf("prompt missing agent_private_workspace rule, got:\n%s", prompt)
 	}
 
 	if !strings.Contains(prompt, "user_workspace_database") || !strings.Contains(prompt, "native_workspace_search") {
@@ -50,16 +50,11 @@ func TestBuildHostEnvironmentPrompt(t *testing.T) {
 	if !strings.Contains(prompt, "<filesystem_layout>") {
 		t.Errorf("prompt missing <filesystem_layout> tag, got:\n%s", prompt)
 	}
+	if !strings.Contains(prompt, "<system_data_root") {
+		t.Errorf("prompt missing <system_data_root> tag, got:\n%s", prompt)
+	}
 	if !strings.Contains(prompt, "<agent_private_workspace") {
 		t.Errorf("prompt missing <agent_private_workspace> tag, got:\n%s", prompt)
-	}
-	if !strings.Contains(prompt, "<system_directories") {
-		t.Errorf("prompt missing <system_directories> tag, got:\n%s", prompt)
-	}
-
-	customAgentPrompt := BuildAgentEnvironmentPrompt("/custom", "/custom/workspace", "agent_custom_coder")
-	if !strings.Contains(customAgentPrompt, "agent_custom_coder") || !strings.Contains(customAgentPrompt, "agents") {
-		t.Errorf("expected custom agent slug in agent_dir prompt, got:\n%s", customAgentPrompt)
 	}
 
 	if runtime.GOOS == "windows" {

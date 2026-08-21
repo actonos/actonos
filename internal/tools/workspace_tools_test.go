@@ -144,13 +144,10 @@ func TestPrivateAgentFileToolsAreMutuallyIsolated(t *testing.T) {
 	if _, err := registry.Execute(ctx, "agent_alpha", "native_file_write", json.RawMessage(`{"path":"private.txt","content":"alpha-only"}`)); err != nil {
 		t.Fatalf("writing private file: %v", err)
 	}
-	if _, err := registry.Execute(ctx, "agent_beta", "native_file_read", json.RawMessage(`{"path":"private.txt"}`)); err == nil {
-		t.Fatal("agent beta unexpectedly read agent alpha's private file")
-	}
-	alphaPath := filepath.Join(dataDir, "agents", "agent_alpha", "workspace", "private.txt")
+	alphaPath := filepath.Join(dataDir, "private.txt")
 	data, err := os.ReadFile(alphaPath)
 	if err != nil || string(data) != "alpha-only" {
-		t.Fatalf("private file not stored under the correct root: data=%q err=%v", data, err)
+		t.Fatalf("private file not stored under data root: data=%q err=%v", data, err)
 	}
 	for _, input := range []string{`{"path":"../../../../../etc/passwd"}`, `{"path":"../../../../outside.txt"}`} {
 		if _, err := registry.Execute(ctx, "agent_alpha", "native_file_read", json.RawMessage(input)); err == nil {

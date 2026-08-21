@@ -40,7 +40,7 @@ func TestToolRegistry_NotifiesSuccessfulFileMutations(t *testing.T) {
 		json.RawMessage(`{"path":"notes.txt","content":"semantic content"}`)); err != nil {
 		t.Fatal(err)
 	}
-	wantPath := filepath.Join(workspace, "agents", "agent-files", "workspace", "notes.txt")
+	wantPath := filepath.Join(workspace, "notes.txt")
 	wantInfo, wantErr := os.Stat(wantPath)
 	gotInfo, gotErr := os.Stat(sink.path)
 	if sink.calls != 1 || wantErr != nil || gotErr != nil || !os.SameFile(wantInfo, gotInfo) || sink.agentID != "agent-files" || sink.deleted {
@@ -656,7 +656,7 @@ func TestFileWriteTool_RobustParsing(t *testing.T) {
 	agentID := "agent_parser"
 	tool := NewFileWriteTool(workspaceDir)
 	ctx := WithAgentID(context.Background(), agentID)
-	privateDir := filepath.Join(workspaceDir, agentID, "workspace")
+	privateDir := workspaceDir
 
 	// 1. Standard JSON
 	_, err := tool.Execute(ctx, json.RawMessage(`{"path": "email1.html", "content": "<h1>Hello</h1>"}`))
@@ -695,13 +695,11 @@ func TestFileWriteTool_RobustParsing(t *testing.T) {
 
 func TestAgentSpecificWorkspaceFileOperations(t *testing.T) {
 	tempDir := t.TempDir()
-	workspaceDir := filepath.Join(tempDir, "workspace")
-	_ = os.MkdirAll(workspaceDir, 0755)
 
 	eventBus := bus.NewEventBus()
 	defer eventBus.Close()
 	registry := NewToolRegistry(eventBus)
-	RegisterNativeTools(registry, workspaceDir)
+	RegisterNativeTools(registry, tempDir)
 
 	ctx := context.Background()
 	agentID := "agent_system_core"
@@ -713,11 +711,11 @@ func TestAgentSpecificWorkspaceFileOperations(t *testing.T) {
 		t.Fatalf("native_file_write failed: %v", err)
 	}
 
-	// Verify it was written inside data/agents/{slug}/workspace/note.txt.
-	expectedAgentFile := filepath.Join(tempDir, "agents", agentID, "workspace", "note.txt")
+	// Verify it was written inside data directory root note.txt
+	expectedAgentFile := filepath.Join(tempDir, "note.txt")
 	data, err := os.ReadFile(expectedAgentFile)
 	if err != nil {
-		t.Fatalf("expected file in agent workspace %s: %v", expectedAgentFile, err)
+		t.Fatalf("expected file in data root %s: %v", expectedAgentFile, err)
 	}
 	if string(data) != "agent note" {
 		t.Fatalf("expected 'agent note', got %q", string(data))
@@ -733,16 +731,7 @@ func TestAgentSpecificWorkspaceFileOperations(t *testing.T) {
 		t.Fatalf("expected 'agent note', got %q", readRes.Content)
 	}
 
-	// 3. A user file in the legacy shared workspace must never be visible through native_file_read.
-	sharedFile := filepath.Join(workspaceDir, "DELIVERIES.md")
-	_ = os.WriteFile(sharedFile, []byte("# Deliveries Shared"), 0644)
-
-	sharedReadInput := json.RawMessage(`{"path": "DELIVERIES.md"}`)
-	if _, err := registry.Execute(ctx, agentID, "native_file_read", sharedReadInput); err == nil {
-		t.Fatal("private agent file tool unexpectedly read the shared user workspace")
-	}
-
-	// 4. Non-existent file read returns "reading file" error, not "access denied / path escapes"
+	// 3. Non-existent file read returns "reading file" error, not "access denied / path escapes"
 	missingInput := json.RawMessage(`{"path": "MISSING.md"}`)
 	_, missingErr := registry.Execute(ctx, agentID, "native_file_read", missingInput)
 	if missingErr == nil {

@@ -189,16 +189,8 @@ func (s *ConstraintsSection) Render() string {
 	sb.WriteString("  <rule id=\"tool_domain_relevance\">Only invoke tools directly related to the user request. For web searches, use `native_web_search`; do NOT randomly inspect workspace files or hardware telemetry unless requested.</rule>\n")
 	sb.WriteString("  <rule id=\"verify_modifications\">After modifying code, files, or executing system changes, verify the status code and observations before declaring task completion.</rule>\n")
 	if s.AgentSlug != "" {
-		dataRoot := s.DataDir
-		if dataRoot == "" {
-			if s.WorkspaceDir != "" && filepath.Base(s.WorkspaceDir) == "workspace" {
-				dataRoot = filepath.Dir(s.WorkspaceDir)
-			} else {
-				dataRoot = "./data"
-			}
-		}
-		agentWs := filepath.Join(dataRoot, "agents", s.AgentSlug, "workspace")
-		fmt.Fprintf(&sb, "  <rule id=\"agent_workspace_discipline\">All relative paths for native_file_* are automatically relative to your private workspace root `%s`. Do NOT prefix paths with 'data/' or 'agents/'. Use native_workspace_* with opaque IDs for user files in virtual `/data/workspace`.</rule>\n", agentWs)
+		agentWs := filepath.ToSlash(filepath.Join("agents", s.AgentSlug, "workspace"))
+		fmt.Fprintf(&sb, "  <rule id=\"agent_workspace_discipline\">Your private storage directory is `%s/`. All task outputs, temporary scripts, and artifacts you create MUST be stored inside `%s/` unless explicitly instructed to create a global skill in 'skills/' or edit system config.</rule>\n", agentWs, agentWs)
 	}
 	for _, r := range s.AdditionalRules {
 		if r != "" {

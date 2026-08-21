@@ -1122,9 +1122,7 @@ func TestServer_ProductionEndpoints(t *testing.T) {
 
 func TestServer_ApprovalAndRunEndpoints(t *testing.T) {
 	srv := newTestServer(t)
-	privateDir := filepath.Join(srv.dataDir, "agents", "agent_system_core", "workspace")
-	_ = os.MkdirAll(privateDir, 0750)
-	_ = os.WriteFile(filepath.Join(privateDir, "approval.txt"), []byte("data"), 0644)
+	_ = os.WriteFile(filepath.Join(srv.dataDir, "approval.txt"), []byte("data"), 0644)
 
 	body := bytes.NewBufferString(`{
 		"name":"native_file_delete",
