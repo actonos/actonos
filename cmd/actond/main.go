@@ -311,6 +311,7 @@ func main() {
 	}
 
 	channelMgr := channels.NewChannelManager(eventBus, pairingMgr)
+	toolReg.SetChannelSender(channelMgr)
 
 	// Load initial channel accounts from disk
 	loadAccountsFromDisk := func(ch string) []channels.ChannelAccount {

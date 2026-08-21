@@ -149,7 +149,6 @@ func BuildAgentEnvironmentPrompt(dataDir, workspaceDir, agentSlug string) string
 	}
 
 	agentWorkspace := filepath.Join(dataDir, "agents", agentSlug, "workspace")
-	_ = os.MkdirAll(agentWorkspace, 0755)
 
 	var sb strings.Builder
 

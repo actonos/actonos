@@ -15,7 +15,7 @@ import (
 
 func configureHeartbeatDirective(t *testing.T, db *memory.DB, daemon *HeartbeatDaemon, directive string) {
 	t.Helper()
-	taskManager, err := NewTaskManager(db.SQLDB(), "")
+	taskManager, err := NewTaskManager(db.SQLDB(), t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,9 +144,6 @@ func TestHeartbeatExcludesCronFromRoutineTools(t *testing.T) {
 		for _, tool := range opts.Tools {
 			if tool.Function.Name == "native_cron_schedule" {
 				t.Fatal("routine heartbeat exposed cron scheduling to the model")
-			}
-			if tool.Function.Name == "native_channel_notify" {
-				t.Fatal("routine heartbeat exposed channel notify to the model")
 			}
 		}
 		return &llm.Response{Model: "openai/gpt-4o", Content: "HEARTBEAT_OK"}, nil

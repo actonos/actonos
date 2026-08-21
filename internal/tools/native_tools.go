@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -1075,12 +1076,22 @@ func (t *WebSearchTool) searchDDGAPI(ctx context.Context, query string, maxResul
 // 9. Channel Notify Tool (Proactive Message Dispatch)
 // -----------------------------------------------------------------------------
 
+// ChannelMessageSender delivers outbound notifications to active channel adapters.
+type ChannelMessageSender interface {
+	Send(ctx context.Context, channelID, accountID, recipient, content string) error
+}
+
 type ChannelNotifyTool struct {
-	bus *bus.EventBus
+	bus    *bus.EventBus
+	sender ChannelMessageSender
 }
 
 func NewChannelNotifyTool(eventBus *bus.EventBus) *ChannelNotifyTool {
 	return &ChannelNotifyTool{bus: eventBus}
+}
+
+func (t *ChannelNotifyTool) SetSender(s ChannelMessageSender) {
+	t.sender = s
 }
 
 func (t *ChannelNotifyTool) Name() string { return "native_channel_notify" }
@@ -1093,7 +1104,7 @@ func (t *ChannelNotifyTool) ParametersSchema() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {
-			"channel": { "type": "string", "enum": ["telegram", "whatsapp", "discord", "all"], "description": "Target channel (default 'telegram')" },
+			"channel": { "type": "string", "enum": ["telegram", "whatsapp", "discord", "all"], "description": "Target channel (default 'all')" },
 			"account_id": { "type": "string", "description": "Target account ID or 'all' (default 'all')" },
 			"recipient": { "type": "string", "description": "Optional recipient chat ID or phone number" },
 			"message": { "type": "string", "description": "Message content to send" }
@@ -1114,7 +1125,7 @@ func (t *ChannelNotifyTool) Execute(ctx context.Context, inputJSON json.RawMessa
 		return nil, errors.New("message parameter is required")
 	}
 	if input.Channel == "" {
-		input.Channel = "telegram"
+		input.Channel = "all"
 	}
 	if input.AccountID == "" {
 		input.AccountID = "all"
@@ -1129,6 +1140,12 @@ func (t *ChannelNotifyTool) Execute(ctx context.Context, inputJSON json.RawMessa
 			"target_account_id": input.AccountID,
 			"target_recipient":  input.Recipient,
 		}))
+	}
+
+	if t.sender != nil {
+		if err := t.sender.Send(ctx, input.Channel, input.AccountID, input.Recipient, input.Message); err != nil {
+			slog.Warn("channel notify direct send failed", "channel", input.Channel, "error", err)
+		}
 	}
 
 	return &ToolResult{

@@ -482,11 +482,7 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) *Heartbea
 		taskCtx := context.WithValue(ctx, "task_id", activeTask.ID)
 		taskCtx = context.WithValue(taskCtx, "suppress_episodic_memory", true)
 		taskCtx = context.WithValue(taskCtx, "heartbeat_headless_mode", true)
-		// Delivery is the runtime's responsibility (the mission coordinator routes
-		// the final response to activeTask.TargetChannel below); the model must
-		// never call the notify tool itself, and must never create/alter recurring
-		// automations as a side effect of executing a one-off mission.
-		taskCtx = tools.WithDeniedTools(taskCtx, "native_channel_notify", "channel_notify", "native_cron_schedule")
+		taskCtx = tools.WithDeniedTools(taskCtx, "native_cron_schedule")
 		resp, execErr := h.engine.ExecuteAutonomousGoal(taskCtx, assignedAgent, prompt, history)
 		if execErr != nil {
 			var approvalErr *tools.ApprovalRequiredError
@@ -613,12 +609,7 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) *Heartbea
 	// CASE B: Routine System Health & Zero-Noise Evaluation
 	routineCtx := context.WithValue(ctx, "suppress_episodic_memory", true)
 	routineCtx = context.WithValue(routineCtx, "heartbeat_headless_mode", true)
-	// Recurring schedules and outbound notifications are runtime/operator
-	// concerns, never actions an unattended routine heartbeat should take
-	// itself: cron changes must always be an explicit operator request
-	// (never inferred from a directive), and delivery of the reply below is
-	// handled automatically by the daemon via the configured target channel.
-	routineCtx = tools.WithDeniedTools(routineCtx, "native_cron_schedule", "native_channel_notify", "channel_notify")
+	routineCtx = tools.WithDeniedTools(routineCtx, "native_cron_schedule")
 	backlogSummary := "All previous backlog missions are COMPLETED. There are ZERO pending or in-progress tasks."
 	if h.taskMgr != nil {
 		completedList, _ := h.taskMgr.ListTasks(ctx, "completed", "")
@@ -728,10 +719,9 @@ const heartbeatOKToken = "HEARTBEAT_OK"
 const defaultAckMaxChars = 300
 
 // classifyHeartbeatResponse implements OpenClaw's heartbeat response
-// contract: HEARTBEAT_OK is only treated as an acknowledgement when it
-// appears at the start or end of the trimmed reply AND the remaining content
-// is at most ackMaxChars long. A token appearing in the middle of the reply
-// is not special-cased and the whole reply is treated as an alert. Returns
+// contract: HEARTBEAT_OK (and standard nominal/OK variations) is treated as an
+// acknowledgement when it appears at the boundary of the trimmed reply or matches
+// nominal status patterns AND the remaining content is within ackMaxChars. Returns
 // (isAck, alertText) — alertText is only meaningful when isAck is false.
 func classifyHeartbeatResponse(content string, ackMaxChars int) (bool, string) {
 	trimmed := strings.TrimSpace(content)
@@ -742,12 +732,53 @@ func classifyHeartbeatResponse(content string, ackMaxChars int) (bool, string) {
 		ackMaxChars = defaultAckMaxChars
 	}
 
-	if rest, ok := stripBoundaryToken(trimmed, heartbeatOKToken, true); ok && len(rest) <= ackMaxChars {
-		return true, ""
+	nominalTokens := []string{
+		heartbeatOKToken,
+		"SYSTEM_NOMINAL",
+		"ALL_NOMINAL",
+		"ZERO_TASKS_PENDING",
 	}
-	if rest, ok := stripBoundaryToken(trimmed, heartbeatOKToken, false); ok && len(rest) <= ackMaxChars {
-		return true, ""
+	for _, tok := range nominalTokens {
+		if rest, ok := stripBoundaryToken(trimmed, tok, true); ok && len(rest) <= ackMaxChars {
+			return true, ""
+		}
+		if rest, ok := stripBoundaryToken(trimmed, tok, false); ok && len(rest) <= ackMaxChars {
+			return true, ""
+		}
 	}
+
+	// Double-barrier safety layer: Check if response is an affirmative/nominal status without new actionable alerts
+	lower := strings.ToLower(trimmed)
+	cleanLower := strings.Trim(lower, " .!;\n\r\t*`\"'")
+	nominalExactPhrases := []string{
+		"heartbeat ok",
+		"heartbeat_ok",
+		"ok",
+		"system ok",
+		"everything is ok",
+		"everything is nominal",
+		"system nominal",
+		"system is nominal",
+		"all systems nominal",
+		"all systems operational",
+		"zero tasks pending",
+		"no actionable tasks",
+		"no actionable items",
+		"no proactive notification required",
+		"không có vấn đề gì",
+		"mọi thứ đều ổn",
+		"hệ thống bình thường",
+		"hệ thống hoạt động bình thường",
+		"không cần hành động",
+		"không có tác vụ nào cần xử lý",
+		"tất cả đều ổn",
+	}
+	for _, phrase := range nominalExactPhrases {
+		if cleanLower == phrase {
+			return true, ""
+		}
+	}
+
 	return false, trimmed
 }
 

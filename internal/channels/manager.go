@@ -401,6 +401,16 @@ func (m *ChannelManager) FindBoundAgent(channelID, accountID string) string {
 	return ""
 }
 
+// Send implements tools.ChannelMessageSender.
+func (m *ChannelManager) Send(ctx context.Context, channelID, accountID, recipient, content string) error {
+	return m.SendMessage(ctx, OutboundMessage{
+		ChannelID: channelID,
+		AccountID: accountID,
+		Recipient: recipient,
+		Content:   content,
+	})
+}
+
 // SendMessage dispatches an outbound message according to target channel, account, and recipient.
 func (m *ChannelManager) SendMessage(ctx context.Context, msg OutboundMessage) error {
 	m.mu.RLock()
@@ -463,7 +473,7 @@ func (m *ChannelManager) SendMessage(ctx context.Context, msg OutboundMessage) e
 				continue
 			}
 			acc := m.accounts[id]
-			recipients := m.resolveRecipients(acc, "", nil, msg.Recipient)
+			recipients := m.resolveRecipients(acc, adapter.GetLastChannelID(), nil, msg.Recipient)
 			for _, r := range recipients {
 				if err := adapter.SendMessage(ctx, OutboundMessage{
 					ChannelID: "discord",

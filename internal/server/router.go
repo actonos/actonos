@@ -185,6 +185,9 @@ func NewServer(cfg Config) *Server {
 	if s.heartbeat != nil && s.approvalMgr != nil {
 		s.heartbeat.SetApprovalManager(s.approvalMgr)
 	}
+	if s.toolReg != nil && s.channelMgr != nil {
+		s.toolReg.SetChannelSender(s.channelMgr)
+	}
 
 	s.setupRoutes()
 	return s

@@ -438,10 +438,15 @@ func (d *DiscordAdapter) SendMessage(ctx context.Context, msg OutboundMessage) e
 		return d.postWebhook(ctx, url, content)
 	}
 
-	// 2. Bot Token REST API Mode
 	targetChannel := msg.Recipient
 	if targetChannel == "" || targetChannel == "default" || targetChannel == "all" {
 		targetChannel = lastChan
+	}
+	if targetChannel == "" && d.pairingMgr != nil {
+		paired := d.pairingMgr.ListAuthorized("discord")
+		if len(paired) > 0 {
+			targetChannel = paired[0].SenderID
+		}
 	}
 	if targetChannel == "" {
 		return fmt.Errorf("no discord recipient channel specified")
@@ -488,33 +493,93 @@ func (d *DiscordAdapter) postWebhook(ctx context.Context, webhookURL, content st
 	return nil
 }
 
-func (d *DiscordAdapter) sendBotMessage(ctx context.Context, token, channelID, content string) error {
+func (d *DiscordAdapter) getOrCreateDMChannel(ctx context.Context, token, recipientID string) (string, error) {
 	cleanTok := strings.TrimPrefix(token, "Bot ")
 	cleanTok = strings.TrimSpace(cleanTok)
 
-	url := fmt.Sprintf("https://discord.com/api/v10/channels/%s/messages", channelID)
-	body := map[string]string{"content": content}
+	url := "https://discord.com/api/v10/users/@me/channels"
+	body := map[string]string{"recipient_id": recipientID}
 	data, err := json.Marshal(body)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
 	if err != nil {
-		return err
+		return "", err
 	}
 	req.Header.Set("Authorization", "Bot "+cleanTok)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := d.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("sending discord bot message: %w", err)
+		return "", fmt.Errorf("opening discord DM channel: %w", err)
 	}
 	defer resp.Body.Close()
 
+	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("discord open DM returned %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var dm struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(respBody, &dm); err != nil || dm.ID == "" {
+		return "", fmt.Errorf("invalid dm response from discord: %s", string(respBody))
+	}
+	return dm.ID, nil
+}
+
+func (d *DiscordAdapter) sendBotMessage(ctx context.Context, token, channelOrUserID, content string) error {
+	cleanTok := strings.TrimPrefix(token, "Bot ")
+	cleanTok = strings.TrimSpace(cleanTok)
+
+	sendToChannel := func(chanID string) (int, []byte, error) {
+		url := fmt.Sprintf("https://discord.com/api/v10/channels/%s/messages", chanID)
+		body := map[string]string{"content": content}
+		data, err := json.Marshal(body)
+		if err != nil {
+			return 0, nil, err
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
+		if err != nil {
+			return 0, nil, err
+		}
+		req.Header.Set("Authorization", "Bot "+cleanTok)
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := d.client.Do(req)
+		if err != nil {
+			return 0, nil, fmt.Errorf("sending discord bot message: %w", err)
+		}
+		defer resp.Body.Close()
 		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("discord api error (%d): %s", resp.StatusCode, string(respBody))
+		return resp.StatusCode, respBody, nil
+	}
+
+	statusCode, respBody, err := sendToChannel(channelOrUserID)
+	if err != nil {
+		return err
+	}
+
+	// If 404 Unknown Channel (code 10003), channelOrUserID is likely a User ID — create/fetch the DM channel and retry
+	if statusCode == http.StatusNotFound && (strings.Contains(string(respBody), "10003") || strings.Contains(string(respBody), "Unknown Channel")) {
+		dmChanID, dmErr := d.getOrCreateDMChannel(ctx, token, channelOrUserID)
+		if dmErr == nil && dmChanID != "" {
+			d.mu.Lock()
+			d.lastChannelID = dmChanID
+			d.mu.Unlock()
+
+			statusCode, respBody, err = sendToChannel(dmChanID)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	if statusCode < 200 || statusCode >= 300 {
+		return fmt.Errorf("discord api error (%d): %s", statusCode, string(respBody))
 	}
 	return nil
 }

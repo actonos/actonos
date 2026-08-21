@@ -161,6 +161,15 @@ func (r *ToolRegistry) SetWorkspaceMutationSink(sink WorkspaceMutationSink) {
 	r.workspaceMutations = sink
 }
 
+// SetChannelSender wires up the messaging channel dispatcher for native_channel_notify.
+func (r *ToolRegistry) SetChannelSender(s ChannelMessageSender) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if tool, ok := r.tools["native_channel_notify"].(*ChannelNotifyTool); ok {
+		tool.SetSender(s)
+	}
+}
+
 // WithTraceID propagates an end-to-end trace identifier into tool execution.
 func WithTraceID(ctx context.Context, traceID string) context.Context {
 	return context.WithValue(ctx, traceIDContextKey, traceID)
