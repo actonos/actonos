@@ -191,8 +191,8 @@ func initCanonicalCatalog() {
 			AccentColor:    "#10B981",
 			ModelPresets: []ModelSpec{
 				{
-					ID:              "openai/gpt-5-mini",
-					Name:            "GPT-5 Mini",
+					ID:              "openai/gpt-5.4-mini",
+					Name:            "GPT-5.4 Mini",
 					ProviderID:      "openai",
 					ProviderName:    "OpenAI",
 					Badge:           "Lightweight Ultra-Fast Multimodal",

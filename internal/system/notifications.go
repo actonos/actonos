@@ -589,8 +589,8 @@ func (nm *NotificationManager) StartBackgroundListener(ctx context.Context) {
 					}
 					nm.clearIntegrationAlert("channel:" + accountID)
 					_, _ = nm.Create(context.Background(), Notification{
-						Title:    fmt.Sprintf("Kênh chat đã kết nối lại: %s (%s)", name, channel),
-						Message:  fmt.Sprintf("Tài khoản '%s' trên %s đã hoạt động trở lại.", name, channel),
+						Title:    fmt.Sprintf("Connected to the channel: %s (%s)", name, channel),
+						Message:  fmt.Sprintf("Account '%s' on %s is now connected.", name, channel),
 						Type:     "success",
 						Category: "system",
 						Link:     "/channels",

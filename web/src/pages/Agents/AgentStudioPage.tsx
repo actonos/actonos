@@ -99,8 +99,8 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
   const [isSystem, setIsSystem] = useState(false);
 
   // Model & Reasoning
-  const [primaryModel, setPrimaryModel] = useState('anthropic/claude-sonnet-4-6');
-  const [fallbackModel, setFallbackModel] = useState('openai/gpt-5-mini');
+  const [primaryModel, setPrimaryModel] = useState('openai/gpt-5.4-mini');
+  const [fallbackModel, setFallbackModel] = useState('openai/gpt-5.4-mini');
   const [temperature, setTemperature] = useState(0.2);
   const [maxTokens, setMaxTokens] = useState(4096);
 
@@ -166,8 +166,8 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
           setIsSystem(!!agent.is_system);
 
           if (agent.model_config) {
-            const pMod = agent.model_config.primary_model || 'anthropic/claude-sonnet-4-6';
-            const fMod = agent.model_config.fallback_model || 'openai/gpt-5-mini';
+            const pMod = agent.model_config.primary_model || 'openai/gpt-5.4-mini';
+            const fMod = agent.model_config.fallback_model || 'openai/gpt-5.4-mini';
             setPrimaryModel(pMod);
             setFallbackModel(fMod);
             setTemperature(agent.model_config.temperature ?? 0.2);

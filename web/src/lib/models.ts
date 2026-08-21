@@ -135,8 +135,8 @@ export const LATEST_MODEL_CATALOG: ModelOption[] = [
 
   // OpenAI
   {
-    id: 'openai/gpt-5-mini',
-    name: 'GPT-5 Mini',
+    id: 'openai/gpt-5.4-mini',
+    name: 'GPT-5.4 Mini',
     providerId: 'openai',
     providerName: 'OpenAI',
     badge: 'Lightweight Ultra-Fast Multimodal',
@@ -426,7 +426,6 @@ export const PROVIDER_METAS: ProviderMeta[] = [
     defaultBaseURL: 'https://api.openai.com/v1',
     modelPresets: [
       { id: 'gpt-5', label: 'GPT-5 (Flagship Foundation)' },
-      { id: 'gpt-5-mini', label: 'GPT-5 Mini (Ultra Fast)' },
       { id: 'gpt-5.1', label: 'GPT-5.1 (Tool Calling Enhanced)' },
       { id: 'gpt-5.2', label: 'GPT-5.2 (Multi-Step Reasoning)' },
       { id: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },

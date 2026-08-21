@@ -292,8 +292,8 @@ func (m *AgentManager) EnsureDefaultAgent(ctx context.Context) error {
 		Status:      StatusActive,
 		IsSystem:    true,
 		ModelConfig: llm.ModelConfig{
-			PrimaryModel:  "anthropic/claude-sonnet-4-6",
-			FallbackModel: "openai/gpt-5-mini",
+			PrimaryModel:  "openai/gpt-5.4-mini",
+			FallbackModel: "openai/gpt-5.4-mini",
 			Temperature:   0.2,
 			MaxTokens:     32768,
 		},

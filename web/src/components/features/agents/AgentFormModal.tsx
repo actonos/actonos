@@ -27,8 +27,8 @@ export function AgentFormModal({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [systemInstructions, setSystemInstructions] = useState('');
-  const [primaryModel, setPrimaryModel] = useState('anthropic/claude-sonnet-4-6');
-  const [fallbackModel, setFallbackModel] = useState('openai/gpt-5-mini');
+  const [primaryModel, setPrimaryModel] = useState('openai/gpt-5.4-mini');
+  const [fallbackModel, setFallbackModel] = useState('openai/gpt-5.4-mini');
   const [temperature, setTemperature] = useState(0.2);
   const [authorizedTools, setAuthorizedTools] = useState<string[]>(['native_file_read', 'native_sysinfo']);
   const [monthlyBudget, setMonthlyBudget] = useState(50);
@@ -40,8 +40,8 @@ export function AgentFormModal({
       setName(initialAgent.name || '');
       setDescription(initialAgent.description || '');
       setSystemInstructions(initialAgent.system_instructions || '');
-      setPrimaryModel(initialAgent.model_config?.primary_model || 'anthropic/claude-sonnet-4-6');
-      setFallbackModel(initialAgent.model_config?.fallback_model || 'openai/gpt-5-mini');
+      setPrimaryModel(initialAgent.model_config?.primary_model || 'openai/gpt-5.4-mini');
+      setFallbackModel(initialAgent.model_config?.fallback_model || 'openai/gpt-5.4-mini');
       setTemperature(initialAgent.model_config?.temperature ?? 0.2);
       setAuthorizedTools(initialAgent.authorized_tools || ['native_file_read', 'native_sysinfo']);
       setMonthlyBudget(initialAgent.delegation_scope?.max_monthly_budget_usd ?? 50);
@@ -50,8 +50,8 @@ export function AgentFormModal({
       setName('');
       setDescription('');
       setSystemInstructions('');
-      setPrimaryModel('anthropic/claude-sonnet-4-6');
-      setFallbackModel('openai/gpt-5-mini');
+      setPrimaryModel('openai/gpt-5.4-mini');
+      setFallbackModel('openai/gpt-5.4-mini');
       setTemperature(0.2);
       setAuthorizedTools(['native_file_read', 'native_sysinfo']);
       setMonthlyBudget(50);

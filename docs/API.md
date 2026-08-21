@@ -248,8 +248,8 @@ Create a new agent manifest.
   "description": "Helps with academic research and web summaries",
   "avatar_icon": "bot",
   "model_config": {
-    "primary_model": "anthropic/claude-sonnet-4-6",
-    "fallback_model": "openai/gpt-5-mini",
+    "primary_model": "openai/gpt-5.4-mini",
+    "fallback_model": "openai/gpt-5.4-mini",
     "temperature": 0.3
   },
   "system_instructions": "You are an expert research analyst...",

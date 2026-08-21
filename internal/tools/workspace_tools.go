@@ -175,8 +175,7 @@ func (t *WorkspaceWriteTool) ParametersSchema() json.RawMessage {
 			"content_base64":{"type":"string","description":"Base64 bytes for format-agnostic binary content"},
 			"mime_type":{"type":"string","description":"Optional MIME hint; content sniffing is authoritative"},
 			"expected_version":{"type":"integer","minimum":1,"description":"Required for conflict-safe updates"}
-		},
-		"oneOf":[{"required":["content"]},{"required":["content_base64"]}]
+		}
 	}`)
 }
 func (t *WorkspaceWriteTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {
