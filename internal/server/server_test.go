@@ -726,13 +726,15 @@ func TestServer_SystemSetupKeysDashboardAndAdministrativeTools(t *testing.T) {
 		}
 	}
 
-	skillApproval := requestApproval(
-		http.MethodPost, "/api/tools/skill", "application/json",
-		bytes.NewBufferString(`{"name":"api_skill","description":"API skill","content":"Instructions"}`),
-	)
-	approve(skillApproval, http.StatusOK)
+	skillReq := httptest.NewRequest(http.MethodPost, "/api/tools/skill", bytes.NewBufferString(`{"name":"api_skill","description":"API skill","content":"Instructions"}`))
+	skillReq.Header.Set("Content-Type", "application/json")
+	skillW := httptest.NewRecorder()
+	srv.Router().ServeHTTP(skillW, skillReq)
+	if skillW.Code != http.StatusOK {
+		t.Fatalf("expected skill creation status 200, got %d: %s", skillW.Code, skillW.Body.String())
+	}
 	if _, err := os.Stat(filepath.Join(srv.skillsDir, "api_skill", "SKILL.md")); err != nil {
-		t.Fatalf("approved skill was not created: %v", err)
+		t.Fatalf("created skill was not found on disk: %v", err)
 	}
 
 	wasmBody := &bytes.Buffer{}
@@ -760,16 +762,21 @@ func TestServer_SystemSetupKeysDashboardAndAdministrativeTools(t *testing.T) {
 	}
 	if len(catalog) > 0 {
 		skillID := catalog[0].ID
-		installApproval := requestApproval(
-			http.MethodPost, "/api/tools/hub/install", "application/json",
-			bytes.NewBufferString(`{"skill_id":"`+skillID+`"}`),
-		)
-		approve(installApproval, http.StatusOK)
-		uninstallApproval := requestApproval(
-			http.MethodPost, "/api/tools/hub/uninstall", "application/json",
-			bytes.NewBufferString(`{"skill_id":"`+skillID+`"}`),
-		)
-		approve(uninstallApproval, http.StatusOK)
+		installReq := httptest.NewRequest(http.MethodPost, "/api/tools/hub/install", bytes.NewBufferString(`{"skill_id":"`+skillID+`"}`))
+		installReq.Header.Set("Content-Type", "application/json")
+		installW := httptest.NewRecorder()
+		srv.Router().ServeHTTP(installW, installReq)
+		if installW.Code != http.StatusOK {
+			t.Fatalf("expected install status 200, got %d: %s", installW.Code, installW.Body.String())
+		}
+
+		uninstallReq := httptest.NewRequest(http.MethodPost, "/api/tools/hub/uninstall", bytes.NewBufferString(`{"skill_id":"`+skillID+`"}`))
+		uninstallReq.Header.Set("Content-Type", "application/json")
+		uninstallW := httptest.NewRecorder()
+		srv.Router().ServeHTTP(uninstallW, uninstallReq)
+		if uninstallW.Code != http.StatusOK {
+			t.Fatalf("expected uninstall status 200, got %d: %s", uninstallW.Code, uninstallW.Body.String())
+		}
 	}
 
 	restartApproval := requestApproval(

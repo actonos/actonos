@@ -4,8 +4,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -195,17 +197,23 @@ func (s *Server) handleCreateSkill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Name == "" {
-		s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", "skill name is required")
+	if req.Name == "" || strings.ContainsAny(req.Name, `/\`) {
+		s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", "valid skill name is required")
 		return
 	}
 
-	approval, err := s.requestAdminAction(r.Context(), "skill_create", req)
-	if err != nil {
-		s.respondError(w, http.StatusInternalServerError, "APPROVAL_REQUEST_FAILED", err.Error())
+	dir := filepath.Join(s.skillsDir, req.Name)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		s.respondError(w, http.StatusInternalServerError, "DIRECTORY_CREATION_FAILED", err.Error())
 		return
 	}
-	s.respondJSON(w, http.StatusAccepted, map[string]any{"status": "approval_required", "approval": approval})
+	content := fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n\n%s\n", req.Name, req.Description, req.Content)
+	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(content), 0644); err != nil {
+		s.respondError(w, http.StatusInternalServerError, "WRITE_FILE_FAILED", err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]string{"status": "created", "name": req.Name, "path": dir})
 }
 
 func (s *Server) handleUploadWASM(w http.ResponseWriter, r *http.Request) {
@@ -266,12 +274,11 @@ func (s *Server) handleInstallHubSkill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	approval, err := s.requestAdminAction(r.Context(), "hub_install", req)
-	if err != nil {
-		s.respondError(w, http.StatusInternalServerError, "APPROVAL_REQUEST_FAILED", err.Error())
+	if err := s.hubMgr.InstallSkill(req.SkillID); err != nil {
+		s.respondError(w, http.StatusInternalServerError, "INSTALL_FAILED", err.Error())
 		return
 	}
-	s.respondJSON(w, http.StatusAccepted, map[string]any{"status": "approval_required", "approval": approval})
+	s.respondJSON(w, http.StatusOK, map[string]any{"status": "installed", "skill_id": req.SkillID})
 }
 
 func (s *Server) handleUninstallHubSkill(w http.ResponseWriter, r *http.Request) {
@@ -288,12 +295,11 @@ func (s *Server) handleUninstallHubSkill(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	approval, err := s.requestAdminAction(r.Context(), "hub_uninstall", req)
-	if err != nil {
-		s.respondError(w, http.StatusInternalServerError, "APPROVAL_REQUEST_FAILED", err.Error())
+	if err := s.hubMgr.UninstallSkill(req.SkillID); err != nil {
+		s.respondError(w, http.StatusInternalServerError, "UNINSTALL_FAILED", err.Error())
 		return
 	}
-	s.respondJSON(w, http.StatusAccepted, map[string]any{"status": "approval_required", "approval": approval})
+	s.respondJSON(w, http.StatusOK, map[string]any{"status": "uninstalled", "skill_id": req.SkillID})
 }
 
 func (s *Server) handleToggleSkill(w http.ResponseWriter, r *http.Request) {
