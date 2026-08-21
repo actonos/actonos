@@ -396,8 +396,10 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
       content: '',
       timestamp: now,
       thought: `Deliberating with ${activeAgent?.name || 'Agent'}...`,
+      segments: [],
       toolCalls: [],
       auditLogs: [],
+      finalized: false,
     };
 
     setMessages((prev) => [...prev, userMsgObj, currentAssistantMsg]);
@@ -497,17 +499,34 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                   thought: parsed.thought,
                 };
               } else if (currentEvent === 'reasoning' && parsed.reasoning) {
-                // Streaming CoT reasoning tokens
+                // Streaming CoT reasoning tokens into separate segments
+                const segs = [...(currentAssistantMsg.segments || [])];
+                const last = segs[segs.length - 1];
+                if (last && last.type === 'reasoning') {
+                  segs[segs.length - 1] = { ...last, text: last.text + parsed.reasoning };
+                } else {
+                  segs.push({ type: 'reasoning', text: parsed.reasoning });
+                }
                 currentAssistantMsg = {
                   ...currentAssistantMsg,
                   reasoning: (currentAssistantMsg.reasoning ?? '') + parsed.reasoning,
+                  segments: segs,
                 };
               } else if (currentEvent === 'token' && parsed.content) {
+                // Streaming tokens into separate segments
+                const segs = [...(currentAssistantMsg.segments || [])];
+                const last = segs[segs.length - 1];
+                if (last && last.type === 'content') {
+                  segs[segs.length - 1] = { ...last, text: last.text + parsed.content };
+                } else {
+                  segs.push({ type: 'content', text: parsed.content });
+                }
                 currentAssistantMsg = {
                   ...currentAssistantMsg,
                   content: currentAssistantMsg.content + parsed.content,
                   // A token arriving means the answer has started: clear transient status
                   thought: undefined,
+                  segments: segs,
                 };
               } else if (currentEvent === 'token_reset') {
                 // If this turn called tools, shift any streamed preamble into reasoning (stripping any raw DSML/XML markup)
@@ -517,12 +536,17 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                   .replace(/<[|｜]{1,2}[\s\S]*?>/g, '')
                   .replace(/<\/?(?:tool_call|function_call|invoke|parameter)[^>]*>/g, '')
                   .trim();
+                const segs = (currentAssistantMsg.segments || []).filter(s => s.type === 'reasoning');
+                if (cleanPreamble) {
+                  segs.push({ type: 'reasoning', text: cleanPreamble });
+                }
                 currentAssistantMsg = {
                   ...currentAssistantMsg,
                   reasoning: cleanPreamble
                     ? (currentAssistantMsg.reasoning ? currentAssistantMsg.reasoning + '\n\n' + cleanPreamble : cleanPreamble)
                     : currentAssistantMsg.reasoning,
                   content: '',
+                  segments: segs,
                 };
               } else if (currentEvent === 'tool_call') {
                 const newToolCall: ToolCallTrace = {
@@ -558,12 +582,14 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
                   model: parsed.model,
                   tokens_used: parsed.tokens_used,
                   thought: undefined,
+                  finalized: true,
                 };
               } else if (currentEvent === 'error') {
                 currentAssistantMsg = {
                   ...currentAssistantMsg,
                   content: currentAssistantMsg.content + `\n\nError: ${parsed.error}`,
                   thought: undefined,
+                  finalized: true,
                 };
               }
 

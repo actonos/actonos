@@ -383,3 +383,72 @@ h3,
 .tiptap-user .tiptap blockquote {
   color: rgba(255, 255, 255, 0.8);
 }
+
+/* TipTap Table Styling */
+.tiptap-renderer .tiptap table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.875rem 0;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid rgba(19, 14, 48, 0.12);
+  font-size: 12.5px;
+}
+
+:root[data-theme="dark"] .tiptap-renderer .tiptap table {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.tiptap-renderer .tiptap th,
+.tiptap-renderer .tiptap td {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+  border: 1px solid rgba(19, 14, 48, 0.08);
+}
+
+:root[data-theme="dark"] .tiptap-renderer .tiptap th,
+:root[data-theme="dark"] .tiptap-renderer .tiptap td {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.tiptap-renderer:not(.tiptap-user) .tiptap th {
+  background-color: rgba(19, 14, 48, 0.05);
+  font-weight: 600;
+  color: var(--color-deep-ink);
+}
+
+.tiptap-user .tiptap th {
+  background-color: rgba(255, 255, 255, 0.15);
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.tiptap-renderer:not(.tiptap-user) .tiptap tr:nth-child(even) td {
+  background-color: rgba(19, 14, 48, 0.02);
+}
+
+.tiptap-user .tiptap tr:nth-child(even) td {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.tiptap-renderer .tiptap th p,
+.tiptap-renderer .tiptap td p {
+  margin: 0 !important;
+  line-height: 1.45;
+}
+
+/* TipTap Horizontal Rule */
+.tiptap-renderer .tiptap hr {
+  border: none;
+  border-top: 1px solid rgba(19, 14, 48, 0.12);
+  margin: 1.25rem 0;
+}
+
+:root[data-theme="dark"] .tiptap-renderer .tiptap hr {
+  border-top-color: rgba(255, 255, 255, 0.12);
+}
+
+.tiptap-user .tiptap hr {
+  border-top-color: rgba(255, 255, 255, 0.2);
+}

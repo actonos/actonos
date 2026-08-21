@@ -58,5 +58,6 @@
   "milliseconds": "{{value}} ms",
   "copyResponse": "Sao chép phản hồi",
   "connecting": "Đang kết nối với tầng mô hình...",
-  "thinkingProcess": "Quá trình suy nghĩ"
+  "thinkingProcess": "Quá trình suy nghĩ",
+  "showThinking": "Xem quá trình suy nghĩ ({{count}} bước)"
 }

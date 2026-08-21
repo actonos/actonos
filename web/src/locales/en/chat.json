@@ -58,5 +58,6 @@
   "milliseconds": "{{value}} ms",
   "copyResponse": "Copy response",
   "connecting": "Connecting to model cascade...",
-  "thinkingProcess": "Thinking Process"
+  "thinkingProcess": "Thinking Process",
+  "showThinking": "Show thinking process ({{count}} steps)"
 }

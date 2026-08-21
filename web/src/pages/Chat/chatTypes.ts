@@ -17,6 +17,11 @@ export interface ToolCallTrace {
   latency_ms?: number;
 }
 
+export interface MessageSegment {
+  type: 'reasoning' | 'content';
+  text: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -26,6 +31,8 @@ export interface ChatMessage {
   tokens_used?: number;
   thought?: string;
   reasoning?: string;
+  segments?: MessageSegment[];
+  finalized?: boolean;
   toolCalls?: ToolCallTrace[];
   auditLogs?: AuditLogItem[];
 }
