@@ -267,6 +267,9 @@ export function ChatPage({ selectedAgentID, onSelectAgentID, onNavigateTab }: Ch
         });
 
         setMessages((prev) => {
+          if (newFormatted.length < prev.length) {
+            return prev;
+          }
           if (prev.length !== newFormatted.length || (prev.length > 0 && prev[prev.length - 1]?.content !== newFormatted[newFormatted.length - 1]?.content)) {
             return newFormatted;
           }

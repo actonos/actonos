@@ -776,8 +776,17 @@ func TestAdvancedFileOperations(t *testing.T) {
 		t.Fatal("expected edit content")
 	}
 
+	// 3b. Test native_file_edit with whitespace and trailing-space resilience
+	fuzzyEditRes, err := registry.Execute(ctx, agentID, "native_file_edit", json.RawMessage(`{"path": "code.py", "target_content": "line TWO modified   \n", "replacement_content": "line TWO resilient"}`))
+	if err != nil {
+		t.Fatalf("fuzzy whitespace edit failed: %v", err)
+	}
+	if fuzzyEditRes.Content == "" {
+		t.Fatal("expected fuzzy edit content")
+	}
+
 	verifyRead, _ := registry.Execute(ctx, agentID, "native_file_read", json.RawMessage(`{"path": "code.py"}`))
-	if !strings.Contains(verifyRead.Content, "line TWO modified") {
+	if !strings.Contains(verifyRead.Content, "line TWO resilient") {
 		t.Fatalf("expected edited line in file, got: %s", verifyRead.Content)
 	}
 
@@ -795,7 +804,7 @@ func TestAdvancedFileOperations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("grep search failed: %v", err)
 	}
-	if !strings.Contains(grepRes.Content, "line TWO modified") {
+	if !strings.Contains(grepRes.Content, "line TWO resilient") {
 		t.Fatalf("expected grep match: %s", grepRes.Content)
 	}
 
@@ -808,7 +817,7 @@ func TestAdvancedFileOperations(t *testing.T) {
 		t.Fatal("expected copy success content")
 	}
 	bakRead, _ := registry.Execute(ctx, agentID, "native_file_read", json.RawMessage(`{"path": "backup/code_bak.py"}`))
-	if !strings.Contains(bakRead.Content, "line TWO modified") {
+	if !strings.Contains(bakRead.Content, "line TWO resilient") {
 		t.Fatalf("backup copy read failed: %s", bakRead.Content)
 	}
 

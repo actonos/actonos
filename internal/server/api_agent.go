@@ -829,16 +829,25 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 	}
 	result := <-resultCh
-	if result.err == nil && result.response != nil && s.memory != nil {
-		content := result.response.Content
-		if strings.TrimSpace(content) == "" {
-			content = "Completed requested operations successfully."
+	if s.memory != nil {
+		var content string
+		var toolCallsJSON string
+		if result.err == nil && result.response != nil {
+			content = result.response.Content
+			if strings.TrimSpace(content) == "" {
+				content = "Completed requested operations successfully."
+			}
+			toolCalls, _ := json.Marshal(result.response.ToolCalls)
+			toolCallsJSON = string(toolCalls)
+		} else if result.err != nil {
+			content = fmt.Sprintf("Execution error: %v", result.err)
 		}
-		toolCalls, _ := json.Marshal(result.response.ToolCalls)
-		_, _ = s.memory.DB().SQLDB().ExecContext(context.Background(), `
-			INSERT INTO messages (id, conversation_id, agent_id, role, content, tool_calls_json, created_at)
-			VALUES (?, ?, ?, 'assistant', ?, ?, ?)
-		`, "msg_"+uuid.NewString(), convID, agentID, content, string(toolCalls), time.Now().UTC())
+		if content != "" {
+			_, _ = s.memory.DB().SQLDB().ExecContext(context.Background(), `
+				INSERT INTO messages (id, conversation_id, agent_id, role, content, tool_calls_json, created_at)
+				VALUES (?, ?, ?, 'assistant', ?, ?, ?)
+			`, "msg_"+uuid.NewString(), convID, agentID, content, toolCallsJSON, time.Now().UTC())
+		}
 	}
 }
 
