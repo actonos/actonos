@@ -113,13 +113,23 @@ func (w *WorkspaceWatcher) loop(ctx context.Context) {
 }
 
 func ignoredEmbeddingPath(path string) bool {
-	name := strings.ToLower(filepath.Base(path))
-	if name == "" || name == "." || strings.HasPrefix(name, ".") || strings.HasSuffix(name, "~") {
-		return true
+	clean := filepath.ToSlash(filepath.Clean(path))
+	parts := strings.Split(clean, "/")
+	for _, part := range parts {
+		name := strings.ToLower(part)
+		if name == "" || name == "." {
+			continue
+		}
+		if strings.HasPrefix(name, ".") || strings.HasSuffix(name, "~") {
+			return true
+		}
+		switch name {
+		case "node_modules", "vectors", "storage", "models":
+			return true
+		}
+		if strings.HasSuffix(name, ".tmp") || strings.HasSuffix(name, ".swp") || strings.HasSuffix(name, ".part") {
+			return true
+		}
 	}
-	switch name {
-	case "node_modules", ".git", "vectors", "storage", "models":
-		return true
-	}
-	return strings.HasSuffix(name, ".tmp") || strings.HasSuffix(name, ".swp") || strings.HasSuffix(name, ".part")
+	return false
 }

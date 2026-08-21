@@ -324,16 +324,16 @@ func TestEmbeddingDirectoryDeleteMatchesUnicodePaths(t *testing.T) {
 }
 
 func TestChunkTextBoundsAndOverlap(t *testing.T) {
-	content := strings.Repeat("x", 1700)
+	content := strings.Repeat("x", 1100)
 	chunks := chunkText(content)
 	if len(chunks) != 2 {
 		t.Fatalf("chunk count=%d, want 2", len(chunks))
 	}
-	if len([]rune(chunks[0])) != 1400 || len([]rune(chunks[1])) != 520 {
+	if len([]rune(chunks[0])) != 800 || len([]rune(chunks[1])) != 420 {
 		t.Fatalf("unexpected chunk lengths: %d, %d", len([]rune(chunks[0])), len([]rune(chunks[1])))
 	}
-	if chunks[0][1180:] != chunks[1][:220] {
-		t.Fatal("expected 220-rune overlap between chunks")
+	if chunks[0][680:] != chunks[1][:120] {
+		t.Fatal("expected 120-rune overlap between chunks")
 	}
 }
 
@@ -387,4 +387,60 @@ func osWriteFile(path, content string) error {
 		return err
 	}
 	return os.WriteFile(path, []byte(content), 0644)
+}
+
+func TestEmbeddingDeletedMessageCleansUp(t *testing.T) {
+	_, service, _ := newEmbeddingTestService(t)
+	service.delay = 0
+	// Enqueue a message that doesn't exist in the database (or was deleted)
+	if err := service.EnqueueMessage(context.Background(), "msg-nonexistent", "agent-1", "conv-1"); err != nil {
+		t.Fatal(err)
+	}
+	job := claimAndProcess(t, service)
+	if job.SourceKey != "msg-nonexistent" {
+		t.Fatalf("unexpected processed job: %+v", job)
+	}
+}
+
+func TestChunkTextEdgeCases(t *testing.T) {
+	if chunks := chunkText(""); len(chunks) != 0 {
+		t.Fatalf("chunkText empty string returned %d chunks", len(chunks))
+	}
+	if chunks := chunkText("   \n\n\t  \n  "); len(chunks) != 0 {
+		t.Fatalf("chunkText whitespace only returned %d chunks", len(chunks))
+	}
+	// Very long single line without any newlines
+	longText := strings.Repeat("a", 2000)
+	chunks := chunkText(longText)
+	if len(chunks) < 2 {
+		t.Fatalf("chunkText long single line produced %d chunks, want >= 2", len(chunks))
+	}
+	for i, chunk := range chunks {
+		if len([]rune(chunk)) > 800 {
+			t.Fatalf("chunk %d exceeded target runes: %d", i, len([]rune(chunk)))
+		}
+	}
+}
+
+func TestIgnoredEmbeddingPath(t *testing.T) {
+	cases := []struct {
+		path   string
+		ignore bool
+	}{
+		{"workspace/docs/readme.md", false},
+		{"workspace/.git/config", true},
+		{"workspace/.hidden/file.txt", true},
+		{"workspace/node_modules/pkg/index.js", true},
+		{"workspace/sub/vectors/index.bin", true},
+		{"workspace/sub/models/model.onnx", true},
+		{"workspace/file.tmp", true},
+		{"workspace/file.swp", true},
+		{"workspace/file.part", true},
+		{"workspace/file.txt~", true},
+	}
+	for _, tc := range cases {
+		if got := ignoredEmbeddingPath(tc.path); got != tc.ignore {
+			t.Errorf("ignoredEmbeddingPath(%q) = %v, want %v", tc.path, got, tc.ignore)
+		}
+	}
 }

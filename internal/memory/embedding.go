@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -26,7 +27,7 @@ const (
 	EmbeddingModelRevision = "614241f622f53c4eeff9890bdc4f31cfecc418b3"
 	EmbeddingDimension     = 384
 	semanticCollection     = "semantic_documents"
-	chunkerVersion         = "paragraph-v1"
+	chunkerVersion         = "paragraph-v2"
 	defaultEmbeddingDelay  = time.Minute
 	embeddingLeaseDuration = 5 * time.Minute
 	maxEmbeddingFileSize   = 10 << 20
@@ -379,10 +380,36 @@ func (s *EmbeddingService) run(ctx context.Context) {
 			if err != nil || job == nil {
 				break
 			}
+			start := time.Now()
+			slog.Info("processing embedding job",
+				"job_id", job.ID,
+				"source_type", job.SourceType,
+				"source_ref", job.SourceRef,
+				"operation", job.Operation,
+				"agent_id", job.AgentID,
+				"scope", job.Scope,
+				"generation", job.Generation,
+			)
 			err = s.process(ctx, *job)
 			if err != nil {
+				slog.Error("embedding job failed",
+					"job_id", job.ID,
+					"source_type", job.SourceType,
+					"source_ref", job.SourceRef,
+					"operation", job.Operation,
+					"error", err,
+					"attempts", job.Attempts+1,
+					"duration", time.Since(start).Round(time.Millisecond),
+				)
 				s.fail(ctx, *job, err)
 			} else {
+				slog.Info("embedding job completed",
+					"job_id", job.ID,
+					"source_type", job.SourceType,
+					"source_ref", job.SourceRef,
+					"operation", job.Operation,
+					"duration", time.Since(start).Round(time.Millisecond),
+				)
 				s.complete(ctx, *job)
 			}
 		}
@@ -438,7 +465,7 @@ func (s *EmbeddingService) process(ctx context.Context, job EmbeddingJob) error 
 	}
 	content, metadata, err := s.loadContent(ctx, job)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
+		if errors.Is(err, os.ErrNotExist) || errors.Is(err, sql.ErrNoRows) {
 			return s.deleteSource(ctx, job)
 		}
 		if errors.Is(err, errUnsupportedEmbeddingSource) {
@@ -471,6 +498,9 @@ func (s *EmbeddingService) process(ctx context.Context, job EmbeddingJob) error 
 	}
 
 	chunks := chunkText(content)
+	if len(chunks) == 0 {
+		return s.deleteSource(ctx, job)
+	}
 	passages := make([]string, len(chunks))
 	for index, chunk := range chunks {
 		passages[index] = chunk
@@ -589,6 +619,7 @@ func (s *EmbeddingService) process(ctx context.Context, job EmbeddingJob) error 
 		return err
 	}
 	_ = s.vectorStore.DeleteDocuments(context.Background(), semanticCollection, oldIDs)
+	slog.Info("indexed semantic chunks", "job_id", job.ID, "source_ref", job.SourceRef, "chunks", len(chunks))
 	return nil
 }
 
@@ -613,14 +644,11 @@ func (s *EmbeddingService) loadContent(ctx context.Context, job EmbeddingJob) (s
 		if info.Size() > maxEmbeddingFileSize {
 			return "", nil, fmt.Errorf("%w: file exceeds limit of %d bytes", errUnsupportedEmbeddingSource, maxEmbeddingFileSize)
 		}
-		data, err := os.ReadFile(job.SourceRef)
+		text, err := extractDocumentText(job.SourceRef)
 		if err != nil {
 			return "", nil, err
 		}
-		if bytes.IndexByte(data, 0) >= 0 {
-			return "", nil, fmt.Errorf("%w: binary file", errUnsupportedEmbeddingSource)
-		}
-		return string(data), map[string]any{
+		return text, map[string]any{
 			"path": filepath.ToSlash(job.SourceRef), "filename": filepath.Base(job.SourceRef),
 		}, nil
 	default:
@@ -651,6 +679,7 @@ func (s *EmbeddingService) deleteSource(ctx context.Context, job EmbeddingJob) e
 	if err != nil {
 		return err
 	}
+	slog.Info("deleted semantic source", "job_id", job.ID, "source_type", job.SourceType, "source_ref", job.SourceRef, "chunks_deleted", len(ids))
 	return s.vectorStore.DeleteDocuments(ctx, semanticCollection, ids)
 }
 
@@ -684,6 +713,7 @@ func (s *EmbeddingService) markUnsupported(ctx context.Context, job EmbeddingJob
 	if err != nil {
 		return fmt.Errorf("marking unsupported semantic source (%s): %w", truncateError(cause), err)
 	}
+	slog.Warn("embedding source marked unsupported", "job_id", job.ID, "source_type", job.SourceType, "source_ref", job.SourceRef, "reason", truncateError(cause))
 	return nil
 }
 
@@ -811,8 +841,8 @@ func (s *EmbeddingService) Status(ctx context.Context) (EmbeddingStatus, error) 
 func chunkText(content string) []string {
 	content = strings.ReplaceAll(content, "\r\n", "\n")
 	paragraphs := strings.Split(content, "\n\n")
-	const targetRunes = 1400
-	const overlapRunes = 220
+	const targetRunes = 800
+	const overlapRunes = 120
 	var chunks []string
 	var current strings.Builder
 	flush := func() {
@@ -823,7 +853,10 @@ func chunkText(content string) []string {
 		}
 		for len([]rune(value)) > targetRunes {
 			runes := []rune(value)
-			chunks = append(chunks, strings.TrimSpace(string(runes[:targetRunes])))
+			chunk := strings.TrimSpace(string(runes[:targetRunes]))
+			if chunk != "" {
+				chunks = append(chunks, chunk)
+			}
 			value = strings.TrimSpace(string(runes[targetRunes-overlapRunes:]))
 		}
 		if value != "" {
@@ -856,7 +889,7 @@ func stableID(parts ...string) string {
 func hashText(value string) string { return stableID(value) }
 
 func approximateTokenCount(value string) int {
-	count := len([]rune(value)) / 4
+	count := len([]rune(value)) / 3
 	if count < 1 {
 		return 1
 	}

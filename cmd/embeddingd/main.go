@@ -203,19 +203,30 @@ func (s *server) handleEmbed(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) embed(ctx context.Context, texts []string) ([][]float32, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
+	const maxTokens = 512
 	encoded := make([][]int, len(texts))
 	maxSequence := 0
 	for index, text := range texts {
-		encoded[index] = s.tokenizer.Encode(text)
-		if len(encoded[index]) > maxSequence {
-			maxSequence = len(encoded[index])
+		ids := s.tokenizer.Encode(text)
+		if len(ids) > maxTokens {
+			ids = append(ids[:maxTokens-1], ids[len(ids)-1])
+		}
+		encoded[index] = ids
+		if len(ids) > maxSequence {
+			maxSequence = len(ids)
 		}
 	}
-	if maxSequence == 0 || maxSequence > 512 {
-		return nil, fmt.Errorf("invalid tokenized sequence length %d", maxSequence)
+	if maxSequence == 0 {
+		return nil, fmt.Errorf("empty token sequence")
 	}
 	batch := len(texts)
 	inputIDs := make([]int64, batch*maxSequence)
@@ -302,14 +313,17 @@ func (s *server) embed(ctx context.Context, texts []string) ([][]float32, error)
 			}
 			count++
 		}
+		if count == 0 {
+			return nil, fmt.Errorf("zero tokens in sequence for item %d", row)
+		}
 		var norm float64
 		for column := range dimension {
 			vector[column] /= float32(count)
 			norm += float64(vector[column] * vector[column])
 		}
 		norm = math.Sqrt(norm)
-		if norm == 0 {
-			return nil, fmt.Errorf("model returned zero vector")
+		if norm == 0 || math.IsNaN(norm) || math.IsInf(norm, 0) {
+			return nil, fmt.Errorf("model returned invalid norm for item %d: %v", row, norm)
 		}
 		for column := range dimension {
 			vector[column] /= float32(norm)
