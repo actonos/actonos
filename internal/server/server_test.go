@@ -24,6 +24,7 @@ import (
 	"github.com/actonos/actonos/internal/memory"
 	"github.com/actonos/actonos/internal/system"
 	"github.com/actonos/actonos/internal/tools"
+	workspacepkg "github.com/actonos/actonos/internal/workspace"
 )
 
 type serverTestEmbedder struct{}
@@ -60,8 +61,14 @@ func newTestServer(t *testing.T) *Server {
 	t.Cleanup(func() { eventBus.Close() })
 
 	agentMgr, _ := agent.NewAgentManager(db, eventBus)
+	workspaceStore, err := workspacepkg.NewStore(context.Background(), db.SQLDB())
+	if err != nil {
+		t.Fatalf("creating database workspace: %v", err)
+	}
 	toolReg := tools.NewToolRegistry(eventBus)
-	tools.RegisterNativeTools(toolReg, filepath.Join(tempDir, "workspace"))
+	tools.RegisterNativeToolsWithConfig(toolReg, tools.NativeToolsConfig{
+		DataDir: tempDir, AgentsDir: filepath.Join(tempDir, "agents"), UserWorkspace: workspaceStore,
+	})
 	approvalMgr := tools.NewApprovalManager(db.SQLDB())
 	toolReg.SetApprovalManager(approvalMgr)
 	toolReg.SetPolicyResolver(func(ctx context.Context, agentID string) (tools.AgentToolPolicy, error) {
@@ -86,7 +93,8 @@ func newTestServer(t *testing.T) *Server {
 	}
 	hybrid := memory.NewHybridEngine(db, vectorStore, nil)
 	embedding := memory.NewEmbeddingService(db.SQLDB(), vectorStore, serverTestEmbedder{})
-	embedding.SetWorkspaceDir(filepath.Join(tempDir, "workspace"))
+	embedding.SetWorkspaceStore(workspaceStore)
+	toolReg.SetWorkspaceMutationSink(embedding)
 	hybrid.SetEmbeddingService(embedding)
 	engine := agent.NewEngine(agentMgr, eventBus, llmRouter, hybrid)
 	engine.SetEmbeddingService(embedding)
@@ -155,6 +163,7 @@ func newTestServer(t *testing.T) *Server {
 		Tailscale:           tailscale,
 		EventBus:            eventBus,
 		WorkspaceDir:        filepath.Join(tempDir, "workspace"),
+		WorkspaceStore:      workspaceStore,
 		SkillsDir:           filepath.Join(tempDir, "skills"),
 		WASMDir:             filepath.Join(tempDir, "tools", "wasm"),
 		DataDir:             tempDir,
@@ -177,36 +186,28 @@ func TestServer_EmbeddingStatusAndWorkspaceQueue(t *testing.T) {
 		t.Fatalf("unexpected embedding status: %s", statusResponse.Body.String())
 	}
 
-	saveRequest := httptest.NewRequest(http.MethodPost, "/api/workspace/file",
-		strings.NewReader(`{"path":"embedding/status.txt","content":"alpha"}`))
-	saveRequest.Header.Set("Content-Type", "application/json")
-	saveResponse := httptest.NewRecorder()
-	srv.Router().ServeHTTP(saveResponse, saveRequest)
-	if saveResponse.Code != http.StatusOK {
-		t.Fatalf("workspace save failed: %d %s", saveResponse.Code, saveResponse.Body.String())
-	}
+	directory := createWorkspaceDirectory(t, srv, "", "embedding")
+	file := createWorkspaceFile(t, srv, workspaceString(directory["id"]), "status.txt", "alpha")
+	fileID := workspaceString(file["id"])
 	var operation, scope, sourceRef string
 	var dueAt, createdAt time.Time
 	err := srv.memory.DB().SQLDB().QueryRow(`SELECT operation, scope, source_ref, due_at, created_at
-		FROM embedding_jobs WHERE source_type = 'file'`).Scan(&operation, &scope, &sourceRef, &dueAt, &createdAt)
+		FROM embedding_jobs WHERE source_type = 'workspace_file' AND source_key = ?`, fileID).
+		Scan(&operation, &scope, &sourceRef, &dueAt, &createdAt)
 	if err != nil {
 		t.Fatalf("reading workspace embedding job: %v", err)
 	}
 	if operation != string(memory.EmbeddingUpsert) || scope != "shared" ||
-		filepath.Base(sourceRef) != "status.txt" || dueAt.Sub(createdAt) < 59*time.Second {
+		sourceRef != fileID {
 		t.Fatalf("unexpected workspace embedding job: operation=%s scope=%s ref=%s delay=%s",
 			operation, scope, sourceRef, dueAt.Sub(createdAt))
 	}
 
-	deleteRequest := httptest.NewRequest(http.MethodDelete, "/api/workspace/file?path=embedding/status.txt", nil)
-	deleteResponse := httptest.NewRecorder()
-	srv.Router().ServeHTTP(deleteResponse, deleteRequest)
-	if deleteResponse.Code != http.StatusOK {
-		t.Fatalf("workspace delete failed: %d %s", deleteResponse.Code, deleteResponse.Body.String())
-	}
+	deleteRequest := workspaceJSONRequest(t, srv, http.MethodDelete, "/api/workspace/file?id="+fileID, "", http.StatusAccepted)
+	approveWorkspaceMutation(t, srv, deleteRequest)
 	var generation int
 	if err := srv.memory.DB().SQLDB().QueryRow(`SELECT operation, generation FROM embedding_jobs
-		WHERE source_type = 'file'`).Scan(&operation, &generation); err != nil {
+		WHERE source_type = 'workspace_file' AND source_key = ?`, fileID).Scan(&operation, &generation); err != nil {
 		t.Fatal(err)
 	}
 	if operation != string(memory.EmbeddingDelete) || generation != 2 {
@@ -323,28 +324,17 @@ func TestServer_ToolsAndSystem(t *testing.T) {
 
 func TestServer_WorkspaceDirectMutationAndFileOperations(t *testing.T) {
 	srv := newTestServer(t)
-	body := `{"path":"notes/result.txt","content":"approved content"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/workspace/file", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	srv.Router().ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200 direct write success, got %d: %s", w.Code, w.Body.String())
-	}
-
-	data, err := os.ReadFile(filepath.Join(srv.workspaceDir, "notes", "result.txt"))
-	if err != nil || string(data) != "approved content" {
-		t.Fatalf("workspace direct mutation not executed: content=%q err=%v", data, err)
-	}
-
-	read := httptest.NewRequest(http.MethodGet, "/api/workspace/file?path=notes/result.txt", nil)
+	directory := createWorkspaceDirectory(t, srv, "", "notes")
+	file := createWorkspaceFile(t, srv, workspaceString(directory["id"]), "result.txt", "approved content")
+	fileID := workspaceString(file["id"])
+	read := httptest.NewRequest(http.MethodGet, "/api/workspace/file?id="+fileID, nil)
 	readResult := httptest.NewRecorder()
 	srv.Router().ServeHTTP(readResult, read)
 	if readResult.Code != http.StatusOK || !strings.Contains(readResult.Body.String(), "approved content") {
 		t.Fatalf("workspace read failed: %d %s", readResult.Code, readResult.Body.String())
 	}
 
-	rawReq := httptest.NewRequest(http.MethodGet, "/api/workspace/raw?path=notes/result.txt", nil)
+	rawReq := httptest.NewRequest(http.MethodGet, "/api/workspace/raw?id="+fileID, nil)
 	rawResult := httptest.NewRecorder()
 	srv.Router().ServeHTTP(rawResult, rawReq)
 	if rawResult.Code != http.StatusOK || rawResult.Body.String() != "approved content" {
@@ -488,65 +478,6 @@ func TestServer_ConversationIdentityMetricsAndCatalogLifecycle(t *testing.T) {
 	srv.Router().ServeHTTP(notFound, missing)
 	if notFound.Code != http.StatusNotFound {
 		t.Fatalf("deleted conversation still available: %d", notFound.Code)
-	}
-}
-
-func TestServer_WorkspaceDirectoryUploadDeleteLifecycle(t *testing.T) {
-	srv := newTestServer(t)
-	mkdirReq := httptest.NewRequest(http.MethodPost, "/api/workspace/mkdir", strings.NewReader(`{"path":"uploads"}`))
-	mkdirReq.Header.Set("Content-Type", "application/json")
-	mkdirRes := httptest.NewRecorder()
-	srv.Router().ServeHTTP(mkdirRes, mkdirReq)
-	if mkdirRes.Code != http.StatusOK {
-		t.Fatalf("mkdir failed: %d %s", mkdirRes.Code, mkdirRes.Body.String())
-	}
-
-	fileBody := &bytes.Buffer{}
-	writer := multipart.NewWriter(fileBody)
-	part, err := writer.CreateFormFile("file", "sample.txt")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, _ = part.Write([]byte("uploaded"))
-	_ = writer.WriteField("dir", "uploads")
-	_ = writer.Close()
-	uploadReq := httptest.NewRequest(http.MethodPost, "/api/workspace/upload", fileBody)
-	uploadReq.Header.Set("Content-Type", writer.FormDataContentType())
-	uploadResult := httptest.NewRecorder()
-	srv.Router().ServeHTTP(uploadResult, uploadReq)
-	if uploadResult.Code != http.StatusOK {
-		t.Fatalf("upload failed: %d %s", uploadResult.Code, uploadResult.Body.String())
-	}
-	var uploadOperation string
-	if err := srv.memory.DB().SQLDB().QueryRow(`SELECT operation FROM embedding_jobs
-		WHERE source_type = 'file' AND source_ref LIKE ?`, "%sample.txt").Scan(&uploadOperation); err != nil {
-		t.Fatalf("uploaded file was not enqueued for embedding: %v", err)
-	}
-	if uploadOperation != string(memory.EmbeddingUpsert) {
-		t.Fatalf("uploaded file operation=%s, want upsert", uploadOperation)
-	}
-
-	list := httptest.NewRequest(http.MethodGet, "/api/workspace/files?dir=uploads", nil)
-	listed := httptest.NewRecorder()
-	srv.Router().ServeHTTP(listed, list)
-	if listed.Code != http.StatusOK || !strings.Contains(listed.Body.String(), "sample.txt") {
-		t.Fatalf("workspace list failed: %d %s", listed.Code, listed.Body.String())
-	}
-
-	delReq := httptest.NewRequest(http.MethodDelete, "/api/workspace/file?path=uploads/sample.txt", nil)
-	delRes := httptest.NewRecorder()
-	srv.Router().ServeHTTP(delRes, delReq)
-	if delRes.Code != http.StatusOK {
-		t.Fatalf("delete failed: %d %s", delRes.Code, delRes.Body.String())
-	}
-	if _, err := os.Stat(filepath.Join(srv.workspaceDir, "uploads", "sample.txt")); !os.IsNotExist(err) {
-		t.Fatalf("delete did not remove file: %v", err)
-	}
-	rootDelete := httptest.NewRequest(http.MethodDelete, "/api/workspace/file?path=.", nil)
-	rootResult := httptest.NewRecorder()
-	srv.Router().ServeHTTP(rootResult, rootDelete)
-	if rootResult.Code != http.StatusForbidden {
-		t.Fatalf("workspace root delete was accepted: %d", rootResult.Code)
 	}
 }
 
@@ -1174,7 +1105,9 @@ func TestServer_ProductionEndpoints(t *testing.T) {
 
 func TestServer_ApprovalAndRunEndpoints(t *testing.T) {
 	srv := newTestServer(t)
-	_ = os.WriteFile(filepath.Join(srv.workspaceDir, "approval.txt"), []byte("data"), 0644)
+	privateDir := filepath.Join(srv.dataDir, "agents", "agent_system_core", "workspace")
+	_ = os.MkdirAll(privateDir, 0750)
+	_ = os.WriteFile(filepath.Join(privateDir, "approval.txt"), []byte("data"), 0644)
 
 	body := bytes.NewBufferString(`{
 		"name":"native_file_delete",

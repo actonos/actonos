@@ -193,12 +193,14 @@ func (s *server) handleEmbed(w http.ResponseWriter, r *http.Request) {
 		}
 		request.Texts[index] = request.Kind + ": " + strings.TrimSpace(text)
 	}
+	start := time.Now()
 	embeddings, err := s.embed(r.Context(), request.Texts)
 	if err != nil {
-		slog.Warn("embedding request failed", "error", err)
+		slog.Warn("embedding request failed", "kind", request.Kind, "texts", len(request.Texts), "error", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "embedding failed"})
 		return
 	}
+	slog.Info("computed embeddings", "kind", request.Kind, "batch_size", len(request.Texts), "duration", time.Since(start).Round(time.Millisecond))
 	writeJSON(w, http.StatusOK, map[string]any{"embeddings": embeddings})
 }
 

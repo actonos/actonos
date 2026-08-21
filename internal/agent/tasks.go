@@ -7,8 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -61,24 +59,16 @@ type HeartbeatConfig struct {
 // having no concrete check to perform. It must not activate an idle heartbeat.
 const legacyDefaultHeartbeatDirective = "Autonomous standing supervisor. Routinely review pending tasks in TASKS.md and monitor system stability."
 
-// TaskManager coordinates autonomous tasks, persistence in SQLite, and bi-directional markdown synchronization.
+// TaskManager coordinates autonomous tasks and heartbeat configuration in
+// SQLite. User workspace filenames are never reserved for system state.
 type TaskManager struct {
-	mu           sync.RWMutex
-	db           *sql.DB
-	workspaceDir string
+	mu sync.RWMutex
+	db *sql.DB
 }
 
 // NewTaskManager creates and initializes a TaskManager.
-func NewTaskManager(db *sql.DB, workspaceDir string) (*TaskManager, error) {
-	if workspaceDir == "" {
-		workspaceDir = "./data/workspace"
-	}
-	_ = os.MkdirAll(workspaceDir, 0755)
-
-	tm := &TaskManager{
-		db:           db,
-		workspaceDir: workspaceDir,
-	}
+func NewTaskManager(db *sql.DB, _ string) (*TaskManager, error) {
+	tm := &TaskManager{db: db}
 
 	if err := tm.initDB(); err != nil {
 		return nil, err
@@ -360,86 +350,11 @@ func (tm *TaskManager) ListTasks(ctx context.Context, status, priority string) (
 	return list, nil
 }
 
-// syncToMarkdownLocked writes current tasks to data/workspace/TASKS.md.
+// syncToMarkdownLocked remains as an internal compatibility hook for callers
+// created before the database workspace migration. SQLite is now the sole
+// source of truth, so synchronization intentionally performs no file I/O.
 func (tm *TaskManager) syncToMarkdownLocked() error {
-	if tm.db == nil {
-		return nil
-	}
-
-	query := `
-	SELECT id, title, description, status, priority, assigned_agent_id, progress, execution_log
-	FROM autonomous_tasks
-	ORDER BY 
-		CASE priority
-			WHEN 'p0_critical' THEN 1
-			WHEN 'p1_high' THEN 2
-			WHEN 'p2_normal' THEN 3
-			WHEN 'p3_low' THEN 4
-			ELSE 5
-		END ASC,
-		updated_at DESC
-	`
-	rows, err := tm.db.Query(query)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	var sb strings.Builder
-	sb.WriteString("# ActonOS Autonomous Tasks Backlog\n")
-	sb.WriteString(fmt.Sprintf("> Last synchronized: %s UTC\n\n", time.Now().UTC().Format(time.RFC3339)))
-
-	sb.WriteString("## Active Backlog\n\n")
-
-	hasActive := false
-	var completedTasks []string
-
-	for rows.Next() {
-		var id, title, desc, status, priority, agentID, execLog string
-		var progress int
-		if err := rows.Scan(&id, &title, &desc, &status, &priority, &agentID, &progress, &execLog); err == nil {
-			if status == "completed" || status == "cancelled" {
-				completedTasks = append(completedTasks, fmt.Sprintf("- [x] **[%s]** %s *(Status: %s)*\n", priority, title, status))
-			} else {
-				hasActive = true
-				statusEmoji := "⏳"
-				switch status {
-				case "in_progress":
-					statusEmoji = "⚡"
-				case "blocked":
-					statusEmoji = "🚫"
-				}
-				sb.WriteString(fmt.Sprintf("### %s [%s] %s\n", statusEmoji, strings.ToUpper(priority), title))
-				sb.WriteString(fmt.Sprintf("- **Task ID**: `%s`\n", id))
-				sb.WriteString(fmt.Sprintf("- **Assigned Agent**: `%s`\n", agentID))
-				sb.WriteString(fmt.Sprintf("- **Status**: `%s` (%d%% complete)\n", status, progress))
-				if desc != "" {
-					sb.WriteString(fmt.Sprintf("- **Directive**: %s\n", desc))
-				}
-				if execLog != "" {
-					sb.WriteString(fmt.Sprintf("- **Latest Note**: *%s*\n", execLog))
-				}
-				sb.WriteString("\n")
-			}
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-
-	if !hasActive {
-		sb.WriteString("*No active tasks currently pending in backlog.*\n\n")
-	}
-
-	if len(completedTasks) > 0 {
-		sb.WriteString("## Completed & Archived Missions\n\n")
-		for _, ct := range completedTasks {
-			sb.WriteString(ct)
-		}
-	}
-
-	filePath := filepath.Join(tm.workspaceDir, "TASKS.md")
-	return os.WriteFile(filePath, []byte(sb.String()), 0644)
+	return nil
 }
 
 // GetHeartbeatConfig loads heartbeat configuration and directives.
@@ -465,19 +380,14 @@ func (tm *TaskManager) GetHeartbeatConfig(ctx context.Context) (*HeartbeatConfig
 		}
 	}
 
-	// Read from HEARTBEAT.md if present
-	hbPath := filepath.Join(tm.workspaceDir, "HEARTBEAT.md")
-	if data, err := os.ReadFile(hbPath); err == nil && len(data) > 0 {
-		directives := string(data)
-		if strings.TrimSpace(directives) != legacyDefaultHeartbeatDirective {
-			cfg.Directives = directives
-		}
+	if strings.TrimSpace(cfg.Directives) == legacyDefaultHeartbeatDirective {
+		cfg.Directives = ""
 	}
 
 	return cfg, nil
 }
 
-// SaveHeartbeatConfig saves directives to HEARTBEAT.md and updates settings.
+// SaveHeartbeatConfig persists heartbeat configuration exclusively in SQLite.
 func (tm *TaskManager) SaveHeartbeatConfig(ctx context.Context, cfg HeartbeatConfig) error {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
@@ -485,18 +395,18 @@ func (tm *TaskManager) SaveHeartbeatConfig(ctx context.Context, cfg HeartbeatCon
 	if strings.TrimSpace(cfg.Directives) == legacyDefaultHeartbeatDirective {
 		cfg.Directives = ""
 	}
-	if cfg.Directives != "" {
-		hbPath := filepath.Join(tm.workspaceDir, "HEARTBEAT.md")
-		_ = os.WriteFile(hbPath, []byte(cfg.Directives), 0644)
-	}
 
 	if tm.db != nil {
-		if raw, err := json.Marshal(cfg); err == nil {
-			query := `
+		raw, err := json.Marshal(cfg)
+		if err != nil {
+			return fmt.Errorf("marshalling heartbeat configuration: %w", err)
+		}
+		query := `
 			INSERT INTO heartbeat_settings (key, value) VALUES ('config', ?)
 			ON CONFLICT(key) DO UPDATE SET value = excluded.value
 			`
-			_, _ = tm.db.ExecContext(ctx, query, string(raw))
+		if _, err := tm.db.ExecContext(ctx, query, string(raw)); err != nil {
+			return fmt.Errorf("saving heartbeat configuration: %w", err)
 		}
 	}
 

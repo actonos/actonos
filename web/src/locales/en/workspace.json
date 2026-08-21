@@ -1,52 +1,169 @@
 {
   "diff": {
     "toggle": "Diff",
-    "before": "Before",
-    "after": "Working copy"
+    "before": "Original",
+    "after": "Working Copy",
+    "showDiff": "Show Diff",
+    "hideDiff": "Hide Diff"
   },
-  "eyebrow": "Files",
-  "title": "Workspace Files",
-  "subtitle": "View and manage files created and read by agents.",
+  "eyebrow": "Files & AI Memory",
+  "title": "Workspace Studio",
+  "subtitle": "Manage database-backed files with exact names, rich previews and semantic AI memory.",
+  "views": {
+    "tree": "Tree View",
+    "list": "List View",
+    "grid": "Grid View"
+  },
+  "categories": {
+    "all": "All Files",
+    "documents": "Documents",
+    "code": "Code",
+    "data": "Data",
+    "media": "Media"
+  },
+  "sorting": {
+    "nameAsc": "Name (A-Z)",
+    "nameDesc": "Name (Z-A)",
+    "sizeDesc": "Size (Largest)",
+    "sizeAsc": "Size (Smallest)",
+    "dateDesc": "Modified (Newest)",
+    "dateAsc": "Modified (Oldest)"
+  },
   "actions": {
     "newFile": "New File",
+    "newFolder": "New Folder",
     "refresh": "Refresh",
-    "save": "Save",
+    "save": "Save Changes",
+    "saving": "Saving...",
     "delete": "Delete",
     "deleteConfirm": "Are you sure you want to delete this file?",
     "upload": "Upload",
-    "newFolder": "New Folder",
     "download": "Download",
+    "downloadZip": "Download ZIP",
     "downloadTitle": "Download file to local machine",
-    "saving": "Saving...",
-    "createFile": "Create New File"
+    "createFile": "Create New File",
+    "rename": "Rename",
+    "duplicate": "Duplicate",
+    "copyPath": "Copy Path",
+    "reindex": "Re-index AI Memory",
+    "reindexing": "Enqueuing Index...",
+    "chatWithFile": "Chat with File",
+    "clearSelection": "Clear Selection",
+    "batchDelete": "Delete Selected ({{count}})",
+    "batchDownload": "Download Selected ZIP",
+    "selectedCount": "{{count}} selected"
   },
   "table": {
     "name": "Name",
     "size": "Size",
     "modified": "Last Modified",
-    "empty": "No files found."
+    "kind": "Kind",
+    "aiStatus": "AI Memory",
+    "actions": "Actions",
+    "empty": "No files in this folder."
   },
   "editor": {
     "title": "Editing: {{path}}",
-    "placeholder": "File content...",
-    "stats": "Lines: {{lines}} • Size: {{bytes}} bytes",
-    "shortcut": "UTF-8 • Ctrl+S to save",
+    "placeholder": "Enter file content...",
+    "stats": "Lines: {{lines}} • Characters: {{chars}} • Size: {{bytes}}",
+    "tokens": "~{{tokens}} tokens",
+    "shortcut": "Ctrl+S to save • Ctrl+F to find",
     "noSelection": "No File Selected",
-    "noSelectionDescription": "Select a file from the explorer on the left, or create a new file to start editing."
+    "noSelectionDescription": "Select a file from the explorer on the left or create a new file to start viewing and editing.",
+    "unsavedChanges": "Unsaved changes",
+    "discardPrompt": "You have unsaved changes. Are you sure you want to discard them?",
+    "modeCode": "Code",
+    "modeSplit": "Split",
+    "modePreview": "Preview"
   },
-  "loading": "Loading files...",
+  "tableViewer": {
+    "rows": "{{count}} rows",
+    "cols": "{{count}} columns",
+    "search": "Filter table rows...",
+    "page": "Page {{current}} of {{total}}",
+    "perPage": "{{count}} / page",
+    "prev": "Previous",
+    "next": "Next"
+  },
+  "jsonViewer": {
+    "format": "Format JSON",
+    "raw": "Raw",
+    "tree": "Tree",
+    "copy": "Copy JSON",
+    "copied": "JSON Copied!",
+    "invalidJson": "Invalid JSON syntax"
+  },
+  "inspector": {
+    "title": "File Inspector",
+    "overview": "Overview",
+    "aiMemory": "AI Memory",
+    "path": "Relative Path",
+    "size": "File Size",
+    "mime": "MIME Type",
+    "modified": "Last Modified",
+    "kind": "File Kind",
+    "lines": "Total Lines",
+    "words": "Word Count",
+    "tokens": "Token Estimate",
+    "aiStatus": {
+      "active": "Indexed in Memory",
+      "indexing": "Queued for Indexing",
+      "unsupported": "Not Indexed (Binary/Skipped)",
+      "none": "Not Indexed"
+    },
+    "chunksTitle": "Semantic Chunks ({{count}})",
+    "chunksSubtitle": "Passages indexed into vector memory for agent RAG retrieval.",
+    "noChunks": "No semantic chunks generated for this file.",
+    "model": "Model",
+    "chunkerVersion": "Chunker",
+    "indexedAt": "Indexed At",
+    "chunkOrdinal": "Chunk #{{num}}",
+    "chunkTokens": "{{count}} tokens"
+  },
+  "stats": {
+    "title": "Workspace Storage",
+    "totalSize": "Total Disk Usage",
+    "files": "Files",
+    "folders": "Directories",
+    "indexed": "AI Indexed Files",
+    "breakdown": {
+      "documents": "Docs",
+      "code": "Code",
+      "data": "Data",
+      "media": "Media",
+      "other": "Other"
+    }
+  },
+  "loading": "Loading workspace...",
   "navigation": {
-    "root": "root",
-    "up": "Up"
+    "root": "workspace",
+    "up": "Up One Level",
+    "searchPlaceholder": "Search workspace files..."
+  },
+  "dragDrop": {
+    "active": "Drop files here to upload",
+    "hint": "Drag & drop files from your computer to upload"
+  },
+  "tree": {
+    "empty": "(empty)",
+    "loading": "Loading..."
   },
   "deleteModal": {
     "title": "Delete Workspace File",
-    "description": "Are you sure you want to permanently delete \"{{path}}\" from your sandboxed workspace?"
+    "description": "Request deletion of \"{{path}}\" from the shared workspace?",
+    "batchTitle": "Delete Selected Files",
+    "batchDescription": "Request deletion of {{count}} selected items from your workspace?"
+  },
+  "renameModal": {
+    "title": "Rename File or Folder",
+    "label": "Exact new name",
+    "placeholder": "Any UTF-8 name; an extension is optional",
+    "confirm": "Rename"
   },
   "createFileModal": {
     "title": "Create New File",
-    "label": "File Name & Extension",
-    "placeholder": "e.g. main.py, data.json, script.sh",
+    "label": "Exact file name",
+    "placeholder": "Any UTF-8 name; an extension is optional",
     "confirm": "Create & Edit"
   },
   "createFolderModal": {
@@ -56,9 +173,33 @@
     "confirm": "Create Folder"
   },
   "preview": {
-    "image": "Image preview",
-    "pdf": "PDF preview",
-    "binary": "Binary file — cannot be displayed as text.",
+    "image": "Image Preview",
+    "pdf": "PDF Viewer",
+    "audio": "Audio Player",
+    "video": "Video Player",
+    "zoomIn": "Zoom In",
+    "zoomOut": "Zoom Out",
+    "resetZoom": "Reset Zoom",
+    "binary": "Binary file — cannot be displayed as plain text.",
     "downloadBinary": "Download file"
+  },
+  "toasts": {
+    "saveSuccess": "File \"{{name}}\" saved successfully.",
+    "saveFailed": "Failed to save file: {{error}}",
+    "deleteSuccess": "File \"{{path}}\" deleted successfully.",
+    "deleteFailed": "Failed to delete: {{error}}",
+    "renameSuccess": "Renamed to \"{{path}}\".",
+    "renameFailed": "Failed to rename: {{error}}",
+    "duplicateSuccess": "Duplicated to \"{{path}}\".",
+    "duplicateFailed": "Failed to duplicate: {{error}}",
+    "mkdirSuccess": "Folder \"{{path}}\" created.",
+    "mkdirFailed": "Failed to create folder: {{error}}",
+    "uploadSuccess": "Uploaded {{count}} file(s).",
+    "uploadFailed": "Upload failed: {{error}}",
+    "reindexSuccess": "Enqueued \"{{path}}\" for semantic embedding.",
+    "reindexFailed": "Failed to reindex: {{error}}",
+    "copiedPath": "Virtual path copied to clipboard.",
+    "approvalQueued": "Change queued for approval.",
+    "approvalQueuedCount": "{{count}} change(s) queued for approval."
   }
 }

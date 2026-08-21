@@ -134,7 +134,7 @@ export function AuditLogsPage() {
   }, [logs]);
 
   return (
-    <PageContainer>
+    <PageContainer maxWidth="wide">
       {/* Page Header */}
       <PageHeader
         eyebrow={t('eyebrow', 'Governance & Security')}

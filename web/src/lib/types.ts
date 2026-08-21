@@ -468,3 +468,96 @@ export interface TerminalInfoResponse {
   available_shells: TerminalShellOption[];
 }
 
+export interface WorkspaceFile {
+  id: string;
+  parent_id: string;
+  name: string;
+  path: string;
+  virtual_path: string;
+  is_dir: boolean;
+  size: number;
+  mod_time: string;
+  kind?: string;
+  mime_type?: string;
+  version: number;
+  content_hash?: string;
+  ai_indexed?: boolean;
+  ai_state?: string;
+}
+
+export interface WorkspaceBreadcrumb {
+  id: string;
+  name: string;
+  virtual_path: string;
+}
+
+export interface WorkspaceFileListResponse {
+  files: WorkspaceFile[];
+  parent_id: string;
+  dir: string;
+  count: number;
+  virtual_root: string;
+  breadcrumbs: WorkspaceBreadcrumb[];
+}
+
+export interface WorkspaceFileDetailResponse {
+  id: string;
+  file_id: string;
+  parent_id: string;
+  name: string;
+  path: string;
+  virtual_path: string;
+  size: number;
+  kind: string;
+  mime: string;
+  mime_type: string;
+  version: number;
+  content_hash: string;
+  content?: string;
+  content_base64?: string;
+  data_url?: string;
+}
+
+export interface WorkspaceMutationResponse {
+  status: string;
+  id: string;
+  file_id?: string;
+  parent_id?: string;
+  name: string;
+  virtual_path?: string;
+  version?: number;
+}
+
+export interface WorkspaceStatsResponse {
+  total_size: number;
+  total_files: number;
+  total_directories: number;
+  indexed_files: number;
+  breakdown: {
+    documents: number;
+    code: number;
+    data: number;
+    media: number;
+    other: number;
+  };
+}
+
+export interface SemanticChunkItem {
+  id: string;
+  ordinal: number;
+  content: string;
+  token_count: number;
+  active: boolean;
+  created_at: string;
+}
+
+export interface WorkspaceChunksResponse {
+  state: string;
+  model_id?: string;
+  model_revision?: string;
+  chunker_version?: string;
+  active_generation?: number;
+  indexed_at?: string;
+  chunk_count: number;
+  chunks: SemanticChunkItem[];
+}

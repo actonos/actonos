@@ -126,7 +126,9 @@ func BuildHostEnvironmentPrompt(workspaceDir string) string {
 	return BuildAgentEnvironmentPrompt(dataDir, workspaceDir, DefaultSystemAgentID)
 }
 
-// BuildAgentEnvironmentPrompt generates a structured XML-tagged prompt block with explicit dataDir, workspaceDir, and dedicated agent directory.
+// BuildAgentEnvironmentPrompt describes the database-backed user workspace and
+// the calling agent's isolated filesystem workspace. workspaceDir is retained
+// for call-site compatibility but is never exposed as a host filesystem path.
 func BuildAgentEnvironmentPrompt(dataDir, workspaceDir, agentSlug string) string {
 	if dataDir == "" && workspaceDir == "" {
 		dataDir = "./data"
@@ -146,7 +148,7 @@ func BuildAgentEnvironmentPrompt(dataDir, workspaceDir, agentSlug string) string
 		agentSlug = DefaultSystemAgentID
 	}
 
-	agentWorkspace := filepath.Join(workspaceDir, agentSlug)
+	agentWorkspace := filepath.Join(dataDir, "agents", agentSlug, "workspace")
 	_ = os.MkdirAll(agentWorkspace, 0755)
 
 	var sb strings.Builder
@@ -178,7 +180,7 @@ func BuildAgentEnvironmentPrompt(dataDir, workspaceDir, agentSlug string) string
 	storageDir := filepath.Join(dataDir, "storage")
 	pluginsDir := filepath.Join(dataDir, "plugins")
 
-	fmt.Fprintf(&sb, "  <workspace root=\"%s\" agent_dir=\"%s\" agent_slug=\"%s\" />\n", workspaceDir, agentWorkspace, agentSlug)
+	fmt.Fprintf(&sb, "  <workspace user_virtual_root=\"/data/workspace\" storage=\"sqlite\" agent_dir=\"%s\" agent_slug=\"%s\" />\n", agentWorkspace, agentSlug)
 	fmt.Fprintf(&sb, "  <data_dir path=\"%s\" config=\"%s\" logs=\"%s\" skills=\"%s\" storage=\"%s\" plugins=\"%s\" />\n",
 		dataDir, configDir, logsDir, skillsDir, storageDir, pluginsDir)
 
@@ -195,9 +197,6 @@ func BuildAgentEnvironmentPrompt(dataDir, workspaceDir, agentSlug string) string
 
 	// 3. Workspace Overview State (if available)
 	wsOverview := scanWorkspaceOverview(agentWorkspace)
-	if wsOverview == "" {
-		wsOverview = scanWorkspaceOverview(workspaceDir)
-	}
 	if wsOverview != "" {
 		sb.WriteString("  <workspace_state>\n")
 		sb.WriteString(wsOverview)
@@ -208,8 +207,9 @@ func BuildAgentEnvironmentPrompt(dataDir, workspaceDir, agentSlug string) string
 
 	// 4. Dedicated Storage Policy & Global Data Access
 	sb.WriteString("<workspace_storage_policy>\n")
-	fmt.Fprintf(&sb, "  <rule id=\"dedicated_workspace_default\">DEFAULT STORAGE LOCATION: Your designated working folder is `%s` (or relative `%s/...`). By default, store your intermediate files, scripts, downloads, research notes, and outputs in this folder to avoid cluttering other directories.</rule>\n", agentWorkspace, agentSlug)
-	fmt.Fprintf(&sb, "  <rule id=\"permitted_global_data_access\">CROSS-DIRECTORY DATA ACCESS: When explicitly requested by the user, or necessary for tasks such as editing skills in `%s`, modifying configs in `%s`, or managing shared files in `%s`, you are FULLY AUTHORIZED and permitted to read, write, and execute files anywhere within `%s`.</rule>\n", skillsDir, configDir, workspaceDir, dataDir)
+	fmt.Fprintf(&sb, "  <rule id=\"dedicated_workspace_default\">PRIVATE WORKSPACE: Use native_file_* and native_exec only for your own working files under `%s`. Other agents have separate directories and must never be accessed.</rule>\n", agentWorkspace)
+	sb.WriteString("  <rule id=\"user_workspace_database\">USER WORKSPACE: `/data/workspace` is a virtual, SQLite-backed namespace. Use only native_workspace_search, native_workspace_read, native_workspace_write, and native_workspace_delete for user files. These tools accept opaque file IDs; never guess or pass a host path.</rule>\n")
+	fmt.Fprintf(&sb, "  <rule id=\"system_data_access\">SYSTEM DATA: Skills and configuration live under `%s` and `%s`; access them only with a tool explicitly authorized for that purpose.</rule>\n", skillsDir, configDir)
 	sb.WriteString("</workspace_storage_policy>\n\n")
 
 	// 5. Dynamic Execution Best Practices based on detected environment tools

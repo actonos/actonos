@@ -189,7 +189,7 @@ export function AutomationsPage() {
     <div className="relative min-h-[calc(100vh-64px)]">
       <BlobBackdrop />
 
-      <PageContainer>
+      <PageContainer maxWidth="wide">
         <PageHeader eyebrow={t('eyebrow')} title={t('title')} description={t('eyebrow', 'Proactive Autonomous Scheduling')} actions={(
           <>
             <Button variant="ghost" size="sm" icon={<RefreshCw />} onClick={loadData}>{t('actions.refresh')}</Button>

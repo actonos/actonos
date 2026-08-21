@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	workspacepkg "github.com/actonos/actonos/internal/workspace"
 	"github.com/google/uuid"
 )
 
@@ -88,6 +89,7 @@ func (e *HTTPEmbedder) embed(ctx context.Context, kind string, texts []string) (
 }
 
 func (e *HTTPEmbedder) embedBatch(ctx context.Context, kind string, texts []string) ([][]float32, error) {
+	slog.Info("dispatching embedding batch to embeddingd", "kind", kind, "batch_size", len(texts))
 	payload, err := json.Marshal(map[string]any{"kind": kind, "texts": texts})
 	if err != nil {
 		return nil, fmt.Errorf("marshalling embedding request: %w", err)
@@ -182,16 +184,17 @@ type SemanticRecord struct {
 
 // EmbeddingService owns the durable queue and semantic document index.
 type EmbeddingService struct {
-	db           *sql.DB
-	vectorStore  *VectorStore
-	embedder     Embedder
-	workspaceDir string
-	delay        time.Duration
-	now          func() time.Time
-	wake         chan struct{}
-	startOnce    sync.Once
-	stopOnce     sync.Once
-	cancel       context.CancelFunc
+	db             *sql.DB
+	vectorStore    *VectorStore
+	embedder       Embedder
+	workspaceDir   string
+	workspaceStore *workspacepkg.Store
+	delay          time.Duration
+	now            func() time.Time
+	wake           chan struct{}
+	startOnce      sync.Once
+	stopOnce       sync.Once
+	cancel         context.CancelFunc
 }
 
 func NewEmbeddingService(db *sql.DB, vectorStore *VectorStore, embedder Embedder) *EmbeddingService {
@@ -210,6 +213,12 @@ func (s *EmbeddingService) SetWorkspaceDir(workspaceDir string) {
 	if err == nil {
 		s.workspaceDir = filepath.Clean(absPath)
 	}
+}
+
+// SetWorkspaceStore configures the database-backed user workspace source.
+// Workspace embedding jobs use opaque file IDs and never persist host paths.
+func (s *EmbeddingService) SetWorkspaceStore(store *workspacepkg.Store) {
+	s.workspaceStore = store
 }
 
 func (s *EmbeddingService) Start(ctx context.Context) {
@@ -241,6 +250,32 @@ func (s *EmbeddingService) EnqueueMemory(ctx context.Context, memoryID, agentID 
 		SourceType: "memory", SourceKey: memoryID, SourceRef: memoryID,
 		Operation: EmbeddingUpsert, AgentID: agentID, Scope: "agent:" + agentID,
 	})
+}
+
+func (s *EmbeddingService) EnqueueWorkspaceFile(ctx context.Context, fileID, actorID string, operation EmbeddingOperation) error {
+	if fileID == "" {
+		return errors.New("workspace file ID is required")
+	}
+	job := EmbeddingJob{
+		SourceType: "workspace_file", SourceKey: fileID, SourceRef: fileID,
+		Operation: operation, AgentID: actorID, Scope: "shared",
+	}
+	if err := s.enqueue(ctx, job); err != nil {
+		return err
+	}
+	if operation == EmbeddingDelete {
+		return s.tombstoneSource(ctx, job)
+	}
+	return nil
+}
+
+// NotifyWorkspaceMutation implements tools.WorkspaceMutationSink.
+func (s *EmbeddingService) NotifyWorkspaceMutation(ctx context.Context, fileID, agentID string, deleted bool) error {
+	operation := EmbeddingUpsert
+	if deleted {
+		operation = EmbeddingDelete
+	}
+	return s.EnqueueWorkspaceFile(ctx, fileID, agentID, operation)
 }
 
 func (s *EmbeddingService) EnqueueFile(ctx context.Context, absolutePath, agentID, scope string, operation EmbeddingOperation) error {
@@ -366,6 +401,7 @@ func (s *EmbeddingService) enqueue(ctx context.Context, job EmbeddingJob) error 
 }
 
 func (s *EmbeddingService) run(ctx context.Context) {
+	s.recoverOrphanedJobs(ctx)
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -412,6 +448,18 @@ func (s *EmbeddingService) run(ctx context.Context) {
 				)
 				s.complete(ctx, *job)
 			}
+		}
+	}
+}
+
+func (s *EmbeddingService) recoverOrphanedJobs(ctx context.Context) {
+	if s.db == nil {
+		return
+	}
+	result, err := s.db.ExecContext(ctx, `UPDATE embedding_jobs SET status = 'pending', lease_until = NULL WHERE status = 'running'`)
+	if err == nil {
+		if rows, _ := result.RowsAffected(); rows > 0 {
+			slog.Info("recovered orphaned running embedding jobs on startup", "count", rows)
 		}
 	}
 }
@@ -501,6 +549,12 @@ func (s *EmbeddingService) process(ctx context.Context, job EmbeddingJob) error 
 	if len(chunks) == 0 {
 		return s.deleteSource(ctx, job)
 	}
+	slog.Info("chunked content for embedding",
+		"job_id", job.ID,
+		"source_ref", job.SourceRef,
+		"chunks", len(chunks),
+		"content_len", len(content),
+	)
 	passages := make([]string, len(chunks))
 	for index, chunk := range chunks {
 		passages[index] = chunk
@@ -644,12 +698,36 @@ func (s *EmbeddingService) loadContent(ctx context.Context, job EmbeddingJob) (s
 		if info.Size() > maxEmbeddingFileSize {
 			return "", nil, fmt.Errorf("%w: file exceeds limit of %d bytes", errUnsupportedEmbeddingSource, maxEmbeddingFileSize)
 		}
+		slog.Info("extracting document text for embedding", "job_id", job.ID, "file", job.SourceRef, "size_bytes", info.Size())
 		text, err := extractDocumentText(job.SourceRef)
 		if err != nil {
 			return "", nil, err
 		}
+		slog.Info("extracted document text successfully", "job_id", job.ID, "file", job.SourceRef, "chars", len(text))
 		return text, map[string]any{
 			"path": filepath.ToSlash(job.SourceRef), "filename": filepath.Base(job.SourceRef),
+		}, nil
+	case "workspace_file":
+		if s.workspaceStore == nil {
+			return "", nil, errors.New("workspace store is unavailable")
+		}
+		node, data, err := s.workspaceStore.Read(ctx, job.SourceRef, 0, 0)
+		if errors.Is(err, workspacepkg.ErrNotFound) {
+			return "", nil, os.ErrNotExist
+		}
+		if err != nil {
+			return "", nil, fmt.Errorf("reading workspace file %s: %w", job.SourceRef, err)
+		}
+		if node.SizeBytes > maxEmbeddingFileSize {
+			return "", nil, fmt.Errorf("%w: file exceeds limit of %d bytes", errUnsupportedEmbeddingSource, maxEmbeddingFileSize)
+		}
+		text, err := extractDocumentBytes(node.Name, node.MIMEType, data)
+		if err != nil {
+			return "", nil, err
+		}
+		return text, map[string]any{
+			"file_id": node.ID, "virtual_path": node.VirtualPath, "filename": node.Name,
+			"mime_type": node.MIMEType, "version": node.Version,
 		}, nil
 	default:
 		return "", nil, fmt.Errorf("unsupported embedding source type %q", job.SourceType)

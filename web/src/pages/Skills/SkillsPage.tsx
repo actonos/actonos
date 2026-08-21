@@ -336,7 +336,7 @@ export function SkillsPage() {
     <div className="relative min-h-[calc(100vh-64px)] pb-16">
       <BlobBackdrop />
 
-      <PageContainer>
+      <PageContainer maxWidth="wide">
         <PageHeader
           eyebrow={t('eyebrow')}
           title={t('title')}
@@ -363,21 +363,19 @@ export function SkillsPage() {
           <div className="flex items-center gap-1.5 bg-canvas/80 backdrop-blur-sm p-1 rounded-full border border-onyx/10 shadow-xs self-start">
             <button
               onClick={() => selectTab('installed')}
-              className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer ${
-                activeTab === 'installed'
+              className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer ${activeTab === 'installed'
                   ? 'bg-deep-ink text-white font-semibold shadow-xs'
                   : 'text-deep-ink hover:text-slate'
-              }`}
+                }`}
             >
               {t('tabs.installed', { count: installedSkills.length })}
             </button>
             <button
               onClick={() => selectTab('hub')}
-              className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer ${
-                activeTab === 'hub'
+              className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer ${activeTab === 'hub'
                   ? 'bg-deep-ink text-white font-semibold shadow-xs'
                   : 'text-deep-ink hover:text-slate'
-              }`}
+                }`}
             >
               {t('tabs.hub', { count: hubCatalog.length })}
             </button>
@@ -441,11 +439,10 @@ export function SkillsPage() {
                   return (
                     <Card
                       key={skill.name}
-                      className={`p-6 border flex flex-col justify-between transition-all duration-200 ${
-                        isEnabled
+                      className={`p-6 border flex flex-col justify-between transition-all duration-200 ${isEnabled
                           ? 'bg-canvas/95 border-onyx/10 shadow-xs hover:border-onyx/20'
                           : 'bg-soft-meadow/50 border-onyx/5 opacity-75'
-                      }`}
+                        }`}
                     >
                       <div>
                         {/* Header with Icon, Status Badge & Toggle Switch */}
@@ -479,21 +476,19 @@ export function SkillsPage() {
                                 !isRequirementsMet
                                   ? missingReqs.join(', ')
                                   : isEnabled
-                                  ? t('toggle.disable', 'Disable skill')
-                                  : t('toggle.enable', 'Enable skill')
+                                    ? t('toggle.disable', 'Disable skill')
+                                    : t('toggle.enable', 'Enable skill')
                               }
-                              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                !isRequirementsMet
+                              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${!isRequirementsMet
                                   ? 'bg-onyx/10 cursor-not-allowed opacity-50'
                                   : isEnabled
-                                  ? 'bg-deep-ink'
-                                  : 'bg-onyx/20 hover:bg-onyx/30'
-                              }`}
+                                    ? 'bg-deep-ink'
+                                    : 'bg-onyx/20 hover:bg-onyx/30'
+                                }`}
                             >
                               <span
-                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                  isEnabled ? 'translate-x-5' : 'translate-x-0'
-                                }`}
+                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isEnabled ? 'translate-x-5' : 'translate-x-0'
+                                  }`}
                               />
                             </button>
                           </div>
@@ -562,17 +557,15 @@ export function SkillsPage() {
                       setSelectedCategory(cat);
                       setPageSize(18);
                     }}
-                    className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-caption font-sans font-medium whitespace-nowrap transition-all cursor-pointer border ${
-                      isSelected
+                    className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-caption font-sans font-medium whitespace-nowrap transition-all cursor-pointer border ${isSelected
                         ? 'bg-deep-ink text-white border-deep-ink shadow-xs font-semibold'
                         : 'bg-canvas/90 text-deep-ink border-onyx/10 hover:border-onyx/30 hover:bg-soft-meadow'
-                    }`}
+                      }`}
                   >
                     <span>{t(`categories.${cat}`, cat)}</span>
                     <span
-                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                        isSelected ? 'bg-white/20 text-white' : 'bg-soft-meadow text-slate'
-                      }`}
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${isSelected ? 'bg-white/20 text-white' : 'bg-soft-meadow text-slate'
+                        }`}
                     >
                       {count}
                     </span>
@@ -597,25 +590,22 @@ export function SkillsPage() {
                 <div className="flex items-center bg-soft-meadow rounded-full p-0.5 border border-onyx/10 text-caption">
                   <button
                     onClick={() => setSelectedStatus('all')}
-                    className={`px-2.5 py-1 rounded-full transition-all cursor-pointer ${
-                      selectedStatus === 'all' ? 'bg-deep-ink text-white font-medium shadow-2xs' : 'text-slate hover:text-deep-ink'
-                    }`}
+                    className={`px-2.5 py-1 rounded-full transition-all cursor-pointer ${selectedStatus === 'all' ? 'bg-deep-ink text-white font-medium shadow-2xs' : 'text-slate hover:text-deep-ink'
+                      }`}
                   >
                     {t('statusFilter.all', 'All')}
                   </button>
                   <button
                     onClick={() => setSelectedStatus('installed')}
-                    className={`px-2.5 py-1 rounded-full transition-all cursor-pointer ${
-                      selectedStatus === 'installed' ? 'bg-deep-ink text-white font-medium shadow-2xs' : 'text-slate hover:text-deep-ink'
-                    }`}
+                    className={`px-2.5 py-1 rounded-full transition-all cursor-pointer ${selectedStatus === 'installed' ? 'bg-deep-ink text-white font-medium shadow-2xs' : 'text-slate hover:text-deep-ink'
+                      }`}
                   >
                     {t('statusFilter.installed', 'Installed')}
                   </button>
                   <button
                     onClick={() => setSelectedStatus('available')}
-                    className={`px-2.5 py-1 rounded-full transition-all cursor-pointer ${
-                      selectedStatus === 'available' ? 'bg-deep-ink text-white font-medium shadow-2xs' : 'text-slate hover:text-deep-ink'
-                    }`}
+                    className={`px-2.5 py-1 rounded-full transition-all cursor-pointer ${selectedStatus === 'available' ? 'bg-deep-ink text-white font-medium shadow-2xs' : 'text-slate hover:text-deep-ink'
+                      }`}
                   >
                     {t('statusFilter.available', 'Available')}
                   </button>

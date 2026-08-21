@@ -377,7 +377,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
     <div className="relative min-h-[calc(100vh-64px)]">
       <BlobBackdrop />
 
-      <PageContainer>
+      <PageContainer maxWidth="wide">
         {/* Top Breadcrumb & Action Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-3">

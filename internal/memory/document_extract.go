@@ -11,9 +11,71 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/ledongthuc/pdf"
 )
+
+// extractDocumentBytes extracts indexable text from database-backed workspace
+// bytes. Complex readers that require a filename receive a private temporary
+// file which is removed before this function returns and is never exposed to a
+// tool, API response, semantic source, or audit event.
+func extractDocumentBytes(name, mimeType string, data []byte) (string, error) {
+	if len(data) > maxEmbeddingFileSize {
+		return "", fmt.Errorf("%w: file exceeds limit of %d bytes", errUnsupportedEmbeddingSource, maxEmbeddingFileSize)
+	}
+	ext := strings.ToLower(filepath.Ext(name))
+	switch strings.ToLower(strings.TrimSpace(strings.Split(mimeType, ";")[0])) {
+	case "application/pdf":
+		ext = ".pdf"
+	case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+		ext = ".docx"
+	case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+		ext = ".xlsx"
+	case "text/csv":
+		ext = ".csv"
+	case "text/tab-separated-values":
+		ext = ".tsv"
+	}
+	if ext != ".pdf" && ext != ".docx" && ext != ".xlsx" && ext != ".csv" && ext != ".tsv" {
+		return extractPlainTextBytes(data)
+	}
+	temp, err := os.CreateTemp("", "actonos-workspace-*"+ext)
+	if err != nil {
+		return "", fmt.Errorf("creating private extraction file: %w", err)
+	}
+	tempPath := temp.Name()
+	defer os.Remove(tempPath)
+	if _, err := temp.Write(data); err != nil {
+		_ = temp.Close()
+		return "", fmt.Errorf("writing private extraction file: %w", err)
+	}
+	if err := temp.Close(); err != nil {
+		return "", fmt.Errorf("closing private extraction file: %w", err)
+	}
+	return extractDocumentText(tempPath)
+}
+
+func extractPlainTextBytes(data []byte) (string, error) {
+	// Check for UTF-16 BOMs.
+	if len(data) >= 2 {
+		if data[0] == 0xFF && data[1] == 0xFE {
+			runes := make([]rune, 0, len(data)/2)
+			for i := 2; i+1 < len(data); i += 2 {
+				runes = append(runes, rune(uint16(data[i])|uint16(data[i+1])<<8))
+			}
+			return string(runes), nil
+		}
+		if data[0] == 0xFE && data[1] == 0xFF {
+			runes := make([]rune, 0, len(data)/2)
+			for i := 2; i+1 < len(data); i += 2 {
+				runes = append(runes, rune(uint16(data[i])<<8|uint16(data[i+1])))
+			}
+			return string(runes), nil
+		}
+	}
+	if bytes.IndexByte(data, 0) >= 0 {
+		return "", fmt.Errorf("%w: binary file", errUnsupportedEmbeddingSource)
+	}
+	return string(data), nil
+}
 
 // extractDocumentText extracts readable plain text from various document formats (PDF, DOCX, XLSX, CSV, TSV, TXT, etc.).
 func extractDocumentText(filePath string) (string, error) {
@@ -32,25 +94,6 @@ func extractDocumentText(filePath string) (string, error) {
 	default:
 		return extractPlainText(filePath)
 	}
-}
-
-func extractPDFText(filePath string) (string, error) {
-	file, r, err := pdf.Open(filePath)
-	if err != nil {
-		return "", fmt.Errorf("%w: opening pdf: %v", errUnsupportedEmbeddingSource, err)
-	}
-	defer file.Close()
-
-	reader, err := r.GetPlainText()
-	if err != nil {
-		return "", fmt.Errorf("%w: extracting pdf plain text: %v", errUnsupportedEmbeddingSource, err)
-	}
-
-	var sb strings.Builder
-	if _, err := io.Copy(&sb, reader); err != nil {
-		return "", fmt.Errorf("%w: reading pdf stream: %v", errUnsupportedEmbeddingSource, err)
-	}
-	return sb.String(), nil
 }
 
 func extractDocxText(filePath string) (string, error) {
@@ -203,28 +246,5 @@ func extractPlainText(filePath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// Check for UTF-16 BOMs
-	if len(data) >= 2 {
-		if data[0] == 0xFF && data[1] == 0xFE {
-			// UTF-16 LE
-			runes := make([]rune, 0, len(data)/2)
-			for i := 2; i+1 < len(data); i += 2 {
-				runes = append(runes, rune(uint16(data[i])|uint16(data[i+1])<<8))
-			}
-			return string(runes), nil
-		}
-		if data[0] == 0xFE && data[1] == 0xFF {
-			// UTF-16 BE
-			runes := make([]rune, 0, len(data)/2)
-			for i := 2; i+1 < len(data); i += 2 {
-				runes = append(runes, rune(uint16(data[i])<<8|uint16(data[i+1])))
-			}
-			return string(runes), nil
-		}
-	}
-	// Check for binary null byte
-	if bytes.IndexByte(data, 0) >= 0 {
-		return "", fmt.Errorf("%w: binary file", errUnsupportedEmbeddingSource)
-	}
-	return string(data), nil
+	return extractPlainTextBytes(data)
 }

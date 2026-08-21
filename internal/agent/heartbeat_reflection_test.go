@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -13,6 +12,21 @@ import (
 	"github.com/actonos/actonos/internal/memory"
 	"github.com/actonos/actonos/internal/tools"
 )
+
+func configureHeartbeatDirective(t *testing.T, db *memory.DB, daemon *HeartbeatDaemon, directive string) {
+	t.Helper()
+	taskManager, err := NewTaskManager(db.SQLDB(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := taskManager.SaveHeartbeatConfig(context.Background(), HeartbeatConfig{
+		Enabled: true, IntervalMinutes: 60, Directives: directive,
+		TargetChannel: "all", TargetAccountID: "all", AutoDelegate: true, ZeroNoise: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	daemon.SetTaskManager(taskManager)
+}
 
 func TestHeartbeatRoutineAndRunLedger(t *testing.T) {
 	db, eventBus := setupTestDB(t)
@@ -74,15 +88,12 @@ func TestHeartbeatSkipsLegacyDefaultDirective(t *testing.T) {
 		t.Fatal(err)
 	}
 	workspace := t.TempDir()
-	if err := os.WriteFile(filepath.Join(workspace, "HEARTBEAT.md"), []byte(legacyDefaultHeartbeatDirective), 0644); err != nil {
-		t.Fatal(err)
-	}
-
 	provider := llm.NewMockProvider("openai/gpt-4o", "HEARTBEAT_OK")
 	router := llm.NewModelCascadeRouter()
 	router.RegisterProvider("openai/gpt-4o", provider)
 	engine := NewEngine(manager, eventBus, router, nil)
 	daemon := NewHeartbeatDaemon(manager, engine, eventBus, db.SQLDB(), workspace, time.Hour)
+	configureHeartbeatDirective(t, db, daemon, legacyDefaultHeartbeatDirective)
 
 	run, err := daemon.TriggerManualPulse(context.Background())
 	if err != nil || run.Status != "ok" || provider.CompleteCalls != 0 {
@@ -128,10 +139,6 @@ func TestHeartbeatExcludesCronFromRoutineTools(t *testing.T) {
 		t.Fatal(err)
 	}
 	workspace := t.TempDir()
-	if err := os.WriteFile(filepath.Join(workspace, "HEARTBEAT.md"), []byte("Check the deployment health endpoint."), 0644); err != nil {
-		t.Fatal(err)
-	}
-
 	provider := llm.NewMockProvider("openai/gpt-4o", "")
 	provider.CompleteFunc = func(_ context.Context, _ []llm.Message, opts llm.CompletionOptions) (*llm.Response, error) {
 		for _, tool := range opts.Tools {
@@ -152,6 +159,7 @@ func TestHeartbeatExcludesCronFromRoutineTools(t *testing.T) {
 	engine.SetToolRegistry(registry)
 
 	daemon := NewHeartbeatDaemon(manager, engine, eventBus, db.SQLDB(), workspace, time.Hour)
+	configureHeartbeatDirective(t, db, daemon, "Check the deployment health endpoint.")
 	run, err := daemon.TriggerManualPulse(context.Background())
 	if err != nil || run.Status != "ok" || provider.CompleteCalls != 1 {
 		t.Fatalf("unexpected heartbeat routine run: %+v err=%v calls=%d", run, err, provider.CompleteCalls)
@@ -227,14 +235,12 @@ func TestHeartbeatCooldownSuppressesRapidNonManualPulses(t *testing.T) {
 		t.Fatal(err)
 	}
 	workspace := t.TempDir()
-	if err := os.WriteFile(filepath.Join(workspace, "HEARTBEAT.md"), []byte("Check the deployment health endpoint."), 0644); err != nil {
-		t.Fatal(err)
-	}
 	provider := llm.NewMockProvider("openai/gpt-4o", "HEARTBEAT_OK")
 	router := llm.NewModelCascadeRouter()
 	router.RegisterProvider("openai/gpt-4o", provider)
 	engine := NewEngine(manager, eventBus, router, nil)
 	daemon := NewHeartbeatDaemon(manager, engine, eventBus, db.SQLDB(), workspace, time.Hour)
+	configureHeartbeatDirective(t, db, daemon, "Check the deployment health endpoint.")
 
 	first := daemon.checkCycle(context.Background(), false)
 	if first == nil || first.Status != "ok" || provider.CompleteCalls != 1 {
@@ -265,14 +271,12 @@ func TestHeartbeatActiveHoursSkipsOutsideWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 	workspace := t.TempDir()
-	if err := os.WriteFile(filepath.Join(workspace, "HEARTBEAT.md"), []byte("Check the deployment health endpoint."), 0644); err != nil {
-		t.Fatal(err)
-	}
 	provider := llm.NewMockProvider("openai/gpt-4o", "HEARTBEAT_OK")
 	router := llm.NewModelCascadeRouter()
 	router.RegisterProvider("openai/gpt-4o", provider)
 	engine := NewEngine(manager, eventBus, router, nil)
 	daemon := NewHeartbeatDaemon(manager, engine, eventBus, db.SQLDB(), workspace, time.Hour)
+	configureHeartbeatDirective(t, db, daemon, "Check the deployment health endpoint.")
 
 	// A zero-width window ("start == end") means the window is always outside,
 	// per OpenClaw's documented semantics.
@@ -296,13 +300,11 @@ func TestHeartbeatHonorsConfiguredSilentTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	workspace := t.TempDir()
-	if err := os.WriteFile(filepath.Join(workspace, "HEARTBEAT.md"), []byte("Check the deployment health endpoint."), 0644); err != nil {
-		t.Fatal(err)
-	}
 	router := llm.NewModelCascadeRouter()
 	router.RegisterProvider("openai/gpt-4o", llm.NewMockProvider("openai/gpt-4o", "Deployment needs attention."))
 	engine := NewEngine(manager, eventBus, router, nil)
 	daemon := NewHeartbeatDaemon(manager, engine, eventBus, db.SQLDB(), workspace, time.Hour)
+	configureHeartbeatDirective(t, db, daemon, "Check the deployment health endpoint.")
 	daemon.SyncConfig(HeartbeatConfig{Enabled: true, TargetChannel: "none", TargetAccountID: "all"})
 
 	notifications := eventBus.Subscribe(bus.EventAgentActionDone)
@@ -339,16 +341,14 @@ func TestHeartbeatSuppressesOffTopicGreetingResponse(t *testing.T) {
 		t.Fatal(err)
 	}
 	workspace := t.TempDir()
-	if err := os.WriteFile(filepath.Join(workspace, "HEARTBEAT.md"), []byte(
-		"Autonomous standing supervisor. Routinely review pending tasks in TASKS.md and monitor system stability.\n\n"+
-			"- Check current Ho Chi Minh, Vietnam weather and send to all chat channels"), 0644); err != nil {
-		t.Fatal(err)
-	}
+	directive := "Autonomous standing supervisor. Routinely review pending tasks and monitor system stability.\n\n" +
+		"- Check current Ho Chi Minh, Vietnam weather and send to all chat channels"
 	router := llm.NewModelCascadeRouter()
 	router.RegisterProvider("openai/gpt-4o", llm.NewMockProvider("openai/gpt-4o",
 		"Chào Bieber! Tôi đang sẵn sàng tại đây. Bạn muốn tôi hỗ trợ gì hôm nay?"))
 	engine := NewEngine(manager, eventBus, router, nil)
 	daemon := NewHeartbeatDaemon(manager, engine, eventBus, db.SQLDB(), workspace, time.Hour)
+	configureHeartbeatDirective(t, db, daemon, directive)
 	daemon.SyncConfig(HeartbeatConfig{Enabled: true, TargetChannel: "all", TargetAccountID: "all"})
 
 	notifications := eventBus.Subscribe(bus.EventAgentActionDone)

@@ -43,8 +43,8 @@ func TestBuildHostEnvironmentPrompt(t *testing.T) {
 		t.Errorf("prompt missing dedicated_workspace_default rule, got:\n%s", prompt)
 	}
 
-	if !strings.Contains(prompt, "permitted_global_data_access") {
-		t.Errorf("prompt missing permitted_global_data_access rule, got:\n%s", prompt)
+	if !strings.Contains(prompt, "user_workspace_database") || !strings.Contains(prompt, "native_workspace_search") {
+		t.Errorf("prompt missing database workspace tool policy, got:\n%s", prompt)
 	}
 
 	if !strings.Contains(prompt, "<execution_best_practices>") {
@@ -52,7 +52,7 @@ func TestBuildHostEnvironmentPrompt(t *testing.T) {
 	}
 
 	customAgentPrompt := BuildAgentEnvironmentPrompt("/custom", "/custom/workspace", "agent_custom_coder")
-	if !strings.Contains(customAgentPrompt, "agent_dir=\"/custom/workspace/agent_custom_coder\"") && !strings.Contains(customAgentPrompt, "agent_custom_coder") {
+	if !strings.Contains(customAgentPrompt, "agent_custom_coder") || !strings.Contains(customAgentPrompt, "agents") {
 		t.Errorf("expected custom agent slug in agent_dir prompt, got:\n%s", customAgentPrompt)
 	}
 

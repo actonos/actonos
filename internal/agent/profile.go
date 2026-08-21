@@ -62,15 +62,20 @@ const DefaultAgentSoul = `You are an autonomous, highly capable, and dedicated A
 // NewUserProfileManager creates a new UserProfileManager.
 func NewUserProfileManager(db *memory.DB, dataDir string) (*UserProfileManager, error) {
 	configDir := filepath.Join(dataDir, "config")
-	workspaceDir := filepath.Join(dataDir, "workspace")
 	agentsDir := filepath.Join(dataDir, "agents")
+	systemWorkspaceDir := filepath.Join(agentsDir, DefaultSystemAgentID, "workspace")
 	_ = os.MkdirAll(configDir, 0755)
-	_ = os.MkdirAll(workspaceDir, 0755)
-	_ = os.MkdirAll(agentsDir, 0755)
+	_ = os.MkdirAll(systemWorkspaceDir, 0750)
 
 	configPath := filepath.Join(configDir, "profile.json")
 	soulPath := filepath.Join(configDir, "SOUL.md")
-	memoryMDPath := filepath.Join(workspaceDir, "MEMORY.md")
+	memoryMDPath := filepath.Join(systemWorkspaceDir, "MEMORY.md")
+	legacyMemoryPath := filepath.Join(dataDir, "workspace", "MEMORY.md")
+	if _, err := os.Stat(memoryMDPath); os.IsNotExist(err) {
+		if data, readErr := os.ReadFile(legacyMemoryPath); readErr == nil {
+			_ = os.WriteFile(memoryMDPath, data, 0640)
+		}
+	}
 
 	var sqlDB *sql.DB
 	if db != nil {
@@ -218,6 +223,9 @@ func (m *UserProfileManager) GetAgentSoul(agentID string) string {
 	if agentID == "" {
 		agentID = DefaultSystemAgentID
 	}
+	if !validAgentProfileID(agentID) {
+		return DefaultAgentSoul
+	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -243,6 +251,9 @@ func (m *UserProfileManager) GetAgentSoul(agentID string) string {
 func (m *UserProfileManager) SaveAgentSoul(ctx context.Context, agentID string, content string) error {
 	if agentID == "" {
 		agentID = DefaultSystemAgentID
+	}
+	if !validAgentProfileID(agentID) {
+		return fmt.Errorf("invalid agent id %q", agentID)
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -279,23 +290,37 @@ func (m *UserProfileManager) GetAgentMemoryMD(agentID string) string {
 	if agentID == "" {
 		agentID = DefaultSystemAgentID
 	}
+	if !validAgentProfileID(agentID) {
+		return ""
+	}
+	m.migrateLegacyAgentMemory(agentID)
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	if m.dataDir != "" {
-		agentMemPath := filepath.Join(m.dataDir, "agents", agentID, "MEMORY.md")
+		agentMemPath := filepath.Join(m.dataDir, "agents", agentID, "workspace", "MEMORY.md")
 		if data, err := os.ReadFile(agentMemPath); err == nil {
 			return string(data)
 		}
 	}
-
-	// Fallback to legacy global memoryMDPath if agentID is default
-	if agentID == DefaultSystemAgentID {
-		if data, err := os.ReadFile(m.memoryMDPath); err == nil {
-			return string(data)
-		}
-	}
 	return ""
+}
+
+func (m *UserProfileManager) migrateLegacyAgentMemory(agentID string) {
+	if m.dataDir == "" {
+		return
+	}
+	target := filepath.Join(m.dataDir, "agents", agentID, "workspace", "MEMORY.md")
+	if _, err := os.Stat(target); err == nil {
+		return
+	}
+	legacy := filepath.Join(m.dataDir, "agents", agentID, "MEMORY.md")
+	data, err := os.ReadFile(legacy)
+	if err != nil {
+		return
+	}
+	_ = os.MkdirAll(filepath.Dir(target), 0750)
+	_ = os.WriteFile(target, data, 0640)
 }
 
 // AppendAgentMemoryMD appends a timestamped reflection entry to the isolated MEMORY.md for a specific agent.
@@ -303,13 +328,16 @@ func (m *UserProfileManager) AppendAgentMemoryMD(ctx context.Context, agentID st
 	if agentID == "" {
 		agentID = DefaultSystemAgentID
 	}
+	if !validAgentProfileID(agentID) {
+		return fmt.Errorf("invalid agent id %q", agentID)
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	var targetPath string
 	if m.dataDir != "" {
-		agentDir := filepath.Join(m.dataDir, "agents", agentID)
-		_ = os.MkdirAll(agentDir, 0755)
+		agentDir := filepath.Join(m.dataDir, "agents", agentID, "workspace")
+		_ = os.MkdirAll(agentDir, 0750)
 		targetPath = filepath.Join(agentDir, "MEMORY.md")
 	} else {
 		targetPath = m.memoryMDPath
@@ -325,6 +353,18 @@ func (m *UserProfileManager) AppendAgentMemoryMD(ctx context.Context, agentID st
 	formatted := fmt.Sprintf("\n### [%s]\n%s\n", timestamp, entry)
 	_, err = f.WriteString(formatted)
 	return err
+}
+
+func validAgentProfileID(agentID string) bool {
+	if agentID == "" || len(agentID) > 128 {
+		return false
+	}
+	for _, char := range agentID {
+		if (char < 'a' || char > 'z') && (char < '0' || char > '9') && char != '_' && char != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 // GetMemoryMD retrieves the persistent markdown memory diary.

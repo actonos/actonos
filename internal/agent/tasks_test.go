@@ -3,9 +3,6 @@ package agent
 import (
 	"context"
 	"database/sql"
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -25,7 +22,7 @@ func newTaskManagerForTest(t *testing.T) *TaskManager {
 	return manager
 }
 
-func TestTaskManagerCRUDFilteringAndMarkdown(t *testing.T) {
+func TestTaskManagerCRUDFilteringAndSQLitePersistence(t *testing.T) {
 	manager := newTaskManagerForTest(t)
 	ctx := context.Background()
 	existing, err := manager.ListTasks(ctx, "all", "all")
@@ -62,14 +59,6 @@ func TestTaskManagerCRUDFilteringAndMarkdown(t *testing.T) {
 	if err != nil || len(completed) != 1 {
 		t.Fatalf("filtering failed: tasks=%+v err=%v", completed, err)
 	}
-	markdown, err := os.ReadFile(filepath.Join(manager.workspaceDir, "TASKS.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(markdown), "Coverage mission") || !strings.Contains(string(markdown), "Status: completed") {
-		t.Fatalf("markdown was not synchronized:\n%s", markdown)
-	}
-
 	if err := manager.DeleteTask(ctx, task.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -79,8 +68,7 @@ func TestTaskManagerCRUDFilteringAndMarkdown(t *testing.T) {
 }
 
 func TestTaskManagerHeartbeatAndNilDatabase(t *testing.T) {
-	workspace := t.TempDir()
-	manager := &TaskManager{workspaceDir: workspace}
+	manager := &TaskManager{}
 	ctx := context.Background()
 	if tasks, err := manager.ListTasks(ctx, "", ""); err != nil || len(tasks) != 0 {
 		t.Fatalf("nil database list failed: tasks=%v err=%v", tasks, err)
@@ -92,7 +80,7 @@ func TestTaskManagerHeartbeatAndNilDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg, err := manager.GetHeartbeatConfig(ctx)
-	if err != nil || cfg.Directives != "stay healthy" || !cfg.Enabled || !cfg.AutoDelegate {
+	if err != nil || cfg.Directives != "" || !cfg.Enabled || !cfg.AutoDelegate {
 		t.Fatalf("unexpected heartbeat config: cfg=%+v err=%v", cfg, err)
 	}
 }
@@ -100,13 +88,36 @@ func TestTaskManagerHeartbeatAndNilDatabase(t *testing.T) {
 func TestTaskManagerIgnoresLegacyHeartbeatDirective(t *testing.T) {
 	manager := newTaskManagerForTest(t)
 	ctx := context.Background()
-	if err := os.WriteFile(filepath.Join(manager.workspaceDir, "HEARTBEAT.md"), []byte(legacyDefaultHeartbeatDirective), 0644); err != nil {
+	if err := manager.SaveHeartbeatConfig(ctx, HeartbeatConfig{Directives: legacyDefaultHeartbeatDirective}); err != nil {
 		t.Fatal(err)
 	}
 
 	cfg, err := manager.GetHeartbeatConfig(ctx)
 	if err != nil || cfg.Directives != "" {
 		t.Fatalf("legacy directive should be normalized to empty: cfg=%+v err=%v", cfg, err)
+	}
+}
+
+func TestTaskManagerClearsHeartbeatDirectives(t *testing.T) {
+	manager := newTaskManagerForTest(t)
+	ctx := context.Background()
+
+	// 1. Save directives
+	if err := manager.SaveHeartbeatConfig(ctx, HeartbeatConfig{Directives: "Check alerts daily", IntervalMinutes: 5}); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := manager.GetHeartbeatConfig(ctx)
+	if err != nil || cfg.Directives != "Check alerts daily" {
+		t.Fatalf("expected directives saved, got %q", cfg.Directives)
+	}
+
+	// 2. Clear directives completely
+	if err := manager.SaveHeartbeatConfig(ctx, HeartbeatConfig{Directives: "", IntervalMinutes: 5}); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err = manager.GetHeartbeatConfig(ctx)
+	if err != nil || cfg.Directives != "" {
+		t.Fatalf("expected empty directives after clearing, got %q", cfg.Directives)
 	}
 }
 

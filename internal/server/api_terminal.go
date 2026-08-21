@@ -6,7 +6,9 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"time"
@@ -83,7 +85,12 @@ func (s *Server) handleTerminalWebSocket(w http.ResponseWriter, r *http.Request)
 	}
 
 	// 2. Start True Pseudo-Terminal
-	ptySession, err := startPTY(requestedShell, s.workspaceDir, cols, rows)
+	terminalWorkspace := filepath.Join(s.dataDir, "agents", adminAgentID, "workspace")
+	if err := os.MkdirAll(terminalWorkspace, 0750); err != nil {
+		_ = conn.Close(websocket.StatusInternalError, "failed to prepare terminal workspace")
+		return
+	}
+	ptySession, err := startPTY(requestedShell, terminalWorkspace, cols, rows)
 	if err != nil {
 		slog.Warn("terminal: failed to start pseudo-terminal", "error", err)
 		_ = conn.Close(websocket.StatusInternalError, "failed to start terminal PTY: "+err.Error())

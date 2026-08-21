@@ -116,15 +116,23 @@ type FileMutationSink interface {
 	NotifyFileMutation(ctx context.Context, absolutePath, agentID string, deleted bool) error
 }
 
+// WorkspaceMutationSink receives successful database-backed user workspace
+// changes. Unlike FileMutationSink, it is keyed only by opaque file ID and can
+// never expose a host path.
+type WorkspaceMutationSink interface {
+	NotifyWorkspaceMutation(ctx context.Context, fileID, agentID string, deleted bool) error
+}
+
 // ToolRegistry manages all registered tools (Native, MCP, WASM, Skills).
 type ToolRegistry struct {
-	mu             sync.RWMutex
-	tools          map[string]Tool
-	bus            *bus.EventBus
-	auditLogger    ToolAuditLogger
-	policyResolver PolicyResolver
-	approvals      *ApprovalManager
-	fileMutations  FileMutationSink
+	mu                 sync.RWMutex
+	tools              map[string]Tool
+	bus                *bus.EventBus
+	auditLogger        ToolAuditLogger
+	policyResolver     PolicyResolver
+	approvals          *ApprovalManager
+	fileMutations      FileMutationSink
+	workspaceMutations WorkspaceMutationSink
 }
 
 // SetPolicyResolver enables authoritative execution-time permission checks.
@@ -145,6 +153,12 @@ func (r *ToolRegistry) SetFileMutationSink(sink FileMutationSink) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.fileMutations = sink
+}
+
+func (r *ToolRegistry) SetWorkspaceMutationSink(sink WorkspaceMutationSink) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.workspaceMutations = sink
 }
 
 // WithTraceID propagates an end-to-end trace identifier into tool execution.
@@ -326,6 +340,14 @@ func NormalizeToolName(name string) string {
 		return "native_file_list"
 	case "deletefile", "delete_file", "remove_file", "file_delete", "rm":
 		return "native_file_delete"
+	case "workspace_search", "search_workspace", "user_file_search":
+		return "native_workspace_search"
+	case "workspace_read", "read_workspace", "user_file_read":
+		return "native_workspace_read"
+	case "workspace_write", "write_workspace", "user_file_write":
+		return "native_workspace_write"
+	case "workspace_delete", "delete_workspace", "user_file_delete":
+		return "native_workspace_delete"
 	case "subshell", "bash", "sh", "exec", "powershell", "terminal", "run_command", "shell":
 		return "native_subshell"
 	case "browser", "browser_open", "web_browser":
@@ -554,7 +576,7 @@ func (r *ToolRegistry) Execute(ctx context.Context, agentID, name string, inputJ
 	if r.bus != nil {
 		r.bus.Publish(bus.NewEvent(bus.EventToolExecutionStarted, agentID, map[string]any{
 			"tool_name": name,
-			"input":     string(normalizedInput),
+			"input":     toolInputForEvent(name, normalizedInput),
 		}))
 	}
 
@@ -617,7 +639,7 @@ func (r *ToolRegistry) Execute(ctx context.Context, agentID, name string, inputJ
 	if r.bus != nil {
 		r.bus.Publish(bus.NewEvent(bus.EventToolExecutionResult, agentID, map[string]any{
 			"tool_name":   name,
-			"result":      res.Content,
+			"result":      toolResultForEvent(name, res),
 			"duration_ms": duration.Milliseconds(),
 		}))
 	}
@@ -632,16 +654,59 @@ func (r *ToolRegistry) Execute(ctx context.Context, agentID, name string, inputJ
 			}
 		}
 	}
+	if res != nil && (name == "native_workspace_write" || name == "native_workspace_delete") {
+		r.mu.RLock()
+		sink := r.workspaceMutations
+		r.mu.RUnlock()
+		if sink != nil && res.Data != nil {
+			if fileID, ok := res.Data["workspace_file_id"].(string); ok && fileID != "" {
+				_ = sink.NotifyWorkspaceMutation(context.Background(), fileID, agentID, name == "native_workspace_delete")
+			}
+		}
+	}
 
 	return res, nil
+}
+
+func toolInputForEvent(name string, input json.RawMessage) string {
+	if name != "native_file_write" && name != "native_workspace_write" {
+		return string(input)
+	}
+	var payload map[string]any
+	if json.Unmarshal(input, &payload) != nil {
+		return `{"content":"[redacted]"}`
+	}
+	for _, key := range []string{"content", "content_base64"} {
+		if value, exists := payload[key]; exists {
+			length := len(fmt.Sprint(value))
+			payload[key] = fmt.Sprintf("[redacted:%d chars]", length)
+		}
+	}
+	redacted, err := json.Marshal(payload)
+	if err != nil {
+		return `{"content":"[redacted]"}`
+	}
+	return string(redacted)
+}
+
+func toolResultForEvent(name string, result *ToolResult) string {
+	if result == nil {
+		return ""
+	}
+	switch name {
+	case "native_file_read", "native_workspace_read", "native_workspace_search":
+		return "[workspace content omitted]"
+	default:
+		return result.Content
+	}
 }
 
 // ToolRiskLevel returns the deterministic risk class for a tool.
 func ToolRiskLevel(name string) string {
 	switch name {
-	case "native_exec", "native_file_delete", "native_cron_schedule":
+	case "native_exec", "native_file_delete", "native_workspace_delete", "native_cron_schedule":
 		return "High"
-	case "native_file_write", "native_browser_navigate", "native_browser_screenshot", "native_http_fetch", "native_channel_notify":
+	case "native_file_write", "native_workspace_write", "native_browser_navigate", "native_browser_screenshot", "native_http_fetch", "native_channel_notify":
 		return "Medium"
 	}
 	if strings.HasPrefix(name, "mcp_") || strings.HasPrefix(name, "wasm_") {

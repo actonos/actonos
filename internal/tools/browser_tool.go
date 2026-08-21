@@ -233,8 +233,12 @@ func (t *BrowserScreenshotTool) Execute(ctx context.Context, inputJSON json.RawM
 		return nil, fmt.Errorf("screenshot capture failed: %w", err)
 	}
 
-	// Save to workspace or data directory
-	targetPath, err := security.ResolvePathWithBase(filepath.Dir(t.workspaceDir), t.workspaceDir, input.OutputPath, true)
+	// Screenshots are private agent artifacts and never enter the user workspace.
+	allowedRoot, baseDir, err := resolveTargetBaseDir(ctx, t.workspaceDir)
+	if err != nil {
+		return nil, err
+	}
+	targetPath, err := security.ResolvePathWithBase(allowedRoot, baseDir, input.OutputPath, true)
 	if err != nil {
 		return nil, fmt.Errorf("validating screenshot path: %w", err)
 	}

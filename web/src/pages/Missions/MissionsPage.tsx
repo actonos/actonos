@@ -241,7 +241,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
     <div className="relative min-h-screen bg-soft-meadow/40 pb-16">
       <BlobBackdrop />
 
-      <PageContainer>
+      <PageContainer maxWidth="wide">
         <PageHeader
           eyebrow={t('page.eyebrow')}
           title={t('title')}

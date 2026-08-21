@@ -820,17 +820,24 @@ func (s *Server) handleGetStorageInfo(w http.ResponseWriter, r *http.Request) {
 	dataDir := s.dataDir
 	storageSize := getDirSize(filepath.Join(dataDir, "storage"))
 	vectorsSize := getDirSize(filepath.Join(dataDir, "vectors"))
-	workspaceSize := getDirSize(filepath.Join(dataDir, "workspace"))
+	workspaceSize := int64(0)
+	if s.workspaceStore != nil {
+		if stats, err := s.workspaceStore.Stats(r.Context()); err == nil {
+			workspaceSize = stats.TotalSize
+		}
+	}
+	agentWorkspaceSize := getDirSize(filepath.Join(dataDir, "agents"))
 	logsSize := getDirSize(filepath.Join(dataDir, "logs"))
 
-	totalSize := storageSize + vectorsSize + workspaceSize + logsSize
+	totalSize := storageSize + vectorsSize + agentWorkspaceSize + logsSize
 
 	s.respondJSON(w, http.StatusOK, map[string]any{
-		"storage_bytes":   storageSize,
-		"vectors_bytes":   vectorsSize,
-		"workspace_bytes": workspaceSize,
-		"logs_bytes":      logsSize,
-		"total_bytes":     totalSize,
+		"storage_bytes":         storageSize,
+		"vectors_bytes":         vectorsSize,
+		"workspace_bytes":       workspaceSize,
+		"agent_workspace_bytes": agentWorkspaceSize,
+		"logs_bytes":            logsSize,
+		"total_bytes":           totalSize,
 	})
 }
 

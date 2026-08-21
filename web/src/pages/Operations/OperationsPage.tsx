@@ -90,7 +90,7 @@ export function OperationsPage() {
   ];
 
   return (
-    <PageContainer>
+    <PageContainer maxWidth="wide">
       <PageHeader
         eyebrow={t('eyebrow')}
         title={t('title')}

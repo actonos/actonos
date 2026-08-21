@@ -8,8 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -55,7 +53,6 @@ type HeartbeatDaemon struct {
 	taskMgr       *TaskManager
 	sessionMgr    SessionHistoryProvider
 	approvalMgr   ApprovalListProvider
-	workspaceDir  string
 	interval      time.Duration
 	enabled       bool
 	targetChannel string
@@ -91,21 +88,17 @@ func NewHeartbeatDaemon(
 	engine *Engine,
 	eventBus *bus.EventBus,
 	db *sql.DB,
-	workspaceDir string,
+	_ string,
 	interval time.Duration,
 ) *HeartbeatDaemon {
 	if interval <= 0 {
 		interval = 5 * time.Minute
-	}
-	if workspaceDir == "" {
-		workspaceDir = "./data/workspace"
 	}
 	return &HeartbeatDaemon{
 		agentMgr:      agentMgr,
 		engine:        engine,
 		eventBus:      eventBus,
 		db:            db,
-		workspaceDir:  workspaceDir,
 		interval:      interval,
 		enabled:       true,
 		targetChannel: "all",
@@ -323,11 +316,12 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) *Heartbea
 		return run
 	}
 
-	// 1. Read standing directives
-	heartbeatMDPath := filepath.Join(h.workspaceDir, "HEARTBEAT.md")
+	// 1. Read standing directives from the SQLite-backed task manager.
 	standingDirectives := ""
-	if data, err := os.ReadFile(heartbeatMDPath); err == nil && len(data) > 0 {
-		standingDirectives = string(data)
+	if h.taskMgr != nil {
+		if cfg, err := h.taskMgr.GetHeartbeatConfig(ctx); err == nil && cfg != nil {
+			standingDirectives = cfg.Directives
+		}
 	}
 
 	var activeTask *AutonomousTask

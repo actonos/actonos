@@ -11,8 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/actonos/actonos/internal/memory"
-	"github.com/actonos/actonos/internal/security"
+	workspacepkg "github.com/actonos/actonos/internal/workspace"
 )
 
 const adminAgentID = "agent_system_core"
@@ -30,90 +29,85 @@ func (s *Server) requestAdminAction(ctx context.Context, action string, input an
 
 func (s *Server) executeAdminAction(ctx context.Context, action string, raw json.RawMessage) (any, error) {
 	switch action {
-	case "workspace_write":
-		var input struct {
-			Path    string `json:"path"`
-			Content string `json:"content"`
-		}
-		if err := json.Unmarshal(raw, &input); err != nil {
-			return nil, err
-		}
-		target, err := security.ResolvePath(s.workspaceDir, input.Path, true)
-		if err != nil {
-			return nil, err
-		}
-		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-			return nil, err
-		}
-		if err := os.WriteFile(target, []byte(input.Content), 0644); err != nil {
-			return nil, err
-		}
-		if s.embedding != nil {
-			_ = s.embedding.EnqueueFile(context.Background(), target, "", "shared", memory.EmbeddingUpsert)
-		}
-		return map[string]any{"path": filepath.Clean(input.Path), "written": len(input.Content)}, nil
-	case "workspace_upload":
-		var input struct {
-			Path string `json:"path"`
-			Data string `json:"data"`
-		}
-		if err := json.Unmarshal(raw, &input); err != nil {
-			return nil, err
-		}
-		data, err := base64.StdEncoding.DecodeString(input.Data)
-		if err != nil {
-			return nil, err
-		}
-		target, err := security.ResolvePath(s.workspaceDir, input.Path, true)
-		if err != nil {
-			return nil, err
-		}
-		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-			return nil, err
-		}
-		if err := os.WriteFile(target, data, 0644); err != nil {
-			return nil, err
-		}
-		if s.embedding != nil {
-			_ = s.embedding.EnqueueFile(context.Background(), target, "", "shared", memory.EmbeddingUpsert)
-		}
-		return map[string]any{"path": input.Path, "written": len(data)}, nil
+	case "workspace_write", "workspace_upload":
+		return s.executeWorkspaceWrite(ctx, raw)
 	case "workspace_delete":
 		var input struct {
-			Path string `json:"path"`
+			FileID          string `json:"file_id"`
+			ExpectedVersion int64  `json:"expected_version"`
+			Recursive       bool   `json:"recursive"`
 		}
 		if err := json.Unmarshal(raw, &input); err != nil {
 			return nil, err
 		}
-		if clean := filepath.Clean(input.Path); clean == "." || clean == "" {
-			return nil, errors.New("workspace root cannot be deleted")
+		if s.workspaceStore == nil {
+			return nil, errors.New("workspace store is unavailable")
 		}
-		target, err := security.ResolvePath(s.workspaceDir, input.Path, false)
+		node, err := s.workspaceStore.Get(ctx, input.FileID)
 		if err != nil {
 			return nil, err
 		}
-		if err := os.RemoveAll(target); err != nil {
+		if err := s.workspaceStore.Delete(ctx, input.FileID, input.ExpectedVersion, input.Recursive); err != nil {
 			return nil, err
 		}
 		if s.embedding != nil {
-			_ = s.embedding.EnqueueFile(context.Background(), target, "", "shared", memory.EmbeddingDelete)
+			_ = s.embedding.NotifyWorkspaceMutation(context.Background(), node.ID, adminAgentID, true)
 		}
-		return map[string]string{"status": "deleted"}, nil
+		return map[string]any{"status": "deleted", "id": node.ID, "file_id": node.ID, "name": node.Name}, nil
 	case "workspace_mkdir":
 		var input struct {
-			Path string `json:"path"`
+			ParentID string `json:"parent_id"`
+			Name     string `json:"name"`
 		}
 		if err := json.Unmarshal(raw, &input); err != nil {
 			return nil, err
 		}
-		target, err := security.ResolvePath(s.workspaceDir, input.Path, true)
+		if s.workspaceStore == nil {
+			return nil, errors.New("workspace store is unavailable")
+		}
+		node, err := s.workspaceStore.CreateDirectory(ctx, input.ParentID, input.Name)
 		if err != nil {
 			return nil, err
 		}
-		if err := os.MkdirAll(target, 0755); err != nil {
+		return map[string]any{"status": "created", "id": node.ID, "parent_id": node.ParentID, "name": node.Name, "virtual_path": node.VirtualPath}, nil
+	case "workspace_rename":
+		var input struct {
+			FileID          string `json:"file_id"`
+			ParentID        string `json:"parent_id"`
+			Name            string `json:"name"`
+			ExpectedVersion int64  `json:"expected_version"`
+		}
+		if err := json.Unmarshal(raw, &input); err != nil {
 			return nil, err
 		}
-		return map[string]string{"status": "created", "path": filepath.Clean(input.Path)}, nil
+		if s.workspaceStore == nil {
+			return nil, errors.New("workspace store is unavailable")
+		}
+		node, err := s.workspaceStore.Rename(ctx, input.FileID, input.ParentID, input.Name, input.ExpectedVersion)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"status": "renamed", "id": node.ID, "name": node.Name, "virtual_path": node.VirtualPath, "version": node.Version}, nil
+	case "workspace_duplicate":
+		var input struct {
+			FileID   string `json:"file_id"`
+			ParentID string `json:"parent_id"`
+			Name     string `json:"name"`
+		}
+		if err := json.Unmarshal(raw, &input); err != nil {
+			return nil, err
+		}
+		if s.workspaceStore == nil {
+			return nil, errors.New("workspace store is unavailable")
+		}
+		node, err := s.workspaceStore.Duplicate(ctx, input.FileID, input.ParentID, input.Name, adminAgentID)
+		if err != nil {
+			return nil, err
+		}
+		if s.embedding != nil {
+			_ = s.embedding.NotifyWorkspaceMutation(context.Background(), node.ID, adminAgentID, false)
+		}
+		return map[string]any{"status": "duplicated", "id": node.ID, "name": node.Name, "virtual_path": node.VirtualPath, "version": node.Version}, nil
 	case "skill_create":
 		var input struct {
 			Name, Description, Content string
@@ -218,4 +212,42 @@ func (s *Server) executeAdminAction(ctx context.Context, action string, raw json
 	default:
 		return nil, fmt.Errorf("unknown administrative action %q", action)
 	}
+}
+
+func (s *Server) executeWorkspaceWrite(ctx context.Context, raw json.RawMessage) (any, error) {
+	if s.workspaceStore == nil {
+		return nil, errors.New("workspace store is unavailable")
+	}
+	var input workspaceWriteAdminInput
+	if err := json.Unmarshal(raw, &input); err != nil {
+		return nil, fmt.Errorf("decoding workspace write: %w", err)
+	}
+	var content []byte
+	switch input.Encoding {
+	case "base64":
+		decoded, err := base64.StdEncoding.DecodeString(input.ContentBase64)
+		if err != nil {
+			return nil, fmt.Errorf("decoding workspace content: %w", err)
+		}
+		content = decoded
+	case "utf8", "":
+		content = []byte(input.Content)
+	default:
+		return nil, errors.New("unsupported workspace content encoding")
+	}
+	node, err := s.workspaceStore.Write(ctx, workspacepkg.WriteRequest{
+		ID: input.FileID, ParentID: input.ParentID, Name: input.Name, Content: content,
+		MIMEType: input.MIMEType, ExpectedVersion: input.ExpectedVersion, ActorID: adminAgentID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if s.embedding != nil {
+		_ = s.embedding.NotifyWorkspaceMutation(context.Background(), node.ID, adminAgentID, false)
+	}
+	return map[string]any{
+		"status": "saved", "id": node.ID, "file_id": node.ID, "parent_id": node.ParentID,
+		"name": node.Name, "virtual_path": node.VirtualPath, "version": node.Version,
+		"written": node.SizeBytes,
+	}, nil
 }

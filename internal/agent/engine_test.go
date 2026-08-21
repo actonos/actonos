@@ -121,7 +121,8 @@ func TestEngineDurableApprovalResumeEndToEnd(t *testing.T) {
 	if !errors.As(err, &approvalRequired) {
 		t.Fatalf("expected durable approval pause, got %v", err)
 	}
-	if _, statErr := os.Stat(filepath.Join(workspace, manifest.AgentID, "result.txt")); !os.IsNotExist(statErr) {
+	privateFile := filepath.Join(workspace, "agents", manifest.AgentID, "workspace", "result.txt")
+	if _, statErr := os.Stat(privateFile); !os.IsNotExist(statErr) {
 		t.Fatalf("tool executed before approval: %v", statErr)
 	}
 	pendingRuns, err := runStore.List(context.Background(), 10)
@@ -140,10 +141,7 @@ func TestEngineDurableApprovalResumeEndToEnd(t *testing.T) {
 	if response.Content == "" || response.Usage.TotalTokens != 11 || provider.CompleteCalls != 2 {
 		t.Fatalf("unexpected resumed response: response=%+v calls=%d", response, provider.CompleteCalls)
 	}
-	data, err := os.ReadFile(filepath.Join(workspace, manifest.AgentID, "result.txt"))
-	if err != nil {
-		data, err = os.ReadFile(filepath.Join(workspace, "result.txt"))
-	}
+	data, err := os.ReadFile(privateFile)
 	if err != nil || string(data) != "exactly once" {
 		t.Fatalf("approved tool result mismatch: data=%q err=%v", data, err)
 	}
@@ -174,9 +172,6 @@ func TestEngineStreamingReActToolExecutionAndEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 	workspace := t.TempDir()
-	if err := os.WriteFile(filepath.Join(workspace, "input.txt"), []byte("stream observation"), 0644); err != nil {
-		t.Fatal(err)
-	}
 	registry := tools.NewToolRegistry(eventBus)
 	tools.RegisterNativeTools(registry, workspace)
 	registry.SetPolicyResolver(func(context.Context, string) (tools.AgentToolPolicy, error) {
@@ -220,6 +215,13 @@ func TestEngineStreamingReActToolExecutionAndEvents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	privateDir := filepath.Join(workspace, "agents", manifest.AgentID, "workspace")
+	if err := os.MkdirAll(privateDir, 0750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(privateDir, "input.txt"), []byte("stream observation"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	events := make(chan AgentStreamEvent, 64)
 	response, err := engine.ExecuteStepStream(context.Background(), manifest.AgentID, "Read and verify input.txt", events)
 	if err != nil {
@@ -256,7 +258,7 @@ func TestEngineDurableApprovalResumeWithChainedToolCalls(t *testing.T) {
 	registry.SetApprovalManager(approvalMgr)
 	registry.SetPolicyResolver(func(context.Context, string) (tools.AgentToolPolicy, error) {
 		return tools.AgentToolPolicy{
-			AuthorizedTools: []string{"native_file_write", "native_file_read"},
+			AuthorizedTools:   []string{"native_file_write", "native_file_read"},
 			ApprovalThreshold: "High",
 			AllowedPaths:      []string{"*"},
 		}, nil
@@ -340,7 +342,7 @@ func TestEngineDurableApprovalResumeWithChainedApproval(t *testing.T) {
 	registry.SetApprovalManager(approvalMgr)
 	registry.SetPolicyResolver(func(context.Context, string) (tools.AgentToolPolicy, error) {
 		return tools.AgentToolPolicy{
-			AuthorizedTools: []string{"native_file_write", "native_file_delete"},
+			AuthorizedTools:   []string{"native_file_write", "native_file_delete"},
 			ApprovalThreshold: "High",
 			AllowedPaths:      []string{"*"},
 		}, nil
@@ -427,4 +429,3 @@ func TestEngineDurableApprovalResumeWithChainedApproval(t *testing.T) {
 		t.Fatalf("unexpected final response: %+v calls=%d", resp, provider.CompleteCalls)
 	}
 }
-

@@ -19,6 +19,7 @@ import (
 	"github.com/actonos/actonos/internal/bus"
 	"github.com/actonos/actonos/internal/sandbox"
 	"github.com/actonos/actonos/internal/security"
+	workspacepkg "github.com/actonos/actonos/internal/workspace"
 )
 
 var (
@@ -32,24 +33,55 @@ type CronSchedulerProvider interface {
 	ListCrons() []map[string]any
 }
 
-// RegisterNativeTools adds default native tools to the registry.
-func RegisterNativeTools(r *ToolRegistry, workspaceDir string) {
-	if workspaceDir == "" {
-		workspaceDir = "./data/workspace"
+type NativeToolsConfig struct {
+	DataDir       string
+	AgentsDir     string
+	UserWorkspace *workspacepkg.Store
+}
+
+// RegisterNativeTools adds native tools using the data directory inferred from
+// the former workspace argument. New production wiring should use
+// RegisterNativeToolsWithConfig so the user database and private agent roots
+// are explicit.
+func RegisterNativeTools(r *ToolRegistry, legacyWorkspaceDir string) {
+	if legacyWorkspaceDir == "" {
+		legacyWorkspaceDir = "./data/workspace"
+	}
+	dataDir := legacyWorkspaceDir
+	if filepath.Base(legacyWorkspaceDir) == "workspace" {
+		dataDir = filepath.Dir(legacyWorkspaceDir)
+	}
+	RegisterNativeToolsWithConfig(r, NativeToolsConfig{
+		DataDir:   dataDir,
+		AgentsDir: filepath.Join(dataDir, "agents"),
+	})
+}
+
+func RegisterNativeToolsWithConfig(r *ToolRegistry, config NativeToolsConfig) {
+	if config.DataDir == "" {
+		config.DataDir = "./data"
+	}
+	if config.AgentsDir == "" {
+		config.AgentsDir = filepath.Join(config.DataDir, "agents")
 	}
 	_ = r.Register(NewHTTPFetchTool())
-	_ = r.Register(NewFileReadTool(workspaceDir))
-	_ = r.Register(NewFileWriteTool(workspaceDir))
-	_ = r.Register(NewFileListTool(workspaceDir))
-	_ = r.Register(NewFileDeleteTool(workspaceDir))
-	_ = r.Register(NewFileSearchTool(workspaceDir))
-	_ = r.Register(NewExecTool(workspaceDir))
+	_ = r.Register(NewFileReadTool(config.AgentsDir))
+	_ = r.Register(NewFileWriteTool(config.AgentsDir))
+	_ = r.Register(NewFileListTool(config.AgentsDir))
+	_ = r.Register(NewFileDeleteTool(config.AgentsDir))
+	_ = r.Register(NewFileSearchTool(config.AgentsDir))
+	_ = r.Register(NewExecTool(config.AgentsDir))
+	if config.UserWorkspace != nil {
+		_ = r.Register(NewWorkspaceSearchTool(config.UserWorkspace))
+		_ = r.Register(NewWorkspaceReadTool(config.UserWorkspace))
+		_ = r.Register(NewWorkspaceWriteTool(config.UserWorkspace))
+		_ = r.Register(NewWorkspaceDeleteTool(config.UserWorkspace))
+	}
 	_ = r.Register(NewWebSearchTool())
 	_ = r.Register(NewChannelNotifyTool(r.bus))
-	dataDir := filepath.Dir(workspaceDir)
-	_ = r.Register(NewSysInfoTool(dataDir))
+	_ = r.Register(NewSysInfoTool(config.DataDir))
 	_ = r.Register(NewBrowserNavigateTool())
-	_ = r.Register(NewBrowserScreenshotTool(workspaceDir))
+	_ = r.Register(NewBrowserScreenshotTool(config.AgentsDir))
 	_ = r.Register(NewCronScheduleTool(nil))
 }
 
@@ -189,15 +221,6 @@ func (t *FileReadTool) ParametersSchema() json.RawMessage {
 	}`)
 }
 
-func (t *FileReadTool) validatePath(relPath string) (string, error) {
-	allowedRoot := filepath.Dir(t.workspaceDir)
-	targetPath, err := security.ResolvePathWithBase(allowedRoot, t.workspaceDir, relPath, false)
-	if err != nil {
-		return "", fmt.Errorf("%w: %v", ErrPathEscape, err)
-	}
-	return targetPath, nil
-}
-
 // parseFilePathInput safely parses the target file path from JSON or raw input.
 func parseFilePathInput(inputJSON json.RawMessage) (string, error) {
 	inputJSON = NormalizeToolInput(inputJSON)
@@ -324,26 +347,42 @@ func parseFileWriteInput(inputJSON json.RawMessage) (string, string, error) {
 	return path, content, nil
 }
 
-// resolveTargetBaseDir determines the root and base directory for file operations.
-// Default relative paths are placed within the agent's dedicated workspace (workspaceDir/agentSlug).
-// Explicit paths like "../skills/..." or "agentSlug/..." resolve cleanly within allowedRoot.
-func resolveTargetBaseDir(ctx context.Context, workspaceDir string, relPath string) (allowedRoot string, baseDir string) {
-	allowedRoot = filepath.Dir(workspaceDir)
-	baseDir = workspaceDir
-
+// resolveTargetBaseDir returns the calling agent's private filesystem root.
+// User workspace data never participates in this resolution path.
+func resolveTargetBaseDir(ctx context.Context, agentsDir string) (allowedRoot string, baseDir string, err error) {
 	agentID := AgentIDFromContext(ctx)
-	if agentID != "" {
-		agentWs := filepath.Join(workspaceDir, agentID)
-		_ = os.MkdirAll(agentWs, 0755)
+	if !validAgentWorkspaceSlug(agentID) {
+		return "", "", fmt.Errorf("%w: valid agent identity is required", ErrPathEscape)
+	}
+	baseDir = filepath.Join(agentsDir, agentID, "workspace")
+	if err := os.MkdirAll(baseDir, 0750); err != nil {
+		return "", "", fmt.Errorf("creating private agent workspace: %w", err)
+	}
+	absAgents, err := filepath.Abs(agentsDir)
+	if err != nil {
+		return "", "", fmt.Errorf("resolving agents root: %w", err)
+	}
+	absBase, err := filepath.Abs(baseDir)
+	if err != nil {
+		return "", "", fmt.Errorf("resolving agent workspace: %w", err)
+	}
+	rel, err := filepath.Rel(absAgents, absBase)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", "", ErrPathEscape
+	}
+	return absBase, absBase, nil
+}
 
-		cleanRel := filepath.Clean(relPath)
-		if strings.HasPrefix(cleanRel, agentID+string(filepath.Separator)) || cleanRel == agentID {
-			baseDir = workspaceDir
-		} else if !strings.HasPrefix(cleanRel, "..") {
-			baseDir = agentWs
+func validAgentWorkspaceSlug(agentID string) bool {
+	if agentID == "" {
+		return false
+	}
+	for _, char := range agentID {
+		if (char < 'a' || char > 'z') && (char < '0' || char > '9') && char != '_' && char != '-' {
+			return false
 		}
 	}
-	return allowedRoot, baseDir
+	return true
 }
 
 func (t *FileReadTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {
@@ -352,20 +391,13 @@ func (t *FileReadTool) Execute(ctx context.Context, inputJSON json.RawMessage) (
 		return nil, err
 	}
 
-	allowedRoot, baseDir := resolveTargetBaseDir(ctx, t.workspaceDir, relPath)
+	allowedRoot, baseDir, err := resolveTargetBaseDir(ctx, t.workspaceDir)
+	if err != nil {
+		return nil, err
+	}
 	targetPath, err := security.ResolvePathWithBase(allowedRoot, baseDir, relPath, true)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrPathEscape, err)
-	}
-
-	// If file not found in agent's dedicated workspace, check shared workspace
-	if _, statErr := os.Stat(targetPath); os.IsNotExist(statErr) && baseDir != t.workspaceDir {
-		sharedPath, sharedErr := security.ResolvePathWithBase(allowedRoot, t.workspaceDir, relPath, true)
-		if sharedErr == nil {
-			if _, sharedStatErr := os.Stat(sharedPath); sharedStatErr == nil {
-				targetPath = sharedPath
-			}
-		}
 	}
 
 	data, err := os.ReadFile(targetPath)
@@ -417,7 +449,10 @@ func (t *FileWriteTool) Execute(ctx context.Context, inputJSON json.RawMessage) 
 		return nil, err
 	}
 
-	allowedRoot, baseDir := resolveTargetBaseDir(ctx, t.workspaceDir, relPath)
+	allowedRoot, baseDir, err := resolveTargetBaseDir(ctx, t.workspaceDir)
+	if err != nil {
+		return nil, err
+	}
 	targetPath, err := security.ResolvePathWithBase(allowedRoot, baseDir, relPath, true)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrPathEscape, err)
@@ -477,7 +512,10 @@ func (t *FileListTool) Execute(ctx context.Context, inputJSON json.RawMessage) (
 	}
 	_ = json.Unmarshal(inputJSON, &input)
 
-	allowedRoot, baseDir := resolveTargetBaseDir(ctx, t.workspaceDir, input.Path)
+	allowedRoot, baseDir, err := resolveTargetBaseDir(ctx, t.workspaceDir)
+	if err != nil {
+		return nil, err
+	}
 	targetDir, err := security.ResolvePathWithBase(allowedRoot, baseDir, input.Path, true)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrPathEscape, err)
@@ -585,20 +623,13 @@ func (t *FileDeleteTool) Execute(ctx context.Context, inputJSON json.RawMessage)
 	if cleanRel == "." || cleanRel == "" {
 		return nil, ErrPathEscape
 	}
-	allowedRoot, baseDir := resolveTargetBaseDir(ctx, t.workspaceDir, relPath)
+	allowedRoot, baseDir, err := resolveTargetBaseDir(ctx, t.workspaceDir)
+	if err != nil {
+		return nil, err
+	}
 	targetPath, err := security.ResolvePathWithBase(allowedRoot, baseDir, relPath, true)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrPathEscape, err)
-	}
-
-	// If file not found in agent's dedicated workspace, check shared workspace
-	if _, statErr := os.Stat(targetPath); os.IsNotExist(statErr) && baseDir != t.workspaceDir {
-		sharedPath, sharedErr := security.ResolvePathWithBase(allowedRoot, t.workspaceDir, relPath, true)
-		if sharedErr == nil {
-			if _, sharedStatErr := os.Stat(sharedPath); sharedStatErr == nil {
-				targetPath = sharedPath
-			}
-		}
 	}
 
 	if err := os.Remove(targetPath); err != nil {
@@ -650,7 +681,10 @@ func (t *FileSearchTool) Execute(ctx context.Context, inputJSON json.RawMessage)
 		return nil, errors.New("query is required")
 	}
 
-	absWorkspace, _ := filepath.Abs(t.workspaceDir)
+	_, absWorkspace, err := resolveTargetBaseDir(ctx, t.workspaceDir)
+	if err != nil {
+		return nil, err
+	}
 	queryLower := strings.ToLower(input.Query)
 
 	type SearchMatch struct {
@@ -755,9 +789,13 @@ func (t *ExecTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*Too
 	}
 
 	sb := sandbox.AutoDetectSandbox()
+	_, agentWorkspace, err := resolveTargetBaseDir(ctx, t.workspaceDir)
+	if err != nil {
+		return nil, err
+	}
 	result, err := sb.Execute(ctx, sandbox.CommandRequest{
 		Command:      input.Command,
-		WorkspaceDir: t.workspaceDir,
+		WorkspaceDir: agentWorkspace,
 		Timeout:      timeout,
 		MaxMemoryMB:  512,
 		MaxProcesses: 30,

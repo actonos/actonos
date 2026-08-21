@@ -261,7 +261,7 @@ export function ConnectorsPage() {
     <div className="relative min-h-[calc(100vh-64px)]">
       <BlobBackdrop />
 
-      <PageContainer>
+      <PageContainer maxWidth="wide">
         <PageHeader eyebrow={t('eyebrow')} title={t('title')} description={t('subtitle')} actions={(
           <Button variant="ghost" size="sm" icon={<RefreshCw className={loading ? 'animate-spin' : ''} />} onClick={loadData}>
             {t('ui.refresh')}

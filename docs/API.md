@@ -701,6 +701,70 @@ Removes an installed community skill directory.
 
 ---
 
+## Workspace File Manager & Semantic Memory
+
+### `GET /api/workspace/files`
+Lists files and directories in a workspace directory. Query params: `dir` (relative directory path, e.g. `docs` or empty for root). Returns file list with AI indexing status (`ai_indexed`, `ai_state`).
+
+### `GET /api/workspace/file`
+Reads content of a specific file. Query params: `path` (relative file path). Returns text content or base64 `data_url` for images/media.
+
+### `POST /api/workspace/file`
+Creates or updates a file. Enqueues semantic embedding automatically.
+
+**Request:**
+```json
+{
+  "path": "scripts/analysis.py",
+  "content": "print('hello world')"
+}
+```
+
+### `DELETE /api/workspace/file`
+Deletes a file or directory. Query params: `path`.
+
+### `POST /api/workspace/rename`
+Renames or moves a file/folder within the workspace.
+
+**Request:**
+```json
+{
+  "old_path": "scripts/old.py",
+  "new_path": "scripts/new.py"
+}
+```
+
+### `POST /api/workspace/duplicate`
+Duplicates a file with automatic `_copy` suffix naming.
+
+**Request:**
+```json
+{
+  "path": "data/sample.json"
+}
+```
+
+### `GET /api/workspace/stats`
+Returns total workspace storage usage, file/directory counts, semantic memory indexed count, and storage breakdown by category (documents, code, data, media, other).
+
+### `GET /api/workspace/zip`
+Downloads a folder or multiple files as a compressed `.zip` archive. Query params: `path` (folder) or `paths` (comma-separated list of relative files/folders).
+
+### `POST /api/workspace/reindex`
+Manually triggers embedding re-indexing for a file.
+
+**Request:**
+```json
+{
+  "path": "docs/manual.pdf"
+}
+```
+
+### `GET /api/workspace/chunks`
+Fetches the semantic text chunks and embedding metadata generated for a workspace file. Query params: `path`.
+
+---
+
 ## Error Format
 
 All error responses adhere to the standard envelope:

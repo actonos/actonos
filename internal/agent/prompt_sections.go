@@ -190,23 +190,15 @@ func (s *ConstraintsSection) Render() string {
 	sb.WriteString("  <rule id=\"verify_modifications\">After modifying code, files, or executing system changes, verify the status code and observations before declaring task completion.</rule>\n")
 	if s.AgentSlug != "" {
 		dataRoot := s.DataDir
-		ws := s.WorkspaceDir
-		if ws == "" {
-			if dataRoot != "" {
-				ws = filepath.Join(dataRoot, "workspace")
+		if dataRoot == "" {
+			if s.WorkspaceDir != "" && filepath.Base(s.WorkspaceDir) == "workspace" {
+				dataRoot = filepath.Dir(s.WorkspaceDir)
 			} else {
-				ws = "./data/workspace"
 				dataRoot = "./data"
 			}
-		} else if dataRoot == "" {
-			if filepath.Base(ws) == "workspace" {
-				dataRoot = filepath.Dir(ws)
-			} else {
-				dataRoot = ws
-			}
 		}
-		agentWs := filepath.Join(ws, s.AgentSlug)
-		fmt.Fprintf(&sb, "  <rule id=\"agent_workspace_discipline\">Default to reading and writing working files within `%s`. Access to other locations under `%s` is allowed whenever explicitly requested or necessary for the task.</rule>\n", agentWs, dataRoot)
+		agentWs := filepath.Join(dataRoot, "agents", s.AgentSlug, "workspace")
+		fmt.Fprintf(&sb, "  <rule id=\"agent_workspace_discipline\">Use native_file_* only inside your private workspace `%s`. Use native_workspace_* with opaque IDs for user data in virtual `/data/workspace`; never translate an ID into a host path or inspect another agent's workspace.</rule>\n", agentWs)
 	}
 	for _, r := range s.AdditionalRules {
 		if r != "" {

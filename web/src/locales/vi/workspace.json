@@ -1,64 +1,205 @@
 {
   "diff": {
     "toggle": "So sánh",
-    "before": "Trước thay đổi",
-    "after": "Bản đang chỉnh sửa"
+    "before": "Bản gốc",
+    "after": "Bản đang sửa",
+    "showDiff": "Hiện so sánh",
+    "hideDiff": "Ẩn so sánh"
   },
-  "eyebrow": "Tệp tin",
-  "title": "Quản lý tệp",
-  "subtitle": "Xem và quản lý các tệp được tạo và sử dụng bởi agent.",
+  "eyebrow": "Tệp tin & Bộ nhớ AI",
+  "title": "Không gian làm việc",
+  "subtitle": "Quản lý tệp lưu trong cơ sở dữ liệu với tên nguyên bản, xem trước phong phú và bộ nhớ AI.",
+  "views": {
+    "tree": "Dạng cây",
+    "list": "Danh sách",
+    "grid": "Dạng lưới"
+  },
+  "categories": {
+    "all": "Tất cả",
+    "documents": "Tài liệu",
+    "code": "Mã nguồn",
+    "data": "Dữ liệu",
+    "media": "Đa phương tiện"
+  },
+  "sorting": {
+    "nameAsc": "Tên (A-Z)",
+    "nameDesc": "Tên (Z-A)",
+    "sizeDesc": "Kích thước (Lớn nhất)",
+    "sizeAsc": "Kích thước (Nhỏ nhất)",
+    "dateDesc": "Sửa đổi (Mới nhất)",
+    "dateAsc": "Sửa đổi (Cũ nhất)"
+  },
   "actions": {
     "newFile": "Tệp mới",
-    "refresh": "Làm mới",
-    "save": "Lưu",
-    "delete": "Xoá",
-    "deleteConfirm": "Bạn có chắc muốn xoá tệp này?",
-    "upload": "Tải lên",
     "newFolder": "Thư mục mới",
-    "download": "Tải xuống",
-    "downloadTitle": "Tải tập tin xuống máy cục bộ",
+    "refresh": "Làm mới",
+    "save": "Lưu thay đổi",
     "saving": "Đang lưu...",
-    "createFile": "Tạo tập tin mới"
+    "delete": "Xoá",
+    "deleteConfirm": "Bạn có chắc chắn muốn xoá tệp này?",
+    "upload": "Tải lên",
+    "download": "Tải xuống",
+    "downloadZip": "Tải file ZIP",
+    "downloadTitle": "Tải tệp tin về máy cục bộ",
+    "createFile": "Tạo tệp mới",
+    "rename": "Đổi tên",
+    "duplicate": "Nhân bản",
+    "copyPath": "Sao chép đường dẫn",
+    "reindex": "Nạp lại bộ nhớ AI",
+    "reindexing": "Đang xếp hàng nạp...",
+    "chatWithFile": "Trò chuyện với tệp",
+    "clearSelection": "Bỏ chọn",
+    "batchDelete": "Xoá các mục đã chọn ({{count}})",
+    "batchDownload": "Tải ZIP các mục đã chọn",
+    "selectedCount": "Đã chọn {{count}} mục"
   },
   "table": {
     "name": "Tên tệp",
     "size": "Kích thước",
     "modified": "Ngày sửa đổi",
-    "empty": "Không có tệp nào."
+    "kind": "Loại",
+    "aiStatus": "Bộ nhớ AI",
+    "actions": "Thao tác",
+    "empty": "Không có tệp tin nào trong thư mục này."
   },
   "editor": {
-    "title": "Chỉnh sửa: {{path}}",
-    "placeholder": "Nội dung tệp...",
-    "stats": "Dòng: {{lines}} • Kích thước: {{bytes}} byte",
-    "shortcut": "UTF-8 • Ctrl+S để lưu",
-    "noSelection": "Không có tệp nào được chọn",
-    "noSelectionDescription": "Chọn tệp từ trình khám phá ở bên trái hoặc tạo tệp mới để bắt đầu chỉnh sửa."
+    "title": "Đang chỉnh sửa: {{path}}",
+    "placeholder": "Nhập nội dung tệp tin...",
+    "stats": "Dòng: {{lines}} • Ký tự: {{chars}} • Kích thước: {{bytes}}",
+    "tokens": "~{{tokens}} token",
+    "shortcut": "Ctrl+S để lưu • Ctrl+F để tìm kiếm",
+    "noSelection": "Chưa chọn tệp tin nào",
+    "noSelectionDescription": "Chọn một tệp từ trình duyệt ở bên trái hoặc tạo tệp mới để bắt đầu xem và chỉnh sửa.",
+    "unsavedChanges": "Có thay đổi chưa lưu",
+    "discardPrompt": "Bạn có các thay đổi chưa lưu. Bạn có chắc muốn huỷ bỏ các thay đổi này không?",
+    "modeCode": "Mã",
+    "modeSplit": "Chia đôi",
+    "modePreview": "Xem trước"
   },
-  "loading": "Đang tải tập tin...",
+  "tableViewer": {
+    "rows": "{{count}} dòng",
+    "cols": "{{count}} cột",
+    "search": "Lọc các dòng...",
+    "page": "Trang {{current}} / {{total}}",
+    "perPage": "{{count}} / trang",
+    "prev": "Trước",
+    "next": "Sau"
+  },
+  "jsonViewer": {
+    "format": "Định dạng JSON",
+    "raw": "Dạng thô",
+    "tree": "Dạng cây",
+    "copy": "Sao chép JSON",
+    "copied": "Đã sao chép JSON!",
+    "invalidJson": "Cú pháp JSON không hợp lệ"
+  },
+  "inspector": {
+    "title": "Thông tin chi tiết",
+    "overview": "Tổng quan",
+    "aiMemory": "Bộ nhớ AI",
+    "path": "Đường dẫn tương đối",
+    "size": "Dung lượng tệp",
+    "mime": "Kiểu MIME",
+    "modified": "Sửa đổi lần cuối",
+    "kind": "Phân loại tệp",
+    "lines": "Tổng số dòng",
+    "words": "Số từ",
+    "tokens": "Ước tính token",
+    "aiStatus": {
+      "active": "Đã nạp vào bộ nhớ",
+      "indexing": "Đang xếp hàng nạp",
+      "unsupported": "Không hỗ trợ nạp (Tệp nhị phân)",
+      "none": "Chưa nạp bộ nhớ"
+    },
+    "chunksTitle": "Các đoạn ngữ nghĩa ({{count}})",
+    "chunksSubtitle": "Các đoạn văn bản được nạp vào không gian vector cho truy xuất RAG của Agent.",
+    "noChunks": "Chưa có đoạn ngữ nghĩa nào được tạo cho tệp này.",
+    "model": "Mô hình",
+    "chunkerVersion": "Bộ cắt đoạn",
+    "indexedAt": "Thời điểm nạp",
+    "chunkOrdinal": "Đoạn #{{num}}",
+    "chunkTokens": "{{count}} token"
+  },
+  "stats": {
+    "title": "Lưu trữ Không gian làm việc",
+    "totalSize": "Tổng dung lượng sử dụng",
+    "files": "Tệp tin",
+    "folders": "Thư mục",
+    "indexed": "Tệp đã nạp vào AI",
+    "breakdown": {
+      "documents": "Tài liệu",
+      "code": "Mã nguồn",
+      "data": "Dữ liệu",
+      "media": "Đa phương tiện",
+      "other": "Khác"
+    }
+  },
+  "loading": "Đang tải không gian làm việc...",
   "navigation": {
-    "root": "gốc",
-    "up": "Hướng lên"
+    "root": "không gian làm việc",
+    "up": "Lên một cấp",
+    "searchPlaceholder": "Tìm kiếm tệp tin trong workspace..."
+  },
+  "dragDrop": {
+    "active": "Thả tệp vào đây để tải lên",
+    "hint": "Kéo & thả tệp tin từ máy tính vào đây để tải lên"
+  },
+  "tree": {
+    "empty": "(trống)",
+    "loading": "Đang tải..."
   },
   "deleteModal": {
-    "title": "Xóa tệp không gian làm việc",
-    "description": "Bạn có chắc chắn muốn xóa vĩnh viễn \"{{path}}\" khỏi không gian làm việc được đóng hộp cát của mình không?"
+    "title": "Xoá tệp Không gian làm việc",
+    "description": "Gửi yêu cầu xoá \"{{path}}\" khỏi không gian làm việc dùng chung?",
+    "batchTitle": "Xoá các tệp đã chọn",
+    "batchDescription": "Gửi yêu cầu xoá {{count}} mục đã chọn khỏi không gian làm việc?"
+  },
+  "renameModal": {
+    "title": "Đổi tên tệp hoặc thư mục",
+    "label": "Tên mới chính xác",
+    "placeholder": "Tên UTF-8 tuỳ ý; không bắt buộc có phần mở rộng",
+    "confirm": "Đổi tên"
   },
   "createFileModal": {
-    "title": "Tạo tập tin mới",
-    "label": "Tên tệp & phần mở rộng",
-    "placeholder": "ví dụ. main.py, data.json, script.sh",
+    "title": "Tạo tệp mới",
+    "label": "Tên tệp chính xác",
+    "placeholder": "Tên UTF-8 tuỳ ý; không bắt buộc có phần mở rộng",
     "confirm": "Tạo & Chỉnh sửa"
   },
   "createFolderModal": {
     "title": "Tạo thư mục mới",
     "label": "Tên thư mục",
-    "placeholder": "ví dụ. tập lệnh, mô hình, tập dữ liệu",
+    "placeholder": "ví dụ: scripts, models, datasets",
     "confirm": "Tạo thư mục"
   },
   "preview": {
     "image": "Xem trước hình ảnh",
-    "pdf": "Xem trước PDF",
+    "pdf": "Trình xem PDF",
+    "audio": "Trình phát âm thanh",
+    "video": "Trình phát video",
+    "zoomIn": "Phóng to",
+    "zoomOut": "Thu nhỏ",
+    "resetZoom": "Đặt lại kích thước",
     "binary": "Tệp nhị phân — không thể hiển thị dưới dạng văn bản.",
     "downloadBinary": "Tải tệp xuống"
+  },
+  "toasts": {
+    "saveSuccess": "Đã lưu tệp \"{{name}}\" thành công.",
+    "saveFailed": "Lưu tệp thất bại: {{error}}",
+    "deleteSuccess": "Đã xoá tệp \"{{path}}\" thành công.",
+    "deleteFailed": "Xoá thất bại: {{error}}",
+    "renameSuccess": "Đã đổi tên thành \"{{path}}\".",
+    "renameFailed": "Đổi tên thất bại: {{error}}",
+    "duplicateSuccess": "Đã nhân bản thành \"{{path}}\".",
+    "duplicateFailed": "Nhân bản thất bại: {{error}}",
+    "mkdirSuccess": "Đã tạo thư mục \"{{path}}\".",
+    "mkdirFailed": "Tạo thư mục thất bại: {{error}}",
+    "uploadSuccess": "Đã tải lên {{count}} tệp.",
+    "uploadFailed": "Tải lên thất bại: {{error}}",
+    "reindexSuccess": "Đã xếp hàng nạp vector cho \"{{path}}\".",
+    "reindexFailed": "Nạp thất bại: {{error}}",
+    "copiedPath": "Đã sao chép đường dẫn ảo vào bộ nhớ tạm.",
+    "approvalQueued": "Đã đưa thay đổi vào hàng chờ phê duyệt.",
+    "approvalQueuedCount": "Đã đưa {{count}} thay đổi vào hàng chờ phê duyệt."
   }
 }

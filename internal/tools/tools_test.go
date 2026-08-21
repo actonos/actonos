@@ -40,7 +40,7 @@ func TestToolRegistry_NotifiesSuccessfulFileMutations(t *testing.T) {
 		json.RawMessage(`{"path":"notes.txt","content":"semantic content"}`)); err != nil {
 		t.Fatal(err)
 	}
-	wantPath := filepath.Join(workspace, "agent-files", "notes.txt")
+	wantPath := filepath.Join(workspace, "agents", "agent-files", "workspace", "notes.txt")
 	wantInfo, wantErr := os.Stat(wantPath)
 	gotInfo, gotErr := os.Stat(sink.path)
 	if sink.calls != 1 || wantErr != nil || gotErr != nil || !os.SameFile(wantInfo, gotInfo) || sink.agentID != "agent-files" || sink.deleted {
@@ -104,19 +104,10 @@ func TestToolRegistry_RegisterAndExecute(t *testing.T) {
 		t.Fatal("expected path escape error for 2 levels up, got nil")
 	}
 
-	// Test 1-level-up access (e.g. ../skills/skill.md)
+	// Private agent file tools must not access sibling data directories.
 	oneLevelWrite := json.RawMessage(`{"path": "../skills/skill.md", "content": "Skill definition content"}`)
-	if _, err := registry.Execute(ctx, "test_agent", "native_file_write", oneLevelWrite); err != nil {
-		t.Fatalf("native_file_write failed for 1 level up: %v", err)
-	}
-
-	oneLevelRead := json.RawMessage(`{"path": "../skills/skill.md"}`)
-	oneLevelReadRes, err := registry.Execute(ctx, "test_agent", "native_file_read", oneLevelRead)
-	if err != nil {
-		t.Fatalf("native_file_read failed for 1 level up: %v", err)
-	}
-	if oneLevelReadRes.Content != "Skill definition content" {
-		t.Fatalf("expected 'Skill definition content', got '%s'", oneLevelReadRes.Content)
+	if _, err := registry.Execute(ctx, "test_agent", "native_file_write", oneLevelWrite); err == nil {
+		t.Fatal("expected one-level-up private workspace escape to fail")
 	}
 
 	// Test native_file_list
@@ -643,8 +634,10 @@ func TestFileWriteTool_RobustParsing(t *testing.T) {
 	workspaceDir := filepath.Join(tempDir, "workspace")
 	_ = os.MkdirAll(workspaceDir, 0755)
 
+	agentID := "agent_parser"
 	tool := NewFileWriteTool(workspaceDir)
-	ctx := context.Background()
+	ctx := WithAgentID(context.Background(), agentID)
+	privateDir := filepath.Join(workspaceDir, agentID, "workspace")
 
 	// 1. Standard JSON
 	_, err := tool.Execute(ctx, json.RawMessage(`{"path": "email1.html", "content": "<h1>Hello</h1>"}`))
@@ -667,15 +660,15 @@ func TestFileWriteTool_RobustParsing(t *testing.T) {
 	}
 
 	// Verify written files
-	data1, _ := os.ReadFile(filepath.Join(workspaceDir, "email1.html"))
+	data1, _ := os.ReadFile(filepath.Join(privateDir, "email1.html"))
 	if string(data1) != "<h1>Hello</h1>" {
 		t.Fatalf("unexpected content in email1: %q", string(data1))
 	}
-	data2, _ := os.ReadFile(filepath.Join(workspaceDir, "email2.html"))
+	data2, _ := os.ReadFile(filepath.Join(privateDir, "email2.html"))
 	if !strings.Contains(string(data2), "<h1>Title</h1>") {
 		t.Fatalf("unexpected content in email2: %q", string(data2))
 	}
-	data3, _ := os.ReadFile(filepath.Join(workspaceDir, "email3.html"))
+	data3, _ := os.ReadFile(filepath.Join(privateDir, "email3.html"))
 	if string(data3) != "<h1>Stringified</h1>" {
 		t.Fatalf("unexpected content in email3: %q", string(data3))
 	}
@@ -701,8 +694,8 @@ func TestAgentSpecificWorkspaceFileOperations(t *testing.T) {
 		t.Fatalf("native_file_write failed: %v", err)
 	}
 
-	// Verify it was written inside workspace/agent_system_core/note.txt
-	expectedAgentFile := filepath.Join(workspaceDir, agentID, "note.txt")
+	// Verify it was written inside data/agents/{slug}/workspace/note.txt.
+	expectedAgentFile := filepath.Join(tempDir, "agents", agentID, "workspace", "note.txt")
 	data, err := os.ReadFile(expectedAgentFile)
 	if err != nil {
 		t.Fatalf("expected file in agent workspace %s: %v", expectedAgentFile, err)
@@ -721,17 +714,13 @@ func TestAgentSpecificWorkspaceFileOperations(t *testing.T) {
 		t.Fatalf("expected 'agent note', got %q", readRes.Content)
 	}
 
-	// 3. Shared file in root workspace can also be read by agent if not in agent subfolder
+	// 3. A user file in the legacy shared workspace must never be visible through native_file_read.
 	sharedFile := filepath.Join(workspaceDir, "DELIVERIES.md")
 	_ = os.WriteFile(sharedFile, []byte("# Deliveries Shared"), 0644)
 
 	sharedReadInput := json.RawMessage(`{"path": "DELIVERIES.md"}`)
-	sharedReadRes, err := registry.Execute(ctx, agentID, "native_file_read", sharedReadInput)
-	if err != nil {
-		t.Fatalf("reading shared DELIVERIES.md failed: %v", err)
-	}
-	if !strings.Contains(sharedReadRes.Content, "# Deliveries Shared") {
-		t.Fatalf("expected shared content, got %q", sharedReadRes.Content)
+	if _, err := registry.Execute(ctx, agentID, "native_file_read", sharedReadInput); err == nil {
+		t.Fatal("private agent file tool unexpectedly read the shared user workspace")
 	}
 
 	// 4. Non-existent file read returns "reading file" error, not "access denied / path escapes"

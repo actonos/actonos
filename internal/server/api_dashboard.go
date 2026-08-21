@@ -102,15 +102,24 @@ func (s *Server) handleDashboardSummary(w http.ResponseWriter, r *http.Request) 
 	dataDir := s.dataDir
 	storageSize := getDirSize(filepath.Join(dataDir, "storage"))
 	vectorsSize := getDirSize(filepath.Join(dataDir, "vectors"))
-	workspaceSize := getDirSize(filepath.Join(dataDir, "workspace"))
+	workspaceSize := int64(0)
+	if s.workspaceStore != nil {
+		if stats, err := s.workspaceStore.Stats(ctx); err == nil {
+			workspaceSize = stats.TotalSize
+		}
+	}
+	agentWorkspaceSize := getDirSize(filepath.Join(dataDir, "agents"))
 	logsSize := getDirSize(filepath.Join(dataDir, "logs"))
 
 	storageMap := map[string]int64{
-		"storage_bytes":   storageSize,
-		"vectors_bytes":   vectorsSize,
-		"workspace_bytes": workspaceSize,
-		"logs_bytes":      logsSize,
-		"total_bytes":     storageSize + vectorsSize + workspaceSize + logsSize,
+		"storage_bytes":         storageSize,
+		"vectors_bytes":         vectorsSize,
+		"workspace_bytes":       workspaceSize,
+		"agent_workspace_bytes": agentWorkspaceSize,
+		"logs_bytes":            logsSize,
+		// workspace_bytes is a logical payload metric already stored inside the
+		// SQLite database counted by storage_bytes, so do not double count it.
+		"total_bytes": storageSize + vectorsSize + agentWorkspaceSize + logsSize,
 	}
 
 	// 7. Recent audit logs from file

@@ -24,6 +24,7 @@ import (
 	"github.com/actonos/actonos/internal/server"
 	"github.com/actonos/actonos/internal/system"
 	"github.com/actonos/actonos/internal/tools"
+	workspacepkg "github.com/actonos/actonos/internal/workspace"
 )
 
 // Build metadata injected via linker flags from the VERSION file; see LDFLAGS
@@ -104,11 +105,12 @@ func main() {
 	storageDir := filepath.Join(*dataDir, "storage")
 	vectorDir := filepath.Join(*dataDir, "vectors")
 	workspaceDir := filepath.Join(*dataDir, "workspace")
+	agentsDir := filepath.Join(*dataDir, "agents")
 	pluginsDir := filepath.Join(*dataDir, "plugins")
 	skillsDir := filepath.Join(*dataDir, "skills")
 	overridesDir := filepath.Join(*dataDir, "overrides")
 
-	for _, dir := range []string{storageDir, vectorDir, workspaceDir, pluginsDir, skillsDir, overridesDir} {
+	for _, dir := range []string{storageDir, vectorDir, workspaceDir, agentsDir, pluginsDir, skillsDir, overridesDir} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			slog.Error("failed to create directory", "path", dir, "error", err)
 			os.Exit(1)
@@ -127,6 +129,11 @@ func main() {
 	}
 	defer db.Close()
 	slog.Info("database initialized (SQLite WAL mode)", "path", dbPath)
+	userWorkspace, err := workspacepkg.NewStore(ctx, db.SQLDB())
+	if err != nil {
+		slog.Error("failed to initialize database-backed user workspace", "error", err)
+		os.Exit(1)
+	}
 
 	// 2. Initialize Vector Store (Chromem-go)
 	vectorStore, err := memory.NewVectorStore(vectorDir)
@@ -147,19 +154,10 @@ func main() {
 	// 4. Initialize Hybrid Memory Engine
 	hybridEngine := memory.NewHybridEngine(db, vectorStore, nil)
 	embeddingService := memory.NewEmbeddingService(db.SQLDB(), vectorStore, memory.NewHTTPEmbedder(*embeddingURL))
-	embeddingService.SetWorkspaceDir(workspaceDir)
+	embeddingService.SetWorkspaceStore(userWorkspace)
 	hybridEngine.SetEmbeddingService(embeddingService)
 	embeddingService.Start(ctx)
 	defer embeddingService.Stop()
-	workspaceWatcher, err := memory.NewWorkspaceWatcher(workspaceDir, embeddingService)
-	if err != nil {
-		slog.Warn("failed to initialize workspace embedding watcher", "error", err)
-	} else {
-		if err := workspaceWatcher.Start(ctx); err != nil {
-			slog.Warn("failed to start workspace embedding watcher", "error", err)
-		}
-		defer workspaceWatcher.Close()
-	}
 
 	// 5. Initialize Event Bus
 	eventBus := bus.NewEventBus()
@@ -197,8 +195,12 @@ func main() {
 	if auditLogger != nil {
 		toolReg.SetAuditLogger(auditLogger)
 	}
-	tools.RegisterNativeTools(toolReg, workspaceDir)
-	toolReg.SetFileMutationSink(embeddingService)
+	tools.RegisterNativeToolsWithConfig(toolReg, tools.NativeToolsConfig{
+		DataDir:       *dataDir,
+		AgentsDir:     agentsDir,
+		UserWorkspace: userWorkspace,
+	})
+	toolReg.SetWorkspaceMutationSink(embeddingService)
 	mcpHost := tools.NewMCPHostEngine(toolReg)
 	mcpHost.SetEventBus(eventBus)
 	if err := mcpHost.SetPersistence(db.SQLDB(), vault); err != nil {
@@ -225,6 +227,24 @@ func main() {
 	}
 	agentsList, _ := agentMgr.List(ctx)
 	slog.Info("agent manager loaded", "agents_registered", len(agentsList))
+	agentIDs := make([]string, 0, len(agentsList))
+	for _, manifest := range agentsList {
+		agentIDs = append(agentIDs, manifest.AgentID)
+	}
+	migrationReport, err := userWorkspace.ImportLegacy(ctx, workspaceDir, agentsDir, agentIDs)
+	if err != nil {
+		slog.Error("legacy workspace migration failed", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("legacy workspace migration ready",
+		"already_completed", migrationReport.AlreadyCompleted,
+		"imported_files", migrationReport.ImportedFiles,
+		"imported_folders", migrationReport.ImportedFolders,
+		"copied_agent_files", migrationReport.CopiedAgentFiles,
+		"conflicts", len(migrationReport.Conflicts),
+		"skipped_symlinks", len(migrationReport.SkippedSymlinks),
+		"legacy_preserved_at", migrationReport.PreservedLegacyAt,
+	)
 
 	approvalMgr := tools.NewApprovalManager(db.SQLDB())
 	toolReg.SetApprovalManager(approvalMgr)
@@ -547,6 +567,7 @@ func main() {
 		TelegramAdapter:     nil,
 		WhatsAppAdapter:     nil,
 		WorkspaceDir:        workspaceDir,
+		WorkspaceStore:      userWorkspace,
 		SkillsDir:           skillsDir,
 		WASMDir:             pluginsDir,
 		DataDir:             *dataDir,

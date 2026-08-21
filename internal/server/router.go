@@ -13,6 +13,7 @@ import (
 	"github.com/actonos/actonos/internal/memory"
 	"github.com/actonos/actonos/internal/system"
 	"github.com/actonos/actonos/internal/tools"
+	workspacepkg "github.com/actonos/actonos/internal/workspace"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -20,46 +21,47 @@ import (
 
 // Server holds all subsystem references and handles HTTP routing.
 type Server struct {
-	router       chi.Router
-	agentMgr     *agent.AgentManager
-	swarmMgr     *agent.SwarmManager
-	engine       *agent.Engine
-	cronSched    *agent.CronScheduler
-	heartbeat    *agent.HeartbeatDaemon
-	taskMgr      *agent.TaskManager
-	tokenTracker *memory.TokenTracker
-	profileMgr   *agent.UserProfileManager
-	llmRouter    *llm.ModelCascadeRouter
-	toolReg      *tools.ToolRegistry
-	mcpHost      *tools.MCPHostEngine
-	approvalMgr  *tools.ApprovalManager
-	runStore     *agent.RunStore
-	hubMgr       *tools.HubManager
-	memory       *memory.HybridEngine
-	embedding    *memory.EmbeddingService
-	hal          system.HAL
-	tailscale    *system.TailscaleManager
-	tokenDaemon  *auth.TokenRefreshDaemon
-	oauthEngine  *auth.OAuthEngine
-	stateStore   *auth.StateStore
-	sysAuth      *auth.SystemAuthManager
-	bus          *bus.EventBus
-	auditLogger  *system.AuditLogger
-	notifMgr     *system.NotificationManager
-	vault        *memory.Vault
-	pairingMgr   *channels.PairingManager
-	channelMgr   *channels.ChannelManager
-	tgAdapter    *channels.TelegramAdapter
-	waAdapter    *channels.WhatsAppAdapter
-	startTime    time.Time
-	dataDir      string
-	workspaceDir string
-	skillsDir    string
-	wasmDir      string
-	version      string
-	gitCommit    string
-	buildTime    string
-	realtime     *realtimeHub
+	router         chi.Router
+	agentMgr       *agent.AgentManager
+	swarmMgr       *agent.SwarmManager
+	engine         *agent.Engine
+	cronSched      *agent.CronScheduler
+	heartbeat      *agent.HeartbeatDaemon
+	taskMgr        *agent.TaskManager
+	tokenTracker   *memory.TokenTracker
+	profileMgr     *agent.UserProfileManager
+	llmRouter      *llm.ModelCascadeRouter
+	toolReg        *tools.ToolRegistry
+	mcpHost        *tools.MCPHostEngine
+	approvalMgr    *tools.ApprovalManager
+	runStore       *agent.RunStore
+	hubMgr         *tools.HubManager
+	memory         *memory.HybridEngine
+	embedding      *memory.EmbeddingService
+	hal            system.HAL
+	tailscale      *system.TailscaleManager
+	tokenDaemon    *auth.TokenRefreshDaemon
+	oauthEngine    *auth.OAuthEngine
+	stateStore     *auth.StateStore
+	sysAuth        *auth.SystemAuthManager
+	bus            *bus.EventBus
+	auditLogger    *system.AuditLogger
+	notifMgr       *system.NotificationManager
+	vault          *memory.Vault
+	pairingMgr     *channels.PairingManager
+	channelMgr     *channels.ChannelManager
+	tgAdapter      *channels.TelegramAdapter
+	waAdapter      *channels.WhatsAppAdapter
+	startTime      time.Time
+	dataDir        string
+	workspaceDir   string
+	workspaceStore *workspacepkg.Store
+	skillsDir      string
+	wasmDir        string
+	version        string
+	gitCommit      string
+	buildTime      string
+	realtime       *realtimeHub
 }
 
 // Config holds configuration parameters for the HTTP server.
@@ -95,6 +97,7 @@ type Config struct {
 	TelegramAdapter     *channels.TelegramAdapter
 	WhatsAppAdapter     *channels.WhatsAppAdapter
 	WorkspaceDir        string
+	WorkspaceStore      *workspacepkg.Store
 	SkillsDir           string
 	WASMDir             string
 	DataDir             string
@@ -135,44 +138,45 @@ func NewServer(cfg Config) *Server {
 		buildTime = "unspecified"
 	}
 	s := &Server{
-		agentMgr:     cfg.AgentManager,
-		swarmMgr:     cfg.SwarmManager,
-		engine:       cfg.Engine,
-		cronSched:    cfg.CronScheduler,
-		heartbeat:    cfg.HeartbeatDaemon,
-		taskMgr:      cfg.TaskManager,
-		tokenTracker: cfg.TokenTracker,
-		profileMgr:   cfg.ProfileManager,
-		llmRouter:    cfg.LLMRouter,
-		toolReg:      cfg.ToolRegistry,
-		mcpHost:      cfg.MCPHost,
-		approvalMgr:  cfg.ApprovalManager,
-		runStore:     cfg.RunStore,
-		hubMgr:       cfg.HubManager,
-		memory:       cfg.Memory,
-		embedding:    cfg.Embedding,
-		hal:          cfg.HAL,
-		tailscale:    cfg.Tailscale,
-		tokenDaemon:  cfg.TokenRefreshDaemon,
-		oauthEngine:  cfg.OAuthEngine,
-		stateStore:   cfg.StateStore,
-		sysAuth:      cfg.SystemAuth,
-		bus:          cfg.EventBus,
-		auditLogger:  cfg.AuditLogger,
-		notifMgr:     cfg.NotificationManager,
-		vault:        cfg.Vault,
-		pairingMgr:   cfg.PairingManager,
-		channelMgr:   cfg.ChannelManager,
-		tgAdapter:    cfg.TelegramAdapter,
-		waAdapter:    cfg.WhatsAppAdapter,
-		startTime:    time.Now(),
-		dataDir:      dataDir,
-		workspaceDir: workspaceDir,
-		skillsDir:    skillsDir,
-		wasmDir:      wasmDir,
-		version:      version,
-		gitCommit:    gitCommit,
-		buildTime:    buildTime,
+		agentMgr:       cfg.AgentManager,
+		swarmMgr:       cfg.SwarmManager,
+		engine:         cfg.Engine,
+		cronSched:      cfg.CronScheduler,
+		heartbeat:      cfg.HeartbeatDaemon,
+		taskMgr:        cfg.TaskManager,
+		tokenTracker:   cfg.TokenTracker,
+		profileMgr:     cfg.ProfileManager,
+		llmRouter:      cfg.LLMRouter,
+		toolReg:        cfg.ToolRegistry,
+		mcpHost:        cfg.MCPHost,
+		approvalMgr:    cfg.ApprovalManager,
+		runStore:       cfg.RunStore,
+		hubMgr:         cfg.HubManager,
+		memory:         cfg.Memory,
+		embedding:      cfg.Embedding,
+		hal:            cfg.HAL,
+		tailscale:      cfg.Tailscale,
+		tokenDaemon:    cfg.TokenRefreshDaemon,
+		oauthEngine:    cfg.OAuthEngine,
+		stateStore:     cfg.StateStore,
+		sysAuth:        cfg.SystemAuth,
+		bus:            cfg.EventBus,
+		auditLogger:    cfg.AuditLogger,
+		notifMgr:       cfg.NotificationManager,
+		vault:          cfg.Vault,
+		pairingMgr:     cfg.PairingManager,
+		channelMgr:     cfg.ChannelManager,
+		tgAdapter:      cfg.TelegramAdapter,
+		waAdapter:      cfg.WhatsAppAdapter,
+		startTime:      time.Now(),
+		dataDir:        dataDir,
+		workspaceDir:   workspaceDir,
+		workspaceStore: cfg.WorkspaceStore,
+		skillsDir:      skillsDir,
+		wasmDir:        wasmDir,
+		version:        version,
+		gitCommit:      gitCommit,
+		buildTime:      buildTime,
 	}
 	s.realtime = newRealtimeHub(s)
 	if s.engine != nil && s.taskMgr != nil {
@@ -356,13 +360,19 @@ func (s *Server) setupRoutes() {
 
 			// Workspace File Manager
 			r.Route("/workspace", func(r chi.Router) {
-				r.Get("/files", s.handleListWorkspaceFiles)
-				r.Get("/file", s.handleGetWorkspaceFile)
-				r.Post("/file", s.handleSaveWorkspaceFile)
-				r.Delete("/file", s.handleDeleteWorkspaceFile)
-				r.Post("/mkdir", s.handleMkdirWorkspace)
-				r.Post("/upload", s.handleUploadWorkspaceFile)
-				r.Get("/raw", s.handleRawWorkspaceFile)
+				r.Get("/files", s.handleDBListWorkspaceFiles)
+				r.Get("/file", s.handleDBGetWorkspaceFile)
+				r.Post("/file", s.handleDBSaveWorkspaceFile)
+				r.Delete("/file", s.handleDBDeleteWorkspaceFile)
+				r.Post("/mkdir", s.handleDBMkdirWorkspace)
+				r.Post("/upload", s.handleDBUploadWorkspaceFile)
+				r.Get("/raw", s.handleDBRawWorkspaceFile)
+				r.Post("/rename", s.handleDBRenameWorkspaceFile)
+				r.Post("/duplicate", s.handleDBDuplicateWorkspaceFile)
+				r.Get("/stats", s.handleDBGetWorkspaceStats)
+				r.Get("/zip", s.handleDBDownloadWorkspaceZip)
+				r.Post("/reindex", s.handleDBReindexWorkspaceFile)
+				r.Get("/chunks", s.handleDBGetFileEmbeddingChunks)
 			})
 
 			// Autonomous Tasks & Operations Backlog
