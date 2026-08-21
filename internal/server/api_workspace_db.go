@@ -11,6 +11,8 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -617,6 +619,19 @@ func (s *Server) handleDBUploadWorkspaceFile(w http.ResponseWriter, r *http.Requ
 	})
 }
 
+func isTextMIME(mimeType string) bool {
+	lower := strings.ToLower(mimeType)
+	return strings.HasPrefix(lower, "text/") ||
+		strings.Contains(lower, "json") ||
+		strings.Contains(lower, "xml") ||
+		strings.Contains(lower, "yaml") ||
+		strings.Contains(lower, "javascript") ||
+		strings.Contains(lower, "typescript") ||
+		strings.Contains(lower, "sql") ||
+		strings.Contains(lower, "markdown") ||
+		strings.Contains(lower, "csv")
+}
+
 func (s *Server) handleDBRawWorkspaceFile(w http.ResponseWriter, r *http.Request) {
 	store, ok := s.requireWorkspaceStore(w)
 	if !ok {
@@ -633,9 +648,42 @@ func (s *Server) handleDBRawWorkspaceFile(w http.ResponseWriter, r *http.Request
 		return
 	}
 	defer file.Close()
-	w.Header().Set("Content-Type", node.MIMEType)
-	disposition := mime.FormatMediaType("inline", map[string]string{"filename": node.Name})
-	w.Header().Set("Content-Disposition", disposition)
+
+	contentType := node.MIMEType
+	if contentType == "" || contentType == "application/octet-stream" {
+		ext := strings.ToLower(filepath.Ext(node.Name))
+		if extMime := mime.TypeByExtension(ext); extMime != "" {
+			contentType = extMime
+		} else {
+			switch ext {
+			case ".md", ".markdown":
+				contentType = "text/markdown"
+			case ".ts", ".tsx", ".mts":
+				contentType = "text/typescript"
+			case ".js", ".jsx", ".mjs":
+				contentType = "text/javascript"
+			case ".json":
+				contentType = "application/json"
+			case ".yaml", ".yml":
+				contentType = "application/yaml"
+			case ".go", ".py", ".rs", ".c", ".cpp", ".h", ".hpp", ".sql", ".sh", ".txt", ".csv", ".tsv", ".log":
+				contentType = "text/plain"
+			default:
+				contentType = "application/octet-stream"
+			}
+		}
+	}
+	if isTextMIME(contentType) && !strings.Contains(strings.ToLower(contentType), "charset") {
+		contentType += "; charset=utf-8"
+	}
+	w.Header().Set("Content-Type", contentType)
+
+	dispositionType := "inline"
+	if r.URL.Query().Get("download") == "1" || r.URL.Query().Get("download") == "true" {
+		dispositionType = "attachment"
+	}
+	encodedName := url.PathEscape(node.Name)
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`%s; filename=%q; filename*=UTF-8''%s`, dispositionType, node.Name, encodedName))
 	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 	w.Header().Set("Content-Security-Policy", "frame-ancestors 'self'")
 	http.ServeContent(w, r, node.Name, parseWorkspaceTime(node.UpdatedAt), file)

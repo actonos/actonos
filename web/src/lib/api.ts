@@ -629,5 +629,6 @@ export const api = {
     }
     return `/api/workspace/zip?id=${encodeURIComponent(fileId || '')}`;
   },
-  getWorkspaceRawUrl: (fileId: string) => `/api/workspace/raw?id=${encodeURIComponent(fileId)}`,
+  getWorkspaceRawUrl: (fileId: string, download?: boolean) =>
+    `/api/workspace/raw?id=${encodeURIComponent(fileId)}${download ? '&download=1' : ''}`,
 };

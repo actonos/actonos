@@ -264,9 +264,9 @@ export function WorkspacePage() {
   // Download single file or folder ZIP
   const handleDownload = (file: WorkspaceFile) => {
     if (file.is_dir) {
-			window.location.href = api.getWorkspaceZipUrl(file.id);
+      window.open(api.getWorkspaceZipUrl(file.id), '_blank', 'noopener,noreferrer');
     } else {
-			window.location.href = api.getWorkspaceRawUrl(file.id);
+      window.open(api.getWorkspaceRawUrl(file.id, true), '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -396,7 +396,7 @@ export function WorkspacePage() {
           }}
           onBatchDelete={() => setDeleteModalTarget({ isBatch: true })}
           onBatchDownload={() => {
-						window.location.href = api.getWorkspaceZipUrl(undefined, Array.from(selectedPaths));
+            window.open(api.getWorkspaceZipUrl(undefined, Array.from(selectedPaths)), '_blank', 'noopener,noreferrer');
           }}
           onContextMenu={(file, e) => {
             setContextMenu({ x: e.clientX, y: e.clientY, file });

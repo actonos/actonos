@@ -24,6 +24,7 @@ export function WorkspaceMediaViewer({ path, kind, rawUrl, size = 0 }: Workspace
   const [imgError, setImgError] = useState(false);
 
   const mediaUrl = rawUrl || api.getWorkspaceRawUrl(path);
+  const downloadUrl = api.getWorkspaceRawUrl(path, true);
 
   if (kind === 'image') {
     return (
@@ -33,7 +34,7 @@ export function WorkspaceMediaViewer({ path, kind, rawUrl, size = 0 }: Workspace
           <div className="flex items-center gap-2">
             <button
               onClick={() => setZoom((z) => Math.max(0.2, z - 0.2))}
-              className="p-1.5 rounded-full border border-deep-ink/10 hover:bg-soft-meadow transition-colors"
+              className="p-1.5 rounded-full border border-deep-ink/10 hover:bg-soft-meadow transition-colors cursor-pointer"
               title={t('preview.zoomOut')}
             >
               <ZoomOut className="w-4 h-4 text-slate" />
@@ -43,14 +44,14 @@ export function WorkspaceMediaViewer({ path, kind, rawUrl, size = 0 }: Workspace
             </span>
             <button
               onClick={() => setZoom((z) => Math.min(3, z + 0.2))}
-              className="p-1.5 rounded-full border border-deep-ink/10 hover:bg-soft-meadow transition-colors"
+              className="p-1.5 rounded-full border border-deep-ink/10 hover:bg-soft-meadow transition-colors cursor-pointer"
               title={t('preview.zoomIn')}
             >
               <ZoomIn className="w-4 h-4 text-slate" />
             </button>
             <button
               onClick={() => setZoom(1)}
-              className="p-1.5 rounded-full border border-deep-ink/10 hover:bg-soft-meadow transition-colors"
+              className="p-1.5 rounded-full border border-deep-ink/10 hover:bg-soft-meadow transition-colors cursor-pointer"
               title={t('preview.resetZoom')}
             >
               <RotateCcw className="w-4 h-4 text-slate" />
@@ -58,9 +59,11 @@ export function WorkspaceMediaViewer({ path, kind, rawUrl, size = 0 }: Workspace
           </div>
 
           <a
-            href={mediaUrl}
+            href={downloadUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             download={path.split('/').pop()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-deep-ink/10 bg-canvas hover:bg-soft-meadow text-body-sm font-medium transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-deep-ink/10 bg-canvas hover:bg-soft-meadow text-body-sm font-medium transition-colors cursor-pointer"
           >
             <Download className="w-4 h-4 text-slate" />
             <span>{t('actions.download')}</span>
@@ -94,9 +97,11 @@ export function WorkspaceMediaViewer({ path, kind, rawUrl, size = 0 }: Workspace
         <div className="flex items-center justify-between p-3 border-b border-deep-ink/10 bg-soft-meadow/30">
           <span className="text-body-sm font-semibold">{t('preview.pdf')}</span>
           <a
-            href={mediaUrl}
+            href={downloadUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             download={path.split('/').pop()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-deep-ink/10 bg-canvas hover:bg-soft-meadow text-body-sm font-medium transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-deep-ink/10 bg-canvas hover:bg-soft-meadow text-body-sm font-medium transition-colors cursor-pointer"
           >
             <Download className="w-4 h-4 text-slate" />
             <span>{t('actions.download')}</span>
@@ -120,9 +125,11 @@ export function WorkspaceMediaViewer({ path, kind, rawUrl, size = 0 }: Workspace
           <div className="text-subheading font-bold truncate">{path.split('/').pop()}</div>
           <audio controls src={mediaUrl} className="w-full" />
           <a
-            href={mediaUrl}
+            href={downloadUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             download={path.split('/').pop()}
-            className="mx-auto flex items-center gap-1.5 px-4 py-2 rounded-full bg-deep-ink text-canvas hover:bg-deep-ink/90 text-body-sm font-semibold transition-colors"
+            className="mx-auto flex items-center gap-1.5 px-4 py-2 rounded-full bg-deep-ink text-canvas hover:bg-deep-ink/90 text-body-sm font-semibold transition-colors cursor-pointer"
           >
             <Download className="w-4 h-4" />
             <span>{t('actions.download')}</span>
@@ -138,9 +145,11 @@ export function WorkspaceMediaViewer({ path, kind, rawUrl, size = 0 }: Workspace
         <div className="flex items-center justify-between p-3 border-b border-deep-ink/10 bg-soft-meadow/30">
           <span className="text-body-sm font-semibold">{t('preview.video')}</span>
           <a
-            href={mediaUrl}
+            href={downloadUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             download={path.split('/').pop()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-deep-ink/10 bg-canvas hover:bg-soft-meadow text-body-sm font-medium transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-deep-ink/10 bg-canvas hover:bg-soft-meadow text-body-sm font-medium transition-colors cursor-pointer"
           >
             <Download className="w-4 h-4 text-slate" />
             <span>{t('actions.download')}</span>
@@ -178,9 +187,11 @@ export function WorkspaceMediaViewer({ path, kind, rawUrl, size = 0 }: Workspace
         </div>
 
         <a
-          href={mediaUrl}
+          href={downloadUrl}
+          target="_blank"
+          rel="noopener noreferrer"
           download={path.split('/').pop()}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-deep-ink text-canvas hover:bg-deep-ink/90 font-semibold text-body-sm transition-colors"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-deep-ink text-canvas hover:bg-deep-ink/90 font-semibold text-body-sm transition-colors cursor-pointer"
         >
           <Download className="w-4 h-4" />
           <span>{t('preview.downloadBinary')}</span>
