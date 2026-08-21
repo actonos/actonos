@@ -394,9 +394,6 @@ export function WorkspacePage() {
             loadFiles(currentDir);
             loadStats();
           }}
-          onDownloadZip={() => {
-            window.location.href = api.getWorkspaceZipUrl(currentDir);
-          }}
           onBatchDelete={() => setDeleteModalTarget({ isBatch: true })}
           onBatchDownload={() => {
 						window.location.href = api.getWorkspaceZipUrl(undefined, Array.from(selectedPaths));

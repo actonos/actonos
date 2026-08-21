@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Save,
@@ -8,6 +8,7 @@ import {
   FileText,
   Layers,
 } from 'lucide-react';
+import { WorkspaceCodeMirror } from './WorkspaceCodeMirror';
 import { WorkspaceMarkdownPreview } from './WorkspaceMarkdownPreview';
 import { WorkspaceTableViewer } from './WorkspaceTableViewer';
 import { WorkspaceJsonViewer } from './WorkspaceJsonViewer';
@@ -51,10 +52,8 @@ export function WorkspaceEditor({
   onToggleInspector,
 }: WorkspaceEditorProps) {
   const { t } = useTranslation('workspace');
-  const [markdownMode, setMarkdownMode] = useState<'code' | 'split' | 'preview'>('code');
+  const [markdownMode, setMarkdownMode] = useState<'code' | 'preview'>('code');
   const [showDiff, setShowDiff] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const lineNumbersRef = useRef<HTMLDivElement>(null);
 
   const activeTab = useMemo(
     () => tabs.find((tab) => tab.id === activeTabPath) || null,
@@ -74,31 +73,6 @@ export function WorkspaceEditor({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeTab, onSave]);
-
-  // Sync line numbers scroll with textarea
-  const handleScroll = () => {
-    if (textareaRef.current && lineNumbersRef.current) {
-      lineNumbersRef.current.scrollTop = textareaRef.current.scrollTop;
-    }
-  };
-
-  // Support Tab key in textarea
-  const handleKeyDownTextarea = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      const target = e.currentTarget;
-      const start = target.selectionStart;
-      const end = target.selectionEnd;
-      const val = target.value;
-      const updated = val.substring(0, start) + '  ' + val.substring(end);
-      if (activeTab) {
-        onChangeContent(activeTab.id, updated);
-      }
-      setTimeout(() => {
-        target.selectionStart = target.selectionEnd = start + 2;
-      }, 0);
-    }
-  };
 
   if (!activeTab) {
     return (
@@ -176,21 +150,14 @@ export function WorkspaceEditor({
             <div className="flex items-center p-0.5 rounded-full bg-canvas border border-deep-ink/10 text-caption font-semibold">
               <button
                 onClick={() => setMarkdownMode('code')}
-                className={`px-2.5 py-0.5 rounded-full transition-colors ${markdownMode === 'code' ? 'bg-deep-ink text-canvas' : 'text-slate hover:text-deep-ink'
+                className={`px-2.5 py-0.5 rounded-full transition-colors cursor-pointer ${markdownMode === 'code' ? 'bg-deep-ink text-canvas' : 'text-slate hover:text-deep-ink'
                   }`}
               >
                 {t('editor.modeCode')}
               </button>
               <button
-                onClick={() => setMarkdownMode('split')}
-                className={`px-2.5 py-0.5 rounded-full transition-colors ${markdownMode === 'split' ? 'bg-deep-ink text-canvas' : 'text-slate hover:text-deep-ink'
-                  }`}
-              >
-                {t('editor.modeSplit')}
-              </button>
-              <button
                 onClick={() => setMarkdownMode('preview')}
-                className={`px-2.5 py-0.5 rounded-full transition-colors ${markdownMode === 'preview' ? 'bg-deep-ink text-canvas' : 'text-slate hover:text-deep-ink'
+                className={`px-2.5 py-0.5 rounded-full transition-colors cursor-pointer ${markdownMode === 'preview' ? 'bg-deep-ink text-canvas' : 'text-slate hover:text-deep-ink'
                   }`}
               >
                 {t('editor.modePreview')}
@@ -202,7 +169,7 @@ export function WorkspaceEditor({
             <>
               <button
                 onClick={() => setShowDiff(!showDiff)}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-full border border-deep-ink/10 text-caption font-semibold transition-colors ${showDiff ? 'bg-hi-yellow text-deep-ink' : 'bg-canvas hover:bg-soft-meadow text-slate'
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full border border-deep-ink/10 text-caption font-semibold transition-colors cursor-pointer ${showDiff ? 'bg-hi-yellow text-deep-ink' : 'bg-canvas hover:bg-soft-meadow text-slate'
                   }`}
               >
                 <Columns2 className="w-3.5 h-3.5" />
@@ -273,67 +240,29 @@ export function WorkspaceEditor({
             </div>
           </div>
         ) : isMarkdown ? (
-          /* Markdown modes: Code / Split / Preview */
-          <div className="h-full flex overflow-hidden">
-            {(markdownMode === 'code' || markdownMode === 'split') && (
-              <div className={`h-full flex overflow-hidden ${markdownMode === 'split' ? 'w-1/2 border-r border-deep-ink/10' : 'w-full'}`}>
-                {/* Line numbers gutter */}
-                <div
-                  ref={lineNumbersRef}
-                  className="w-12 py-4 bg-soft-meadow/40 text-slate/50 font-mono text-caption text-right select-none pr-3 overflow-hidden border-r border-deep-ink/5"
-                >
-                  {lines.map((_, i) => (
-                    <div key={i} className="leading-6">
-                      {i + 1}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Textarea */}
-                <textarea
-                  ref={textareaRef}
-                  value={activeTab.content}
-                  onChange={(e) => onChangeContent(activeTab.id, e.target.value)}
-                  onScroll={handleScroll}
-                  onKeyDown={handleKeyDownTextarea}
-                  placeholder={t('editor.placeholder')}
-                  spellCheck={false}
-                  className="flex-1 h-full p-4 bg-canvas text-deep-ink font-mono text-body-sm leading-6 resize-none focus:outline-none overflow-auto"
-                />
-              </div>
-            )}
-
-            {(markdownMode === 'preview' || markdownMode === 'split') && (
-              <div className={`h-full overflow-hidden ${markdownMode === 'split' ? 'w-1/2' : 'w-full'}`}>
-                <WorkspaceMarkdownPreview content={activeTab.content} />
-              </div>
+          /* Markdown modes: Code / Preview */
+          <div className="h-full w-full overflow-hidden">
+            {markdownMode === 'preview' ? (
+              <WorkspaceMarkdownPreview content={activeTab.content} />
+            ) : (
+              <WorkspaceCodeMirror
+                value={activeTab.content}
+                filename={activeTab.name}
+                kind={activeTab.kind}
+                placeholder={t('editor.placeholder')}
+                onChange={(val) => onChangeContent(activeTab.id, val)}
+              />
             )}
           </div>
         ) : (
-          /* Standard Code & Text Editor with Line Numbers Gutter */
-          <div className="h-full flex overflow-hidden">
-            {/* Line Numbers */}
-            <div
-              ref={lineNumbersRef}
-              className="w-12 py-4 bg-soft-meadow/40 text-slate/50 font-mono text-caption text-right select-none pr-3 overflow-hidden border-r border-deep-ink/5"
-            >
-              {lines.map((_, i) => (
-                <div key={i} className="leading-6">
-                  {i + 1}
-                </div>
-              ))}
-            </div>
-
-            {/* Textarea Code Input */}
-            <textarea
-              ref={textareaRef}
+          /* Standard Code & Text Editor with CodeMirror */
+          <div className="h-full w-full overflow-hidden">
+            <WorkspaceCodeMirror
               value={activeTab.content}
-              onChange={(e) => onChangeContent(activeTab.id, e.target.value)}
-              onScroll={handleScroll}
-              onKeyDown={handleKeyDownTextarea}
+              filename={activeTab.name}
+              kind={activeTab.kind}
               placeholder={t('editor.placeholder')}
-              spellCheck={false}
-              className="flex-1 h-full p-4 bg-canvas text-deep-ink font-mono text-body-sm leading-6 resize-none focus:outline-none overflow-auto"
+              onChange={(val) => onChangeContent(activeTab.id, val)}
             />
           </div>
         )}

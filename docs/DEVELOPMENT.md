@@ -25,7 +25,7 @@
 
 | Tool | Minimum Version | Installation |
 |:---|:---|:---|
-| **Go** | 1.23+ | [go.dev/dl](https://go.dev/dl/) |
+| **Go** | 1.26+ | [go.dev/dl](https://go.dev/dl/) |
 | **Node.js** | 22 LTS+ | [nodejs.org](https://nodejs.org/) or via `nvm` |
 | **npm** | 10+ | Bundled with Node.js |
 | **Make** | 4.0+ | Pre-installed on Linux/macOS; use `choco install make` on Windows |
@@ -58,7 +58,7 @@ cd actonos
 make deps
 
 # 3. Verify the setup
-go version          # Should show 1.23+
+go version          # Should show 1.26+
 node --version      # Should show v22+
 make version        # Should show current version (e.g., 0.1.0)
 

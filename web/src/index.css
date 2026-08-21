@@ -452,3 +452,190 @@ h3,
 .tiptap-user .tiptap hr {
   border-top-color: rgba(255, 255, 255, 0.2);
 }
+
+/* -----------------------------------------------------------------------------
+ * Workspace Markdown Preview Styling
+ * ----------------------------------------------------------------------------- */
+.workspace-markdown-preview h1 {
+  font-family: var(--font-serif);
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--color-deep-ink);
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(19, 14, 48, 0.1);
+}
+
+.workspace-markdown-preview h2 {
+  font-family: var(--font-serif);
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--color-deep-ink);
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid rgba(19, 14, 48, 0.08);
+}
+
+.workspace-markdown-preview h3 {
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-deep-ink);
+  margin-top: 1rem;
+  margin-bottom: 0.35rem;
+}
+
+.workspace-markdown-preview h4,
+.workspace-markdown-preview h5,
+.workspace-markdown-preview h6 {
+  font-weight: 600;
+  color: var(--color-deep-ink);
+  margin-top: 0.85rem;
+  margin-bottom: 0.25rem;
+}
+
+.workspace-markdown-preview p {
+  margin-bottom: 0.75rem;
+  line-height: 1.65;
+  color: var(--color-deep-ink);
+}
+
+.workspace-markdown-preview ul,
+.workspace-markdown-preview ol {
+  padding-left: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.workspace-markdown-preview ul {
+  list-style-type: disc;
+}
+
+.workspace-markdown-preview ol {
+  list-style-type: decimal;
+}
+
+.workspace-markdown-preview li {
+  margin-bottom: 0.25rem;
+  line-height: 1.6;
+}
+
+.workspace-markdown-preview blockquote {
+  border-left: 4px solid var(--color-hi-yellow);
+  background-color: var(--color-soft-meadow);
+  padding: 0.5rem 1rem;
+  margin: 0.75rem 0;
+  border-radius: 0 12px 12px 0;
+  font-style: italic;
+  color: var(--color-slate);
+}
+
+.workspace-markdown-preview pre {
+  background-color: var(--color-deep-ink);
+  color: #f8fafc;
+  padding: 1rem;
+  border-radius: 16px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12.5px;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+:root[data-theme="dark"] .workspace-markdown-preview pre {
+  background-color: #12101e;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.workspace-markdown-preview code {
+  background-color: var(--color-soft-meadow);
+  color: var(--color-deep-ink);
+  padding: 0.15rem 0.35rem;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  border: 1px solid rgba(19, 14, 48, 0.06);
+}
+
+:root[data-theme="dark"] .workspace-markdown-preview code {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.workspace-markdown-preview pre code {
+  background-color: transparent !important;
+  color: inherit !important;
+  padding: 0 !important;
+  border: none !important;
+}
+
+.workspace-markdown-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.875rem 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(19, 14, 48, 0.12);
+  font-size: 12.5px;
+}
+
+:root[data-theme="dark"] .workspace-markdown-preview table {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.workspace-markdown-preview th,
+.workspace-markdown-preview td {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border: 1px solid rgba(19, 14, 48, 0.08);
+}
+
+:root[data-theme="dark"] .workspace-markdown-preview th,
+.workspace-markdown-preview td {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.workspace-markdown-preview th {
+  background-color: var(--color-soft-meadow);
+  font-weight: 600;
+  color: var(--color-deep-ink);
+}
+
+.workspace-markdown-preview tr:nth-child(even) td {
+  background-color: rgba(19, 14, 48, 0.02);
+}
+
+:root[data-theme="dark"] .workspace-markdown-preview tr:nth-child(even) td {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.workspace-markdown-preview a {
+  color: var(--color-deep-ink);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--color-hi-yellow);
+  text-decoration-thickness: 2px;
+  border-radius: 4px;
+  padding: 0 2px;
+  transition: background-color 0.2s ease;
+}
+
+.workspace-markdown-preview a:hover {
+  background-color: rgba(255, 226, 40, 0.25);
+}
+
+.workspace-markdown-preview hr {
+  border: none;
+  border-top: 1px solid rgba(19, 14, 48, 0.12);
+  margin: 1.25rem 0;
+}
+
+:root[data-theme="dark"] .workspace-markdown-preview hr {
+  border-top-color: rgba(255, 255, 255, 0.12);
+}
+
+.workspace-markdown-preview img {
+  max-width: 100%;
+  border-radius: 16px;
+  margin: 0.75rem 0;
+}

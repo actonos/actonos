@@ -33,7 +33,6 @@ interface WorkspaceExplorerProps {
   onNewFile: () => void;
   onNewFolder: () => void;
   onRefresh: () => void;
-  onDownloadZip: () => void;
   onBatchDelete: () => void;
   onBatchDownload: () => void;
   onContextMenu: (file: WorkspaceFile, e: React.MouseEvent) => void;
@@ -60,7 +59,6 @@ export function WorkspaceExplorer({
   onNewFile,
   onNewFolder,
   onRefresh,
-  onDownloadZip,
   onBatchDelete,
   onBatchDownload,
   onContextMenu,
@@ -178,21 +176,21 @@ export function WorkspaceExplorer({
         <div className="flex items-center gap-1">
           <button
             onClick={onNewFile}
-            className="p-1.5 rounded-full border border-deep-ink/10 bg-canvas hover:bg-soft-meadow text-deep-ink transition-colors"
+            className="p-1.5 rounded-full border border-deep-ink/10 bg-canvas hover:bg-soft-meadow text-deep-ink transition-colors cursor-pointer"
             title={t('actions.newFile')}
           >
             <Plus className="w-4 h-4" />
           </button>
           <button
             onClick={onNewFolder}
-            className="p-1.5 rounded-full border border-deep-ink/10 bg-canvas hover:bg-soft-meadow text-deep-ink transition-colors"
+            className="p-1.5 rounded-full border border-deep-ink/10 bg-canvas hover:bg-soft-meadow text-deep-ink transition-colors cursor-pointer"
             title={t('actions.newFolder')}
           >
             <FolderPlus className="w-4 h-4" />
           </button>
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="p-1.5 rounded-full border border-deep-ink/10 bg-canvas hover:bg-soft-meadow text-deep-ink transition-colors"
+            className="p-1.5 rounded-full border border-deep-ink/10 bg-canvas hover:bg-soft-meadow text-deep-ink transition-colors cursor-pointer"
             title={t('actions.upload')}
           >
             <Upload className="w-4 h-4" />
@@ -213,15 +211,8 @@ export function WorkspaceExplorer({
 
         <div className="flex items-center gap-1">
           <button
-            onClick={onDownloadZip}
-            className="p-1.5 rounded-full border border-deep-ink/10 bg-canvas hover:bg-soft-meadow text-slate hover:text-deep-ink transition-colors"
-            title={t('actions.downloadZip')}
-          >
-            <Download className="w-4 h-4" />
-          </button>
-          <button
             onClick={onRefresh}
-            className={`p-1.5 rounded-full border border-deep-ink/10 bg-canvas hover:bg-soft-meadow text-slate hover:text-deep-ink transition-colors ${
+            className={`p-1.5 rounded-full border border-deep-ink/10 bg-canvas hover:bg-soft-meadow text-slate hover:text-deep-ink transition-colors cursor-pointer ${
               loading ? 'animate-spin' : ''
             }`}
             title={t('actions.refresh')}
@@ -233,7 +224,7 @@ export function WorkspaceExplorer({
           <div className="flex items-center p-0.5 rounded-full bg-soft-meadow border border-deep-ink/10 ml-1">
             <button
               onClick={() => setViewMode('tree')}
-              className={`p-1 rounded-full transition-colors ${
+              className={`p-1 rounded-full transition-colors cursor-pointer ${
                 viewMode === 'tree' ? 'bg-deep-ink text-canvas' : 'text-slate hover:text-deep-ink'
               }`}
               title={t('views.tree')}
@@ -242,7 +233,7 @@ export function WorkspaceExplorer({
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`p-1 rounded-full transition-colors ${
+              className={`p-1 rounded-full transition-colors cursor-pointer ${
                 viewMode === 'list' ? 'bg-deep-ink text-canvas' : 'text-slate hover:text-deep-ink'
               }`}
               title={t('views.list')}
@@ -251,7 +242,7 @@ export function WorkspaceExplorer({
             </button>
             <button
               onClick={() => setViewMode('grid')}
-              className={`p-1 rounded-full transition-colors ${
+              className={`p-1 rounded-full transition-colors cursor-pointer ${
                 viewMode === 'grid' ? 'bg-deep-ink text-canvas' : 'text-slate hover:text-deep-ink'
               }`}
               title={t('views.grid')}

@@ -143,7 +143,7 @@ fix(memory): prevent concurrent FTS5 write corruption
 docs: update API reference with new agent endpoints
 refactor(llm): extract retry logic into shared middleware
 test(auth): add edge case tests for expired token refresh
-build: upgrade Go to 1.23.2
+build: upgrade Go to 1.26
 ```
 
 ### Breaking Changes

@@ -263,7 +263,6 @@ export function Sidebar({
                 </span>
                 <span className="font-mono font-medium text-deep-ink">{t('status.connected', 'System Online')}</span>
               </div>
-              <span className="text-slate font-mono text-[10px]">{t('status.runtime')}</span>
             </div>
           ) : (
             <div className="flex justify-center py-1" title={t('status.connected', 'System Online')}>

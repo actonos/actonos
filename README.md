@@ -6,7 +6,7 @@
 
 **Extensible AI Agent Operating System Kernel**
 
-[![Go Version](https://img.shields.io/badge/Go-1.23+-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev)
+[![Go Version](https://img.shields.io/badge/Go-1.26+-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue?style=flat-square)](LICENSE)
 [![Version](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fraw.githubusercontent.com%2Factonos%2Factonos%2Frefs%2Fheads%2Fmaster%2FVERSION&search=(.*)&label=version&style=flat-square&color=green)](VERSION)
@@ -136,7 +136,7 @@ Open `http://localhost:8080` to access the dashboard.
 
 | Tool | Version | Purpose |
 |:---|:---|:---|
-| Go | 1.23+ | Backend daemon |
+| Go | 1.26+ | Backend daemon |
 | Node.js | 22 LTS+ | Frontend build |
 | Make | 4.0+ | Build orchestration |
 | Docker | 24+ | Container builds (optional) |

@@ -13,7 +13,7 @@ Before starting development, verify the following tools are installed:
 
 | Tool | Min Version | Verification Command | Install Guide |
 |:---|:---|:---|:---|
-| Go | 1.23+ | `go version` | https://go.dev/dl/ |
+| Go | 1.26+ | `go version` | https://go.dev/dl/ |
 | Node.js | 22 LTS+ | `node --version` | https://nodejs.org/ |
 | npm | 10+ | `npm --version` | Bundled with Node.js |
 | Make | 4.0+ | `make --version` | `apt install make` or `choco install make` |
