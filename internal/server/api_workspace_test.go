@@ -65,13 +65,19 @@ func approveWorkspaceMutation(t *testing.T, srv *Server, recorder *httptest.Resp
 func createWorkspaceDirectory(t *testing.T, srv *Server, parentID, name string) map[string]any {
 	t.Helper()
 	body, _ := json.Marshal(map[string]string{"parent_id": parentID, "name": name})
-	return approveWorkspaceMutation(t, srv, workspaceJSONRequest(t, srv, http.MethodPost, "/api/workspace/mkdir", string(body), http.StatusAccepted))
+	recorder := workspaceJSONRequest(t, srv, http.MethodPost, "/api/workspace/mkdir", string(body), http.StatusOK)
+	var response map[string]any
+	decodeWorkspaceData(t, recorder, &response)
+	return response
 }
 
 func createWorkspaceFile(t *testing.T, srv *Server, parentID, name, content string) map[string]any {
 	t.Helper()
 	body, _ := json.Marshal(map[string]string{"parent_id": parentID, "name": name, "content": content})
-	return approveWorkspaceMutation(t, srv, workspaceJSONRequest(t, srv, http.MethodPost, "/api/workspace/file", string(body), http.StatusAccepted))
+	recorder := workspaceJSONRequest(t, srv, http.MethodPost, "/api/workspace/file", string(body), http.StatusOK)
+	var response map[string]any
+	decodeWorkspaceData(t, recorder, &response)
+	return response
 }
 
 func workspaceString(value any) string {
@@ -128,19 +134,25 @@ func TestWorkspaceDatabaseLifecycleUsesOpaqueIDs(t *testing.T) {
 
 	renamedName := `không cần đuôi / vẫn hợp lệ<>|`
 	renameBody, _ := json.Marshal(map[string]any{"file_id": fileID, "parent_id": directoryID, "name": renamedName, "expected_version": contents.Version})
-	renamed := approveWorkspaceMutation(t, srv, workspaceJSONRequest(t, srv, http.MethodPost, "/api/workspace/rename", string(renameBody), http.StatusAccepted))
+	renameRecorder := workspaceJSONRequest(t, srv, http.MethodPost, "/api/workspace/rename", string(renameBody), http.StatusOK)
+	var renamed map[string]any
+	decodeWorkspaceData(t, renameRecorder, &renamed)
 	if workspaceString(renamed["id"]) != fileID || workspaceString(renamed["name"]) != renamedName {
 		t.Fatalf("rename changed identity or name: %#v", renamed)
 	}
 
 	duplicateBody, _ := json.Marshal(map[string]string{"file_id": fileID, "parent_id": directoryID, "name": `bản sao / tùy ý`})
-	duplicate := approveWorkspaceMutation(t, srv, workspaceJSONRequest(t, srv, http.MethodPost, "/api/workspace/duplicate", string(duplicateBody), http.StatusAccepted))
+	duplicateRecorder := workspaceJSONRequest(t, srv, http.MethodPost, "/api/workspace/duplicate", string(duplicateBody), http.StatusOK)
+	var duplicate map[string]any
+	decodeWorkspaceData(t, duplicateRecorder, &duplicate)
 	if workspaceString(duplicate["id"]) == "" || workspaceString(duplicate["id"]) == fileID {
 		t.Fatalf("duplicate must receive a new opaque id: %#v", duplicate)
 	}
 
 	deleteURL := "/api/workspace/file?id=" + url.QueryEscape(fileID) + "&expected_version=" + url.QueryEscape(workspaceString(renamed["version"]))
-	deleted := approveWorkspaceMutation(t, srv, workspaceJSONRequest(t, srv, http.MethodDelete, deleteURL, "", http.StatusAccepted))
+	deleteRecorder := workspaceJSONRequest(t, srv, http.MethodDelete, deleteURL, "", http.StatusOK)
+	var deleted map[string]any
+	decodeWorkspaceData(t, deleteRecorder, &deleted)
 	if workspaceString(deleted["status"]) != "deleted" {
 		t.Fatalf("unexpected delete result: %#v", deleted)
 	}
@@ -168,10 +180,11 @@ func TestWorkspaceBinaryUploadRawStatsAndZip(t *testing.T) {
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	recorder := httptest.NewRecorder()
 	srv.Router().ServeHTTP(recorder, req)
-	if recorder.Code != http.StatusAccepted {
+	if recorder.Code != http.StatusOK {
 		t.Fatalf("upload: %d %s", recorder.Code, recorder.Body.String())
 	}
-	uploaded := approveWorkspaceMutation(t, srv, recorder)
+	var uploaded map[string]any
+	decodeWorkspaceData(t, recorder, &uploaded)
 	fileID := workspaceString(uploaded["id"])
 
 	raw := workspaceJSONRequest(t, srv, http.MethodGet, "/api/workspace/raw?id="+url.QueryEscape(fileID), "", http.StatusOK)

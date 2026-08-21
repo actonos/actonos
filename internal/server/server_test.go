@@ -203,8 +203,7 @@ func TestServer_EmbeddingStatusAndWorkspaceQueue(t *testing.T) {
 			operation, scope, sourceRef, dueAt.Sub(createdAt))
 	}
 
-	deleteRequest := workspaceJSONRequest(t, srv, http.MethodDelete, "/api/workspace/file?id="+fileID, "", http.StatusAccepted)
-	approveWorkspaceMutation(t, srv, deleteRequest)
+	workspaceJSONRequest(t, srv, http.MethodDelete, "/api/workspace/file?id="+fileID, "", http.StatusOK)
 	var generation int
 	if err := srv.memory.DB().SQLDB().QueryRow(`SELECT operation, generation FROM embedding_jobs
 		WHERE source_type = 'workspace_file' AND source_key = ?`, fileID).Scan(&operation, &generation); err != nil {

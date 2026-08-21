@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/actonos/actonos/internal/memory"
+	"github.com/actonos/actonos/internal/tools"
 	workspacepkg "github.com/actonos/actonos/internal/workspace"
 )
 
@@ -201,7 +203,26 @@ type workspaceWriteAdminInput struct {
 	ExpectedVersion int64  `json:"expected_version,omitempty"`
 }
 
+func (s *Server) shouldBypassWorkspaceApproval(ctx context.Context) bool {
+	return tools.IsApprovalBypassed(ctx)
+}
+
 func (s *Server) requestWorkspaceApproval(w http.ResponseWriter, r *http.Request, action string, input any) {
+	if s.shouldBypassWorkspaceApproval(r.Context()) {
+		raw, err := json.Marshal(input)
+		if err != nil {
+			s.respondError(w, http.StatusBadRequest, "INVALID_PAYLOAD", err.Error())
+			return
+		}
+		result, execErr := s.executeAdminAction(r.Context(), action, raw)
+		if execErr != nil {
+			s.respondWorkspaceError(w, execErr)
+			return
+		}
+		s.respondJSON(w, http.StatusOK, result)
+		return
+	}
+
 	approval, err := s.requestAdminAction(r.Context(), action, input)
 	if err != nil {
 		s.respondError(w, http.StatusInternalServerError, "APPROVAL_REQUEST_FAILED", err.Error())
