@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/actonos/actonos/internal/bus"
 	"github.com/fsnotify/fsnotify"
 	"gopkg.in/yaml.v3"
 )
@@ -351,7 +352,7 @@ func (s *SkillTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*To
 	}, nil
 }
 
-// SkillWatcher watches `/data/skills/` and hot-reloads skills via fsnotify.
+// SkillWatcher watches `/data/skills/` and hot-reloads skills via fsnotify and EventBus events.
 type SkillWatcher struct {
 	mu       sync.RWMutex
 	registry *ToolRegistry
@@ -359,6 +360,7 @@ type SkillWatcher struct {
 	dir      string
 	watcher  *fsnotify.Watcher
 	stopCh   chan struct{}
+	eventBus *bus.EventBus
 }
 
 // NewSkillWatcher creates a SkillWatcher instance.
@@ -371,9 +373,17 @@ func NewSkillWatcher(registry *ToolRegistry, skillsDir string) *SkillWatcher {
 	}
 }
 
-// ScanAll scans all subdirectories in skillsDir and registers valid skills.
+// SetEventBus attaches the system event bus for skill lifecycle events.
+func (w *SkillWatcher) SetEventBus(eventBus *bus.EventBus) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.eventBus = eventBus
+}
+
+// ScanAll scans all subdirectories in skillsDir, registers or updates valid skills,
+// and unregisters any skills whose directories were deleted.
 func (w *SkillWatcher) ScanAll() {
-	if w.dir == "" {
+	if w.dir == "" || w.registry == nil {
 		return
 	}
 
@@ -383,6 +393,8 @@ func (w *SkillWatcher) ScanAll() {
 		slog.Error("reading skills directory", "path", w.dir, "error", err)
 		return
 	}
+
+	currentSkills := make(map[string]*SkillTool)
 
 	for _, entry := range entries {
 		if !entry.IsDir() {
@@ -394,18 +406,43 @@ func (w *SkillWatcher) ScanAll() {
 			continue
 		}
 
-		w.mu.Lock()
-		w.skills[skillTool.Name()] = skillTool
-		w.mu.Unlock()
-
-		_ = w.registry.Register(skillTool)
+		currentSkills[skillTool.Name()] = skillTool
+		w.registry.RegisterOrReplace(skillTool)
 		slog.Info("skill loaded and registered", "name", skillTool.Name(), "path", subPath, "enabled", skillTool.IsEnabled(), "requirementsMet", skillTool.RequirementsMet())
 	}
+
+	w.mu.Lock()
+	// Detect and unregister skills that are no longer on disk
+	for name := range w.skills {
+		if _, exists := currentSkills[name]; !exists {
+			w.registry.Unregister(name)
+			slog.Info("skill removed and unregistered", "name", name)
+		}
+	}
+	w.skills = currentSkills
+	w.mu.Unlock()
 }
 
-// Start begins fsnotify folder monitoring.
+// Start begins fsnotify folder monitoring and EventBus subscription.
 func (w *SkillWatcher) Start() error {
 	w.ScanAll()
+
+	if w.eventBus != nil {
+		chInstalled := w.eventBus.Subscribe(bus.EventSkillInstalled)
+		chUninstalled := w.eventBus.Subscribe(bus.EventSkillUninstalled)
+		go func() {
+			for {
+				select {
+				case <-w.stopCh:
+					return
+				case <-chInstalled:
+					w.ScanAll()
+				case <-chUninstalled:
+					w.ScanAll()
+				}
+			}
+		}()
+	}
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -431,7 +468,7 @@ func (w *SkillWatcher) watchLoop() {
 			if !ok {
 				return
 			}
-			if event.Has(fsnotify.Create) || event.Has(fsnotify.Write) || event.Has(fsnotify.Remove) {
+			if event.Has(fsnotify.Create) || event.Has(fsnotify.Write) || event.Has(fsnotify.Remove) || event.Has(fsnotify.Rename) {
 				time.Sleep(100 * time.Millisecond) // Debounce
 				w.ScanAll()
 			}

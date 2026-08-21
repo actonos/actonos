@@ -211,12 +211,15 @@ func main() {
 	_ = wasmManager.ScanAndRegisterPlugins(ctx)
 
 	skillWatcher := tools.NewSkillWatcher(toolReg, skillsDir)
+	skillWatcher.SetEventBus(eventBus)
 	if err := skillWatcher.Start(); err != nil {
 		slog.Warn("skill watcher failed to start", "error", err)
 	}
 	defer skillWatcher.Stop()
 	hubMgr := tools.NewHubManager(skillsDir)
 	hubMgr.SetEventBus(eventBus)
+	hubMgr.SetToolRegistry(toolReg)
+	hubMgr.SetSkillWatcher(skillWatcher)
 	slog.Info("dynamic tooling hub initialized", "tools_registered", len(toolReg.List()))
 
 	// 8. Initialize Agent Manager, User Profile & Cognitive Memory
@@ -529,6 +532,7 @@ func main() {
 		ProfileManager:      profileMgr,
 		LLMRouter:           llmRouter,
 		ToolRegistry:        toolReg,
+		SkillWatcher:        skillWatcher,
 		MCPHost:             mcpHost,
 		ApprovalManager:     approvalMgr,
 		RunStore:            runStore,

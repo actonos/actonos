@@ -121,6 +121,9 @@ func newTestServer(t *testing.T) *Server {
 	}
 	cronScheduler := agent.NewCronScheduler(engine, eventBus, db.SQLDB())
 	hubManager := tools.NewHubManager(filepath.Join(tempDir, "skills"))
+	skillWatcher := tools.NewSkillWatcher(toolReg, filepath.Join(tempDir, "skills"))
+	hubManager.SetToolRegistry(toolReg)
+	hubManager.SetSkillWatcher(skillWatcher)
 	mcpHost := tools.NewMCPHostEngine(toolReg)
 	if err := mcpHost.SetPersistence(db.SQLDB(), nil); err != nil {
 		t.Fatalf("configuring MCP persistence: %v", err)
@@ -143,6 +146,7 @@ func newTestServer(t *testing.T) *Server {
 		Engine:              engine,
 		LLMRouter:           llmRouter,
 		ToolRegistry:        toolReg,
+		SkillWatcher:        skillWatcher,
 		ApprovalManager:     approvalMgr,
 		RunStore:            runStore,
 		TaskManager:         taskMgr,
@@ -776,6 +780,13 @@ func TestServer_SystemSetupKeysDashboardAndAdministrativeTools(t *testing.T) {
 		srv.Router().ServeHTTP(uninstallW, uninstallReq)
 		if uninstallW.Code != http.StatusOK {
 			t.Fatalf("expected uninstall status 200, got %d: %s", uninstallW.Code, uninstallW.Body.String())
+		}
+
+		// Verify skill is unregistered from tool registry
+		for _, tool := range srv.toolReg.ListByCategory("skill") {
+			if tool.Name == "skill_"+skillID || tool.Name == skillID {
+				t.Fatalf("expected skill %s to be unregistered from tool registry, found: %s", skillID, tool.Name)
+			}
 		}
 	}
 

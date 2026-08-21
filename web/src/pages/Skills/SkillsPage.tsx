@@ -174,6 +174,23 @@ export function SkillsPage() {
         if (inspectSkill && (inspectSkill.id === target || inspectSkill.slug === target)) {
           setInspectSkill(null);
         }
+        const targetClean = target.toLowerCase().replace(/^skill_/, '').replace(/[-_]/g, '');
+        setInstalledSkills((prev) =>
+          prev.filter((s) => {
+            const sClean = s.name.toLowerCase().replace(/^skill_/, '').replace(/[-_]/g, '');
+            return sClean !== targetClean;
+          })
+        );
+        setHubCatalog((prev) =>
+          prev.map((s) => {
+            const sCleanId = s.id.toLowerCase().replace(/[-_]/g, '');
+            const sCleanSlug = (s.slug || '').toLowerCase().replace(/[-_]/g, '');
+            if (sCleanId === targetClean || sCleanSlug === targetClean) {
+              return { ...s, installed: false };
+            }
+            return s;
+          })
+        );
         loadData();
       },
     });

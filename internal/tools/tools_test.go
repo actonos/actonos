@@ -334,6 +334,15 @@ func TestSkillWatcher_LoadSkill(t *testing.T) {
 	if tool.Description() != "Echoes input back" {
 		t.Fatalf("unexpected description: %s", tool.Description())
 	}
+
+	// Delete skill directory and rescan
+	_ = os.RemoveAll(testSkillDir)
+	watcher.ScanAll()
+
+	_, errAfterDelete := registry.Get("skill_echo_test")
+	if errAfterDelete == nil {
+		t.Fatal("expected skill_echo_test to be unregistered after directory removal")
+	}
 }
 
 // TestActionHashSurvivesJSONRoundTrip guards the approval bug where a pending

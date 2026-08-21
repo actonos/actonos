@@ -213,6 +213,14 @@ func (s *Server) handleCreateSkill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if s.skillWatcher != nil {
+		s.skillWatcher.ScanAll()
+	} else if s.toolReg != nil {
+		if st, err := tools.NewSkillTool(dir); err == nil {
+			s.toolReg.RegisterOrReplace(st)
+		}
+	}
+
 	s.respondJSON(w, http.StatusOK, map[string]string{"status": "created", "name": req.Name, "path": dir})
 }
 
@@ -278,6 +286,9 @@ func (s *Server) handleInstallHubSkill(w http.ResponseWriter, r *http.Request) {
 		s.respondError(w, http.StatusInternalServerError, "INSTALL_FAILED", err.Error())
 		return
 	}
+	if s.skillWatcher != nil {
+		s.skillWatcher.ScanAll()
+	}
 	s.respondJSON(w, http.StatusOK, map[string]any{"status": "installed", "skill_id": req.SkillID})
 }
 
@@ -298,6 +309,9 @@ func (s *Server) handleUninstallHubSkill(w http.ResponseWriter, r *http.Request)
 	if err := s.hubMgr.UninstallSkill(req.SkillID); err != nil {
 		s.respondError(w, http.StatusInternalServerError, "UNINSTALL_FAILED", err.Error())
 		return
+	}
+	if s.skillWatcher != nil {
+		s.skillWatcher.ScanAll()
 	}
 	s.respondJSON(w, http.StatusOK, map[string]any{"status": "uninstalled", "skill_id": req.SkillID})
 }

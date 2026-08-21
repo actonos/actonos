@@ -118,6 +118,11 @@ func TestHubManager_InstallAndUninstall(t *testing.T) {
 	targetID := target.ID
 	slug := target.Slug
 
+	reg := NewToolRegistry(eb)
+	watcher := NewSkillWatcher(reg, tempDir)
+	hm.SetToolRegistry(reg)
+	hm.SetSkillWatcher(watcher)
+
 	// 1. Install
 	if err := hm.InstallSkill(targetID); err != nil {
 		t.Fatalf("install skill failed: %v", err)
@@ -146,12 +151,20 @@ func TestHubManager_InstallAndUninstall(t *testing.T) {
 		t.Fatalf("skill %s should be marked installed", targetID)
 	}
 
+	if len(reg.ListByCategory("skill")) == 0 {
+		t.Fatal("expected installed skill to be present in ToolRegistry")
+	}
+
 	// 2. Uninstall
 	if err := hm.UninstallSkill(targetID); err != nil {
 		t.Fatalf("uninstall failed: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(tempDir, slug)); !os.IsNotExist(err) {
 		t.Fatal("skill dir should be removed after uninstall")
+	}
+
+	if len(reg.ListByCategory("skill")) != 0 {
+		t.Fatal("expected uninstalled skill to be unregistered from ToolRegistry")
 	}
 }
 

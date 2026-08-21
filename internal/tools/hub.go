@@ -64,6 +64,8 @@ type HubManager struct {
 	lastFetch   time.Time
 	httpClient  *http.Client
 	eventBus    *bus.EventBus
+	toolReg     *ToolRegistry
+	watcher     *SkillWatcher
 }
 
 // NewHubManager creates a HubManager and initiates remote catalog fetch.
@@ -97,6 +99,20 @@ func NewHubManagerWithRegistry(skillsDir, registryURL, rawBaseURL string) *HubMa
 		rawBaseURL:  rawBaseURL,
 		httpClient:  &http.Client{Timeout: 10 * time.Second},
 	}
+}
+
+// SetToolRegistry attaches the runtime ToolRegistry.
+func (hm *HubManager) SetToolRegistry(reg *ToolRegistry) {
+	hm.mu.Lock()
+	defer hm.mu.Unlock()
+	hm.toolReg = reg
+}
+
+// SetSkillWatcher attaches the active SkillWatcher.
+func (hm *HubManager) SetSkillWatcher(watcher *SkillWatcher) {
+	hm.mu.Lock()
+	defer hm.mu.Unlock()
+	hm.watcher = watcher
 }
 
 // SetEventBus sets the event bus for broadcasting installation progress events.
@@ -313,6 +329,15 @@ func (hm *HubManager) InstallSkill(skillID string) error {
 
 	hm.publishProgress(skillID, "verifying", "Verifying prerequisites & registering skill", 90, map[string]any{"slug": slug})
 
+	// Immediate registry / watcher sync
+	if hm.watcher != nil {
+		hm.watcher.ScanAll()
+	} else if hm.toolReg != nil {
+		if st, err := NewSkillTool(destDir); err == nil {
+			hm.toolReg.RegisterOrReplace(st)
+		}
+	}
+
 	// Emit completion event on EventBus
 	if hm.eventBus != nil {
 		hm.eventBus.Publish(bus.NewEvent(bus.EventSkillInstalled, skillID, map[string]any{
@@ -327,14 +352,16 @@ func (hm *HubManager) InstallSkill(skillID string) error {
 	return nil
 }
 
-// UninstallSkill removes the skill directory.
+// UninstallSkill removes the skill directory and unregisters it from runtime.
 func (hm *HubManager) UninstallSkill(skillID string) error {
 	hm.mu.Lock()
 	defer hm.mu.Unlock()
 
 	var targetSlug string
 	for _, s := range hm.catalog {
-		if s.ID == skillID || s.Slug == skillID {
+		if s.ID == skillID || s.Slug == skillID ||
+			strings.EqualFold(strings.ReplaceAll(s.ID, "-", "_"), strings.ReplaceAll(skillID, "-", "_")) ||
+			strings.EqualFold(strings.ReplaceAll(s.Slug, "-", "_"), strings.ReplaceAll(skillID, "-", "_")) {
 			targetSlug = s.Slug
 			break
 		}
@@ -345,14 +372,59 @@ func (hm *HubManager) UninstallSkill(skillID string) error {
 
 	hm.publishProgress(skillID, "removing", fmt.Sprintf("Removing skill package '%s'", targetSlug), 40, map[string]any{"slug": targetSlug})
 
-	destDir := filepath.Join(hm.skillsDir, targetSlug)
-	if _, err := os.Stat(destDir); err == nil {
-		_ = os.RemoveAll(destDir)
+	candidates := []string{
+		targetSlug,
+		skillID,
+		strings.ReplaceAll(targetSlug, "-", "_"),
+		strings.ReplaceAll(targetSlug, "_", "-"),
+		strings.ReplaceAll(skillID, "-", "_"),
+		strings.ReplaceAll(skillID, "_", "-"),
 	}
 
-	destDirID := filepath.Join(hm.skillsDir, skillID)
-	if _, err := os.Stat(destDirID); err == nil {
-		_ = os.RemoveAll(destDirID)
+	for _, cand := range candidates {
+		if cand == "" {
+			continue
+		}
+		p := filepath.Join(hm.skillsDir, cand)
+		if _, err := os.Stat(p); err == nil {
+			_ = os.RemoveAll(p)
+		}
+	}
+
+	// Remove matching subdirectories
+	if entries, err := os.ReadDir(hm.skillsDir); err == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			folderName := entry.Name()
+			if strings.EqualFold(strings.ReplaceAll(folderName, "-", "_"), strings.ReplaceAll(skillID, "-", "_")) ||
+				strings.EqualFold(strings.ReplaceAll(folderName, "-", "_"), strings.ReplaceAll(targetSlug, "-", "_")) {
+				_ = os.RemoveAll(filepath.Join(hm.skillsDir, folderName))
+			}
+		}
+	}
+
+	// Unregister from ToolRegistry immediately if available
+	if hm.toolReg != nil {
+		toolNames := []string{
+			skillID,
+			targetSlug,
+			"skill_" + skillID,
+			"skill_" + targetSlug,
+			"skill_" + strings.ToLower(strings.ReplaceAll(skillID, " ", "_")),
+			"skill_" + strings.ToLower(strings.ReplaceAll(targetSlug, " ", "_")),
+			"skill_" + strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(skillID, "-", "_"), " ", "_")),
+			"skill_" + strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(targetSlug, "-", "_"), " ", "_")),
+		}
+		for _, name := range toolNames {
+			hm.toolReg.Unregister(name)
+		}
+	}
+
+	// Rescan watcher if available
+	if hm.watcher != nil {
+		hm.watcher.ScanAll()
 	}
 
 	if hm.eventBus != nil {

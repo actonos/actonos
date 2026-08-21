@@ -327,6 +327,13 @@ func (r *ToolRegistry) Register(tool Tool) error {
 	return nil
 }
 
+// RegisterOrReplace adds a tool to the registry, replacing any existing tool with the same name.
+func (r *ToolRegistry) RegisterOrReplace(tool Tool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.tools[tool.Name()] = tool
+}
+
 // Unregister removes a tool from the registry.
 func (r *ToolRegistry) Unregister(name string) {
 	r.mu.Lock()

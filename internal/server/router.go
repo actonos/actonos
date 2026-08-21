@@ -52,6 +52,7 @@ type Server struct {
 	channelMgr     *channels.ChannelManager
 	tgAdapter      *channels.TelegramAdapter
 	waAdapter      *channels.WhatsAppAdapter
+	skillWatcher   *tools.SkillWatcher
 	startTime      time.Time
 	dataDir        string
 	workspaceDir   string
@@ -76,6 +77,7 @@ type Config struct {
 	ProfileManager      *agent.UserProfileManager
 	LLMRouter           *llm.ModelCascadeRouter
 	ToolRegistry        *tools.ToolRegistry
+	SkillWatcher        *tools.SkillWatcher
 	MCPHost             *tools.MCPHostEngine
 	ApprovalManager     *tools.ApprovalManager
 	RunStore            *agent.RunStore
@@ -148,6 +150,7 @@ func NewServer(cfg Config) *Server {
 		profileMgr:     cfg.ProfileManager,
 		llmRouter:      cfg.LLMRouter,
 		toolReg:        cfg.ToolRegistry,
+		skillWatcher:   cfg.SkillWatcher,
 		mcpHost:        cfg.MCPHost,
 		approvalMgr:    cfg.ApprovalManager,
 		runStore:       cfg.RunStore,

@@ -220,16 +220,24 @@
       "reasoningHighDesc": "Deep multi-step reasoning, thorough verification, and complex planning"
     },
     "tools": {
-      "title": "Authorized Tools",
+      "title": "Authorized Capabilities",
       "description": "Select native tools, MCP servers, and skills this agent is permitted to execute.",
       "clear": "Clear All",
       "selectAll": "Select All (*)",
       "fullTitle": "Full Authorization:",
-      "fullDescription": "Agent can use all available tools and plugins.",
-      "empty": "No tools are available",
-      "noDescription": "No tool description provided.",
+      "fullDescription": "Agent can use all available tools and skills.",
+      "empty": "No tools or skills are available",
+      "noDescription": "No description provided.",
       "authorized": "Authorized",
-      "disabled": "Disabled"
+      "disabled": "Disabled",
+      "skillsSectionTitle": "Agent Skills",
+      "skillsSectionDesc": "Domain-specific instructions, prompt procedures, and automated skill workflows.",
+      "toolsSectionTitle": "System & Native Tools",
+      "toolsSectionDesc": "Built-in operating system capabilities, workspace file tools, and MCP connector tools.",
+      "noSkills": "No skills installed yet",
+      "noTools": "No system tools registered",
+      "selectedCount": "{{selected}} of {{total}} selected",
+      "searchPlaceholder": "Filter skills and tools by name or description..."
     },
     "channels": {
       "title": "Chat Channels Inbound Listeners",

@@ -220,16 +220,24 @@
       "reasoningHighDesc": "Tư duy đa bước chuyên sâu, xác minh kỹ lưỡng và lập kế hoạch phức tạp"
     },
     "tools": {
-      "title": "Công cụ được ủy quyền",
-      "description": "Chọn các công cụ gốc, máy chủ MCP và các kỹ năng mà tác nhân này được phép thực thi.",
+      "title": "Công cụ & Kỹ năng được ủy quyền",
+      "description": "Chọn các công cụ hệ thống, máy chủ MCP và kỹ năng mà agent này được phép thực thi.",
       "clear": "Xóa tất cả",
       "selectAll": "Chọn tất cả (*)",
       "fullTitle": "Ủy quyền đầy đủ:",
-      "fullDescription": "Agent có thể sử dụng tất cả các công cụ và plugin có sẵn.",
-      "empty": "Chưa có công cụ khả dụng",
+      "fullDescription": "Agent có thể sử dụng tất cả các công cụ và kỹ năng có sẵn.",
+      "empty": "Chưa có công cụ hoặc kỹ năng khả dụng",
       "noDescription": "Công cụ chưa có mô tả.",
       "authorized": "Đã cấp quyền",
-      "disabled": "Đã tắt"
+      "disabled": "Đã tắt",
+      "skillsSectionTitle": "Kỹ năng Agent (Skills)",
+      "skillsSectionDesc": "Quy trình chuyên môn, tài liệu hướng dẫn và luồng kỹ năng tự động hoá.",
+      "toolsSectionTitle": "Công cụ hệ thống & Tích hợp (System Tools)",
+      "toolsSectionDesc": "Các công cụ cốt lõi của hệ điều hành, thao tác tệp không gian làm việc và bộ nối MCP.",
+      "noSkills": "Chưa cài đặt kỹ năng nào",
+      "noTools": "Chưa có công cụ hệ thống nào",
+      "selectedCount": "Đã chọn {{selected}}/{{total}}",
+      "searchPlaceholder": "Lọc kỹ năng và công cụ theo tên hoặc mô tả..."
     },
     "channels": {
       "title": "Kênh trò chuyện",
