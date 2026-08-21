@@ -142,12 +142,19 @@ func (t *BrowserNavigateTool) Execute(ctx context.Context, inputJSON json.RawMes
 
 // BrowserScreenshotTool captures a screenshot of a rendered webpage.
 type BrowserScreenshotTool struct {
-	workspaceDir string
+	dataDir   string
+	agentsDir string
 }
 
 // NewBrowserScreenshotTool creates a new BrowserScreenshotTool.
-func NewBrowserScreenshotTool(workspaceDir string) *BrowserScreenshotTool {
-	return &BrowserScreenshotTool{workspaceDir: workspaceDir}
+func NewBrowserScreenshotTool(dataDir string, agentsDir ...string) *BrowserScreenshotTool {
+	agDir := ""
+	if len(agentsDir) > 0 && agentsDir[0] != "" {
+		agDir = agentsDir[0]
+	} else {
+		agDir = filepath.Join(dataDir, "agents")
+	}
+	return &BrowserScreenshotTool{dataDir: dataDir, agentsDir: agDir}
 }
 
 func (t *BrowserScreenshotTool) Name() string { return "native_browser_screenshot" }
@@ -233,12 +240,14 @@ func (t *BrowserScreenshotTool) Execute(ctx context.Context, inputJSON json.RawM
 		return nil, fmt.Errorf("screenshot capture failed: %w", err)
 	}
 
-	// Screenshots are private agent artifacts and never enter the user workspace.
-	allowedRoot, baseDir, err := resolveTargetBaseDir(ctx, t.workspaceDir)
+	// Screenshots are saved in private agent workspace or specified data directory path
+	agentID := AgentIDFromContext(ctx)
+	relPath := sanitizeAgentRelativePath(input.OutputPath, agentID)
+	allowedRoot, baseDir, targetRel, err := resolveTargetBaseDir(ctx, t.dataDir, t.agentsDir, relPath)
 	if err != nil {
 		return nil, err
 	}
-	targetPath, err := security.ResolvePathWithBase(allowedRoot, baseDir, input.OutputPath, true)
+	targetPath, err := security.ResolvePathWithBase(allowedRoot, baseDir, targetRel, true)
 	if err != nil {
 		return nil, fmt.Errorf("validating screenshot path: %w", err)
 	}

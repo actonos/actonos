@@ -179,9 +179,18 @@ func BuildAgentEnvironmentPrompt(dataDir, workspaceDir, agentSlug string) string
 	storageDir := filepath.Join(dataDir, "storage")
 	pluginsDir := filepath.Join(dataDir, "plugins")
 
-	fmt.Fprintf(&sb, "  <workspace user_virtual_root=\"/data/workspace\" storage=\"sqlite\" agent_dir=\"%s\" agent_slug=\"%s\" />\n", agentWorkspace, agentSlug)
-	fmt.Fprintf(&sb, "  <data_dir path=\"%s\" config=\"%s\" logs=\"%s\" skills=\"%s\" storage=\"%s\" plugins=\"%s\" />\n",
+	sb.WriteString("  <filesystem_layout>\n")
+	fmt.Fprintf(&sb, "    <agent_private_workspace path=\".\" host_dir=\"%s\" agent_slug=\"%s\">\n", agentWorkspace, agentSlug)
+	sb.WriteString("      Your private agent workspace. Simple relative paths (e.g. 'script.py', 'output/result.json') resolve here by default.\n")
+	sb.WriteString("    </agent_private_workspace>\n")
+	sb.WriteString("    <user_shared_workspace virtual_root=\"/data/workspace\" storage=\"sqlite_metadata_and_blobs\">\n")
+	sb.WriteString("      User files are managed through native_workspace_* tools (native_workspace_search, native_workspace_read, native_workspace_write, native_workspace_delete) using opaque file IDs.\n")
+	sb.WriteString("    </user_shared_workspace>\n")
+	fmt.Fprintf(&sb, "    <system_directories root=\"%s\" config=\"%s\" logs=\"%s\" skills=\"%s\" storage=\"%s\" plugins=\"%s\">\n",
 		dataDir, configDir, logsDir, skillsDir, storageDir, pluginsDir)
+	sb.WriteString("      Full Data Access: native_file_* tools have full permissions across the entire data directory. You can directly read, write, edit, and search system files like 'skills/my_skill/SKILL.md', 'config/config.json', etc.\n")
+	sb.WriteString("    </system_directories>\n")
+	sb.WriteString("  </filesystem_layout>\n")
 
 	// 2. Probed System Capabilities & Batteries-Included CLI Tools
 	caps := ProbeSystemCapabilities()
@@ -206,9 +215,9 @@ func BuildAgentEnvironmentPrompt(dataDir, workspaceDir, agentSlug string) string
 
 	// 4. Dedicated Storage Policy & Global Data Access
 	sb.WriteString("<workspace_storage_policy>\n")
-	fmt.Fprintf(&sb, "  <rule id=\"dedicated_workspace_default\">PRIVATE WORKSPACE: Use native_file_* and native_exec only for your own working files under `%s`. Other agents have separate directories and must never be accessed.</rule>\n", agentWorkspace)
-	sb.WriteString("  <rule id=\"user_workspace_database\">USER WORKSPACE: `/data/workspace` stores file bytes under opaque UUID paths while SQLite stores metadata only. Use native_workspace_search, native_workspace_read, native_workspace_write, and native_workspace_delete; never guess or pass a host path.</rule>\n")
-	fmt.Fprintf(&sb, "  <rule id=\"system_data_access\">SYSTEM DATA: Skills and configuration live under `%s` and `%s`; access them only with a tool explicitly authorized for that purpose.</rule>\n", skillsDir, configDir)
+	fmt.Fprintf(&sb, "  <rule id=\"dedicated_workspace_default\">WORKSPACE DEFAULT: Relative paths (e.g. 'main.py') default to your private workspace `%s`.</rule>\n", agentWorkspace)
+	sb.WriteString("  <rule id=\"data_full_access\">FULL DATA ACCESS: native_file_* tools can access and manage all files across the data directory (e.g. 'skills/...', 'config/...', 'plugins/...', 'logs/...').</rule>\n")
+	sb.WriteString("  <rule id=\"user_workspace_database\">USER WORKSPACE: `/data/workspace` stores user files via SQLite and opaque UUIDs. Use native_workspace_* tools; never pass a raw host path.</rule>\n")
 	sb.WriteString("</workspace_storage_policy>\n\n")
 
 	// 5. Dynamic Execution Best Practices based on detected environment tools
@@ -222,6 +231,9 @@ func BuildAgentEnvironmentPrompt(dataDir, workspaceDir, agentSlug string) string
 	}
 
 	sb.WriteString("<execution_best_practices>\n")
+	sb.WriteString("  <practice>Editing Code: ALWAYS prefer `native_file_edit` for modifying existing code or text rather than rewriting the entire file with `native_file_write`.</practice>\n")
+	sb.WriteString("  <practice>Inspecting Code: Use `native_file_read` with `start_line` and `end_line` to inspect specific sections with line numbers, avoiding context window bloat.</practice>\n")
+	sb.WriteString("  <practice>File Search & Discovery: Use `native_file_search` without query to explore directory trees, and with `query` (plus optional `context_lines` and `is_regex`) to grep code instantly.</practice>\n")
 	if hasTool("rg") || hasTool("ripgrep") {
 		sb.WriteString("  <practice>Search Efficiency: ALWAYS prioritize `ripgrep` (`rg`) for rapid regex/text searches over iterating through files manually.</practice>\n")
 	} else {

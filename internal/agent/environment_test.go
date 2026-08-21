@@ -47,8 +47,14 @@ func TestBuildHostEnvironmentPrompt(t *testing.T) {
 		t.Errorf("prompt missing database workspace tool policy, got:\n%s", prompt)
 	}
 
-	if !strings.Contains(prompt, "<execution_best_practices>") {
-		t.Errorf("prompt missing <execution_best_practices> XML tag, got:\n%s", prompt)
+	if !strings.Contains(prompt, "<filesystem_layout>") {
+		t.Errorf("prompt missing <filesystem_layout> tag, got:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "<agent_private_workspace") {
+		t.Errorf("prompt missing <agent_private_workspace> tag, got:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "<system_directories") {
+		t.Errorf("prompt missing <system_directories> tag, got:\n%s", prompt)
 	}
 
 	customAgentPrompt := BuildAgentEnvironmentPrompt("/custom", "/custom/workspace", "agent_custom_coder")

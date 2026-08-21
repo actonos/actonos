@@ -198,7 +198,7 @@ func (s *ConstraintsSection) Render() string {
 			}
 		}
 		agentWs := filepath.Join(dataRoot, "agents", s.AgentSlug, "workspace")
-		fmt.Fprintf(&sb, "  <rule id=\"agent_workspace_discipline\">Use native_file_* only inside your private workspace `%s`. Use native_workspace_* with opaque IDs for user data in virtual `/data/workspace`; never translate an ID into a host path or inspect another agent's workspace.</rule>\n", agentWs)
+		fmt.Fprintf(&sb, "  <rule id=\"agent_workspace_discipline\">All relative paths for native_file_* are automatically relative to your private workspace root `%s`. Do NOT prefix paths with 'data/' or 'agents/'. Use native_workspace_* with opaque IDs for user files in virtual `/data/workspace`.</rule>\n", agentWs)
 	}
 	for _, r := range s.AdditionalRules {
 		if r != "" {

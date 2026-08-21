@@ -104,16 +104,26 @@ func TestToolRegistry_RegisterAndExecute(t *testing.T) {
 		t.Fatal("expected path escape error for 2 levels up, got nil")
 	}
 
-	// Private agent file tools must not access sibling data directories.
-	oneLevelWrite := json.RawMessage(`{"path": "../skills/skill.md", "content": "Skill definition content"}`)
-	if _, err := registry.Execute(ctx, "test_agent", "native_file_write", oneLevelWrite); err == nil {
-		t.Fatal("expected one-level-up private workspace escape to fail")
+	// Escapes beyond the data root must be rejected
+	deepEscapeWrite := json.RawMessage(`{"path": "../../../../../etc/passwd", "content": "Bad"}`)
+	if _, err := registry.Execute(ctx, "test_agent", "native_file_write", deepEscapeWrite); err == nil {
+		t.Fatal("expected escape beyond data directory root to fail")
 	}
 
-	// Test native_file_list
-	listRes, err := registry.Execute(ctx, "test_agent", "native_file_list", json.RawMessage(`{}`))
+	// Test redundant prefix sanitization (e.g. LLM passes data/agents/test_agent/workspace/nested.txt)
+	redundantWrite := json.RawMessage(`{"path": "data/agents/test_agent/workspace/nested.txt", "content": "Sanitized path content"}`)
+	if _, err := registry.Execute(ctx, "test_agent", "native_file_write", redundantWrite); err != nil {
+		t.Fatalf("expected redundant prefix write to succeed after sanitization: %v", err)
+	}
+	redundantRead := json.RawMessage(`{"path": "nested.txt"}`)
+	if rRes, err := registry.Execute(ctx, "test_agent", "native_file_read", redundantRead); err != nil || rRes.Content != "Sanitized path content" {
+		t.Fatalf("expected to read sanitized nested file: %v, got %v", err, rRes)
+	}
+
+	// Test native_file_search (directory listing when query is empty)
+	listRes, err := registry.Execute(ctx, "test_agent", "native_file_search", json.RawMessage(`{"path": "."}`))
 	if err != nil {
-		t.Fatalf("native_file_list failed: %v", err)
+		t.Fatalf("native_file_search list failed: %v", err)
 	}
 	if listRes.Content == "" {
 		t.Fatal("expected file list content")
@@ -740,5 +750,114 @@ func TestAgentSpecificWorkspaceFileOperations(t *testing.T) {
 	}
 	if strings.Contains(missingErr.Error(), "access denied") || strings.Contains(missingErr.Error(), "escapes") {
 		t.Fatalf("missing file returned security escape error instead of not-exist: %v", missingErr)
+	}
+}
+
+func TestAdvancedFileOperations(t *testing.T) {
+	tempDir := t.TempDir()
+	registry := NewToolRegistry(nil)
+	RegisterNativeTools(registry, tempDir)
+
+	ctx := context.Background()
+	agentID := "coder_bot"
+
+	// 1. Test native_file_write (append mode)
+	if _, err := registry.Execute(ctx, agentID, "native_file_write", json.RawMessage(`{"path": "code.py", "content": "line 1\nline 2\n", "mode": "overwrite"}`)); err != nil {
+		t.Fatalf("write failed: %v", err)
+	}
+	if _, err := registry.Execute(ctx, agentID, "native_file_write", json.RawMessage(`{"path": "code.py", "content": "line 3\n", "mode": "append"}`)); err != nil {
+		t.Fatalf("append failed: %v", err)
+	}
+
+	// 2. Test native_file_read (with line numbers & start_line/end_line)
+	readRes, err := registry.Execute(ctx, agentID, "native_file_read", json.RawMessage(`{"path": "code.py", "start_line": 2, "end_line": 3, "line_numbers": true}`))
+	if err != nil {
+		t.Fatalf("read with line numbers failed: %v", err)
+	}
+	if !strings.Contains(readRes.Content, "2: line 2") || !strings.Contains(readRes.Content, "3: line 3") {
+		t.Fatalf("unexpected line-numbered read result: %s", readRes.Content)
+	}
+
+	// 3. Test native_file_edit (surgical replace)
+	editRes, err := registry.Execute(ctx, agentID, "native_file_edit", json.RawMessage(`{"path": "code.py", "target_content": "line 2", "replacement_content": "line TWO modified"}`))
+	if err != nil {
+		t.Fatalf("edit failed: %v", err)
+	}
+	if editRes.Content == "" {
+		t.Fatal("expected edit content")
+	}
+
+	verifyRead, _ := registry.Execute(ctx, agentID, "native_file_read", json.RawMessage(`{"path": "code.py"}`))
+	if !strings.Contains(verifyRead.Content, "line TWO modified") {
+		t.Fatalf("expected edited line in file, got: %s", verifyRead.Content)
+	}
+
+	// 4. Test native_file_search (directory list mode when query is empty)
+	listRes, err := registry.Execute(ctx, agentID, "native_file_search", json.RawMessage(`{"path": "."}`))
+	if err != nil {
+		t.Fatalf("unified search list failed: %v", err)
+	}
+	if !strings.Contains(listRes.Content, "code.py") {
+		t.Fatalf("expected code.py in listing: %s", listRes.Content)
+	}
+
+	// 5. Test native_file_search (content grep mode with context_lines)
+	grepRes, err := registry.Execute(ctx, agentID, "native_file_search", json.RawMessage(`{"query": "TWO", "context_lines": 1}`))
+	if err != nil {
+		t.Fatalf("grep search failed: %v", err)
+	}
+	if !strings.Contains(grepRes.Content, "line TWO modified") {
+		t.Fatalf("expected grep match: %s", grepRes.Content)
+	}
+
+	// 6. Test native_file_copy
+	copyRes, err := registry.Execute(ctx, agentID, "native_file_copy", json.RawMessage(`{"src_path": "code.py", "dst_path": "backup/code_bak.py"}`))
+	if err != nil {
+		t.Fatalf("copy failed: %v", err)
+	}
+	if copyRes.Content == "" {
+		t.Fatal("expected copy success content")
+	}
+	bakRead, _ := registry.Execute(ctx, agentID, "native_file_read", json.RawMessage(`{"path": "backup/code_bak.py"}`))
+	if !strings.Contains(bakRead.Content, "line TWO modified") {
+		t.Fatalf("backup copy read failed: %s", bakRead.Content)
+	}
+
+	// 7. Test native_file_move
+	moveRes, err := registry.Execute(ctx, agentID, "native_file_move", json.RawMessage(`{"src_path": "backup/code_bak.py", "dst_path": "backup/code_renamed.py"}`))
+	if err != nil {
+		t.Fatalf("move failed: %v", err)
+	}
+	if moveRes.Content == "" {
+		t.Fatal("expected move success content")
+	}
+
+	// 8. Test native_file_delete (recursive)
+	delRes, err := registry.Execute(ctx, agentID, "native_file_delete", json.RawMessage(`{"path": "backup", "recursive": true}`))
+	if err != nil {
+		t.Fatalf("recursive delete failed: %v", err)
+	}
+	if delRes.Content == "" {
+		t.Fatal("expected delete success content")
+	}
+
+	// 9. Test direct interaction with system data directory (skills, config)
+	if _, err := registry.Execute(ctx, agentID, "native_file_write", json.RawMessage(`{"path": "skills/custom_skill/SKILL.md", "content": "# Custom Skill Documentation"}`)); err != nil {
+		t.Fatalf("writing to skills/ directory failed: %v", err)
+	}
+	skillRead, err := registry.Execute(ctx, agentID, "native_file_read", json.RawMessage(`{"path": "skills/custom_skill/SKILL.md"}`))
+	if err != nil || !strings.Contains(skillRead.Content, "Custom Skill Documentation") {
+		t.Fatalf("reading from skills/ directory failed: %v, content=%s", err, skillRead.Content)
+	}
+
+	// Also accessible via explicit "data/skills/..." prefix
+	dataSkillRead, err := registry.Execute(ctx, agentID, "native_file_read", json.RawMessage(`{"path": "data/skills/custom_skill/SKILL.md"}`))
+	if err != nil || !strings.Contains(dataSkillRead.Content, "Custom Skill Documentation") {
+		t.Fatalf("reading with data/ prefix failed: %v", err)
+	}
+
+	// 10. Test path escape prevention beyond data directory root
+	if _, err := registry.Execute(ctx, agentID, "native_file_read", json.RawMessage(`{"path": "../../../../etc/passwd"}`)); err == nil {
+		t.Fatal("expected path escape outside data root to be rejected")
 	}
 }

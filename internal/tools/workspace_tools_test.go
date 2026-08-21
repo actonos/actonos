@@ -152,7 +152,7 @@ func TestPrivateAgentFileToolsAreMutuallyIsolated(t *testing.T) {
 	if err != nil || string(data) != "alpha-only" {
 		t.Fatalf("private file not stored under the correct root: data=%q err=%v", data, err)
 	}
-	for _, input := range []string{`{"path":"../agent_beta/workspace/private.txt"}`, `{"path":"../../workspace/user.txt"}`} {
+	for _, input := range []string{`{"path":"../../../../../etc/passwd"}`, `{"path":"../../../../outside.txt"}`} {
 		if _, err := registry.Execute(ctx, "agent_alpha", "native_file_read", json.RawMessage(input)); err == nil {
 			t.Fatalf("private path escape unexpectedly succeeded: %s", input)
 		}

@@ -66,12 +66,14 @@ func RegisterNativeToolsWithConfig(r *ToolRegistry, config NativeToolsConfig) {
 		config.AgentsDir = filepath.Join(config.DataDir, "agents")
 	}
 	_ = r.Register(NewHTTPFetchTool())
-	_ = r.Register(NewFileReadTool(config.AgentsDir))
-	_ = r.Register(NewFileWriteTool(config.AgentsDir))
-	_ = r.Register(NewFileListTool(config.AgentsDir))
-	_ = r.Register(NewFileDeleteTool(config.AgentsDir))
-	_ = r.Register(NewFileSearchTool(config.AgentsDir))
-	_ = r.Register(NewExecTool(config.AgentsDir))
+	_ = r.Register(NewFileReadTool(config.DataDir, config.AgentsDir))
+	_ = r.Register(NewFileWriteTool(config.DataDir, config.AgentsDir))
+	_ = r.Register(NewFileEditTool(config.DataDir, config.AgentsDir))
+	_ = r.Register(NewFileSearchTool(config.DataDir, config.AgentsDir))
+	_ = r.Register(NewFileDeleteTool(config.DataDir, config.AgentsDir))
+	_ = r.Register(NewFileMoveTool(config.DataDir, config.AgentsDir))
+	_ = r.Register(NewFileCopyTool(config.DataDir, config.AgentsDir))
+	_ = r.Register(NewExecTool(config.DataDir, config.AgentsDir))
 	if config.UserWorkspace != nil {
 		_ = r.Register(NewWorkspaceSearchTool(config.UserWorkspace))
 		_ = r.Register(NewWorkspaceReadTool(config.UserWorkspace))
@@ -195,31 +197,49 @@ func (t *HTTPFetchTool) Execute(ctx context.Context, inputJSON json.RawMessage) 
 }
 
 // -----------------------------------------------------------------------------
-// 2. File Read Tool
+// 2. File Tools Helpers & Sanitization
 // -----------------------------------------------------------------------------
 
-type FileReadTool struct {
-	workspaceDir string
+// sanitizeAgentRelativePath cleans redundant agent workspace prefixes that LLMs sometimes hallucinate
+// (e.g. "data/agents/{agentID}/workspace/file.txt" or "agents/{agentID}/workspace/file.txt" or "./").
+func sanitizeAgentRelativePath(path, agentID string) string {
+	clean := strings.TrimSpace(path)
+	clean = strings.ReplaceAll(clean, "\\", "/")
+	clean = strings.TrimPrefix(clean, "./")
+	clean = strings.TrimPrefix(clean, "/")
+
+	if agentID != "" {
+		fullPrefix := "data/agents/" + agentID + "/workspace/"
+		if strings.HasPrefix(clean, fullPrefix) {
+			clean = strings.TrimPrefix(clean, fullPrefix)
+		}
+		agentPrefix := "agents/" + agentID + "/workspace/"
+		if strings.HasPrefix(clean, agentPrefix) {
+			clean = strings.TrimPrefix(clean, agentPrefix)
+		}
+		wsPrefix := agentID + "/workspace/"
+		if strings.HasPrefix(clean, wsPrefix) {
+			clean = strings.TrimPrefix(clean, wsPrefix)
+		}
+		if strings.HasPrefix(clean, "workspace/") {
+			clean = strings.TrimPrefix(clean, "workspace/")
+		}
+	}
+	clean = filepath.Clean(clean)
+	return clean
 }
 
-func NewFileReadTool(workspaceDir string) *FileReadTool {
-	return &FileReadTool{workspaceDir: workspaceDir}
-}
-
-func (t *FileReadTool) Name() string { return "native_file_read" }
-func (t *FileReadTool) Description() string {
-	return "Read contents of a file within the authorized workspace or data directory (e.g. '../skills/...' or '../config/...')."
-}
-func (t *FileReadTool) Category() string { return "native" }
-
-func (t *FileReadTool) ParametersSchema() json.RawMessage {
-	return json.RawMessage(`{
-		"type": "object",
-		"properties": {
-			"path": { "type": "string", "description": "Relative path to file in workspace or 1 level up (e.g. '../skills/...')" }
-		},
-		"required": ["path"]
-	}`)
+func formatHumanBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
 // parseFilePathInput safely parses the target file path from JSON or raw input.
@@ -250,7 +270,7 @@ func parseFilePathInput(inputJSON json.RawMessage) (string, error) {
 		raw = strPath
 	}
 
-	pathRe := regexp.MustCompile(`"(?:path|file|filename|filepath|target)"\s*:\s*"([^"]+)"`)
+	pathRe := regexp.MustCompile(`"(?:path|file|filename|filepath|target|src_path)"\s*:\s*"([^"]+)"`)
 	if m := pathRe.FindStringSubmatch(raw); len(m) > 1 {
 		return m[1], nil
 	}
@@ -262,8 +282,8 @@ func parseFilePathInput(inputJSON json.RawMessage) (string, error) {
 	return "", errors.New("path parameter is required")
 }
 
-// parseFileWriteInput safely extracts path and content even if JSON contains unescaped newlines or quotes.
-func parseFileWriteInput(inputJSON json.RawMessage) (string, string, error) {
+// parseFileWriteInput safely extracts path, content, and mode even if JSON contains unescaped newlines or quotes.
+func parseFileWriteInput(inputJSON json.RawMessage) (string, string, string, error) {
 	inputJSON = NormalizeToolInput(inputJSON)
 	raw := strings.TrimSpace(string(inputJSON))
 
@@ -274,6 +294,7 @@ func parseFileWriteInput(inputJSON json.RawMessage) (string, string, error) {
 		Content  string `json:"content"`
 		Data     string `json:"data"`
 		Text     string `json:"text"`
+		Mode     string `json:"mode"`
 	}
 	if err := json.Unmarshal(inputJSON, &input); err == nil {
 		path := input.Path
@@ -290,14 +311,18 @@ func parseFileWriteInput(inputJSON json.RawMessage) (string, string, error) {
 		if content == "" {
 			content = input.Text
 		}
+		mode := strings.ToLower(strings.TrimSpace(input.Mode))
+		if mode == "" {
+			mode = "overwrite"
+		}
 		if path != "" && !strings.HasPrefix(strings.TrimSpace(path), "{") && !strings.Contains(path, `":`) {
-			return strings.TrimSpace(path), content, nil
+			return strings.TrimSpace(path), content, mode, nil
 		}
 	}
 
 	var m map[string]any
 	if err := json.Unmarshal(inputJSON, &m); err == nil {
-		var path, content string
+		var path, content, mode string
 		for _, k := range []string{"path", "file", "filename", "filepath", "target"} {
 			if v, ok := m[k].(string); ok && v != "" {
 				path = v
@@ -310,8 +335,14 @@ func parseFileWriteInput(inputJSON json.RawMessage) (string, string, error) {
 				break
 			}
 		}
+		if v, ok := m["mode"].(string); ok && v != "" {
+			mode = strings.ToLower(strings.TrimSpace(v))
+		}
+		if mode == "" {
+			mode = "overwrite"
+		}
 		if path != "" && !strings.HasPrefix(strings.TrimSpace(path), "{") && !strings.Contains(path, `":`) {
-			return strings.TrimSpace(path), content, nil
+			return strings.TrimSpace(path), content, mode, nil
 		}
 	}
 
@@ -339,39 +370,67 @@ func parseFileWriteInput(inputJSON json.RawMessage) (string, string, error) {
 
 	path = strings.TrimSpace(path)
 	if path == "" {
-		return "", "", errors.New("path parameter is required")
+		return "", "", "", errors.New("path parameter is required")
 	}
 	if strings.ContainsAny(path, "{}\"\r\n") {
-		return "", "", fmt.Errorf("invalid file path: %q", path)
+		return "", "", "", fmt.Errorf("invalid file path: %q", path)
 	}
 
-	return path, content, nil
+	return path, content, "overwrite", nil
 }
 
-// resolveTargetBaseDir returns the calling agent's private filesystem root.
-// User workspace data never participates in this resolution path.
-func resolveTargetBaseDir(ctx context.Context, agentsDir string) (allowedRoot string, baseDir string, err error) {
+// resolveTargetBaseDir returns the allowed root (the full data directory) and the base directory for path resolution.
+// Agents have full access across the entire data directory (skills, config, plugins, logs, workspace, etc.).
+func resolveTargetBaseDir(ctx context.Context, dataDir, agentsDir, requestedPath string) (allowedRoot string, baseDir string, targetRelPath string, err error) {
+	if dataDir == "" {
+		dataDir = "./data"
+	}
+	if agentsDir == "" {
+		agentsDir = filepath.Join(dataDir, "agents")
+	}
+
 	agentID := AgentIDFromContext(ctx)
 	if !validAgentWorkspaceSlug(agentID) {
-		return "", "", fmt.Errorf("%w: valid agent identity is required", ErrPathEscape)
+		agentID = "default"
 	}
-	baseDir = filepath.Join(agentsDir, agentID, "workspace")
-	if err := os.MkdirAll(baseDir, 0750); err != nil {
-		return "", "", fmt.Errorf("creating private agent workspace: %w", err)
+
+	agentWorkspace := filepath.Join(agentsDir, agentID, "workspace")
+	if err := os.MkdirAll(agentWorkspace, 0750); err != nil {
+		return "", "", "", fmt.Errorf("creating private agent workspace: %w", err)
 	}
-	absAgents, err := filepath.Abs(agentsDir)
+
+	absDataDir, err := filepath.Abs(dataDir)
 	if err != nil {
-		return "", "", fmt.Errorf("resolving agents root: %w", err)
+		return "", "", "", fmt.Errorf("resolving data root: %w", err)
 	}
-	absBase, err := filepath.Abs(baseDir)
+
+	absWorkspace, err := filepath.Abs(agentWorkspace)
 	if err != nil {
-		return "", "", fmt.Errorf("resolving agent workspace: %w", err)
+		return "", "", "", fmt.Errorf("resolving agent workspace: %w", err)
 	}
-	rel, err := filepath.Rel(absAgents, absBase)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", "", ErrPathEscape
+
+	cleanReq := strings.TrimSpace(requestedPath)
+	cleanReq = strings.ReplaceAll(cleanReq, "\\", "/")
+	cleanReq = strings.TrimPrefix(cleanReq, "./")
+
+	// If the path explicitly targets data/ or a top-level data folder (skills, config, plugins, logs, storage, agents)
+	// resolve starting from dataDir. Otherwise resolve from the agent's private workspace.
+	if strings.HasPrefix(cleanReq, "data/") {
+		cleanReq = strings.TrimPrefix(cleanReq, "data/")
+		return absDataDir, absDataDir, cleanReq, nil
 	}
-	return absBase, absBase, nil
+	if cleanReq == "data" {
+		return absDataDir, absDataDir, ".", nil
+	}
+
+	topLevelFolders := []string{"skills", "config", "plugins", "logs", "storage", "agents"}
+	for _, folder := range topLevelFolders {
+		if cleanReq == folder || strings.HasPrefix(cleanReq, folder+"/") {
+			return absDataDir, absDataDir, cleanReq, nil
+		}
+	}
+
+	return absDataDir, absWorkspace, cleanReq, nil
 }
 
 func validAgentWorkspaceSlug(agentID string) bool {
@@ -386,17 +445,88 @@ func validAgentWorkspaceSlug(agentID string) bool {
 	return true
 }
 
+func parseDataAndAgentsDir(dataOrAgentsDir string, agentsDir ...string) (string, string) {
+	if len(agentsDir) > 0 && agentsDir[0] != "" {
+		return dataOrAgentsDir, agentsDir[0]
+	}
+	d := dataOrAgentsDir
+	if d == "" {
+		d = "./data"
+	}
+	if filepath.Base(d) == "agents" || filepath.Base(d) == "workspace" {
+		return filepath.Dir(d), d
+	}
+	return d, filepath.Join(d, "agents")
+}
+
+// -----------------------------------------------------------------------------
+// 2. File Read Tool (with Line Numbers and Range Slicing)
+// -----------------------------------------------------------------------------
+
+type FileReadTool struct {
+	dataDir   string
+	agentsDir string
+}
+
+func NewFileReadTool(dataDir string, agentsDir ...string) *FileReadTool {
+	d, agDir := parseDataAndAgentsDir(dataDir, agentsDir...)
+	return &FileReadTool{dataDir: d, agentsDir: agDir}
+}
+
+func (t *FileReadTool) Name() string { return "native_file_read" }
+func (t *FileReadTool) Description() string {
+	return "Read contents of a file inside the data directory or your private workspace with line numbering and range slicing support."
+}
+func (t *FileReadTool) Category() string { return "native" }
+
+func (t *FileReadTool) ParametersSchema() json.RawMessage {
+	return json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"path": { "type": "string", "description": "File path (relative to workspace or relative to data directory, e.g. 'main.py' or 'skills/my_skill/SKILL.md')" },
+			"start_line": { "type": "integer", "description": "Starting line number to read (1-indexed, default 1)", "minimum": 1 },
+			"end_line": { "type": "integer", "description": "Ending line number to read (inclusive, default start_line + 250)", "minimum": 1 },
+			"line_numbers": { "type": "boolean", "description": "Whether to prefix each line with its 1-indexed line number (default true)" }
+		},
+		"required": ["path"]
+	}`)
+}
+
 func (t *FileReadTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {
-	relPath, err := parseFilePathInput(inputJSON)
-	if err != nil {
-		return nil, err
+	inputJSON = NormalizeToolInput(inputJSON)
+	var input struct {
+		Path        string `json:"path"`
+		File        string `json:"file"`
+		Filename    string `json:"filename"`
+		StartLine   int    `json:"start_line"`
+		EndLine     int    `json:"end_line"`
+		LineNumbers *bool  `json:"line_numbers"`
+	}
+	_ = json.Unmarshal(inputJSON, &input)
+
+	path := input.Path
+	if path == "" {
+		path = input.File
+	}
+	if path == "" {
+		path = input.Filename
+	}
+	if path == "" {
+		var err error
+		path, err = parseFilePathInput(inputJSON)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	allowedRoot, baseDir, err := resolveTargetBaseDir(ctx, t.workspaceDir)
+	agentID := AgentIDFromContext(ctx)
+	relPath := sanitizeAgentRelativePath(path, agentID)
+
+	allowedRoot, baseDir, targetRel, err := resolveTargetBaseDir(ctx, t.dataDir, t.agentsDir, relPath)
 	if err != nil {
 		return nil, err
 	}
-	targetPath, err := security.ResolvePathWithBase(allowedRoot, baseDir, relPath, true)
+	targetPath, err := security.ResolvePathWithBase(allowedRoot, baseDir, targetRel, true)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrPathEscape, err)
 	}
@@ -406,30 +536,98 @@ func (t *FileReadTool) Execute(ctx context.Context, inputJSON json.RawMessage) (
 		return nil, fmt.Errorf("reading file: %w", err)
 	}
 
+	withLineNums := false
+	if input.LineNumbers != nil {
+		withLineNums = *input.LineNumbers
+	} else if input.StartLine > 0 || input.EndLine > 0 {
+		withLineNums = true
+	}
+
+	// Binary check: contains null bytes
+	if len(data) > 0 && strings.IndexByte(string(data[:min(len(data), 1024)]), 0) != -1 {
+		return &ToolResult{
+			Content: fmt.Sprintf("[Binary file: %s (%s, %d bytes total)]", relPath, formatHumanBytes(int64(len(data))), len(data)),
+			Data: map[string]any{
+				"path":      relPath,
+				"bytes":     len(data),
+				"is_binary": true,
+			},
+		}, nil
+	}
+
+	lines := strings.Split(string(data), "\n")
+	totalLines := len(lines)
+
+	startLine := input.StartLine
+	if startLine <= 0 {
+		startLine = 1
+	}
+	endLine := input.EndLine
+	if endLine <= 0 {
+		endLine = startLine + 249
+	}
+	if endLine > totalLines {
+		endLine = totalLines
+	}
+	if startLine > totalLines && totalLines > 0 {
+		return &ToolResult{
+			Content: fmt.Sprintf("File %s only contains %d lines (requested start_line=%d).", relPath, totalLines, startLine),
+			Data: map[string]any{
+				"path":        relPath,
+				"total_lines": totalLines,
+				"bytes":       len(data),
+			},
+		}, nil
+	}
+
+	var sb strings.Builder
+	for i := startLine; i <= endLine; i++ {
+		lineContent := lines[i-1]
+		lineContent = strings.TrimRight(lineContent, "\r")
+		if withLineNums {
+			fmt.Fprintf(&sb, "%4d: %s\n", i, lineContent)
+		} else {
+			sb.WriteString(lineContent)
+			sb.WriteString("\n")
+		}
+	}
+
+	var note string
+	if endLine < totalLines {
+		note = fmt.Sprintf("\n[Showing lines %d-%d of %d total lines (%s). Use start_line=%d to view remaining content]",
+			startLine, endLine, totalLines, formatHumanBytes(int64(len(data))), endLine+1)
+	}
+
+	output := strings.TrimRight(sb.String(), "\n") + note
 	return &ToolResult{
-		Content: string(data),
+		Content: output,
 		Data: map[string]any{
-			"bytes": len(data),
-			"path":  relPath,
+			"path":        relPath,
+			"start_line":  startLine,
+			"end_line":    endLine,
+			"total_lines": totalLines,
+			"bytes":       len(data),
 		},
 	}, nil
 }
 
 // -----------------------------------------------------------------------------
-// 3. File Write Tool
+// 3. File Write Tool (with Append Mode & Atomic Overwrite)
 // -----------------------------------------------------------------------------
 
 type FileWriteTool struct {
-	workspaceDir string
+	dataDir   string
+	agentsDir string
 }
 
-func NewFileWriteTool(workspaceDir string) *FileWriteTool {
-	return &FileWriteTool{workspaceDir: workspaceDir}
+func NewFileWriteTool(dataDir string, agentsDir ...string) *FileWriteTool {
+	d, agDir := parseDataAndAgentsDir(dataDir, agentsDir...)
+	return &FileWriteTool{dataDir: d, agentsDir: agDir}
 }
 
 func (t *FileWriteTool) Name() string { return "native_file_write" }
 func (t *FileWriteTool) Description() string {
-	return "Write or overwrite a file within the authorized workspace or data directory."
+	return "Write, overwrite, or append content to a file in the data directory or your private workspace."
 }
 func (t *FileWriteTool) Category() string { return "native" }
 
@@ -437,24 +635,27 @@ func (t *FileWriteTool) ParametersSchema() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {
-			"path": { "type": "string", "description": "Relative path to file in workspace or 1 level up" },
-			"content": { "type": "string", "description": "Text content to write into the file" }
+			"path": { "type": "string", "description": "File path (relative to workspace or relative to data directory, e.g. 'main.py' or 'skills/my_skill/SKILL.md')" },
+			"content": { "type": "string", "description": "Text content to write into the file" },
+			"mode": { "type": "string", "enum": ["overwrite", "append"], "description": "Write mode: 'overwrite' (default) or 'append' to add to the end of file" }
 		},
 		"required": ["path", "content"]
 	}`)
 }
 
 func (t *FileWriteTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {
-	relPath, content, err := parseFileWriteInput(inputJSON)
+	relPath, content, mode, err := parseFileWriteInput(inputJSON)
 	if err != nil {
 		return nil, err
 	}
+	agentID := AgentIDFromContext(ctx)
+	relPath = sanitizeAgentRelativePath(relPath, agentID)
 
-	allowedRoot, baseDir, err := resolveTargetBaseDir(ctx, t.workspaceDir)
+	allowedRoot, baseDir, targetRel, err := resolveTargetBaseDir(ctx, t.dataDir, t.agentsDir, relPath)
 	if err != nil {
 		return nil, err
 	}
-	targetPath, err := security.ResolvePathWithBase(allowedRoot, baseDir, relPath, true)
+	targetPath, err := security.ResolvePathWithBase(allowedRoot, baseDir, targetRel, true)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrPathEscape, err)
 	}
@@ -463,201 +664,211 @@ func (t *FileWriteTool) Execute(ctx context.Context, inputJSON json.RawMessage) 
 		return nil, fmt.Errorf("creating parent directory: %w", err)
 	}
 
-	if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil {
-		return nil, fmt.Errorf("writing file: %w", err)
+	if mode == "append" {
+		f, err := os.OpenFile(targetPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			return nil, fmt.Errorf("opening file for append: %w", err)
+		}
+		defer f.Close()
+		if _, err := f.WriteString(content); err != nil {
+			return nil, fmt.Errorf("appending to file: %w", err)
+		}
+	} else {
+		if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil {
+			return nil, fmt.Errorf("writing file: %w", err)
+		}
+	}
+
+	action := "Successfully wrote"
+	if mode == "append" {
+		action = "Successfully appended"
 	}
 
 	return &ToolResult{
-		Content: fmt.Sprintf("Successfully wrote %d bytes to %s", len(content), relPath),
+		Content: fmt.Sprintf("%s %d bytes to %s (mode: %s)", action, len(content), relPath, mode),
 		Data: map[string]any{
 			"path":          relPath,
 			"absolute_path": targetPath,
 			"bytes":         len(content),
+			"mode":          mode,
 		},
 	}, nil
 }
 
 // -----------------------------------------------------------------------------
-// 4. File List Tool
+// 4. File Edit Tool (Surgical Text Replacement)
 // -----------------------------------------------------------------------------
 
-type FileListTool struct {
-	workspaceDir string
+type FileEditTool struct {
+	dataDir   string
+	agentsDir string
 }
 
-func NewFileListTool(workspaceDir string) *FileListTool {
-	return &FileListTool{workspaceDir: workspaceDir}
+func NewFileEditTool(dataDir string, agentsDir ...string) *FileEditTool {
+	d, agDir := parseDataAndAgentsDir(dataDir, agentsDir...)
+	return &FileEditTool{dataDir: d, agentsDir: agDir}
 }
 
-func (t *FileListTool) Name() string { return "native_file_list" }
-func (t *FileListTool) Description() string {
-	return "List files and directories within the authorized workspace or data directory."
+func (t *FileEditTool) Name() string { return "native_file_edit" }
+func (t *FileEditTool) Description() string {
+	return "Perform surgical text replacement or line edits inside a file in the data directory or your private workspace without rewriting the entire file."
 }
-func (t *FileListTool) Category() string { return "native" }
+func (t *FileEditTool) Category() string { return "native" }
 
-func (t *FileListTool) ParametersSchema() json.RawMessage {
+func (t *FileEditTool) ParametersSchema() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {
-			"path": { "type": "string", "description": "Relative subdirectory in workspace or data directory (optional, default root '')" },
-			"recursive": { "type": "boolean", "description": "Whether to list subdirectories recursively (default false)" }
-		}
+			"path": { "type": "string", "description": "File path (relative to workspace or relative to data directory)" },
+			"target_content": { "type": "string", "description": "Exact text or code block to replace" },
+			"replacement_content": { "type": "string", "description": "New text or code block to insert in place of target_content" },
+			"start_line": { "type": "integer", "description": "Optional starting line number (1-indexed) to restrict replacement search range", "minimum": 1 },
+			"end_line": { "type": "integer", "description": "Optional ending line number (1-indexed) to restrict replacement search range", "minimum": 1 },
+			"allow_multiple": { "type": "boolean", "description": "Whether to replace multiple occurrences if found (default false)" }
+		},
+		"required": ["path", "target_content", "replacement_content"]
 	}`)
 }
 
-func (t *FileListTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {
+func (t *FileEditTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {
 	inputJSON = NormalizeToolInput(inputJSON)
 	var input struct {
-		Path      string `json:"path"`
-		Recursive bool   `json:"recursive"`
+		Path               string `json:"path"`
+		File               string `json:"file"`
+		TargetContent      string `json:"target_content"`
+		ReplacementContent string `json:"replacement_content"`
+		StartLine          int    `json:"start_line"`
+		EndLine            int    `json:"end_line"`
+		AllowMultiple      bool   `json:"allow_multiple"`
 	}
-	_ = json.Unmarshal(inputJSON, &input)
+	if err := json.Unmarshal(inputJSON, &input); err != nil {
+		return nil, fmt.Errorf("parsing edit tool input: %w", err)
+	}
 
-	allowedRoot, baseDir, err := resolveTargetBaseDir(ctx, t.workspaceDir)
+	path := input.Path
+	if path == "" {
+		path = input.File
+	}
+	if path == "" {
+		return nil, errors.New("path parameter is required")
+	}
+	if input.TargetContent == "" {
+		return nil, errors.New("target_content is required")
+	}
+
+	agentID := AgentIDFromContext(ctx)
+	relPath := sanitizeAgentRelativePath(path, agentID)
+
+	allowedRoot, baseDir, targetRel, err := resolveTargetBaseDir(ctx, t.dataDir, t.agentsDir, relPath)
 	if err != nil {
 		return nil, err
 	}
-	targetDir, err := security.ResolvePathWithBase(allowedRoot, baseDir, input.Path, true)
+	targetPath, err := security.ResolvePathWithBase(allowedRoot, baseDir, targetRel, true)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrPathEscape, err)
 	}
-	absWorkspace, _ := filepath.Abs(baseDir)
 
-	_ = os.MkdirAll(targetDir, 0755)
-
-	type FileEntry struct {
-		Name    string `json:"name"`
-		Path    string `json:"path"`
-		IsDir   bool   `json:"is_dir"`
-		Size    int64  `json:"size"`
-		ModTime string `json:"mod_time"`
+	data, err := os.ReadFile(targetPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading file for edit: %w", err)
 	}
 
-	var entries []FileEntry
-	if input.Recursive {
-		err := filepath.Walk(targetDir, func(path string, info os.FileInfo, err error) error {
-			if err != nil || path == targetDir {
-				return nil
-			}
-			rel, _ := filepath.Rel(absWorkspace, path)
-			entries = append(entries, FileEntry{
-				Name:    info.Name(),
-				Path:    rel,
-				IsDir:   info.IsDir(),
-				Size:    info.Size(),
-				ModTime: info.ModTime().Format(time.RFC3339),
-			})
-			if len(entries) >= 200 {
-				return filepath.SkipAll
-			}
-			return nil
-		})
-		if err != nil {
-			return nil, err
+	fileContent := string(data)
+	target := input.TargetContent
+	replacement := input.ReplacementContent
+
+	// Standardize line endings in search
+	normFile := strings.ReplaceAll(fileContent, "\r\n", "\n")
+	normTarget := strings.ReplaceAll(target, "\r\n", "\n")
+	normRepl := strings.ReplaceAll(replacement, "\r\n", "\n")
+
+	// If start_line or end_line specified, limit search range
+	if input.StartLine > 0 || input.EndLine > 0 {
+		lines := strings.Split(normFile, "\n")
+		start := input.StartLine
+		if start <= 0 {
+			start = 1
 		}
+		end := input.EndLine
+		if end <= 0 || end > len(lines) {
+			end = len(lines)
+		}
+		if start > len(lines) {
+			return nil, fmt.Errorf("start_line %d exceeds total file lines %d", start, len(lines))
+		}
+
+		subLines := lines[start-1 : end]
+		subContent := strings.Join(subLines, "\n")
+
+		count := strings.Count(subContent, normTarget)
+		if count == 0 {
+			return nil, fmt.Errorf("target_content not found between lines %d and %d in %s", start, end, relPath)
+		}
+		if count > 1 && !input.AllowMultiple {
+			return nil, fmt.Errorf("found %d occurrences of target_content between lines %d and %d in %s; specify a narrower range or set allow_multiple: true", count, start, end, relPath)
+		}
+
+		newSubContent := strings.Replace(subContent, normTarget, normRepl, 1)
+		if input.AllowMultiple {
+			newSubContent = strings.ReplaceAll(subContent, normTarget, normRepl)
+		}
+
+		// Rebuild full content
+		prefix := ""
+		if start > 1 {
+			prefix = strings.Join(lines[:start-1], "\n") + "\n"
+		}
+		suffix := ""
+		if end < len(lines) {
+			suffix = "\n" + strings.Join(lines[end:], "\n")
+		}
+		normFile = prefix + newSubContent + suffix
 	} else {
-		dirEntries, err := os.ReadDir(targetDir)
-		if err != nil {
-			return nil, err
+		count := strings.Count(normFile, normTarget)
+		if count == 0 {
+			return nil, fmt.Errorf("target_content not found in %s; please check exact whitespace and indentation", relPath)
 		}
-		for _, de := range dirEntries {
-			info, _ := de.Info()
-			size := int64(0)
-			modTime := ""
-			if info != nil {
-				size = info.Size()
-				modTime = info.ModTime().Format(time.RFC3339)
-			}
-			rel, _ := filepath.Rel(absWorkspace, filepath.Join(targetDir, de.Name()))
-			entries = append(entries, FileEntry{
-				Name:    de.Name(),
-				Path:    rel,
-				IsDir:   de.IsDir(),
-				Size:    size,
-				ModTime: modTime,
-			})
+		if count > 1 && !input.AllowMultiple {
+			return nil, fmt.Errorf("found %d occurrences of target_content in %s; specify start_line/end_line or set allow_multiple: true", count, relPath)
+		}
+
+		if input.AllowMultiple {
+			normFile = strings.ReplaceAll(normFile, normTarget, normRepl)
+		} else {
+			normFile = strings.Replace(normFile, normTarget, normRepl, 1)
 		}
 	}
 
-	rawJSON, _ := json.MarshalIndent(entries, "", "  ")
+	if err := os.WriteFile(targetPath, []byte(normFile), 0644); err != nil {
+		return nil, fmt.Errorf("writing edited file: %w", err)
+	}
+
 	return &ToolResult{
-		Content: fmt.Sprintf("Found %d file(s) in %s:\n%s", len(entries), input.Path, string(rawJSON)),
-		Data:    map[string]any{"count": len(entries), "files": entries},
-	}, nil
-}
-
-// -----------------------------------------------------------------------------
-// 5. File Delete Tool
-// -----------------------------------------------------------------------------
-
-type FileDeleteTool struct {
-	workspaceDir string
-}
-
-func NewFileDeleteTool(workspaceDir string) *FileDeleteTool {
-	return &FileDeleteTool{workspaceDir: workspaceDir}
-}
-
-func (t *FileDeleteTool) Name() string { return "native_file_delete" }
-func (t *FileDeleteTool) Description() string {
-	return "Delete a file or empty directory in the authorized workspace or data directory."
-}
-func (t *FileDeleteTool) Category() string { return "native" }
-
-func (t *FileDeleteTool) ParametersSchema() json.RawMessage {
-	return json.RawMessage(`{
-		"type": "object",
-		"properties": {
-			"path": { "type": "string", "description": "Relative path of file to delete" }
+		Content: fmt.Sprintf("Successfully edited %s. Target content replaced with new content (%d bytes).", relPath, len(normFile)),
+		Data: map[string]any{
+			"path":  relPath,
+			"bytes": len(normFile),
 		},
-		"required": ["path"]
-	}`)
-}
-
-func (t *FileDeleteTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {
-	relPath, err := parseFilePathInput(inputJSON)
-	if err != nil {
-		return nil, err
-	}
-
-	cleanRel := filepath.Clean(relPath)
-	if cleanRel == "." || cleanRel == "" {
-		return nil, ErrPathEscape
-	}
-	allowedRoot, baseDir, err := resolveTargetBaseDir(ctx, t.workspaceDir)
-	if err != nil {
-		return nil, err
-	}
-	targetPath, err := security.ResolvePathWithBase(allowedRoot, baseDir, relPath, true)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrPathEscape, err)
-	}
-
-	if err := os.Remove(targetPath); err != nil {
-		return nil, fmt.Errorf("deleting file: %w", err)
-	}
-
-	return &ToolResult{
-		Content: fmt.Sprintf("Successfully deleted %s", relPath),
-		Data:    map[string]any{"deleted": relPath, "absolute_path": targetPath},
 	}, nil
 }
 
 // -----------------------------------------------------------------------------
-// 6. File Search Tool (Grep / Find)
+// 5. Unified File Search Tool (Grep, Regex & Directory Listing Explorer)
 // -----------------------------------------------------------------------------
 
 type FileSearchTool struct {
-	workspaceDir string
+	dataDir   string
+	agentsDir string
 }
 
-func NewFileSearchTool(workspaceDir string) *FileSearchTool {
-	return &FileSearchTool{workspaceDir: workspaceDir}
+func NewFileSearchTool(dataDir string, agentsDir ...string) *FileSearchTool {
+	d, agDir := parseDataAndAgentsDir(dataDir, agentsDir...)
+	return &FileSearchTool{dataDir: d, agentsDir: agDir}
 }
 
 func (t *FileSearchTool) Name() string { return "native_file_search" }
 func (t *FileSearchTool) Description() string {
-	return "Search for text patterns or filenames inside the workspace."
+	return "Unified file search and workspace explorer. When query is provided, searches file contents (grep/regex) with context lines across data or private workspace. When query is empty, lists directory tree, files, sizes, and modified times."
 }
 func (t *FileSearchTool) Category() string { return "native" }
 
@@ -665,70 +876,306 @@ func (t *FileSearchTool) ParametersSchema() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {
-			"query": { "type": "string", "description": "Text query or keyword to search for" },
-			"extension": { "type": "string", "description": "Filter by file extension (e.g. '.md', '.go', '.json')" }
-		},
-		"required": ["query"]
+			"path": { "type": "string", "description": "Relative directory path (e.g. '.' for workspace, or 'skills', 'config', 'data')" },
+			"query": { "type": "string", "description": "Text query or regex pattern to search for in file contents/filenames (omit or empty to list files/directories)" },
+			"pattern": { "type": "string", "description": "Glob pattern to filter filenames (e.g. '*.go', '*.json', 'test_*')" },
+			"is_regex": { "type": "boolean", "description": "Whether query is a regular expression (default false)" },
+			"case_sensitive": { "type": "boolean", "description": "Whether search is case-sensitive (default false)" },
+			"recursive": { "type": "boolean", "description": "Whether to search/list subdirectories recursively (default true for query search, false for listing)" },
+			"max_depth": { "type": "integer", "description": "Maximum directory depth to traverse (0 for unlimited)", "minimum": 0 },
+			"context_lines": { "type": "integer", "description": "Number of context lines before and after match to show (default 0)", "minimum": 0, "maximum": 10 },
+			"include_hidden": { "type": "boolean", "description": "Whether to include hidden files and directories (default false)" },
+			"max_results": { "type": "integer", "description": "Maximum number of results to return (default 50)", "minimum": 1, "maximum": 200 }
+		}
 	}`)
 }
 
 func (t *FileSearchTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {
 	inputJSON = NormalizeToolInput(inputJSON)
 	var input struct {
-		Query     string `json:"query"`
-		Extension string `json:"extension"`
+		Path          string `json:"path"`
+		Query         string `json:"query"`
+		Pattern       string `json:"pattern"`
+		Extension     string `json:"extension"`
+		IsRegex       bool   `json:"is_regex"`
+		CaseSensitive bool   `json:"case_sensitive"`
+		Recursive     *bool  `json:"recursive"`
+		MaxDepth      int    `json:"max_depth"`
+		ContextLines  int    `json:"context_lines"`
+		IncludeHidden bool   `json:"include_hidden"`
+		MaxResults    int    `json:"max_results"`
 	}
-	if err := json.Unmarshal(inputJSON, &input); err != nil || input.Query == "" {
-		return nil, errors.New("query is required")
-	}
+	_ = json.Unmarshal(inputJSON, &input)
 
-	_, absWorkspace, err := resolveTargetBaseDir(ctx, t.workspaceDir)
+	agentID := AgentIDFromContext(ctx)
+	cleanPath := sanitizeAgentRelativePath(input.Path, agentID)
+
+	allowedRoot, baseDir, targetRel, err := resolveTargetBaseDir(ctx, t.dataDir, t.agentsDir, cleanPath)
 	if err != nil {
 		return nil, err
 	}
-	queryLower := strings.ToLower(input.Query)
+	targetDir, err := security.ResolvePathWithBase(allowedRoot, baseDir, targetRel, true)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrPathEscape, err)
+	}
+	absWorkspace, _ := filepath.Abs(baseDir)
+
+	maxResults := input.MaxResults
+	if maxResults <= 0 || maxResults > 200 {
+		maxResults = 50
+	}
+
+	pattern := input.Pattern
+	if pattern == "" && input.Extension != "" {
+		if strings.HasPrefix(input.Extension, ".") {
+			pattern = "*" + input.Extension
+		} else {
+			pattern = "*." + input.Extension
+		}
+	}
+
+	isNoiseDir := func(name string) bool {
+		if input.IncludeHidden {
+			return false
+		}
+		return strings.HasPrefix(name, ".") ||
+			name == "node_modules" ||
+			name == "dist" ||
+			name == "__pycache__" ||
+			name == "target" ||
+			name == "build"
+	}
+
+	// -------------------------------------------------------------------------
+	// Mode A: Directory Listing / Tree Explorer (query is empty)
+	// -------------------------------------------------------------------------
+	if strings.TrimSpace(input.Query) == "" {
+		recursive := false
+		if input.Recursive != nil {
+			recursive = *input.Recursive
+		}
+
+		type FileEntry struct {
+			Name    string `json:"name"`
+			Path    string `json:"path"`
+			IsDir   bool   `json:"is_dir"`
+			Size    int64  `json:"size"`
+			SizeStr string `json:"size_str"`
+			ModTime string `json:"mod_time"`
+		}
+
+		var entries []FileEntry
+		targetDirAbs, _ := filepath.Abs(targetDir)
+
+		if recursive {
+			_ = filepath.Walk(targetDir, func(path string, info os.FileInfo, err error) error {
+				if err != nil || path == targetDir {
+					return nil
+				}
+				if info.IsDir() && isNoiseDir(info.Name()) {
+					return filepath.SkipDir
+				}
+				if input.MaxDepth > 0 {
+					relToTarget, _ := filepath.Rel(targetDirAbs, path)
+					depth := len(strings.Split(filepath.ToSlash(relToTarget), "/"))
+					if depth > input.MaxDepth {
+						if info.IsDir() {
+							return filepath.SkipDir
+						}
+						return nil
+					}
+				}
+				if pattern != "" && !info.IsDir() {
+					if matched, _ := filepath.Match(pattern, info.Name()); !matched {
+						return nil
+					}
+				}
+				rel, _ := filepath.Rel(absWorkspace, path)
+				entries = append(entries, FileEntry{
+					Name:    info.Name(),
+					Path:    filepath.ToSlash(rel),
+					IsDir:   info.IsDir(),
+					Size:    info.Size(),
+					SizeStr: formatHumanBytes(info.Size()),
+					ModTime: info.ModTime().Format("2006-01-02 15:04:05"),
+				})
+				if len(entries) >= maxResults {
+					return filepath.SkipAll
+				}
+				return nil
+			})
+		} else {
+			dirEntries, readErr := os.ReadDir(targetDir)
+			if readErr != nil {
+				return nil, fmt.Errorf("reading directory: %w", readErr)
+			}
+			for _, de := range dirEntries {
+				if isNoiseDir(de.Name()) {
+					continue
+				}
+				info, _ := de.Info()
+				size := int64(0)
+				modTime := ""
+				if info != nil {
+					size = info.Size()
+					modTime = info.ModTime().Format("2006-01-02 15:04:05")
+				}
+				if pattern != "" && !de.IsDir() {
+					if matched, _ := filepath.Match(pattern, de.Name()); !matched {
+						continue
+					}
+				}
+				rel, _ := filepath.Rel(absWorkspace, filepath.Join(targetDir, de.Name()))
+				entries = append(entries, FileEntry{
+					Name:    de.Name(),
+					Path:    filepath.ToSlash(rel),
+					IsDir:   de.IsDir(),
+					Size:    size,
+					SizeStr: formatHumanBytes(size),
+					ModTime: modTime,
+				})
+				if len(entries) >= maxResults {
+					break
+				}
+			}
+		}
+
+		var sb strings.Builder
+		fmt.Fprintf(&sb, "Directory listing for '%s' (%d item(s)):\n", cleanPath, len(entries))
+		for _, e := range entries {
+			if e.IsDir {
+				fmt.Fprintf(&sb, "  [DIR]  %-35s  %s\n", e.Path+"/", e.ModTime)
+			} else {
+				fmt.Fprintf(&sb, "  [FILE] %-35s  %8s  %s\n", e.Path, e.SizeStr, e.ModTime)
+			}
+		}
+
+		return &ToolResult{
+			Content: strings.TrimRight(sb.String(), "\n"),
+			Data: map[string]any{
+				"path":    cleanPath,
+				"count":   len(entries),
+				"entries": entries,
+			},
+		}, nil
+	}
+
+	// -------------------------------------------------------------------------
+	// Mode B: File Content & Regex Grep Search (query is provided)
+	// -------------------------------------------------------------------------
+	query := input.Query
+	var re *regexp.Regexp
+	if input.IsRegex {
+		patternStr := query
+		if !input.CaseSensitive {
+			patternStr = "(?i)" + patternStr
+		}
+		var err error
+		re, err = regexp.Compile(patternStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid regex query %q: %w", query, err)
+		}
+	}
+
+	type MatchContext struct {
+		LineNum int    `json:"line_num"`
+		Line    string `json:"line"`
+		IsMatch bool   `json:"is_match"`
+	}
 
 	type SearchMatch struct {
-		Path    string `json:"path"`
-		LineNum int    `json:"line_num,omitempty"`
-		Snippet string `json:"snippet"`
+		Path        string         `json:"path"`
+		LineNum     int            `json:"line_num"`
+		Snippet     string         `json:"snippet"`
+		ContextTree []MatchContext `json:"context,omitempty"`
 	}
 
 	var matches []SearchMatch
-	_ = filepath.Walk(absWorkspace, func(path string, info os.FileInfo, err error) error {
+	contextLines := input.ContextLines
+	if contextLines < 0 {
+		contextLines = 0
+	}
+	if contextLines > 10 {
+		contextLines = 10
+	}
+
+	_ = filepath.Walk(targetDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
+			if info != nil && info.IsDir() && isNoiseDir(info.Name()) {
+				return filepath.SkipDir
+			}
 			return nil
 		}
-		if input.Extension != "" && !strings.HasSuffix(strings.ToLower(path), strings.ToLower(input.Extension)) {
+		if isNoiseDir(info.Name()) {
 			return nil
+		}
+		if pattern != "" {
+			if matched, _ := filepath.Match(pattern, info.Name()); !matched {
+				return nil
+			}
 		}
 
 		rel, _ := filepath.Rel(absWorkspace, path)
+		relSlash := filepath.ToSlash(rel)
+
 		// Check filename match
-		if strings.Contains(strings.ToLower(info.Name()), queryLower) {
-			matches = append(matches, SearchMatch{
-				Path:    rel,
-				Snippet: fmt.Sprintf("[Filename Match] %s", info.Name()),
-			})
+		filenameMatch := false
+		if input.IsRegex && re != nil {
+			filenameMatch = re.MatchString(info.Name())
+		} else if input.CaseSensitive {
+			filenameMatch = strings.Contains(info.Name(), query)
+		} else {
+			filenameMatch = strings.Contains(strings.ToLower(info.Name()), strings.ToLower(query))
 		}
 
-		// Search file contents (up to 512KB per file)
-		if info.Size() < 512*1024 {
-			data, err := os.ReadFile(path)
-			if err == nil {
+		if filenameMatch {
+			matches = append(matches, SearchMatch{
+				Path:    relSlash,
+				LineNum: 0,
+				Snippet: fmt.Sprintf("[Filename Match] %s (%s)", info.Name(), formatHumanBytes(info.Size())),
+			})
+			if len(matches) >= maxResults {
+				return filepath.SkipAll
+			}
+		}
+
+		// Search file contents (up to 1MB per file)
+		if info.Size() < 1024*1024 {
+			data, readErr := os.ReadFile(path)
+			if readErr == nil && !strings.Contains(string(data[:min(len(data), 512)]), "\x00") {
 				lines := strings.Split(string(data), "\n")
 				for idx, line := range lines {
-					if strings.Contains(strings.ToLower(line), queryLower) {
-						snippet := strings.TrimSpace(line)
-						if len(snippet) > 120 {
-							snippet = snippet[:120] + "..."
+					cleanLine := strings.TrimRight(line, "\r")
+					matched := false
+					if input.IsRegex && re != nil {
+						matched = re.MatchString(cleanLine)
+					} else if input.CaseSensitive {
+						matched = strings.Contains(cleanLine, query)
+					} else {
+						matched = strings.Contains(strings.ToLower(cleanLine), strings.ToLower(query))
+					}
+
+					if matched {
+						var ctxTree []MatchContext
+						if contextLines > 0 {
+							startCtx := max(0, idx-contextLines)
+							endCtx := min(len(lines)-1, idx+contextLines)
+							for cIdx := startCtx; cIdx <= endCtx; cIdx++ {
+								ctxTree = append(ctxTree, MatchContext{
+									LineNum: cIdx + 1,
+									Line:    strings.TrimRight(lines[cIdx], "\r"),
+									IsMatch: cIdx == idx,
+								})
+							}
 						}
+
 						matches = append(matches, SearchMatch{
-							Path:    rel,
-							LineNum: idx + 1,
-							Snippet: snippet,
+							Path:        relSlash,
+							LineNum:     idx + 1,
+							Snippet:     strings.TrimSpace(cleanLine),
+							ContextTree: ctxTree,
 						})
-						if len(matches) >= 50 {
+						if len(matches) >= maxResults {
 							return filepath.SkipAll
 						}
 					}
@@ -738,28 +1185,352 @@ func (t *FileSearchTool) Execute(ctx context.Context, inputJSON json.RawMessage)
 		return nil
 	})
 
-	rawJSON, _ := json.MarshalIndent(matches, "", "  ")
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "Found %d match(es) for '%s' in %s:\n", len(matches), query, cleanPath)
+	for _, m := range matches {
+		if m.LineNum == 0 {
+			fmt.Fprintf(&sb, "\n  %s\n", m.Snippet)
+		} else if len(m.ContextTree) > 0 {
+			fmt.Fprintf(&sb, "\n  File: %s:%d\n", m.Path, m.LineNum)
+			for _, ctxLine := range m.ContextTree {
+				marker := " "
+				if ctxLine.IsMatch {
+					marker = ">"
+				}
+				fmt.Fprintf(&sb, "  %s %4d: %s\n", marker, ctxLine.LineNum, ctxLine.Line)
+			}
+		} else {
+			fmt.Fprintf(&sb, "  %s:%d: %s\n", m.Path, m.LineNum, m.Snippet)
+		}
+	}
+
 	return &ToolResult{
-		Content: fmt.Sprintf("Search for '%s' found %d match(es):\n%s", input.Query, len(matches), string(rawJSON)),
-		Data:    map[string]any{"query": input.Query, "count": len(matches), "matches": matches},
+		Content: strings.TrimRight(sb.String(), "\n"),
+		Data: map[string]any{
+			"query":   query,
+			"path":    cleanPath,
+			"count":   len(matches),
+			"matches": matches,
+		},
 	}, nil
 }
 
 // -----------------------------------------------------------------------------
-// 7. Exec Tool (Sandboxed Command Execution)
+// 6. File Delete Tool (with Recursive Support)
+// -----------------------------------------------------------------------------
+
+type FileDeleteTool struct {
+	dataDir   string
+	agentsDir string
+}
+
+func NewFileDeleteTool(dataDir string, agentsDir ...string) *FileDeleteTool {
+	d, agDir := parseDataAndAgentsDir(dataDir, agentsDir...)
+	return &FileDeleteTool{dataDir: d, agentsDir: agDir}
+}
+
+func (t *FileDeleteTool) Name() string { return "native_file_delete" }
+func (t *FileDeleteTool) Description() string {
+	return "Delete a file or directory located within the data directory or your private workspace."
+}
+func (t *FileDeleteTool) Category() string { return "native" }
+
+func (t *FileDeleteTool) ParametersSchema() json.RawMessage {
+	return json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"path": { "type": "string", "description": "Path of file or directory to delete (relative to workspace or relative to data directory)" },
+			"recursive": { "type": "boolean", "description": "Whether to recursively delete non-empty directories (default false)" }
+		},
+		"required": ["path"]
+	}`)
+}
+
+func (t *FileDeleteTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {
+	inputJSON = NormalizeToolInput(inputJSON)
+	var input struct {
+		Path      string `json:"path"`
+		File      string `json:"file"`
+		Recursive bool   `json:"recursive"`
+	}
+	_ = json.Unmarshal(inputJSON, &input)
+
+	path := input.Path
+	if path == "" {
+		path = input.File
+	}
+	if path == "" {
+		var err error
+		path, err = parseFilePathInput(inputJSON)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	agentID := AgentIDFromContext(ctx)
+	relPath := sanitizeAgentRelativePath(path, agentID)
+
+	cleanRel := filepath.Clean(relPath)
+	if cleanRel == "." || cleanRel == "" {
+		return nil, ErrPathEscape
+	}
+	allowedRoot, baseDir, targetRel, err := resolveTargetBaseDir(ctx, t.dataDir, t.agentsDir, relPath)
+	if err != nil {
+		return nil, err
+	}
+	targetPath, err := security.ResolvePathWithBase(allowedRoot, baseDir, targetRel, true)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrPathEscape, err)
+	}
+
+	if input.Recursive {
+		if err := os.RemoveAll(targetPath); err != nil {
+			return nil, fmt.Errorf("deleting path recursively: %w", err)
+		}
+	} else {
+		if err := os.Remove(targetPath); err != nil {
+			return nil, fmt.Errorf("deleting file: %w", err)
+		}
+	}
+
+	return &ToolResult{
+		Content: fmt.Sprintf("Successfully deleted %s", relPath),
+		Data:    map[string]any{"deleted": relPath, "absolute_path": targetPath, "recursive": input.Recursive},
+	}, nil
+}
+
+// -----------------------------------------------------------------------------
+// 7. File Move Tool
+// -----------------------------------------------------------------------------
+
+type FileMoveTool struct {
+	dataDir   string
+	agentsDir string
+}
+
+func NewFileMoveTool(dataDir string, agentsDir ...string) *FileMoveTool {
+	d, agDir := parseDataAndAgentsDir(dataDir, agentsDir...)
+	return &FileMoveTool{dataDir: d, agentsDir: agDir}
+}
+
+func (t *FileMoveTool) Name() string { return "native_file_move" }
+func (t *FileMoveTool) Description() string {
+	return "Move or rename a file or directory inside the data directory or your private workspace."
+}
+func (t *FileMoveTool) Category() string { return "native" }
+
+func (t *FileMoveTool) ParametersSchema() json.RawMessage {
+	return json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"src_path": { "type": "string", "description": "Source path to move (relative to workspace or data directory)" },
+			"dst_path": { "type": "string", "description": "Destination path" },
+			"overwrite": { "type": "boolean", "description": "Whether to overwrite destination if it exists (default false)" }
+		},
+		"required": ["src_path", "dst_path"]
+	}`)
+}
+
+func (t *FileMoveTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {
+	inputJSON = NormalizeToolInput(inputJSON)
+	var input struct {
+		SrcPath   string `json:"src_path"`
+		DstPath   string `json:"dst_path"`
+		Overwrite bool   `json:"overwrite"`
+	}
+	if err := json.Unmarshal(inputJSON, &input); err != nil || input.SrcPath == "" || input.DstPath == "" {
+		return nil, errors.New("both src_path and dst_path are required")
+	}
+
+	agentID := AgentIDFromContext(ctx)
+	srcRel := sanitizeAgentRelativePath(input.SrcPath, agentID)
+	dstRel := sanitizeAgentRelativePath(input.DstPath, agentID)
+
+	allowedRoot, baseDir, srcTargetRel, err := resolveTargetBaseDir(ctx, t.dataDir, t.agentsDir, srcRel)
+	if err != nil {
+		return nil, err
+	}
+	srcTarget, err := security.ResolvePathWithBase(allowedRoot, baseDir, srcTargetRel, true)
+	if err != nil {
+		return nil, fmt.Errorf("invalid src_path: %w", err)
+	}
+
+	_, dstBaseDir, dstTargetRel, err := resolveTargetBaseDir(ctx, t.dataDir, t.agentsDir, dstRel)
+	if err != nil {
+		return nil, err
+	}
+	dstTarget, err := security.ResolvePathWithBase(allowedRoot, dstBaseDir, dstTargetRel, true)
+	if err != nil {
+		return nil, fmt.Errorf("invalid dst_path: %w", err)
+	}
+
+	if _, err := os.Stat(dstTarget); err == nil && !input.Overwrite {
+		return nil, fmt.Errorf("destination %s already exists; set overwrite: true to replace it", dstRel)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(dstTarget), 0755); err != nil {
+		return nil, fmt.Errorf("creating destination parent directory: %w", err)
+	}
+
+	if err := os.Rename(srcTarget, dstTarget); err != nil {
+		return nil, fmt.Errorf("moving file/directory from %s to %s: %w", srcRel, dstRel, err)
+	}
+
+	return &ToolResult{
+		Content: fmt.Sprintf("Successfully moved %s to %s", srcRel, dstRel),
+		Data: map[string]any{
+			"src_path": srcRel,
+			"dst_path": dstRel,
+		},
+	}, nil
+}
+
+// -----------------------------------------------------------------------------
+// 8. File Copy Tool
+// -----------------------------------------------------------------------------
+
+type FileCopyTool struct {
+	dataDir   string
+	agentsDir string
+}
+
+func NewFileCopyTool(dataDir string, agentsDir ...string) *FileCopyTool {
+	d, agDir := parseDataAndAgentsDir(dataDir, agentsDir...)
+	return &FileCopyTool{dataDir: d, agentsDir: agDir}
+}
+
+func (t *FileCopyTool) Name() string { return "native_file_copy" }
+func (t *FileCopyTool) Description() string {
+	return "Copy a file or directory to a new location inside the data directory or your private workspace."
+}
+func (t *FileCopyTool) Category() string { return "native" }
+
+func (t *FileCopyTool) ParametersSchema() json.RawMessage {
+	return json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"src_path": { "type": "string", "description": "Source path to copy (relative to workspace or data directory)" },
+			"dst_path": { "type": "string", "description": "Destination path" },
+			"overwrite": { "type": "boolean", "description": "Whether to overwrite destination if it exists (default false)" }
+		},
+		"required": ["src_path", "dst_path"]
+	}`)
+}
+
+func (t *FileCopyTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {
+	inputJSON = NormalizeToolInput(inputJSON)
+	var input struct {
+		SrcPath   string `json:"src_path"`
+		DstPath   string `json:"dst_path"`
+		Overwrite bool   `json:"overwrite"`
+	}
+	if err := json.Unmarshal(inputJSON, &input); err != nil || input.SrcPath == "" || input.DstPath == "" {
+		return nil, errors.New("both src_path and dst_path are required")
+	}
+
+	agentID := AgentIDFromContext(ctx)
+	srcRel := sanitizeAgentRelativePath(input.SrcPath, agentID)
+	dstRel := sanitizeAgentRelativePath(input.DstPath, agentID)
+
+	allowedRoot, baseDir, srcTargetRel, err := resolveTargetBaseDir(ctx, t.dataDir, t.agentsDir, srcRel)
+	if err != nil {
+		return nil, err
+	}
+	srcTarget, err := security.ResolvePathWithBase(allowedRoot, baseDir, srcTargetRel, true)
+	if err != nil {
+		return nil, fmt.Errorf("invalid src_path: %w", err)
+	}
+
+	_, dstBaseDir, dstTargetRel, err := resolveTargetBaseDir(ctx, t.dataDir, t.agentsDir, dstRel)
+	if err != nil {
+		return nil, err
+	}
+	dstTarget, err := security.ResolvePathWithBase(allowedRoot, dstBaseDir, dstTargetRel, true)
+	if err != nil {
+		return nil, fmt.Errorf("invalid dst_path: %w", err)
+	}
+
+	srcInfo, err := os.Stat(srcTarget)
+	if err != nil {
+		return nil, fmt.Errorf("source path %s not found: %w", srcRel, err)
+	}
+
+	if _, err := os.Stat(dstTarget); err == nil && !input.Overwrite {
+		return nil, fmt.Errorf("destination %s already exists; set overwrite: true to replace it", dstRel)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(dstTarget), 0755); err != nil {
+		return nil, fmt.Errorf("creating destination parent directory: %w", err)
+	}
+
+	if srcInfo.IsDir() {
+		err := filepath.Walk(srcTarget, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			rel, _ := filepath.Rel(srcTarget, path)
+			destPath := filepath.Join(dstTarget, rel)
+			if info.IsDir() {
+				return os.MkdirAll(destPath, 0755)
+			}
+			in, err := os.Open(path)
+			if err != nil {
+				return err
+			}
+			defer in.Close()
+			out, err := os.OpenFile(destPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode())
+			if err != nil {
+				return err
+			}
+			defer out.Close()
+			_, err = io.Copy(out, in)
+			return err
+		})
+		if err != nil {
+			return nil, fmt.Errorf("copying directory: %w", err)
+		}
+	} else {
+		in, err := os.Open(srcTarget)
+		if err != nil {
+			return nil, fmt.Errorf("opening source file: %w", err)
+		}
+		defer in.Close()
+		out, err := os.OpenFile(dstTarget, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, srcInfo.Mode())
+		if err != nil {
+			return nil, fmt.Errorf("creating destination file: %w", err)
+		}
+		defer out.Close()
+		if _, err := io.Copy(out, in); err != nil {
+			return nil, fmt.Errorf("copying file data: %w", err)
+		}
+	}
+
+	return &ToolResult{
+		Content: fmt.Sprintf("Successfully copied %s to %s", srcRel, dstRel),
+		Data: map[string]any{
+			"src_path": srcRel,
+			"dst_path": dstRel,
+		},
+	}, nil
+}
+
+// -----------------------------------------------------------------------------
+// 9. Exec Tool (Sandboxed Command Execution)
 // -----------------------------------------------------------------------------
 
 type ExecTool struct {
-	workspaceDir string
+	dataDir   string
+	agentsDir string
 }
 
-func NewExecTool(workspaceDir string) *ExecTool {
-	return &ExecTool{workspaceDir: workspaceDir}
+func NewExecTool(dataDir string, agentsDir ...string) *ExecTool {
+	d, agDir := parseDataAndAgentsDir(dataDir, agentsDir...)
+	return &ExecTool{dataDir: d, agentsDir: agDir}
 }
 
 func (t *ExecTool) Name() string { return "native_exec" }
 func (t *ExecTool) Description() string {
-	return "Execute a shell or PowerShell command inside the sandboxed workspace directory (timeout: 60s, max memory: 512MB)."
+	return "Execute a shell or PowerShell command inside your private agent workspace directory (timeout: 60s, max memory: 512MB)."
 }
 func (t *ExecTool) Category() string { return "native" }
 
@@ -790,7 +1561,7 @@ func (t *ExecTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*Too
 	}
 
 	sb := sandbox.AutoDetectSandbox()
-	_, agentWorkspace, err := resolveTargetBaseDir(ctx, t.workspaceDir)
+	_, agentWorkspace, _, err := resolveTargetBaseDir(ctx, t.dataDir, t.agentsDir, "")
 	if err != nil {
 		return nil, err
 	}

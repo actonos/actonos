@@ -352,9 +352,15 @@ func NormalizeToolName(name string) string {
 		return "native_file_read"
 	case "writefile", "write_file", "create_file", "file_write", "save_file", "put_file":
 		return "native_file_write"
-	case "listfiles", "list_files", "list_dir", "ls", "dir", "file_list":
-		return "native_file_list"
-	case "deletefile", "delete_file", "remove_file", "file_delete", "rm":
+	case "editfile", "edit_file", "file_edit", "replace_file", "patch_file", "native_file_edit":
+		return "native_file_edit"
+	case "listfiles", "list_files", "list_dir", "ls", "dir", "file_list", "find_files", "files_search", "native_file_list", "native_file_search":
+		return "native_file_search"
+	case "movefile", "move_file", "file_move", "rename_file", "native_file_move":
+		return "native_file_move"
+	case "copyfile", "copy_file", "file_copy", "native_file_copy":
+		return "native_file_copy"
+	case "deletefile", "delete_file", "remove_file", "file_delete", "rm", "native_file_delete":
 		return "native_file_delete"
 	case "workspace_search", "search_workspace", "user_file_search":
 		return "native_workspace_search"
