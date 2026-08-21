@@ -1670,29 +1670,26 @@ func (t *ExecTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*Too
 		MaxProcesses: 30,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("sandbox execution error: %w", err)
-	}
-	if result.ExitCode != 0 {
 		return &ToolResult{
-			Content: result.Stdout,
+			Content: fmt.Sprintf("(Command execution failed: %v)", err),
 			Data: map[string]any{
-				"exit_code":      result.ExitCode,
-				"stderr":         result.Stderr,
-				"execution_time": result.ExecutionTime.String(),
-				"killed":         result.Killed,
+				"error": err.Error(),
 			},
-			Error: result.Stderr,
-		}, fmt.Errorf("command exited with code %d: %s", result.ExitCode, strings.TrimSpace(result.Stderr))
+		}, nil
 	}
 
-	output := result.Stdout
-	if result.Stderr != "" {
-		if output != "" {
-			output += "\n[STDERR]\n" + result.Stderr
-		} else {
-			output = result.Stderr
-		}
+	var outputParts []string
+	if strings.TrimSpace(result.Stdout) != "" {
+		outputParts = append(outputParts, strings.TrimSpace(result.Stdout))
 	}
+	if strings.TrimSpace(result.Stderr) != "" {
+		outputParts = append(outputParts, "[STDERR]\n"+strings.TrimSpace(result.Stderr))
+	}
+	if result.ExitCode != 0 {
+		outputParts = append(outputParts, fmt.Sprintf("(Command exited with code %d)", result.ExitCode))
+	}
+
+	output := strings.Join(outputParts, "\n\n")
 	if output == "" {
 		output = fmt.Sprintf("(Command completed with exit code %d, no output)", result.ExitCode)
 	} else if len(output) > 32768 {
@@ -1704,6 +1701,7 @@ func (t *ExecTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*Too
 		Content: output,
 		Data: map[string]any{
 			"exit_code":      result.ExitCode,
+			"stderr":         result.Stderr,
 			"execution_time": result.ExecutionTime.String(),
 			"killed":         result.Killed,
 		},
