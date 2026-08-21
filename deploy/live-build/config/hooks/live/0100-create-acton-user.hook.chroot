@@ -36,6 +36,7 @@ chmod 755 /data
 # 4. Configure systemd targets and TTY console services
 systemctl set-default multi-user.target 2>/dev/null || true
 systemctl enable getty@tty1.service 2>/dev/null || true
+systemctl enable embeddingd.service 2>/dev/null || true
 systemctl enable actond.service 2>/dev/null || true
 
 # 5. Disable plymouth splash daemon if installed to prevent TTY hangs

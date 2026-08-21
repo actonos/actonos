@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/actonos/actonos/internal/memory"
 	"github.com/actonos/actonos/internal/security"
 )
 
@@ -176,6 +178,9 @@ func (s *Server) handleSaveWorkspaceFile(w http.ResponseWriter, r *http.Request)
 		s.respondError(w, http.StatusInternalServerError, "WRITE_FAILED", err.Error())
 		return
 	}
+	if s.embedding != nil {
+		_ = s.embedding.EnqueueFile(context.Background(), targetFile, "", "shared", memory.EmbeddingUpsert)
+	}
 
 	if s.auditLogger != nil {
 		s.auditLogger.LogAudit("", "admin", "admin_workspace_write", "Low", "Success", "", 1)
@@ -205,6 +210,9 @@ func (s *Server) handleDeleteWorkspaceFile(w http.ResponseWriter, r *http.Reques
 	if err := os.RemoveAll(targetFile); err != nil {
 		s.respondError(w, http.StatusInternalServerError, "DELETE_FAILED", err.Error())
 		return
+	}
+	if s.embedding != nil {
+		_ = s.embedding.EnqueueFile(context.Background(), targetFile, "", "shared", memory.EmbeddingDelete)
 	}
 
 	if s.auditLogger != nil {
@@ -295,6 +303,13 @@ func (s *Server) handleUploadWorkspaceFile(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		s.respondError(w, http.StatusInternalServerError, "WRITE_FAILED", err.Error())
 		return
+	}
+	if err := out.Sync(); err != nil {
+		s.respondError(w, http.StatusInternalServerError, "WRITE_FAILED", err.Error())
+		return
+	}
+	if s.embedding != nil {
+		_ = s.embedding.EnqueueFile(context.Background(), targetFile, "", "shared", memory.EmbeddingUpsert)
 	}
 
 	uploadRel := filepath.ToSlash(filepath.Join(relDir, fileName))

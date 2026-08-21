@@ -6,6 +6,13 @@ import (
 	"github.com/actonos/actonos/internal/memory"
 )
 
+type conversationContextKey struct{}
+
+// WithConversationContext scopes semantic retrieval to the active conversation.
+func WithConversationContext(ctx context.Context, conversationID string) context.Context {
+	return context.WithValue(ctx, conversationContextKey{}, conversationID)
+}
+
 // BuildCognitiveSystemPrompt constructs a complete 7-layer Cognitive System Prompt
 // using the unified PromptBuilder.
 func BuildCognitiveSystemPrompt(
@@ -16,6 +23,7 @@ func BuildCognitiveSystemPrompt(
 	workspaceDir string,
 	profileMgr *UserProfileManager,
 	mem *memory.HybridEngine,
+	embedding *memory.EmbeddingService,
 	userMessage string,
 ) (string, int) {
 	builder := NewPromptBuilder()
@@ -95,6 +103,16 @@ func BuildCognitiveSystemPrompt(
 			builder.WithSection(&EpisodicSection{
 				Memories: memories,
 			})
+		}
+	}
+
+	if embedding != nil && !suppressEpisodic && userMessage != "" {
+		scopes := []string{"agent:" + agentID, "shared"}
+		if conversationID, _ := ctx.Value(conversationContextKey{}).(string); conversationID != "" {
+			scopes = append([]string{"conversation:" + conversationID}, scopes...)
+		}
+		if records, err := embedding.Search(ctx, userMessage, scopes, 6); err == nil && len(records) > 0 {
+			builder.WithSection(&SemanticKnowledgeSection{Records: records})
 		}
 	}
 

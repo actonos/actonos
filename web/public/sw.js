@@ -1,5 +1,6 @@
 // ActonOS Service Worker - Background Web Push & Notification Manager
 // Provides offline capability, background push wake-up, interactive action buttons, and window focus navigation.
+/* eslint-disable */
 
 const CACHE_NAME = 'actonos-sw-v1';
 
@@ -110,7 +111,7 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(
     (async () => {
       const clientList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-      
+
       // If a window is already open, focus it and navigate
       for (const client of clientList) {
         if ('focus' in client) {

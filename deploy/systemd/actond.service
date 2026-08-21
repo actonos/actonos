@@ -1,8 +1,8 @@
 [Unit]
 Description=ActonOS Extensible AI Agent Operating System Daemon
 Documentation=https://github.com/actonos/actonos
-After=network-online.target tailscaled.service
-Wants=network-online.target
+After=network-online.target tailscaled.service embeddingd.service
+Wants=network-online.target embeddingd.service
 
 [Service]
 Type=simple
@@ -12,6 +12,7 @@ WorkingDirectory=/var/lib/acton
 ExecStart=/usr/local/bin/actond \
     -data-dir /var/lib/acton \
     -listen-addr :8080 \
+	-embedding-url http://127.0.0.1:8091 \
     -log-level info \
     -log-format text
 Restart=always

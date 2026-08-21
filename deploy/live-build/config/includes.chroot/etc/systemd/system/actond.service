@@ -1,8 +1,8 @@
 [Unit]
 Description=ActonOS AI Agent Operating System Daemon
 Documentation=https://actonos.org/docs
-After=network.target network-online.target dbus.service
-Wants=network-online.target
+After=network.target network-online.target dbus.service embeddingd.service
+Wants=network-online.target embeddingd.service
 
 [Service]
 Type=simple
@@ -15,7 +15,7 @@ ExecStartPre=+/bin/mkdir -p /data
 ExecStartPre=+/bin/chown -R acton:acton /data
 ExecStartPre=+/bin/chmod 755 /data
 
-ExecStart=/usr/local/bin/actond --data-dir=/data --listen-addr=:8080
+ExecStart=/usr/local/bin/actond --data-dir=/data --listen-addr=:8080 --embedding-url=http://127.0.0.1:8091
 Restart=always
 RestartSec=3s
 LimitNOFILE=65536

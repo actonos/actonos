@@ -626,7 +626,7 @@ export function SkillsPage() {
                   <span className="text-slate hidden sm:inline">{t('sort.label', 'Sort:')}</span>
                   <select
                     value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as any)}
+                    onChange={(e) => setSortBy(e.target.value as 'stars' | 'recent' | 'name')}
                     className="bg-soft-meadow text-deep-ink border border-onyx/10 rounded-full px-3 py-1 text-caption focus:outline-none focus:ring-1 focus:ring-deep-ink cursor-pointer"
                   >
                     <option value="stars">{t('sort.stars', 'Most Popular (Stars)')}</option>

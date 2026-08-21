@@ -14,6 +14,27 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 LIVE_BUILD_SRC="${ROOT_DIR}/deploy/live-build"
 ISO_NAME="ActonOS-v${VERSION}-${ARCH}.iso"
+EMBEDDING_REVISION="614241f622f53c4eeff9890bdc4f31cfecc418b3"
+ONNXRUNTIME_VERSION="1.28.0"
+
+case "${ARCH}" in
+    amd64)
+        ORT_ARCH="x64"
+        EMBEDDING_CC="gcc"
+        ;;
+    arm64)
+        ORT_ARCH="aarch64"
+        if [ "$(go env GOARCH)" = "arm64" ]; then
+            EMBEDDING_CC="gcc"
+        else
+            EMBEDDING_CC="aarch64-linux-gnu-gcc"
+        fi
+        ;;
+    *)
+        echo "[!] Unsupported architecture: ${ARCH}"
+        exit 1
+        ;;
+esac
 
 echo "======================================================================"
 echo "   ⚡ Building ActonOS Branded Bare-metal ISO (Architecture: ${ARCH})   "
@@ -65,6 +86,18 @@ cd "$WORK_DIR"
 
 cd "${ROOT_DIR}"
 CGO_ENABLED=0 GOOS=linux GOARCH="${ARCH}" go build -trimpath -ldflags="-s -w" -o "${WORK_DIR}/actond" ./cmd/actond
+
+echo "[i] Compiling embeddingd with ONNX Runtime support..."
+CGO_ENABLED=1 GOOS=linux GOARCH="${ARCH}" CC="${EMBEDDING_CC}" \
+    go build -trimpath -tags ORT -ldflags="-s -w" -o "${WORK_DIR}/embeddingd" ./cmd/embeddingd
+
+echo "[i] Downloading pinned multilingual-e5-small model and ONNX Runtime..."
+bash scripts/download-embedding-model.sh "${WORK_DIR}/embedding-model"
+curl -fsSL --retry 3 \
+    "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-${ORT_ARCH}-${ONNXRUNTIME_VERSION}.tgz" \
+    -o "${WORK_DIR}/onnxruntime.tgz"
+mkdir -p "${WORK_DIR}/onnxruntime"
+tar -xzf "${WORK_DIR}/onnxruntime.tgz" --strip-components=1 -C "${WORK_DIR}/onnxruntime"
 cd "$WORK_DIR"
 
 # 4. Setup live-build workspace & assets
@@ -103,8 +136,16 @@ lb config \
 # Copy branding and custom chroot files
 mkdir -p config/includes.chroot/usr/local/bin
 mkdir -p config/includes.chroot/data
+mkdir -p config/includes.chroot/usr/lib
+mkdir -p "config/includes.chroot/opt/actonos/models/multilingual-e5-small/${EMBEDDING_REVISION}"
 cp -r "${LIVE_BUILD_SRC}/config/"* config/
 cp "${WORK_DIR}/actond" config/includes.chroot/usr/local/bin/actond
+cp "${WORK_DIR}/embeddingd" config/includes.chroot/usr/local/bin/embeddingd
+cp "${WORK_DIR}/onnxruntime/lib/libonnxruntime.so.${ONNXRUNTIME_VERSION}" \
+    "config/includes.chroot/usr/lib/libonnxruntime.so.${ONNXRUNTIME_VERSION}"
+ln -sf "libonnxruntime.so.${ONNXRUNTIME_VERSION}" config/includes.chroot/usr/lib/libonnxruntime.so
+cp -r "${WORK_DIR}/embedding-model/." \
+    "config/includes.chroot/opt/actonos/models/multilingual-e5-small/${EMBEDDING_REVISION}/"
 chmod +x config/includes.chroot/usr/local/bin/* 2>/dev/null || true
 chmod +x config/hooks/*/*.hook.chroot 2>/dev/null || true
 

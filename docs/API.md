@@ -144,6 +144,30 @@ Retrieve the canonical catalog of all supported LLM models, provider specs, badg
 ### `GET /api/system/metrics`
 Hardware and container metrics (CPU usage, RAM, disk, uptime).
 
+### `GET /api/system/embedding`
+Return the durable semantic-index queue and local embedding helper status.
+
+```json
+{
+  "data": {
+    "pending": 3,
+    "running": 0,
+    "dead": 0,
+    "indexed_sources": 42,
+    "active_chunks": 87,
+    "oldest_due_at": "2026-08-21T12:01:00Z",
+    "model_id": "intfloat/multilingual-e5-small",
+    "model_revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+    "dimension": 384,
+    "service_ready": true
+  }
+}
+```
+
+Chat messages and workspace mutations are debounced for one minute in SQLite
+before ONNX inference and Chromem indexing. When `embeddingd` is unavailable,
+jobs remain durable and retrieval continues through SQLite FTS5.
+
 ### `GET /api/system/identity` | `PUT /api/system/identity`
 Retrieve and update user identity & preferences.
 

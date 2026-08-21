@@ -38,12 +38,13 @@ var (
 
 func main() {
 	var (
-		dataDir    = flag.String("data-dir", "./data", "Directory for persistent storage and databases")
-		logLevel   = flag.String("log-level", "info", "Log level (debug, info, warn, error)")
-		logFormat  = flag.String("log-format", "text", "Log format (text, json)")
-		listenAddr = flag.String("listen-addr", ":8080", "HTTP server listen address")
-		hostname   = flag.String("hostname", "acton-mini", "Appliance network hostname")
-		showVer    = flag.Bool("version", false, "Print version information and exit")
+		dataDir      = flag.String("data-dir", "./data", "Directory for persistent storage and databases")
+		logLevel     = flag.String("log-level", "info", "Log level (debug, info, warn, error)")
+		logFormat    = flag.String("log-format", "text", "Log format (text, json)")
+		listenAddr   = flag.String("listen-addr", ":8080", "HTTP server listen address")
+		embeddingURL = flag.String("embedding-url", "http://127.0.0.1:8091", "Local embeddingd service URL")
+		hostname     = flag.String("hostname", "acton-mini", "Appliance network hostname")
+		showVer      = flag.Bool("version", false, "Print version information and exit")
 	)
 	flag.Parse()
 
@@ -59,6 +60,9 @@ func main() {
 	}
 	if envAddr := os.Getenv("ACTON_LISTEN_ADDR"); envAddr != "" {
 		*listenAddr = envAddr
+	}
+	if envEmbeddingURL := os.Getenv("ACTON_EMBEDDING_URL"); envEmbeddingURL != "" {
+		*embeddingURL = envEmbeddingURL
 	}
 
 	if *showVer {
@@ -142,6 +146,20 @@ func main() {
 
 	// 4. Initialize Hybrid Memory Engine
 	hybridEngine := memory.NewHybridEngine(db, vectorStore, nil)
+	embeddingService := memory.NewEmbeddingService(db.SQLDB(), vectorStore, memory.NewHTTPEmbedder(*embeddingURL))
+	embeddingService.SetWorkspaceDir(workspaceDir)
+	hybridEngine.SetEmbeddingService(embeddingService)
+	embeddingService.Start(ctx)
+	defer embeddingService.Stop()
+	workspaceWatcher, err := memory.NewWorkspaceWatcher(workspaceDir, embeddingService)
+	if err != nil {
+		slog.Warn("failed to initialize workspace embedding watcher", "error", err)
+	} else {
+		if err := workspaceWatcher.Start(ctx); err != nil {
+			slog.Warn("failed to start workspace embedding watcher", "error", err)
+		}
+		defer workspaceWatcher.Close()
+	}
 
 	// 5. Initialize Event Bus
 	eventBus := bus.NewEventBus()
@@ -180,6 +198,7 @@ func main() {
 		toolReg.SetAuditLogger(auditLogger)
 	}
 	tools.RegisterNativeTools(toolReg, workspaceDir)
+	toolReg.SetFileMutationSink(embeddingService)
 	mcpHost := tools.NewMCPHostEngine(toolReg)
 	mcpHost.SetEventBus(eventBus)
 	if err := mcpHost.SetPersistence(db.SQLDB(), vault); err != nil {
@@ -229,6 +248,7 @@ func main() {
 	// 9. Initialize Swarm Manager, ReAct Engine & Proactive Cron Scheduler
 	swarmMgr := agent.NewSwarmManager(agentMgr, eventBus, llmRouter, hybridEngine, 8)
 	engine := agent.NewEngine(agentMgr, eventBus, llmRouter, hybridEngine)
+	engine.SetEmbeddingService(embeddingService)
 	contextMgr := agent.NewContextManager(8192)
 	contextMgr.SetDB(db.SQLDB())
 	engine.SetContextManager(contextMgr)
@@ -267,6 +287,7 @@ func main() {
 
 	// Multi-Channel Cognitive Session Manager
 	sessionMgr := channels.NewChannelSessionManager(db.SQLDB())
+	sessionMgr.SetEmbeddingSink(embeddingService)
 	engine.SetSessionManager(sessionMgr)
 
 	// Initialize Autonomous Heartbeat Daemon
@@ -391,7 +412,7 @@ func main() {
 							// 5. Execute cognitive ReAct loop with multi-layer memory (Working + Episodic + Procedural + User Profile)
 							// Channel messages bypass approval — authenticated paired users have implicit trust.
 							slog.Info("processing inbound channel message", "channel", msg.ChannelID, "account", msg.AccountID, "sender", msg.SenderID, "target_agent", target)
-							channelCtx := tools.WithBypassApproval(context.Background())
+							channelCtx := agent.WithConversationContext(tools.WithBypassApproval(context.Background()), convID)
 							resp, err := engine.ExecuteStepWithHistory(channelCtx, target, promptWithMeta, history)
 							if err != nil {
 								slog.Error("failed to process channel message", "channel", msg.ChannelID, "error", err)
@@ -510,6 +531,7 @@ func main() {
 		RunStore:            runStore,
 		HubManager:          hubMgr,
 		Memory:              hybridEngine,
+		Embedding:           embeddingService,
 		HAL:                 hal,
 		Tailscale:           tailscaleMgr,
 		TokenRefreshDaemon:  tokenDaemon,
@@ -524,13 +546,13 @@ func main() {
 		ChannelManager:      channelMgr,
 		TelegramAdapter:     nil,
 		WhatsAppAdapter:     nil,
-		WorkspaceDir:       workspaceDir,
-		SkillsDir:          skillsDir,
-		WASMDir:            pluginsDir,
-		DataDir:            *dataDir,
-		Version:            Version,
-		GitCommit:          GitCommit,
-		BuildTime:          BuildTime,
+		WorkspaceDir:        workspaceDir,
+		SkillsDir:           skillsDir,
+		WASMDir:             pluginsDir,
+		DataDir:             *dataDir,
+		Version:             Version,
+		GitCommit:           GitCommit,
+		BuildTime:           BuildTime,
 	}
 
 	apiServer := server.NewServer(srvConfig)

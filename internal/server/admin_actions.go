@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/actonos/actonos/internal/memory"
 	"github.com/actonos/actonos/internal/security"
 )
 
@@ -47,6 +48,9 @@ func (s *Server) executeAdminAction(ctx context.Context, action string, raw json
 		if err := os.WriteFile(target, []byte(input.Content), 0644); err != nil {
 			return nil, err
 		}
+		if s.embedding != nil {
+			_ = s.embedding.EnqueueFile(context.Background(), target, "", "shared", memory.EmbeddingUpsert)
+		}
 		return map[string]any{"path": filepath.Clean(input.Path), "written": len(input.Content)}, nil
 	case "workspace_upload":
 		var input struct {
@@ -70,6 +74,9 @@ func (s *Server) executeAdminAction(ctx context.Context, action string, raw json
 		if err := os.WriteFile(target, data, 0644); err != nil {
 			return nil, err
 		}
+		if s.embedding != nil {
+			_ = s.embedding.EnqueueFile(context.Background(), target, "", "shared", memory.EmbeddingUpsert)
+		}
 		return map[string]any{"path": input.Path, "written": len(data)}, nil
 	case "workspace_delete":
 		var input struct {
@@ -87,6 +94,9 @@ func (s *Server) executeAdminAction(ctx context.Context, action string, raw json
 		}
 		if err := os.RemoveAll(target); err != nil {
 			return nil, err
+		}
+		if s.embedding != nil {
+			_ = s.embedding.EnqueueFile(context.Background(), target, "", "shared", memory.EmbeddingDelete)
 		}
 		return map[string]string{"status": "deleted"}, nil
 	case "workspace_mkdir":

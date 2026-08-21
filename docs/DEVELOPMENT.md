@@ -78,6 +78,9 @@ LISTEN_ADDR=:8080             # HTTP listen address
 DATA_DIR=./dev-data           # Local data directory (instead of /data)
 DISABLE_TAILSCALE=true        # Skip Tailscale in development
 DISABLE_SANDBOX=true          # Skip Bubblewrap sandbox in development
+ACTON_EMBEDDING_URL=http://127.0.0.1:8091
+ACTON_EMBEDDING_MODEL_DIR=./build/models/multilingual-e5-small/614241f622f53c4eeff9890bdc4f31cfecc418b3
+ONNXRUNTIME_SHARED_LIBRARY_PATH=/path/to/libonnxruntime.so.1.28.0
 ```
 
 ---
@@ -87,8 +90,11 @@ DISABLE_SANDBOX=true          # Skip Bubblewrap sandbox in development
 ```
 actonos/
 ├── cmd/
-│   └── actond/
-│       └── main.go                 # Binary entrypoint (auto-detects runtime)
+│   ├── actond/
+│   │   └── main.go                 # Static core daemon entrypoint
+│   └── embeddingd/                 # Loopback ONNX embedding helper (CGO)
+│       ├── main.go                 # ORT build-tag implementation
+│       └── disabled.go             # Non-CGO/default build stub
 │
 ├── internal/                       # Private application code
 │   ├── agent/                      # AI Agent Engine
@@ -144,6 +150,8 @@ actonos/
 │   │   ├── db.go                   # SQLite engine (modernc.org/sqlite)
 │   │   ├── fts.go                  # FTS5 lexical search
 │   │   ├── vector.go               # Vector store (chromem-go)
+│   │   ├── embedding.go            # Durable jobs, chunk activation and search
+│   │   ├── embedding_watcher.go    # Recursive workspace mutation watcher
 │   │   ├── decay.go                # Ebbinghaus decay algorithm
 │   │   ├── hybrid.go               # Calibrated sigmoid fusion
 │   │   └── vault.go                # AES-256-GCM hardware-bound vault
@@ -288,6 +296,17 @@ make build-only
 # Full build (web + Go)
 make build
 # Output: build/actond
+
+# Frontend assets default to internal/server/dist for go:embed.
+# Override when a separate output is required:
+VITE_BUILD_DIR=../build/web-dist npm --prefix web run build
+
+# Download pinned multilingual-e5-small ONNX artifacts (~487 MB)
+make model-embedding
+
+# Build the CGO helper; ONNX Runtime 1.28.0 is required at runtime
+make build-embedding
+# Output: build/embeddingd
 ```
 
 ### Production Build
@@ -472,6 +491,10 @@ dlv debug ./cmd/actond/ -- --log-level=debug --data-dir=./dev-data
 # Inspect SQLite database
 sqlite3 dev-data/storage/app.db ".tables"
 sqlite3 dev-data/storage/app.db "SELECT * FROM conversations LIMIT 10;"
+sqlite3 dev-data/storage/app.db "SELECT status, count(*) FROM embedding_jobs GROUP BY status;"
+
+# Check queue and helper readiness through actond
+curl http://127.0.0.1:8080/api/system/embedding
 
 # View audit log
 tail -f dev-data/logs/audit.jsonl | jq .

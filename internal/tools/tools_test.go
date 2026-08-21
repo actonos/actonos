@@ -14,6 +14,48 @@ import (
 	"github.com/actonos/actonos/internal/memory"
 )
 
+type recordingFileMutationSink struct {
+	path    string
+	agentID string
+	deleted bool
+	calls   int
+}
+
+func (s *recordingFileMutationSink) NotifyFileMutation(_ context.Context, path, agentID string, deleted bool) error {
+	s.path = path
+	s.agentID = agentID
+	s.deleted = deleted
+	s.calls++
+	return nil
+}
+
+func TestToolRegistry_NotifiesSuccessfulFileMutations(t *testing.T) {
+	workspace := t.TempDir()
+	registry := NewToolRegistry(nil)
+	RegisterNativeTools(registry, workspace)
+	sink := &recordingFileMutationSink{}
+	registry.SetFileMutationSink(sink)
+
+	if _, err := registry.Execute(context.Background(), "agent-files", "native_file_write",
+		json.RawMessage(`{"path":"notes.txt","content":"semantic content"}`)); err != nil {
+		t.Fatal(err)
+	}
+	wantPath := filepath.Join(workspace, "agent-files", "notes.txt")
+	wantInfo, wantErr := os.Stat(wantPath)
+	gotInfo, gotErr := os.Stat(sink.path)
+	if sink.calls != 1 || wantErr != nil || gotErr != nil || !os.SameFile(wantInfo, gotInfo) || sink.agentID != "agent-files" || sink.deleted {
+		t.Fatalf("unexpected write notification: %+v", sink)
+	}
+	notifiedPath := sink.path
+	if _, err := registry.Execute(context.Background(), "agent-files", "native_file_delete",
+		json.RawMessage(`{"path":"notes.txt"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if sink.calls != 2 || sink.path != notifiedPath || sink.agentID != "agent-files" || !sink.deleted {
+		t.Fatalf("unexpected delete notification: %+v", sink)
+	}
+}
+
 func TestToolRegistry_RegisterAndExecute(t *testing.T) {
 	t.Setenv("ACTONOS_ALLOW_INSECURE_EXEC", "1")
 	eventBus := bus.NewEventBus()

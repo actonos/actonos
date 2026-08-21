@@ -29,6 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     rsync \
     python3 \
     build-essential \
+    gcc-aarch64-linux-gnu \
     && rm -rf /var/lib/apt/lists/*
 
 # Embed official static Go 1.26 toolchain

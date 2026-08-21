@@ -11,7 +11,7 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue?style=flat-square)](LICENSE)
 [![Version](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fraw.githubusercontent.com%2Factonos%2Factonos%2Frefs%2Fheads%2Fmaster%2FVERSION&search=(.*)&label=version&style=flat-square&color=green)](VERSION)
 
-A single-purpose appliance OS designed as a **customizable, self-governing agent kernel** that runs 24/7. ActonOS compiles into a single static binary (`actond`) and deploys plug-and-play on **bare-metal MiniPCs** or as a **Docker container**.
+A single-purpose appliance OS designed as a **customizable, self-governing agent kernel** that runs 24/7. ActonOS keeps its core daemon (`actond`) statically linked and packages local ONNX inference as a loopback-only helper for **bare-metal MiniPCs** and **Docker containers**.
 
 [Architecture](docs/ARCHITECTURE.md) · [Development](docs/DEVELOPMENT.md) · [Deployment](docs/DEPLOYMENT.md) · [API Reference](docs/API.md) · [Contributing](docs/CONTRIBUTING.md)
 
@@ -23,12 +23,12 @@ A single-purpose appliance OS designed as a **customizable, self-governing agent
 
 | Feature | Description |
 |:---|:---|
-| **Single Static Binary** | Entire system compiles into one `actond` binary (CGO_ENABLED=0). ~20-40 MB idle RAM, <2s boot to Web UI. |
+| **Static Core Daemon** | The core system compiles into one `actond` binary (`CGO_ENABLED=0`); local ONNX inference runs in a separately packaged loopback helper. |
 | **Universal Agent Engine** | Create unlimited AI agents with custom personas, system prompts, tool bindings, LLM models, and delegation scopes. |
 | **Multi-Agent Swarm** | Agent-to-Agent delegation via Goroutines. Orchestration agents decompose tasks and dispatch to specialized sub-agents. |
 | **Dynamic Tooling Hub** | Hot-load MCP servers, WASM plugins, and Skill-as-a-Folder scripts at runtime — no restarts needed. |
 | **Dual-Runtime HAL** | Automatic environment detection: bare-metal (D-Bus, Wi-Fi Hotspot, Bubblewrap sandbox) or Docker (container metrics, jailed exec). |
-| **Hybrid Memory (RAG)** | SQLite FTS5 (lexical) + Chromem-go (vector) with Ebbinghaus decay scoring and calibrated sigmoid fusion. |
+| **Hybrid Memory (RAG)** | SQLite FTS5 + Chromem-go vectors generated locally by pinned multilingual-e5-small ONNX, with a durable one-minute debounce queue. |
 | **Enterprise Auth** | OAuth 2.1 PKCE (S256), Dynamic Client Registration, background token refresh daemon. |
 | **Immutable OS Design** | Read-only system partition, all user data under `/data`. Atomic OTA updates with watchdog auto-rollback. |
 | **Zero-Config Onboarding** | Captive portal Wi-Fi setup, API key entry, OAuth 1-click SaaS connection, Tailscale mesh VPN. |
@@ -168,6 +168,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the full A-Z development guid
 ```
 actonos/
 ├── cmd/actond/              # Binary entrypoint (auto-detects bare-metal vs Docker)
+├── cmd/embeddingd/          # Loopback multilingual-e5-small ONNX helper
 ├── internal/
 │   ├── agent/               # AI Agent Engine, Swarm, Planner, Verifier, Memory Reflection
 │   ├── auth/                # OAuth 2.1 PKCE, Token Refresh, Delegation Manager
@@ -176,7 +177,7 @@ actonos/
 │   ├── llm/                 # LLM Provider Interface & Cascade Router
 │   ├── tools/               # MCP Host, WASM Runner, Skill Watcher, Native Tools
 │   ├── sandbox/             # Bubblewrap (bare-metal) & Subshell (Docker) executors
-│   ├── memory/              # SQLite FTS5, Vector Store, Ebbinghaus Decay, Vault
+│   ├── memory/              # Durable embedding queue, SQLite FTS5, Chromem, decay, Vault
 │   ├── system/              # HAL, Tailscale tsnet, OTA, Hardware Metrics
 │   └── server/              # HTTP Router, WebSocket, REST APIs, Static Asset Server
 ├── web/                     # React 19 + Tailwind v4 + Vite frontend

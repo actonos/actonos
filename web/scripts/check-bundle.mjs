@@ -1,7 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { loadEnv } from 'vite';
 
-const assets = path.resolve('../internal/server/dist/assets');
+const env = loadEnv(process.env.NODE_ENV || 'production', process.cwd(), '');
+const buildDir = process.env.VITE_BUILD_DIR?.trim() || env.VITE_BUILD_DIR?.trim() || '../internal/server/dist';
+const assets = path.resolve(buildDir, 'assets');
 const files = fs.readdirSync(assets);
 const entry = files.find((name) => /^index-.*\.js$/.test(name));
 if (!entry) throw new Error('frontend entry bundle not found');

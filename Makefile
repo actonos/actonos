@@ -23,7 +23,7 @@
 #   make help          Show this help message
 # ==============================================================================
 
-.PHONY: all deps dev lint test test-unit test-race test-integ build-web build docker docker-multiarch docker-run iso iso-arm64 \
+.PHONY: all deps dev lint test test-unit test-race test-integ build-web build build-embedding model-embedding docker docker-multiarch docker-run iso iso-arm64 \
         clean version bump-patch bump-minor bump-major release help
 
 # ------------------------------------------------------------------------------
@@ -104,7 +104,7 @@ test-integ:
 build-web:
 	@echo "==> Building Web UI (React 19 + Tailwind v4)..."
 	cd $(WEB_DIR) && npm run build
-	@echo "==> Web UI built: $(WEB_DIR)/dist/"
+	@echo "==> Web UI built: internal/server/dist/ (override with VITE_BUILD_DIR)"
 
 # ------------------------------------------------------------------------------
 # Build — Go Binary
@@ -119,6 +119,15 @@ build-only:
 	@echo "==> Building $(BINARY) (Go only, no web rebuild)..."
 	@mkdir -p $(BUILD_DIR)
 	$(GO) build $(GOFLAGS) -ldflags '$(LDFLAGS)' -o $(BUILD_DIR)/$(BINARY) ./cmd/actond/
+
+model-embedding:
+	@echo "==> Downloading multilingual-e5-small ONNX artifacts..."
+	@bash scripts/download-embedding-model.sh
+
+build-embedding:
+	@echo "==> Building embeddingd (requires CGO and ONNX Runtime at runtime)..."
+	@mkdir -p $(BUILD_DIR)
+	CGO_ENABLED=1 go build $(GOFLAGS) -tags ORT -o $(BUILD_DIR)/embeddingd ./cmd/embeddingd/
 
 # ------------------------------------------------------------------------------
 # Docker
@@ -191,7 +200,7 @@ release: lint test build
 clean:
 	@echo "==> Cleaning build artifacts..."
 	rm -rf $(BUILD_DIR)
-	rm -rf $(WEB_DIR)/dist
+	rm -rf internal/server/dist
 	rm -rf $(WEB_DIR)/node_modules/.cache
 	@echo "==> Clean complete."
 
@@ -213,6 +222,8 @@ help:
 	@echo "  make build-web     Build frontend only"
 	@echo "  make build         Build full production binary (web + Go)"
 	@echo "  make build-only    Build Go binary without rebuilding web"
+	@echo "  make model-embedding Download pinned multilingual-e5-small ONNX files"
+	@echo "  make build-embedding Build the CGO ONNX helper"
 	@echo "  make docker        Build Docker image"
 	@echo "  make iso           Build bare-metal installation ISO"
 	@echo "  make version       Print current version"

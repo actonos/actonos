@@ -178,6 +178,7 @@
 | Method | Path | Handler | File |
 |:---|:---|:---|:---|
 | `GET` | `/api/system/metrics` | `handleGetMetrics` | `api_system.go` |
+| `GET` | `/api/system/embedding` | `handleGetEmbeddingStatus` | `api_embedding.go` |
 | `GET` | `/api/system/token-usage` | `handleGetTokenUsage` | `api_system.go` |
 | `GET` | `/api/system/token-usage/history` | `handleGetTokenHistory` | `api_system.go` |
 | `GET` | `/api/system/heartbeat/history` | `handleGetHeartbeatHistory` | `api_system.go` |
@@ -209,7 +210,7 @@
 | `bus` | Event bus (Go channels) | `eventbus.go` |
 | `channels` | Multi-platform messaging adapters | `adapter.go`, `telegram.go`, `whatsapp.go`, `discord.go`, `pairing.go`, `session.go`, `webhook.go` |
 | `llm` | LLM provider abstraction, cascading, and true SSE streaming | `provider.go`, `router.go`, `openai.go`, `anthropic.go`, `gemini.go`, `deepseek.go` |
-| `memory` | Hybrid RAG, vector search, FTS5, token ledger, vault | `hybrid.go`, `vector.go`, `fts.go`, `decay.go`, `tokens.go`, `vault.go`, `db.go` |
+| `memory` | Hybrid RAG, durable local embedding queue, workspace watcher, Chromem vector search, FTS5, token ledger, vault | `embedding.go`, `embedding_watcher.go`, `hybrid.go`, `vector.go`, `fts.go`, `decay.go`, `tokens.go`, `vault.go`, `db.go` |
 | `sandbox` | Fail-closed command isolation and Linux cgroup enforcement | `executor.go`, `strong_linux.go`, `strong_other.go`, `bwrap_linux.go`, `jail_docker.go`, `subshell.go` |
 | `security` | Canonical workspace path containment and outbound SSRF protection | `path.go`, `network.go` |
 | `server` | HTTP router, configured data roots, durable approval/run APIs, administrative action dispatch, true SSE, static assets | `router.go`, `api_approvals.go`, `api_runs.go`, `admin_actions.go`, `api_*.go`, `static.go`, `layered_fs.go` |

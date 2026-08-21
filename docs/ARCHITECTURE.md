@@ -50,6 +50,30 @@ ActonOS provides a self-adjusting cognitive infrastructure for every user-create
 | **Procedural Memory** | Error handling history, optimized command sequences (best practices) | Stored as Workflow Patterns, injected into System Prompt on similar tasks |
 | **Episodic Memory** | Past conversation/task journals with timestamps | SQLite FTS5 + Chromem-go vector indexing |
 
+Semantic indexing uses a durable SQLite queue. Web chat, Telegram, WhatsApp,
+Discord and workspace file mutations upsert a job keyed by source. Repeated
+changes reset `due_at` to one minute after the latest mutation and increment a
+generation, so bursts produce one final embedding. File deletion tombstones
+the semantic source immediately and removes its Chromem vectors when the
+delayed delete job runs.
+
+`actond` remains a static `CGO_ENABLED=0` binary. Local inference runs in the
+loopback-only `embeddingd` helper because ONNX Runtime requires CGO and a native
+shared library:
+
+```text
+actond -> http://127.0.0.1:8091 -> embeddingd -> ONNX Runtime
+   |                                      |
+   +-> SQLite embedding_jobs              +-> multilingual-e5-small
+   +-> Chromem semantic_documents             revision 614241f..., 384 dims
+```
+
+The E5 contract uses `query:` and `passage:` prefixes, attention-mask mean
+pooling, L2 normalization and a 512-token limit. Activation is generation-safe:
+the previous source generation remains searchable until all new vectors have
+been written. A missing helper does not stop `actond`; lexical FTS5 retrieval
+remains available while queued work retries with backoff.
+
 ### B. Ebbinghaus Forgetting Curve Decay Model
 
 Each memory fragment's retrieval score is computed using:
@@ -631,7 +655,8 @@ docker run -d \
 
 ```mermaid
 flowchart TD
-    A["Power On / Container Start"] --> B["actond process starts"]
+    A["Power On / Container Start"] --> B2["embeddingd starts on loopback\nwhen model/runtime are installed"]
+    B2 --> B["actond process starts"]
     B --> C{"Environment Detection"}
     C -->|Docker| D["Open Web UI on port 8080\nAccept config via UI or .env"]
     C -->|Bare-metal| E{"Config exists at\n/data/config/vault.db?"}

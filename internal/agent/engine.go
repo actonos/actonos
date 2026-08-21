@@ -27,6 +27,7 @@ type Engine struct {
 	bus              *bus.EventBus
 	llm              *llm.ModelCascadeRouter
 	memory           *memory.HybridEngine
+	embedding        *memory.EmbeddingService
 	profileMgr       *UserProfileManager
 	tools            *tools.ToolRegistry
 	verifier         *Verifier
@@ -95,6 +96,10 @@ func (e *Engine) SetTokenTracker(t *memory.TokenTracker) {
 	e.tokenTracker = t
 }
 
+func (e *Engine) SetEmbeddingService(service *memory.EmbeddingService) {
+	e.embedding = service
+}
+
 // SetTaskManager attaches the autonomous task manager.
 func (e *Engine) SetTaskManager(tm *TaskManager) {
 	e.taskMgr = tm
@@ -142,7 +147,7 @@ func (e *Engine) RecordTokenUsage(ctx context.Context, agentID, model, provider,
 // buildCognitivePrompt synthesizes all 7 cognitive layers into a structured XML cognitive context
 // using the unified PromptBuilder architecture.
 func (e *Engine) buildCognitivePrompt(ctx context.Context, agentID string, agent *AgentManifest, userMessage string) (string, int) {
-	return BuildCognitiveSystemPrompt(ctx, agentID, agent, e.dataDir, e.workspaceDir, e.profileMgr, e.memory, userMessage)
+	return BuildCognitiveSystemPrompt(ctx, agentID, agent, e.dataDir, e.workspaceDir, e.profileMgr, e.memory, e.embedding, userMessage)
 }
 
 // CalculateEntropy calculates Shannon Entropy H(p) = -sum(p * log2(p)).

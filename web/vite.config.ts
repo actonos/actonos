@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import fs from 'node:fs';
@@ -25,47 +25,54 @@ function resolveVersion(): string {
   return '0.0.0-dev';
 }
 
-export default defineConfig({
-  define: {
-    __APP_VERSION__: JSON.stringify(resolveVersion()),
-  },
-  plugins: [
-    react(),
-    tailwindcss(),
-  ],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
+const defaultBuildDir = '../internal/server/dist';
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, __dirname, '');
+  const buildDir = process.env.VITE_BUILD_DIR?.trim() || env.VITE_BUILD_DIR?.trim() || defaultBuildDir;
+
+  return {
+    define: {
+      __APP_VERSION__: JSON.stringify(resolveVersion()),
     },
-  },
-  server: {
-    port: 5173,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8080',
-        changeOrigin: true,
+    plugins: [
+      react(),
+      tailwindcss(),
+    ],
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, './src'),
       },
     },
-  },
-  build: {
-    outDir: '../internal/server/dist',
-    emptyOutDir: true,
-    chunkSizeWarningLimit: 600,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          editor: [
-            '@tiptap/react',
-            '@tiptap/starter-kit',
-            '@tiptap/extension-code-block',
-            '@tiptap/extension-highlight',
-            '@tiptap/extension-link',
-            '@tiptap/extension-typography',
-          ],
-          i18n: ['i18next', 'react-i18next', 'i18next-browser-languagedetector'],
-          icons: ['lucide-react'],
+    server: {
+      port: 5173,
+      proxy: {
+        '/api': {
+          target: 'http://localhost:8080',
+          changeOrigin: true,
         },
       },
     },
-  },
+    build: {
+      outDir: buildDir,
+      emptyOutDir: true,
+      chunkSizeWarningLimit: 600,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            editor: [
+              '@tiptap/react',
+              '@tiptap/starter-kit',
+              '@tiptap/extension-code-block',
+              '@tiptap/extension-highlight',
+              '@tiptap/extension-link',
+              '@tiptap/extension-typography',
+            ],
+            i18n: ['i18next', 'react-i18next', 'i18next-browser-languagedetector'],
+            icons: ['lucide-react'],
+          },
+        },
+      },
+    },
+  };
 });

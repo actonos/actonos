@@ -14,12 +14,21 @@ import (
 
 // ChannelSessionManager handles deterministic, intelligent session management and conversation history for multi-channel interactions.
 type ChannelSessionManager struct {
-	db *sql.DB
+	db        *sql.DB
+	embedding MessageEmbeddingSink
+}
+
+type MessageEmbeddingSink interface {
+	EnqueueMessage(ctx context.Context, messageID, agentID, conversationID string) error
 }
 
 // NewChannelSessionManager creates a ChannelSessionManager instance.
 func NewChannelSessionManager(db *sql.DB) *ChannelSessionManager {
 	return &ChannelSessionManager{db: db}
+}
+
+func (sm *ChannelSessionManager) SetEmbeddingSink(sink MessageEmbeddingSink) {
+	sm.embedding = sink
 }
 
 // GetOrCreateSession ensures a deterministic conversation session exists for a given channel & sender.
@@ -92,7 +101,19 @@ func (sm *ChannelSessionManager) SaveMessage(ctx context.Context, convID, agentI
 		INSERT INTO messages (id, conversation_id, agent_id, role, content, tool_calls_json, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`, msgID, convID, agentID, role, content, toolCallsJSON, now)
+	if err == nil && role == string(llm.RoleUser) && sm.embedding != nil && isExternalChannelConversation(convID) {
+		_ = sm.embedding.EnqueueMessage(context.Background(), msgID, agentID, convID)
+	}
 	return err
+}
+
+func isExternalChannelConversation(conversationID string) bool {
+	for _, prefix := range []string{"conv_telegram_", "conv_whatsapp_", "conv_discord_"} {
+		if strings.HasPrefix(conversationID, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // LoadRecentHistory retrieves recent conversation history for working memory context window.

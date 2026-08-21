@@ -7,7 +7,7 @@ import {
   useEffect,
   type ReactNode,
 } from 'react';
-import { isApprovalRequired, type ApprovalRequest } from '@/lib/types';
+import { isApprovalRequired } from '@/lib/types';
 
 export interface ActionStep {
   id: string;
@@ -28,7 +28,7 @@ export interface ActionItem {
   error?: string | null;
   createdAt: number;
   approvalId?: string;
-  onSuccess?: (result?: any) => void | Promise<void>;
+  onSuccess?: (result?: unknown) => void | Promise<void>;
   onError?: (err: unknown) => void;
 }
 
@@ -121,7 +121,7 @@ export function ActionProgressProvider({ children }: { children: ReactNode }) {
         progressPercent: 10,
         status: 'running',
         createdAt: Date.now(),
-        onSuccess: options.onSuccess as any,
+        onSuccess: options.onSuccess ? (r?: unknown) => options.onSuccess?.(r as T) : undefined,
         onError: options.onError,
       };
 
@@ -135,22 +135,22 @@ export function ActionProgressProvider({ children }: { children: ReactNode }) {
         const result = await options.action();
 
         if (isApprovalRequired(result)) {
-          const approval = (result as any).approval as ApprovalRequest;
+          const approval = result.approval;
           const approvalId = approval?.id;
 
           setActions((prev) =>
             prev.map((a) =>
               a.id === actionId
                 ? {
-                    ...a,
-                    status: 'waiting_approval',
-                    approvalId,
-                    steps: a.steps.map((s, idx) =>
-                      idx === 0
-                        ? { ...s, status: 'running', description: 'Waiting for operator authorization' }
-                        : s
-                    ),
-                  }
+                  ...a,
+                  status: 'waiting_approval',
+                  approvalId,
+                  steps: a.steps.map((s, idx) =>
+                    idx === 0
+                      ? { ...s, status: 'running', description: 'Waiting for operator authorization' }
+                      : s
+                  ),
+                }
                 : a
             )
           );
@@ -167,12 +167,12 @@ export function ActionProgressProvider({ children }: { children: ReactNode }) {
           prev.map((a) =>
             a.id === actionId
               ? {
-                  ...a,
-                  status: 'success',
-                  currentStepIndex: a.steps.length > 0 ? a.steps.length - 1 : 0,
-                  progressPercent: 100,
-                  steps: a.steps.map((s) => ({ ...s, status: 'success' })),
-                }
+                ...a,
+                status: 'success',
+                currentStepIndex: a.steps.length > 0 ? a.steps.length - 1 : 0,
+                progressPercent: 100,
+                steps: a.steps.map((s) => ({ ...s, status: 'success' })),
+              }
               : a
           )
         );
@@ -184,17 +184,17 @@ export function ActionProgressProvider({ children }: { children: ReactNode }) {
         }
 
         scheduleAutoDismiss(actionId, options.autoCloseDelay ?? 4000);
-      } catch (err: any) {
-        const msg = err?.message || String(err);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
         setActions((prev) =>
           prev.map((a) =>
             a.id === actionId
               ? {
-                  ...a,
-                  status: 'error',
-                  error: msg,
-                  steps: a.steps.map((s) => ({ ...s, status: 'error' })),
-                }
+                ...a,
+                status: 'error',
+                error: msg,
+                steps: a.steps.map((s) => ({ ...s, status: 'error' })),
+              }
               : a
           )
         );

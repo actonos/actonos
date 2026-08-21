@@ -434,8 +434,9 @@ func (t *FileWriteTool) Execute(ctx context.Context, inputJSON json.RawMessage) 
 	return &ToolResult{
 		Content: fmt.Sprintf("Successfully wrote %d bytes to %s", len(content), relPath),
 		Data: map[string]any{
-			"path":  relPath,
-			"bytes": len(content),
+			"path":          relPath,
+			"absolute_path": targetPath,
+			"bytes":         len(content),
 		},
 	}, nil
 }
@@ -606,7 +607,7 @@ func (t *FileDeleteTool) Execute(ctx context.Context, inputJSON json.RawMessage)
 
 	return &ToolResult{
 		Content: fmt.Sprintf("Successfully deleted %s", relPath),
-		Data:    map[string]any{"deleted": relPath},
+		Data:    map[string]any{"deleted": relPath, "absolute_path": targetPath},
 	}, nil
 }
 
@@ -997,9 +998,9 @@ func (t *WebSearchTool) searchDDGAPI(ctx context.Context, query string, maxResul
 	defer resp.Body.Close()
 
 	var data struct {
-		AbstractText string `json:"AbstractText"`
-		AbstractURL  string `json:"AbstractURL"`
-		Heading      string `json:"Heading"`
+		AbstractText  string `json:"AbstractText"`
+		AbstractURL   string `json:"AbstractURL"`
+		Heading       string `json:"Heading"`
 		RelatedTopics []struct {
 			Text     string `json:"Text"`
 			FirstURL string `json:"FirstURL"`

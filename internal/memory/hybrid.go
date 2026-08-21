@@ -25,23 +25,28 @@ const (
 
 // MemoryRecord represents a single stored memory fragment.
 type MemoryRecord struct {
-	ID               string                 `json:"id"`
-	AgentID          string                 `json:"agent_id"`
-	Layer            MemoryLayer            `json:"layer"`
-	Content          string                 `json:"content"`
-	Metadata         map[string]any         `json:"metadata,omitempty"`
-	ImportanceWeight float64                `json:"importance_weight"`
-	LastAccessedAt   time.Time              `json:"last_accessed_at"`
-	AccessCount      int                    `json:"access_count"`
-	CreatedAt        time.Time              `json:"created_at"`
-	Score            float64                `json:"score,omitempty"`
+	ID               string         `json:"id"`
+	AgentID          string         `json:"agent_id"`
+	Layer            MemoryLayer    `json:"layer"`
+	Content          string         `json:"content"`
+	Metadata         map[string]any `json:"metadata,omitempty"`
+	ImportanceWeight float64        `json:"importance_weight"`
+	LastAccessedAt   time.Time      `json:"last_accessed_at"`
+	AccessCount      int            `json:"access_count"`
+	CreatedAt        time.Time      `json:"created_at"`
+	Score            float64        `json:"score,omitempty"`
 }
 
 // HybridEngine combines SQLite FTS5 lexical search, Chromem-go vector search, and Ebbinghaus decay.
 type HybridEngine struct {
-	db          *DB
-	vectorStore *VectorStore
-	decayCfg    DecayConfig
+	db               *DB
+	vectorStore      *VectorStore
+	embeddingService *EmbeddingService
+	decayCfg         DecayConfig
+}
+
+func (h *HybridEngine) SetEmbeddingService(service *EmbeddingService) {
+	h.embeddingService = service
 }
 
 // NewHybridEngine creates a new hybrid memory engine.
@@ -115,7 +120,7 @@ func (h *HybridEngine) StoreMemory(
 		}
 	}
 
-	return &MemoryRecord{
+	record := &MemoryRecord{
 		ID:               id,
 		AgentID:          agentID,
 		Layer:            layer,
@@ -125,7 +130,11 @@ func (h *HybridEngine) StoreMemory(
 		LastAccessedAt:   now,
 		AccessCount:      1,
 		CreatedAt:        now,
-	}, nil
+	}
+	if layer == LayerEpisodic && len(embedding) == 0 && h.embeddingService != nil {
+		_ = h.embeddingService.EnqueueMemory(context.Background(), id, agentID)
+	}
+	return record, nil
 }
 
 // sigmoid normalizes an arbitrary value to (0, 1).

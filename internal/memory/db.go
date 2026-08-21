@@ -237,6 +237,69 @@ func (d *DB) migrate() error {
 		created_at TIMESTAMP NOT NULL
 	);
 	CREATE INDEX IF NOT EXISTS idx_context_snapshots_run ON context_snapshots(run_id, created_at);
+
+	CREATE TABLE IF NOT EXISTS embedding_jobs (
+		id TEXT PRIMARY KEY,
+		source_type TEXT NOT NULL,
+		source_key TEXT NOT NULL,
+		source_ref TEXT NOT NULL,
+		operation TEXT NOT NULL,
+		agent_id TEXT NOT NULL DEFAULT '',
+		scope TEXT NOT NULL DEFAULT 'shared',
+		conversation_id TEXT NOT NULL DEFAULT '',
+		due_at TIMESTAMP NOT NULL,
+		status TEXT NOT NULL DEFAULT 'pending',
+		attempts INTEGER NOT NULL DEFAULT 0,
+		generation INTEGER NOT NULL DEFAULT 1,
+		lease_until TIMESTAMP,
+		last_error TEXT NOT NULL DEFAULT '',
+		created_at TIMESTAMP NOT NULL,
+		updated_at TIMESTAMP NOT NULL,
+		UNIQUE(source_type, source_key)
+	);
+	CREATE INDEX IF NOT EXISTS idx_embedding_jobs_due ON embedding_jobs(status, due_at);
+	CREATE INDEX IF NOT EXISTS idx_embedding_jobs_lease ON embedding_jobs(status, lease_until);
+
+	CREATE TABLE IF NOT EXISTS semantic_sources (
+		id TEXT PRIMARY KEY,
+		source_type TEXT NOT NULL,
+		source_key TEXT NOT NULL,
+		source_ref TEXT NOT NULL,
+		agent_id TEXT NOT NULL DEFAULT '',
+		scope TEXT NOT NULL DEFAULT 'shared',
+		conversation_id TEXT NOT NULL DEFAULT '',
+		content_hash TEXT NOT NULL DEFAULT '',
+		active_generation INTEGER NOT NULL DEFAULT 0,
+		model_id TEXT NOT NULL DEFAULT '',
+		model_revision TEXT NOT NULL DEFAULT '',
+		dimension INTEGER NOT NULL DEFAULT 0,
+		chunker_version TEXT NOT NULL DEFAULT '',
+		state TEXT NOT NULL DEFAULT 'pending',
+		size_bytes INTEGER NOT NULL DEFAULT 0,
+		indexed_at TIMESTAMP,
+		deleted_at TIMESTAMP,
+		created_at TIMESTAMP NOT NULL,
+		updated_at TIMESTAMP NOT NULL,
+		UNIQUE(source_type, source_key)
+	);
+	CREATE INDEX IF NOT EXISTS idx_semantic_sources_scope ON semantic_sources(scope, state);
+
+	CREATE TABLE IF NOT EXISTS semantic_chunks (
+		id TEXT PRIMARY KEY,
+		source_id TEXT NOT NULL,
+		generation INTEGER NOT NULL,
+		ordinal INTEGER NOT NULL,
+		content TEXT NOT NULL,
+		content_hash TEXT NOT NULL,
+		token_count INTEGER NOT NULL DEFAULT 0,
+		metadata_json TEXT NOT NULL DEFAULT '{}',
+		active BOOLEAN NOT NULL DEFAULT 0,
+		created_at TIMESTAMP NOT NULL,
+		FOREIGN KEY(source_id) REFERENCES semantic_sources(id) ON DELETE CASCADE,
+		UNIQUE(source_id, generation, ordinal)
+	);
+	CREATE INDEX IF NOT EXISTS idx_semantic_chunks_source ON semantic_chunks(source_id, active);
+	CREATE INDEX IF NOT EXISTS idx_semantic_chunks_active ON semantic_chunks(active, id);
 	`
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

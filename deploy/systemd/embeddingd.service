@@ -1,0 +1,28 @@
+[Unit]
+Description=ActonOS Local Multilingual Embedding Service
+Documentation=https://github.com/actonos/actonos
+After=local-fs.target
+
+[Service]
+Type=simple
+User=acton
+Group=acton
+WorkingDirectory=/var/lib/acton
+ExecStart=/usr/local/bin/embeddingd \
+    -listen-addr 127.0.0.1:8091 \
+    -model-dir /opt/actonos/models/multilingual-e5-small/614241f622f53c4eeff9890bdc4f31cfecc418b3 \
+    -onnxruntime-library /usr/lib/libonnxruntime.so.1.28.0
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=15s
+
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictRealtime=true
+
+[Install]
+WantedBy=multi-user.target

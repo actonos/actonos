@@ -36,6 +36,7 @@ type Server struct {
 	runStore     *agent.RunStore
 	hubMgr       *tools.HubManager
 	memory       *memory.HybridEngine
+	embedding    *memory.EmbeddingService
 	hal          system.HAL
 	tailscale    *system.TailscaleManager
 	tokenDaemon  *auth.TokenRefreshDaemon
@@ -78,6 +79,7 @@ type Config struct {
 	RunStore            *agent.RunStore
 	HubManager          *tools.HubManager
 	Memory              *memory.HybridEngine
+	Embedding           *memory.EmbeddingService
 	HAL                 system.HAL
 	Tailscale           *system.TailscaleManager
 	TokenRefreshDaemon  *auth.TokenRefreshDaemon
@@ -85,17 +87,17 @@ type Config struct {
 	StateStore          *auth.StateStore
 	SystemAuth          *auth.SystemAuthManager
 	NotificationManager *system.NotificationManager
-	EventBus           *bus.EventBus
-	AuditLogger        *system.AuditLogger
-	Vault              *memory.Vault
-	PairingManager     *channels.PairingManager
-	ChannelManager     *channels.ChannelManager
-	TelegramAdapter    *channels.TelegramAdapter
-	WhatsAppAdapter    *channels.WhatsAppAdapter
-	WorkspaceDir       string
-	SkillsDir          string
-	WASMDir            string
-	DataDir            string
+	EventBus            *bus.EventBus
+	AuditLogger         *system.AuditLogger
+	Vault               *memory.Vault
+	PairingManager      *channels.PairingManager
+	ChannelManager      *channels.ChannelManager
+	TelegramAdapter     *channels.TelegramAdapter
+	WhatsAppAdapter     *channels.WhatsAppAdapter
+	WorkspaceDir        string
+	SkillsDir           string
+	WASMDir             string
+	DataDir             string
 	// Build metadata injected via -ldflags; see the Makefile LDFLAGS target.
 	Version   string
 	GitCommit string
@@ -148,6 +150,7 @@ func NewServer(cfg Config) *Server {
 		runStore:     cfg.RunStore,
 		hubMgr:       cfg.HubManager,
 		memory:       cfg.Memory,
+		embedding:    cfg.Embedding,
 		hal:          cfg.HAL,
 		tailscale:    cfg.Tailscale,
 		tokenDaemon:  cfg.TokenRefreshDaemon,
@@ -410,6 +413,7 @@ func (s *Server) setupRoutes() {
 				r.Get("/audit", s.handleGetAuditLogs)
 				r.Get("/audit/verify", s.handleVerifyAuditChain)
 				r.Get("/storage", s.handleGetStorageInfo)
+				r.Get("/embedding", s.handleGetEmbeddingStatus)
 				r.Get("/backup", s.handleGetBackup)
 				r.Post("/ota/check", s.handleCheckOTA)
 				r.Get("/tailscale", s.handleGetTailscale)

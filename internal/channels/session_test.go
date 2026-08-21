@@ -3,11 +3,24 @@ package channels
 import (
 	"context"
 	"database/sql"
+	"sync"
 	"testing"
 
 	"github.com/actonos/actonos/internal/llm"
 	_ "modernc.org/sqlite"
 )
+
+type recordingEmbeddingSink struct {
+	mu    sync.Mutex
+	calls []string
+}
+
+func (s *recordingEmbeddingSink) EnqueueMessage(_ context.Context, messageID, agentID, conversationID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.calls = append(s.calls, messageID+"|"+agentID+"|"+conversationID)
+	return nil
+}
 
 func setupTestDB(t *testing.T) *sql.DB {
 	db, err := sql.Open("sqlite", ":memory:")
@@ -37,6 +50,36 @@ func setupTestDB(t *testing.T) *sql.DB {
 		t.Fatalf("failed to create tables: %v", err)
 	}
 	return db
+}
+
+func TestChannelSessionManager_EnqueuesOnlyExternalUserMessages(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+	sink := &recordingEmbeddingSink{}
+	sm := NewChannelSessionManager(db)
+	sm.SetEmbeddingSink(sink)
+
+	tests := []struct {
+		conversationID string
+		role           string
+		wantCalls      int
+	}{
+		{conversationID: "conv_telegram_user-1", role: "user", wantCalls: 1},
+		{conversationID: "conv_whatsapp_user-1", role: "assistant", wantCalls: 1},
+		{conversationID: "conv_discord_user-1", role: "user", wantCalls: 2},
+		{conversationID: "conv_task_internal", role: "user", wantCalls: 2},
+	}
+	for _, test := range tests {
+		if err := sm.SaveMessage(context.Background(), test.conversationID, "agent-1", test.role, "hello", nil); err != nil {
+			t.Fatal(err)
+		}
+		sink.mu.Lock()
+		got := len(sink.calls)
+		sink.mu.Unlock()
+		if got != test.wantCalls {
+			t.Fatalf("after %s/%s calls=%d, want %d", test.conversationID, test.role, got, test.wantCalls)
+		}
+	}
 }
 
 func TestChannelSessionManager_GetOrCreateAndHistory(t *testing.T) {

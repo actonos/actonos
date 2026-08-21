@@ -26,6 +26,27 @@ import (
 	"github.com/actonos/actonos/internal/tools"
 )
 
+type serverTestEmbedder struct{}
+
+func (serverTestEmbedder) EmbedQuery(_ context.Context, texts []string) ([][]float32, error) {
+	return serverTestVectors(texts), nil
+}
+
+func (serverTestEmbedder) EmbedPassages(_ context.Context, texts []string) ([][]float32, error) {
+	return serverTestVectors(texts), nil
+}
+
+func (serverTestEmbedder) Health(context.Context) error { return nil }
+
+func serverTestVectors(texts []string) [][]float32 {
+	vectors := make([][]float32, len(texts))
+	for index := range texts {
+		vectors[index] = make([]float32, memory.EmbeddingDimension)
+		vectors[index][0] = 1
+	}
+	return vectors
+}
+
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
 	tempDir := t.TempDir()
@@ -64,7 +85,11 @@ func newTestServer(t *testing.T) *Server {
 		t.Fatalf("creating vector store: %v", err)
 	}
 	hybrid := memory.NewHybridEngine(db, vectorStore, nil)
+	embedding := memory.NewEmbeddingService(db.SQLDB(), vectorStore, serverTestEmbedder{})
+	embedding.SetWorkspaceDir(filepath.Join(tempDir, "workspace"))
+	hybrid.SetEmbeddingService(embedding)
 	engine := agent.NewEngine(agentMgr, eventBus, llmRouter, hybrid)
+	engine.SetEmbeddingService(embedding)
 	engine.SetToolRegistry(toolReg)
 	runStore := agent.NewRunStore(db.SQLDB())
 	engine.SetRunStore(runStore)
@@ -118,6 +143,7 @@ func newTestServer(t *testing.T) *Server {
 		ProfileManager:      profileMgr,
 		TokenTracker:        tokenTracker,
 		Memory:              hybrid,
+		Embedding:           embedding,
 		CronScheduler:       cronScheduler,
 		HubManager:          hubManager,
 		MCPHost:             mcpHost,
@@ -135,6 +161,57 @@ func newTestServer(t *testing.T) *Server {
 	}
 
 	return NewServer(cfg)
+}
+
+func TestServer_EmbeddingStatusAndWorkspaceQueue(t *testing.T) {
+	srv := newTestServer(t)
+
+	statusRequest := httptest.NewRequest(http.MethodGet, "/api/system/embedding", nil)
+	statusResponse := httptest.NewRecorder()
+	srv.Router().ServeHTTP(statusResponse, statusRequest)
+	if statusResponse.Code != http.StatusOK {
+		t.Fatalf("embedding status failed: %d %s", statusResponse.Code, statusResponse.Body.String())
+	}
+	if !strings.Contains(statusResponse.Body.String(), memory.EmbeddingModelID) ||
+		!strings.Contains(statusResponse.Body.String(), `"service_ready":true`) {
+		t.Fatalf("unexpected embedding status: %s", statusResponse.Body.String())
+	}
+
+	saveRequest := httptest.NewRequest(http.MethodPost, "/api/workspace/file",
+		strings.NewReader(`{"path":"embedding/status.txt","content":"alpha"}`))
+	saveRequest.Header.Set("Content-Type", "application/json")
+	saveResponse := httptest.NewRecorder()
+	srv.Router().ServeHTTP(saveResponse, saveRequest)
+	if saveResponse.Code != http.StatusOK {
+		t.Fatalf("workspace save failed: %d %s", saveResponse.Code, saveResponse.Body.String())
+	}
+	var operation, scope, sourceRef string
+	var dueAt, createdAt time.Time
+	err := srv.memory.DB().SQLDB().QueryRow(`SELECT operation, scope, source_ref, due_at, created_at
+		FROM embedding_jobs WHERE source_type = 'file'`).Scan(&operation, &scope, &sourceRef, &dueAt, &createdAt)
+	if err != nil {
+		t.Fatalf("reading workspace embedding job: %v", err)
+	}
+	if operation != string(memory.EmbeddingUpsert) || scope != "shared" ||
+		filepath.Base(sourceRef) != "status.txt" || dueAt.Sub(createdAt) < 59*time.Second {
+		t.Fatalf("unexpected workspace embedding job: operation=%s scope=%s ref=%s delay=%s",
+			operation, scope, sourceRef, dueAt.Sub(createdAt))
+	}
+
+	deleteRequest := httptest.NewRequest(http.MethodDelete, "/api/workspace/file?path=embedding/status.txt", nil)
+	deleteResponse := httptest.NewRecorder()
+	srv.Router().ServeHTTP(deleteResponse, deleteRequest)
+	if deleteResponse.Code != http.StatusOK {
+		t.Fatalf("workspace delete failed: %d %s", deleteResponse.Code, deleteResponse.Body.String())
+	}
+	var generation int
+	if err := srv.memory.DB().SQLDB().QueryRow(`SELECT operation, generation FROM embedding_jobs
+		WHERE source_type = 'file'`).Scan(&operation, &generation); err != nil {
+		t.Fatal(err)
+	}
+	if operation != string(memory.EmbeddingDelete) || generation != 2 {
+		t.Fatalf("delete did not supersede upsert: operation=%s generation=%d", operation, generation)
+	}
 }
 
 func TestServer_Health(t *testing.T) {
@@ -440,6 +517,14 @@ func TestServer_WorkspaceDirectoryUploadDeleteLifecycle(t *testing.T) {
 	if uploadResult.Code != http.StatusOK {
 		t.Fatalf("upload failed: %d %s", uploadResult.Code, uploadResult.Body.String())
 	}
+	var uploadOperation string
+	if err := srv.memory.DB().SQLDB().QueryRow(`SELECT operation FROM embedding_jobs
+		WHERE source_type = 'file' AND source_ref LIKE ?`, "%sample.txt").Scan(&uploadOperation); err != nil {
+		t.Fatalf("uploaded file was not enqueued for embedding: %v", err)
+	}
+	if uploadOperation != string(memory.EmbeddingUpsert) {
+		t.Fatalf("uploaded file operation=%s, want upsert", uploadOperation)
+	}
 
 	list := httptest.NewRequest(http.MethodGet, "/api/workspace/files?dir=uploads", nil)
 	listed := httptest.NewRecorder()
@@ -540,6 +625,16 @@ func TestServer_AgentLifecycleChatStreamingSoulAndCron(t *testing.T) {
 		!strings.Contains(streamResult.Body.String(), "event: token") ||
 		!strings.Contains(streamResult.Body.String(), "event: done") {
 		t.Fatalf("true SSE stream failed: status=%d headers=%v body=%s", streamResult.Code, streamResult.Header(), streamResult.Body.String())
+	}
+	var chatJobs int
+	if err := srv.memory.DB().SQLDB().QueryRow(`SELECT COUNT(*) FROM embedding_jobs j
+		JOIN messages m ON m.id = j.source_key
+		WHERE j.source_type = 'message' AND m.agent_id = ? AND m.role = 'user'
+		AND m.content IN ('normal chat', 'stream chat')`, agentID).Scan(&chatJobs); err != nil {
+		t.Fatal(err)
+	}
+	if chatJobs != 2 {
+		t.Fatalf("chat endpoints enqueued %d user messages, want 2", chatJobs)
 	}
 
 	cronBody := `{"id":"api_cron","name":"API Cron","cron_expr":"0 8 * * *","prompt":"status","enabled":true}`

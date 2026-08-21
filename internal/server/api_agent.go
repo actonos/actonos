@@ -230,11 +230,14 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 		// Insert user message with agent_id
 		userMsgID := "msg_" + uuid.New().String()
-		_, _ = s.memory.DB().SQLDB().ExecContext(
+		_, insertErr := s.memory.DB().SQLDB().ExecContext(
 			r.Context(),
 			`INSERT INTO messages (id, conversation_id, agent_id, role, content, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
 			userMsgID, convID, agentID, "user", req.Message, now,
 		)
+		if insertErr == nil && s.embedding != nil {
+			_ = s.embedding.EnqueueMessage(context.Background(), userMsgID, agentID, convID)
+		}
 	}
 
 	// Load short-term Working Memory (recent history) for this conversation
@@ -282,7 +285,8 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 		eventChan := make(chan agent.AgentStreamEvent, 64)
 		go func() {
-			_, _ = s.engine.ExecuteStepStreamWithHistory(tools.WithBypassApproval(r.Context()), agentID, req.Message, history, eventChan)
+			chatCtx := agent.WithConversationContext(tools.WithBypassApproval(r.Context()), convID)
+			_, _ = s.engine.ExecuteStepStreamWithHistory(chatCtx, agentID, req.Message, history, eventChan)
 		}()
 
 		var finalContent strings.Builder
@@ -420,7 +424,8 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Non-streaming completion
-	resp, err := s.engine.ExecuteStepWithHistory(tools.WithBypassApproval(r.Context()), agentID, req.Message, history)
+	chatCtx := agent.WithConversationContext(tools.WithBypassApproval(r.Context()), convID)
+	resp, err := s.engine.ExecuteStepWithHistory(chatCtx, agentID, req.Message, history)
 	if err != nil {
 		s.respondError(w, http.StatusInternalServerError, "CHAT_FAILED", err.Error())
 		return
@@ -761,10 +766,14 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			VALUES (?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET updated_at = excluded.updated_at
 		`, convID, agentID, title, now, now)
-		_, _ = s.memory.DB().SQLDB().ExecContext(r.Context(), `
+		userMsgID := "msg_" + uuid.NewString()
+		_, insertErr := s.memory.DB().SQLDB().ExecContext(r.Context(), `
 			INSERT INTO messages (id, conversation_id, agent_id, role, content, created_at)
 			VALUES (?, ?, ?, 'user', ?, ?)
-		`, "msg_"+uuid.NewString(), convID, agentID, req.Message, now)
+		`, userMsgID, convID, agentID, req.Message, now)
+		if insertErr == nil && s.embedding != nil {
+			_ = s.embedding.EnqueueMessage(context.Background(), userMsgID, agentID, convID)
+		}
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -780,7 +789,8 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 	resultCh := make(chan streamResult, 1)
 	go func() {
-		response, err := s.engine.ExecuteStepStreamWithHistory(tools.WithBypassApproval(r.Context()), agentID, req.Message, history, events)
+		chatCtx := agent.WithConversationContext(tools.WithBypassApproval(r.Context()), convID)
+		response, err := s.engine.ExecuteStepStreamWithHistory(chatCtx, agentID, req.Message, history, events)
 		resultCh <- streamResult{response: response, err: err}
 	}()
 	for event := range events {

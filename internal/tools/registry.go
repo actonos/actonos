@@ -111,6 +111,11 @@ type ToolAuditLogger interface {
 	LogAudit(traceID, agentID, toolName, riskLevel, status, errorMsg string, durationMS int64)
 }
 
+// FileMutationSink receives successful native workspace writes and deletes.
+type FileMutationSink interface {
+	NotifyFileMutation(ctx context.Context, absolutePath, agentID string, deleted bool) error
+}
+
 // ToolRegistry manages all registered tools (Native, MCP, WASM, Skills).
 type ToolRegistry struct {
 	mu             sync.RWMutex
@@ -119,6 +124,7 @@ type ToolRegistry struct {
 	auditLogger    ToolAuditLogger
 	policyResolver PolicyResolver
 	approvals      *ApprovalManager
+	fileMutations  FileMutationSink
 }
 
 // SetPolicyResolver enables authoritative execution-time permission checks.
@@ -133,6 +139,12 @@ func (r *ToolRegistry) SetApprovalManager(manager *ApprovalManager) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.approvals = manager
+}
+
+func (r *ToolRegistry) SetFileMutationSink(sink FileMutationSink) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.fileMutations = sink
 }
 
 // WithTraceID propagates an end-to-end trace identifier into tool execution.
@@ -608,6 +620,17 @@ func (r *ToolRegistry) Execute(ctx context.Context, agentID, name string, inputJ
 			"result":      res.Content,
 			"duration_ms": duration.Milliseconds(),
 		}))
+	}
+
+	if res != nil && (name == "native_file_write" || name == "native_file_delete") {
+		r.mu.RLock()
+		sink := r.fileMutations
+		r.mu.RUnlock()
+		if sink != nil && res.Data != nil {
+			if absolutePath, ok := res.Data["absolute_path"].(string); ok && absolutePath != "" {
+				_ = sink.NotifyFileMutation(context.Background(), absolutePath, agentID, name == "native_file_delete")
+			}
+		}
 	}
 
 	return res, nil

@@ -50,6 +50,7 @@ tmux
 tar
 gzip
 unzip
+libstdc++6
 
 # Python & Node Runtimes
 python3
