@@ -134,12 +134,13 @@
 
 | Method | Path | Handler | File |
 |:---|:---|:---|:---|
-| `GET` | `/api/workspace/files` | `handleListWorkspaceFiles` | `api_workspace.go` |
-| `GET` | `/api/workspace/file` | `handleGetWorkspaceFile` | `api_workspace.go` |
-| `POST` | `/api/workspace/file` | `handleSaveWorkspaceFile` | `api_workspace.go` |
-| `DELETE` | `/api/workspace/file` | `handleDeleteWorkspaceFile` | `api_workspace.go` |
-| `POST` | `/api/workspace/mkdir` | `handleMkdirWorkspace` | `api_workspace.go` |
-| `POST` | `/api/workspace/upload` | `handleUploadWorkspaceFile` | `api_workspace.go` |
+| `GET` | `/api/workspace/files` | `handleDBListWorkspaceFiles` | `api_workspace_db.go` |
+| `GET` | `/api/workspace/file` | `handleDBGetWorkspaceFile` | `api_workspace_db.go` |
+| `POST` | `/api/workspace/file` | `handleDBSaveWorkspaceFile` | `api_workspace_db.go` |
+| `DELETE` | `/api/workspace/file` | `handleDBDeleteWorkspaceFile` | `api_workspace_db.go` |
+| `POST` | `/api/workspace/mkdir` | `handleDBMkdirWorkspace` | `api_workspace_db.go` |
+| `POST` | `/api/workspace/upload` | `handleDBUploadWorkspaceFile` | `api_workspace_db.go` |
+| `GET` | `/api/workspace/raw` | `handleDBRawWorkspaceFile` | `api_workspace_db.go` |
 
 #### Autonomous Missions & Tasks Backlog
 

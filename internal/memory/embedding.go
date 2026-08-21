@@ -215,7 +215,7 @@ func (s *EmbeddingService) SetWorkspaceDir(workspaceDir string) {
 	}
 }
 
-// SetWorkspaceStore configures the database-backed user workspace source.
+// SetWorkspaceStore configures the metadata-backed user workspace source.
 // Workspace embedding jobs use opaque file IDs and never persist host paths.
 func (s *EmbeddingService) SetWorkspaceStore(store *workspacepkg.Store) {
 	s.workspaceStore = store

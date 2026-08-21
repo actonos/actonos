@@ -2,7 +2,6 @@ package server
 
 import (
 	"archive/zip"
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/base64"
@@ -156,19 +155,7 @@ func (s *Server) handleDBGetWorkspaceFile(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
-	fileID := workspaceIDFromRequest(r)
-	var node workspacepkg.Node
-	var content []byte
-	var err error
-	if fileID == "" {
-		if resolved, resolveErr := s.resolveWorkspaceNode(r.Context(), "", r.URL.Query().Get("path")); resolveErr == nil {
-			node, content, err = store.Read(r.Context(), resolved.ID, 0, 0)
-		} else {
-			err = resolveErr
-		}
-	} else {
-		node, content, err = store.Read(r.Context(), fileID, 0, 0)
-	}
+	node, err := s.resolveWorkspaceNode(r.Context(), workspaceIDFromRequest(r), r.URL.Query().Get("path"))
 	if err != nil {
 		s.respondWorkspaceError(w, err)
 		return
@@ -179,15 +166,15 @@ func (s *Server) handleDBGetWorkspaceFile(w http.ResponseWriter, r *http.Request
 		"name": node.Name, "path": node.VirtualPath, "virtual_path": node.VirtualPath,
 		"size": node.SizeBytes, "kind": kind, "mime": node.MIMEType,
 		"mime_type": node.MIMEType, "version": node.Version, "content_hash": node.ContentHash,
+		"raw_url": "/api/workspace/raw?id=" + node.ID,
 	}
 	if kind == "text" || kind == "json" || kind == "csv" {
-		response["content"] = string(content)
-	} else {
-		encoded := base64.StdEncoding.EncodeToString(content)
-		response["content_base64"] = encoded
-		if kind == "image" || kind == "pdf" || kind == "audio" || kind == "video" {
-			response["data_url"] = "data:" + node.MIMEType + ";base64," + encoded
+		_, content, readErr := store.Read(r.Context(), node.ID, 0, 0)
+		if readErr != nil {
+			s.respondWorkspaceError(w, readErr)
+			return
 		}
+		response["content"] = string(content)
 	}
 	s.respondJSON(w, http.StatusOK, response)
 }
@@ -640,15 +627,18 @@ func (s *Server) handleDBRawWorkspaceFile(w http.ResponseWriter, r *http.Request
 		s.respondWorkspaceError(w, err)
 		return
 	}
-	node, content, err := store.Read(r.Context(), node.ID, 0, 0)
+	node, file, err := store.Open(r.Context(), node.ID)
 	if err != nil {
 		s.respondWorkspaceError(w, err)
 		return
 	}
+	defer file.Close()
 	w.Header().Set("Content-Type", node.MIMEType)
 	disposition := mime.FormatMediaType("inline", map[string]string{"filename": node.Name})
 	w.Header().Set("Content-Disposition", disposition)
-	http.ServeContent(w, r, node.Name, parseWorkspaceTime(node.UpdatedAt), bytes.NewReader(content))
+	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+	w.Header().Set("Content-Security-Policy", "frame-ancestors 'self'")
+	http.ServeContent(w, r, node.Name, parseWorkspaceTime(node.UpdatedAt), file)
 }
 
 func parseWorkspaceTime(value string) time.Time {

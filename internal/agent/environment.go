@@ -126,7 +126,7 @@ func BuildHostEnvironmentPrompt(workspaceDir string) string {
 	return BuildAgentEnvironmentPrompt(dataDir, workspaceDir, DefaultSystemAgentID)
 }
 
-// BuildAgentEnvironmentPrompt describes the database-backed user workspace and
+// BuildAgentEnvironmentPrompt describes the metadata-backed user workspace and
 // the calling agent's isolated filesystem workspace. workspaceDir is retained
 // for call-site compatibility but is never exposed as a host filesystem path.
 func BuildAgentEnvironmentPrompt(dataDir, workspaceDir, agentSlug string) string {
@@ -208,7 +208,7 @@ func BuildAgentEnvironmentPrompt(dataDir, workspaceDir, agentSlug string) string
 	// 4. Dedicated Storage Policy & Global Data Access
 	sb.WriteString("<workspace_storage_policy>\n")
 	fmt.Fprintf(&sb, "  <rule id=\"dedicated_workspace_default\">PRIVATE WORKSPACE: Use native_file_* and native_exec only for your own working files under `%s`. Other agents have separate directories and must never be accessed.</rule>\n", agentWorkspace)
-	sb.WriteString("  <rule id=\"user_workspace_database\">USER WORKSPACE: `/data/workspace` is a virtual, SQLite-backed namespace. Use only native_workspace_search, native_workspace_read, native_workspace_write, and native_workspace_delete for user files. These tools accept opaque file IDs; never guess or pass a host path.</rule>\n")
+	sb.WriteString("  <rule id=\"user_workspace_database\">USER WORKSPACE: `/data/workspace` stores file bytes under opaque UUID paths while SQLite stores metadata only. Use native_workspace_search, native_workspace_read, native_workspace_write, and native_workspace_delete; never guess or pass a host path.</rule>\n")
 	fmt.Fprintf(&sb, "  <rule id=\"system_data_access\">SYSTEM DATA: Skills and configuration live under `%s` and `%s`; access them only with a tool explicitly authorized for that purpose.</rule>\n", skillsDir, configDir)
 	sb.WriteString("</workspace_storage_policy>\n\n")
 

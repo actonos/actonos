@@ -26,7 +26,7 @@ func NewWorkspaceSearchTool(store *workspacepkg.Store) *WorkspaceSearchTool {
 
 func (t *WorkspaceSearchTool) Name() string { return "native_workspace_search" }
 func (t *WorkspaceSearchTool) Description() string {
-	return "Search or browse user-owned workspace files stored in SQLite. Returns opaque file IDs and virtual paths; use native_file_* only for your private agent files."
+	return "Search or browse user-owned workspace files. SQLite stores metadata only; file bytes remain on the workspace filesystem."
 }
 func (t *WorkspaceSearchTool) Category() string { return "native" }
 func (t *WorkspaceSearchTool) ParametersSchema() json.RawMessage {
@@ -73,7 +73,7 @@ func NewWorkspaceReadTool(store *workspacepkg.Store) *WorkspaceReadTool {
 
 func (t *WorkspaceReadTool) Name() string { return "native_workspace_read" }
 func (t *WorkspaceReadTool) Description() string {
-	return "Read a user-owned SQLite workspace file by opaque file_id. Never accepts or returns a host filesystem path."
+	return "Read a user-owned workspace file by opaque file_id. Never accepts or returns a host filesystem path."
 }
 func (t *WorkspaceReadTool) Category() string { return "native" }
 func (t *WorkspaceReadTool) ParametersSchema() json.RawMessage {
@@ -161,7 +161,7 @@ func NewWorkspaceWriteTool(store *workspacepkg.Store) *WorkspaceWriteTool {
 
 func (t *WorkspaceWriteTool) Name() string { return "native_workspace_write" }
 func (t *WorkspaceWriteTool) Description() string {
-	return "Create or update a user-owned SQLite workspace file. Create with parent_id and any Unicode name; update with file_id and expected_version."
+	return "Create or update a user-owned workspace file. Create with parent_id and any Unicode name; update with file_id and expected_version."
 }
 func (t *WorkspaceWriteTool) Category() string { return "native" }
 func (t *WorkspaceWriteTool) ParametersSchema() json.RawMessage {
@@ -251,7 +251,7 @@ func NewWorkspaceDeleteTool(store *workspacepkg.Store) *WorkspaceDeleteTool {
 
 func (t *WorkspaceDeleteTool) Name() string { return "native_workspace_delete" }
 func (t *WorkspaceDeleteTool) Description() string {
-	return "Move a user-owned SQLite workspace file or folder to trash by opaque file_id. Does not accept host paths."
+	return "Move a user-owned workspace file or folder to trash by opaque file_id. Does not accept host paths."
 }
 func (t *WorkspaceDeleteTool) Category() string { return "native" }
 func (t *WorkspaceDeleteTool) ParametersSchema() json.RawMessage {

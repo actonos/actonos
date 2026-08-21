@@ -514,8 +514,7 @@ export interface WorkspaceFileDetailResponse {
   version: number;
   content_hash: string;
   content?: string;
-  content_base64?: string;
-  data_url?: string;
+  raw_url: string;
 }
 
 export interface WorkspaceMutationResponse {

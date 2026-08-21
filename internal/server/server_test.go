@@ -61,7 +61,7 @@ func newTestServer(t *testing.T) *Server {
 	t.Cleanup(func() { eventBus.Close() })
 
 	agentMgr, _ := agent.NewAgentManager(db, eventBus)
-	workspaceStore, err := workspacepkg.NewStore(context.Background(), db.SQLDB())
+	workspaceStore, err := workspacepkg.NewStore(context.Background(), db.SQLDB(), filepath.Join(tempDir, "workspace"))
 	if err != nil {
 		t.Fatalf("creating database workspace: %v", err)
 	}

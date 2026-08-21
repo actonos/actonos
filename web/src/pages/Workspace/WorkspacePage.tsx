@@ -111,7 +111,7 @@ export function WorkspacePage() {
         originalContent: detail.content || '',
         kind: detail.kind || 'text',
         mime: detail.mime || '',
-        dataUrl: detail.data_url,
+        rawUrl: detail.raw_url,
         size: detail.size || file.size,
 			version: detail.version,
       };

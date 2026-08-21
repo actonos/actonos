@@ -70,12 +70,6 @@ func NewUserProfileManager(db *memory.DB, dataDir string) (*UserProfileManager, 
 	configPath := filepath.Join(configDir, "profile.json")
 	soulPath := filepath.Join(configDir, "SOUL.md")
 	memoryMDPath := filepath.Join(systemWorkspaceDir, "MEMORY.md")
-	legacyMemoryPath := filepath.Join(dataDir, "workspace", "MEMORY.md")
-	if _, err := os.Stat(memoryMDPath); os.IsNotExist(err) {
-		if data, readErr := os.ReadFile(legacyMemoryPath); readErr == nil {
-			_ = os.WriteFile(memoryMDPath, data, 0640)
-		}
-	}
 
 	var sqlDB *sql.DB
 	if db != nil {

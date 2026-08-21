@@ -22,7 +22,7 @@ export interface OpenTab {
   originalContent: string;
   kind: string;
   mime: string;
-  dataUrl?: string;
+  rawUrl: string;
   size: number;
   version: number;
 }
@@ -242,7 +242,7 @@ export function WorkspaceEditor({
           <WorkspaceMediaViewer
             path={activeTab.id}
             kind={activeTab.kind}
-            dataUrl={activeTab.dataUrl}
+            rawUrl={activeTab.rawUrl}
             size={activeTab.size}
           />
         ) : isCsv ? (

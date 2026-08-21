@@ -7,9 +7,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"mime"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -19,9 +21,9 @@ import (
 )
 
 const (
-	VirtualRoot       = "/data/workspace"
-	maxNameBytes      = 4096
-	maxIndexedContent = 2 << 20
+	VirtualRoot  = "/data/workspace"
+	rootFolderID = "00000000-0000-0000-0000-000000000000"
+	maxNameBytes = 4096
 )
 
 var (
@@ -33,18 +35,19 @@ var (
 )
 
 type Node struct {
-	ID          string  `json:"id"`
-	ParentID    string  `json:"parent_id"`
-	Name        string  `json:"name"`
-	Type        string  `json:"type"`
-	MIMEType    string  `json:"mime_type"`
-	SizeBytes   int64   `json:"size_bytes"`
-	ContentHash string  `json:"content_hash"`
-	Version     int64   `json:"version"`
-	CreatedAt   string  `json:"created_at"`
-	UpdatedAt   string  `json:"updated_at"`
-	DeletedAt   *string `json:"deleted_at,omitempty"`
-	VirtualPath string  `json:"virtual_path"`
+	ID           string  `json:"id"`
+	ParentID     string  `json:"parent_id"`
+	Name         string  `json:"name"`
+	Type         string  `json:"type"`
+	MIMEType     string  `json:"mime_type"`
+	SizeBytes    int64   `json:"size_bytes"`
+	ContentHash  string  `json:"content_hash"`
+	RelativePath string  `json:"-"`
+	Version      int64   `json:"version"`
+	CreatedAt    string  `json:"created_at"`
+	UpdatedAt    string  `json:"updated_at"`
+	DeletedAt    *string `json:"deleted_at,omitempty"`
+	VirtualPath  string  `json:"virtual_path"`
 }
 
 type WriteRequest struct {
@@ -70,15 +73,23 @@ type Stats struct {
 }
 
 type Store struct {
-	db  *sql.DB
-	now func() time.Time
+	db   *sql.DB
+	root string
+	now  func() time.Time
 }
 
-func NewStore(ctx context.Context, db *sql.DB) (*Store, error) {
-	if err := Migrate(ctx, db); err != nil {
+func NewStore(ctx context.Context, db *sql.DB, root string) (*Store, error) {
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return nil, fmt.Errorf("resolving workspace filesystem root: %w", err)
+	}
+	if err := Migrate(ctx, db, absRoot); err != nil {
 		return nil, err
 	}
-	return &Store{db: db, now: time.Now}, nil
+	if err := os.MkdirAll(filepath.Join(absRoot, rootFolderID), 0750); err != nil {
+		return nil, fmt.Errorf("creating workspace root folder: %w", err)
+	}
+	return &Store{db: db, root: absRoot, now: time.Now}, nil
 }
 
 func (s *Store) DB() *sql.DB { return s.db }
@@ -109,23 +120,39 @@ func detectMIME(name, requested string, content []byte) string {
 	return "application/octet-stream"
 }
 
-func indexableText(mimeType string, content []byte) string {
-	if len(content) == 0 || !utf8.Valid(content) || strings.IndexByte(string(content), 0) >= 0 {
-		return ""
+func storageRelativePath(parentID, fileID string) (string, error) {
+	if parentID == "" {
+		parentID = rootFolderID
 	}
-	if !strings.HasPrefix(mimeType, "text/") &&
-		!strings.Contains(mimeType, "json") &&
-		!strings.Contains(mimeType, "xml") &&
-		!strings.Contains(mimeType, "javascript") {
-		return ""
+	parentUUID, err := uuid.Parse(parentID)
+	if err != nil || parentUUID.String() != parentID {
+		return "", fmt.Errorf("%w: invalid storage folder ID", ErrInvalidNode)
 	}
-	if len(content) > maxIndexedContent {
-		content = content[:maxIndexedContent]
-		for len(content) > 0 && !utf8.Valid(content) {
-			content = content[:len(content)-1]
-		}
+	fileUUID, err := uuid.Parse(fileID)
+	if err != nil || fileUUID.String() != fileID {
+		return "", fmt.Errorf("%w: invalid storage file ID", ErrInvalidNode)
 	}
-	return string(content)
+	return filepath.ToSlash(filepath.Join(parentID, fileID)), nil
+}
+
+func (s *Store) storagePath(relativePath string) (string, error) {
+	clean := filepath.Clean(filepath.FromSlash(relativePath))
+	if filepath.IsAbs(clean) || clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("%w: invalid workspace storage path", ErrInvalidNode)
+	}
+	parts := strings.Split(filepath.ToSlash(clean), "/")
+	if len(parts) != 2 {
+		return "", fmt.Errorf("%w: workspace storage path must contain folder and file IDs", ErrInvalidNode)
+	}
+	if _, err := storageRelativePath(parts[0], parts[1]); err != nil {
+		return "", err
+	}
+	target := filepath.Join(s.root, clean)
+	rel, err := filepath.Rel(s.root, target)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("%w: workspace storage path escaped root", ErrInvalidNode)
+	}
+	return target, nil
 }
 
 func (s *Store) ensureParent(ctx context.Context, q interface {
@@ -153,17 +180,17 @@ func scanNode(scanner interface{ Scan(...any) error }) (Node, error) {
 	var node Node
 	var deleted sql.NullString
 	err := scanner.Scan(&node.ID, &node.ParentID, &node.Name, &node.Type, &node.MIMEType,
-		&node.SizeBytes, &node.ContentHash, &node.Version, &node.CreatedAt, &node.UpdatedAt, &deleted)
+		&node.SizeBytes, &node.ContentHash, &node.RelativePath, &node.Version, &node.CreatedAt, &node.UpdatedAt, &deleted)
 	if deleted.Valid {
 		node.DeletedAt = &deleted.String
 	}
 	return node, err
 }
 
-const nodeColumns = `id, parent_id, name, node_type, mime_type, size_bytes, content_hash,
+const nodeColumns = `id, parent_id, name, node_type, mime_type, size_bytes, content_hash, relative_path,
 	version, created_at, updated_at, deleted_at`
 
-const qualifiedNodeColumns = `n.id, n.parent_id, n.name, n.node_type, n.mime_type, n.size_bytes, n.content_hash,
+const qualifiedNodeColumns = `n.id, n.parent_id, n.name, n.node_type, n.mime_type, n.size_bytes, n.content_hash, n.relative_path,
 	n.version, n.created_at, n.updated_at, n.deleted_at`
 
 func (s *Store) Get(ctx context.Context, id string) (Node, error) {
@@ -361,10 +388,15 @@ func (s *Store) CreateDirectory(ctx context.Context, parentID, name string) (Nod
 	}
 	now := s.now().UTC().Format(time.RFC3339Nano)
 	id := uuid.NewString()
+	physicalDir := filepath.Join(s.root, id)
+	if err := os.Mkdir(physicalDir, 0750); err != nil {
+		return Node{}, fmt.Errorf("creating workspace directory storage: %w", err)
+	}
 	_, err := s.db.ExecContext(ctx, `INSERT INTO workspace_nodes
-		(id, parent_id, name, node_type, mime_type, size_bytes, content_hash, version, created_at, updated_at)
-		VALUES (?, ?, ?, 'directory', 'inode/directory', 0, '', 1, ?, ?)`, id, parentID, name, now, now)
+		(id, parent_id, name, node_type, mime_type, size_bytes, content_hash, relative_path, version, created_at, updated_at)
+		VALUES (?, ?, ?, 'directory', 'inode/directory', 0, '', '', 1, ?, ?)`, id, parentID, name, now, now)
 	if err != nil {
+		_ = os.Remove(physicalDir)
 		if strings.Contains(strings.ToLower(err.Error()), "unique") {
 			return Node{}, ErrConflict
 		}
@@ -389,15 +421,21 @@ func (s *Store) Write(ctx context.Context, req WriteRequest) (Node, error) {
 	version := int64(1)
 	name := req.Name
 	mimeType := req.MIMEType
+	parentID := req.ParentID
+	var relativePath string
 	if nodeID == "" {
 		if err := s.ensureParent(ctx, tx, req.ParentID); err != nil {
 			return Node{}, err
 		}
 		nodeID = uuid.NewString()
 		mimeType = detectMIME(name, mimeType, req.Content)
+		relativePath, err = storageRelativePath(parentID, nodeID)
+		if err != nil {
+			return Node{}, err
+		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO workspace_nodes
-			(id, parent_id, name, node_type, mime_type, size_bytes, content_hash, version, created_at, updated_at)
-			VALUES (?, ?, ?, 'file', ?, ?, ?, 1, ?, ?)`, nodeID, req.ParentID, name, mimeType, len(req.Content), hash, now, now)
+			(id, parent_id, name, node_type, mime_type, size_bytes, content_hash, relative_path, version, created_at, updated_at)
+			VALUES (?, ?, ?, 'file', ?, ?, ?, ?, 1, ?, ?)`, nodeID, req.ParentID, name, mimeType, len(req.Content), hash, relativePath, now, now)
 		if err != nil {
 			if strings.Contains(strings.ToLower(err.Error()), "unique") {
 				return Node{}, ErrConflict
@@ -407,8 +445,9 @@ func (s *Store) Write(ctx context.Context, req WriteRequest) (Node, error) {
 	} else {
 		var nodeType string
 		var deleted sql.NullString
-		err = tx.QueryRowContext(ctx, `SELECT name, node_type, mime_type, version, deleted_at
-			FROM workspace_nodes WHERE id = ?`, nodeID).Scan(&name, &nodeType, &mimeType, &version, &deleted)
+		err = tx.QueryRowContext(ctx, `SELECT name, parent_id, node_type, mime_type, version,
+			deleted_at, relative_path FROM workspace_nodes WHERE id = ?`, nodeID).
+			Scan(&name, &parentID, &nodeType, &mimeType, &version, &deleted, &relativePath)
 		if errors.Is(err, sql.ErrNoRows) || deleted.Valid {
 			return Node{}, ErrNotFound
 		}
@@ -434,21 +473,31 @@ func (s *Store) Write(ctx context.Context, req WriteRequest) (Node, error) {
 		}
 	}
 
-	if _, err := tx.ExecContext(ctx, `INSERT INTO workspace_revisions
-		(id, node_id, version, content, content_hash, size_bytes, created_by, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, uuid.NewString(), nodeID, version, req.Content, hash, len(req.Content), req.ActorID, now); err != nil {
-		return Node{}, fmt.Errorf("recording workspace revision: %w", err)
+	target, err := s.storagePath(relativePath)
+	if err != nil {
+		return Node{}, err
 	}
+	staged, err := stageWorkspaceFile(target, req.Content)
+	if err != nil {
+		return Node{}, fmt.Errorf("staging workspace file: %w", err)
+	}
+	defer os.Remove(staged)
+
 	if _, err := tx.ExecContext(ctx, `DELETE FROM workspace_fts WHERE node_id = ?`, nodeID); err != nil {
 		return Node{}, fmt.Errorf("clearing workspace search document: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO workspace_fts(node_id, name, content) VALUES (?, ?, ?)`,
-		nodeID, name, indexableText(mimeType, req.Content)); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO workspace_fts(node_id, name) VALUES (?, ?)`, nodeID, name); err != nil {
 		return Node{}, fmt.Errorf("indexing workspace file: %w", err)
 	}
+	rollbackFile, finalizeFile, err := installWorkspaceFile(staged, target)
+	if err != nil {
+		return Node{}, fmt.Errorf("installing workspace file: %w", err)
+	}
 	if err := tx.Commit(); err != nil {
+		rollbackFile()
 		return Node{}, fmt.Errorf("committing workspace write: %w", err)
 	}
+	finalizeFile()
 	return s.Get(ctx, nodeID)
 }
 
@@ -456,6 +505,29 @@ func (s *Store) Read(ctx context.Context, id string, offset, limit int64) (Node,
 	if offset < 0 || limit < 0 {
 		return Node{}, nil, fmt.Errorf("%w: negative read range", ErrInvalidNode)
 	}
+	node, file, err := s.Open(ctx, id)
+	if err != nil {
+		return Node{}, nil, err
+	}
+	defer file.Close()
+	if offset >= node.SizeBytes {
+		return node, []byte{}, nil
+	}
+	if limit == 0 || offset+limit > node.SizeBytes {
+		limit = node.SizeBytes - offset
+	}
+	if _, err := file.Seek(offset, io.SeekStart); err != nil {
+		return Node{}, nil, fmt.Errorf("seeking workspace file: %w", err)
+	}
+	content, err := io.ReadAll(io.LimitReader(file, limit))
+	if err != nil {
+		return Node{}, nil, fmt.Errorf("reading workspace file: %w", err)
+	}
+	return node, content, nil
+}
+
+// Open returns the current immutable file handle for streaming callers.
+func (s *Store) Open(ctx context.Context, id string) (Node, *os.File, error) {
 	node, err := s.Get(ctx, id)
 	if err != nil {
 		return Node{}, nil, err
@@ -463,22 +535,76 @@ func (s *Store) Read(ctx context.Context, id string, offset, limit int64) (Node,
 	if node.Type != "file" {
 		return Node{}, nil, fmt.Errorf("%w: node is not a file", ErrInvalidNode)
 	}
-	var content []byte
-	err = s.db.QueryRowContext(ctx, `SELECT content FROM workspace_revisions WHERE node_id = ? AND version = ?`, id, node.Version).Scan(&content)
-	if errors.Is(err, sql.ErrNoRows) {
+	target, err := s.storagePath(node.RelativePath)
+	if err != nil {
+		return Node{}, nil, err
+	}
+	file, err := os.Open(target)
+	if errors.Is(err, os.ErrNotExist) {
 		return Node{}, nil, ErrNotFound
 	}
 	if err != nil {
-		return Node{}, nil, fmt.Errorf("reading workspace revision: %w", err)
+		return Node{}, nil, fmt.Errorf("opening workspace file: %w", err)
 	}
-	if offset >= int64(len(content)) {
-		return node, []byte{}, nil
+	return node, file, nil
+}
+func stageWorkspaceFile(target string, content []byte) (string, error) {
+	if err := os.MkdirAll(filepath.Dir(target), 0750); err != nil {
+		return "", err
 	}
-	end := int64(len(content))
-	if limit > 0 && offset+limit < end {
-		end = offset + limit
+	temporary, err := os.CreateTemp(filepath.Dir(target), ".workspace-*")
+	if err != nil {
+		return "", err
 	}
-	return node, content[offset:end], nil
+	name := temporary.Name()
+	if err := temporary.Chmod(0640); err != nil {
+		_ = temporary.Close()
+		_ = os.Remove(name)
+		return "", err
+	}
+	if _, err := temporary.Write(content); err != nil {
+		_ = temporary.Close()
+		_ = os.Remove(name)
+		return "", err
+	}
+	if err := temporary.Sync(); err != nil {
+		_ = temporary.Close()
+		_ = os.Remove(name)
+		return "", err
+	}
+	if err := temporary.Close(); err != nil {
+		_ = os.Remove(name)
+		return "", err
+	}
+	return name, nil
+}
+
+func installWorkspaceFile(staged, target string) (rollback func(), finalize func(), err error) {
+	backup := target + ".backup-" + uuid.NewString()
+	hadOriginal := false
+	if err := os.Rename(target, backup); err == nil {
+		hadOriginal = true
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, nil, err
+	}
+	if err := os.Rename(staged, target); err != nil {
+		if hadOriginal {
+			_ = os.Rename(backup, target)
+		}
+		return nil, nil, err
+	}
+	rollback = func() {
+		_ = os.Remove(target)
+		if hadOriginal {
+			_ = os.Rename(backup, target)
+		}
+	}
+	finalize = func() {
+		if hadOriginal {
+			_ = os.Remove(backup)
+		}
+	}
+	return rollback, finalize, nil
 }
 
 func (s *Store) Rename(ctx context.Context, id, newParentID, newName string, expectedVersion int64) (Node, error) {
@@ -512,8 +638,9 @@ func (s *Store) Rename(ctx context.Context, id, newParentID, newName string, exp
 	var nodeType string
 	var version int64
 	var deleted sql.NullString
-	err = tx.QueryRowContext(ctx, `SELECT node_type, version, deleted_at FROM workspace_nodes WHERE id = ?`, id).
-		Scan(&nodeType, &version, &deleted)
+	var currentRelativePath string
+	err = tx.QueryRowContext(ctx, `SELECT node_type, version, deleted_at, relative_path
+		FROM workspace_nodes WHERE id = ?`, id).Scan(&nodeType, &version, &deleted, &currentRelativePath)
 	if errors.Is(err, sql.ErrNoRows) || deleted.Valid {
 		return Node{}, ErrNotFound
 	}
@@ -524,8 +651,15 @@ func (s *Store) Rename(ctx context.Context, id, newParentID, newName string, exp
 		return Node{}, ErrVersion
 	}
 	now := s.now().UTC().Format(time.RFC3339Nano)
-	result, err := tx.ExecContext(ctx, `UPDATE workspace_nodes SET parent_id = ?, name = ?, version = version + 1,
-		updated_at = ? WHERE id = ? AND deleted_at IS NULL`, newParentID, newName, now, id)
+	newRelativePath := currentRelativePath
+	if nodeType == "file" {
+		newRelativePath, err = storageRelativePath(newParentID, id)
+		if err != nil {
+			return Node{}, err
+		}
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE workspace_nodes SET parent_id = ?, name = ?, relative_path = ?, version = version + 1,
+		updated_at = ? WHERE id = ? AND deleted_at IS NULL`, newParentID, newName, newRelativePath, now, id)
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "unique") {
 			return Node{}, ErrConflict
@@ -535,19 +669,32 @@ func (s *Store) Rename(ctx context.Context, id, newParentID, newName string, exp
 	if rows, _ := result.RowsAffected(); rows != 1 {
 		return Node{}, ErrNotFound
 	}
+	var rollbackMove = func() {}
 	if nodeType == "file" {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO workspace_revisions
-			(id, node_id, version, content, content_hash, size_bytes, created_by, created_at)
-			SELECT ?, node_id, ?, content, content_hash, size_bytes, created_by, ?
-			FROM workspace_revisions WHERE node_id = ? AND version = ?`,
-			uuid.NewString(), version+1, now, id, version); err != nil {
-			return Node{}, fmt.Errorf("carrying workspace revision across rename: %w", err)
+		if newRelativePath != currentRelativePath {
+			currentTarget, err := s.storagePath(currentRelativePath)
+			if err != nil {
+				return Node{}, err
+			}
+			newTarget, err := s.storagePath(newRelativePath)
+			if err != nil {
+				return Node{}, err
+			}
+			if err := os.MkdirAll(filepath.Dir(newTarget), 0750); err != nil {
+				return Node{}, fmt.Errorf("creating workspace move target: %w", err)
+			}
+			if err := os.Rename(currentTarget, newTarget); err != nil {
+				return Node{}, fmt.Errorf("moving workspace file: %w", err)
+			}
+			rollbackMove = func() { _ = os.Rename(newTarget, currentTarget) }
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE workspace_fts SET name = ? WHERE node_id = ?`, newName, id); err != nil {
+			rollbackMove()
 			return Node{}, fmt.Errorf("updating workspace search name: %w", err)
 		}
 	}
 	if err := tx.Commit(); err != nil {
+		rollbackMove()
 		return Node{}, fmt.Errorf("committing workspace rename: %w", err)
 	}
 	return s.Get(ctx, id)
@@ -569,6 +716,10 @@ func (s *Store) Delete(ctx context.Context, id string, expectedVersion int64, re
 		if count > 0 {
 			return fmt.Errorf("%w: directory is not empty", ErrConflict)
 		}
+	}
+	storagePaths, directoryIDs, err := s.deletionStorageTargets(ctx, id, recursive)
+	if err != nil {
+		return err
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -603,7 +754,55 @@ func (s *Store) Delete(ctx context.Context, id string, expectedVersion int64, re
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("committing workspace delete: %w", err)
 	}
+	for _, relativePath := range storagePaths {
+		target, pathErr := s.storagePath(relativePath)
+		if pathErr != nil {
+			return pathErr
+		}
+		if removeErr := os.Remove(target); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			return fmt.Errorf("removing workspace file: %w", removeErr)
+		}
+	}
+	for _, directoryID := range directoryIDs {
+		if removeErr := os.RemoveAll(filepath.Join(s.root, directoryID)); removeErr != nil {
+			return fmt.Errorf("removing workspace directory storage: %w", removeErr)
+		}
+	}
 	return nil
+}
+
+func (s *Store) deletionStorageTargets(ctx context.Context, id string, recursive bool) ([]string, []string, error) {
+	query := `SELECT n.id, n.node_type, n.relative_path
+		FROM workspace_nodes n WHERE n.id = ? AND n.deleted_at IS NULL`
+	if recursive {
+		query = `WITH RECURSIVE targets(id) AS (
+			SELECT id FROM workspace_nodes WHERE id = ? AND deleted_at IS NULL
+			UNION ALL SELECT n.id FROM workspace_nodes n JOIN targets t ON n.parent_id = t.id WHERE n.deleted_at IS NULL
+		) SELECT n.id, n.node_type, n.relative_path
+			FROM workspace_nodes n JOIN targets t ON t.id = n.id`
+	}
+	rows, err := s.db.QueryContext(ctx, query, id)
+	if err != nil {
+		return nil, nil, fmt.Errorf("loading workspace deletion targets: %w", err)
+	}
+	defer rows.Close()
+	paths := make([]string, 0)
+	directories := make([]string, 0)
+	for rows.Next() {
+		var nodeID, nodeType, relativePath string
+		if err := rows.Scan(&nodeID, &nodeType, &relativePath); err != nil {
+			return nil, nil, fmt.Errorf("scanning workspace deletion target: %w", err)
+		}
+		if nodeType == "directory" {
+			directories = append(directories, nodeID)
+		} else if relativePath != "" {
+			paths = append(paths, relativePath)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, fmt.Errorf("iterating workspace deletion targets: %w", err)
+	}
+	return paths, directories, nil
 }
 
 func ftsQuery(query string) string {
@@ -636,9 +835,8 @@ func (s *Store) Search(ctx context.Context, query, parentID string, limit int) (
 	}
 	match := ftsQuery(query)
 	like := "%" + strings.ToLower(query) + "%"
-	rows, err := s.db.QueryContext(ctx, `SELECT `+qualifiedNodeColumns+`,
-		COALESCE(substr(f.content, 1, 320), '')
-		FROM workspace_nodes n LEFT JOIN workspace_fts f ON f.node_id = n.id
+	rows, err := s.db.QueryContext(ctx, `SELECT `+qualifiedNodeColumns+`, ''
+		FROM workspace_nodes n
 		WHERE n.deleted_at IS NULL AND (? = '' OR n.parent_id = ?)
 		AND (lower(n.name) LIKE ? OR n.id IN (SELECT node_id FROM workspace_fts WHERE workspace_fts MATCH ?))
 		ORDER BY CASE WHEN lower(n.name) LIKE ? THEN 0 ELSE 1 END, n.updated_at DESC LIMIT ?`,
@@ -651,7 +849,7 @@ func (s *Store) Search(ctx context.Context, query, parentID string, limit int) (
 		var result SearchResult
 		var deleted sql.NullString
 		if err := rows.Scan(&result.ID, &result.ParentID, &result.Name, &result.Type, &result.MIMEType,
-			&result.SizeBytes, &result.ContentHash, &result.Version, &result.CreatedAt, &result.UpdatedAt,
+			&result.SizeBytes, &result.ContentHash, &result.RelativePath, &result.Version, &result.CreatedAt, &result.UpdatedAt,
 			&deleted, &result.Snippet); err != nil {
 			return nil, fmt.Errorf("scanning workspace search result: %w", err)
 		}

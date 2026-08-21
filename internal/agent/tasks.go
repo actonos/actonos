@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -60,20 +62,35 @@ type HeartbeatConfig struct {
 const legacyDefaultHeartbeatDirective = "Autonomous standing supervisor. Routinely review pending tasks in TASKS.md and monitor system stability."
 
 // TaskManager coordinates autonomous tasks and heartbeat configuration in
-// SQLite. User workspace filenames are never reserved for system state.
+// SQLite and synchronizes them to agent markdown files (/data/agents/{AGENT_SLUG}/).
 type TaskManager struct {
-	mu sync.RWMutex
-	db *sql.DB
+	mu        sync.RWMutex
+	db        *sql.DB
+	agentsDir string
 }
 
 // NewTaskManager creates and initializes a TaskManager.
-func NewTaskManager(db *sql.DB, _ string) (*TaskManager, error) {
-	tm := &TaskManager{db: db}
+func NewTaskManager(db *sql.DB, path string) (*TaskManager, error) {
+	if path == "" {
+		path = "./data"
+	}
+	dataDir := path
+	if filepath.Base(path) == "workspace" {
+		dataDir = filepath.Dir(path)
+	}
+	agentsDir := filepath.Join(dataDir, "agents")
+	tm := &TaskManager{
+		db:        db,
+		agentsDir: agentsDir,
+	}
 
 	if err := tm.initDB(); err != nil {
 		return nil, err
 	}
 
+	if tm.db != nil {
+		_ = tm.syncToMarkdownLocked()
+	}
 	return tm, nil
 }
 
@@ -350,11 +367,73 @@ func (tm *TaskManager) ListTasks(ctx context.Context, status, priority string) (
 	return list, nil
 }
 
-// syncToMarkdownLocked remains as an internal compatibility hook for callers
-// created before the database workspace migration. SQLite is now the sole
-// source of truth, so synchronization intentionally performs no file I/O.
+// syncToMarkdownLocked renders the autonomous task backlog into /data/agents/{AGENT_SLUG}/TASKS.md.
 func (tm *TaskManager) syncToMarkdownLocked() error {
-	return nil
+	if tm.db == nil || tm.agentsDir == "" {
+		return nil
+	}
+
+	rows, err := tm.db.Query(`
+		SELECT id, title, description, status, priority, assigned_agent_id, progress, updated_at
+		FROM autonomous_tasks
+		ORDER BY 
+			CASE priority
+				WHEN 'p0_critical' THEN 1
+				WHEN 'p1_high' THEN 2
+				WHEN 'p2_normal' THEN 3
+				WHEN 'p3_low' THEN 4
+				ELSE 5
+			END ASC,
+			updated_at DESC
+	`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var activeTasks []string
+	var completedTasks []string
+
+	for rows.Next() {
+		var id, title, desc, status, priority, agentID string
+		var progress int
+		var updatedAt time.Time
+		if err := rows.Scan(&id, &title, &desc, &status, &priority, &agentID, &progress, &updatedAt); err != nil {
+			continue
+		}
+		if status == "completed" {
+			completedTasks = append(completedTasks, fmt.Sprintf("- [x] **[%s]** %s *(Status: completed)*", priority, title))
+		} else {
+			activeTasks = append(activeTasks, fmt.Sprintf("- [ ] **[%s]** %s *(Status: %s, Progress: %d%%)*\n  - ID: `%s` | Assigned: `%s`\n  - %s",
+				priority, title, status, progress, id, agentID, desc))
+		}
+	}
+
+	var sb strings.Builder
+	sb.WriteString("# ActonOS Autonomous Tasks Backlog\n")
+	fmt.Fprintf(&sb, "> Last synchronized: %s UTC\n\n", time.Now().UTC().Format(time.RFC3339))
+	sb.WriteString("## Active Backlog\n\n")
+	if len(activeTasks) == 0 {
+		sb.WriteString("*No active tasks currently pending in backlog.*\n\n")
+	} else {
+		for _, item := range activeTasks {
+			sb.WriteString(item + "\n\n")
+		}
+	}
+	sb.WriteString("## Completed & Archived Missions\n\n")
+	if len(completedTasks) == 0 {
+		sb.WriteString("*No completed missions recorded.*\n\n")
+	} else {
+		for _, item := range completedTasks {
+			sb.WriteString(item + "\n")
+		}
+		sb.WriteString("\n")
+	}
+
+	systemAgentDir := filepath.Join(tm.agentsDir, DefaultSystemAgentID)
+	_ = os.MkdirAll(systemAgentDir, 0750)
+	targetTasks := filepath.Join(systemAgentDir, "TASKS.md")
+	return os.WriteFile(targetTasks, []byte(sb.String()), 0640)
 }
 
 // GetHeartbeatConfig loads heartbeat configuration and directives.
@@ -380,6 +459,13 @@ func (tm *TaskManager) GetHeartbeatConfig(ctx context.Context) (*HeartbeatConfig
 		}
 	}
 
+	if cfg.Directives == "" && tm.agentsDir != "" {
+		targetHeartbeat := filepath.Join(tm.agentsDir, DefaultSystemAgentID, "HEARTBEAT.md")
+		if data, err := os.ReadFile(targetHeartbeat); err == nil && len(data) > 0 {
+			cfg.Directives = string(data)
+		}
+	}
+
 	if strings.TrimSpace(cfg.Directives) == legacyDefaultHeartbeatDirective {
 		cfg.Directives = ""
 	}
@@ -387,7 +473,7 @@ func (tm *TaskManager) GetHeartbeatConfig(ctx context.Context) (*HeartbeatConfig
 	return cfg, nil
 }
 
-// SaveHeartbeatConfig persists heartbeat configuration exclusively in SQLite.
+// SaveHeartbeatConfig persists heartbeat configuration in SQLite and /data/agents/{AGENT_SLUG}/HEARTBEAT.md.
 func (tm *TaskManager) SaveHeartbeatConfig(ctx context.Context, cfg HeartbeatConfig) error {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
@@ -408,6 +494,13 @@ func (tm *TaskManager) SaveHeartbeatConfig(ctx context.Context, cfg HeartbeatCon
 		if _, err := tm.db.ExecContext(ctx, query, string(raw)); err != nil {
 			return fmt.Errorf("saving heartbeat configuration: %w", err)
 		}
+	}
+
+	if tm.agentsDir != "" {
+		systemAgentDir := filepath.Join(tm.agentsDir, DefaultSystemAgentID)
+		_ = os.MkdirAll(systemAgentDir, 0750)
+		targetHeartbeat := filepath.Join(systemAgentDir, "HEARTBEAT.md")
+		_ = os.WriteFile(targetHeartbeat, []byte(cfg.Directives), 0640)
 	}
 
 	slog.Info("heartbeat directives and configuration saved", "interval_mins", cfg.IntervalMinutes, "enabled", cfg.Enabled)

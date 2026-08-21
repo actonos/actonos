@@ -76,6 +76,9 @@ func (s *Store) ImportLegacy(ctx context.Context, legacyRoot, agentsRoot string,
 			}
 			continue
 		}
+		if entry.Name() == "HEARTBEAT.md" || entry.Name() == "TASKS.md" || entry.Name() == "MEMORY.md" || entry.Name() == "SOUL.md" {
+			continue
+		}
 		if _, err := s.importLegacyEntry(ctx, legacyRoot, filepath.Join(legacyRoot, entry.Name()), "", &report); err != nil {
 			return report, err
 		}

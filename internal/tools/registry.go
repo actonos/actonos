@@ -116,9 +116,9 @@ type FileMutationSink interface {
 	NotifyFileMutation(ctx context.Context, absolutePath, agentID string, deleted bool) error
 }
 
-// WorkspaceMutationSink receives successful database-backed user workspace
-// changes. Unlike FileMutationSink, it is keyed only by opaque file ID and can
-// never expose a host path.
+// WorkspaceMutationSink receives successful user workspace changes. Unlike
+// FileMutationSink, it is keyed only by opaque file ID and never exposes a
+// host path.
 type WorkspaceMutationSink interface {
 	NotifyWorkspaceMutation(ctx context.Context, fileID, agentID string, deleted bool) error
 }

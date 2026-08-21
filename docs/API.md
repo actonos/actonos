@@ -703,11 +703,16 @@ Removes an installed community skill directory.
 
 ## Workspace File Manager & Semantic Memory
 
+Workspace schema v2 is metadata-only and is intended for fresh databases. Legacy SQLite BLOB workspace schemas are rejected at startup; no automatic content migration is performed.
+
 ### `GET /api/workspace/files`
 Lists files and directories in a workspace directory. Query params: `dir` (relative directory path, e.g. `docs` or empty for root). Returns file list with AI indexing status (`ai_indexed`, `ai_state`).
 
 ### `GET /api/workspace/file`
-Reads content of a specific file. Query params: `path` (relative file path). Returns text content or base64 `data_url` for images/media.
+Returns metadata for a specific file. Query params: `id` (opaque file ID) or the legacy `path` value. Text, JSON, and CSV responses include UTF-8 `content`; binary and media responses include `raw_url` without embedding a base64 payload.
+
+### `GET /api/workspace/raw`
+Streams the original file bytes from `/data/workspace/{FOLDER_UUID}/{FILE_UUID}`. SQLite stores only the relative path and file metadata. Query params: `id` (opaque file ID) or the legacy `path` value. The endpoint supports HTTP byte ranges, returns `Content-Disposition: inline`, and is the canonical source for PDF, image, audio, and video previews and downloads.
 
 ### `POST /api/workspace/file`
 Creates or updates a file. Enqueues semantic embedding automatically.

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/actonos/actonos/internal/memory"
 )
@@ -93,12 +94,14 @@ func BuildCognitiveSystemPrompt(
 		builder.WithSection(&HeadlessSection{Active: true})
 	}
 
-	// Layer 7: Episodic Memory Retrieval
+	// Layer 7: Episodic & Semantic Vector Memory Retrieval
 	episodicCount := 0
 	suppressEpisodic, _ := ctx.Value("suppress_episodic_memory").(bool)
 	if mem != nil && !suppressEpisodic && userMessage != "" {
 		memories, err := mem.Search(ctx, agentID, memory.LayerEpisodic, userMessage, nil, 4)
-		if err == nil && len(memories) > 0 {
+		if err != nil {
+			slog.Debug("episodic memory search error", "agent_id", agentID, "error", err)
+		} else if len(memories) > 0 {
 			episodicCount = len(memories)
 			builder.WithSection(&EpisodicSection{
 				Memories: memories,
@@ -106,15 +109,30 @@ func BuildCognitiveSystemPrompt(
 		}
 	}
 
+	semanticCount := 0
 	if embedding != nil && !suppressEpisodic && userMessage != "" {
 		scopes := []string{"agent:" + agentID, "shared"}
 		if conversationID, _ := ctx.Value(conversationContextKey{}).(string); conversationID != "" {
 			scopes = append([]string{"conversation:" + conversationID}, scopes...)
 		}
-		if records, err := embedding.Search(ctx, userMessage, scopes, 6); err == nil && len(records) > 0 {
+		records, err := embedding.Search(ctx, userMessage, scopes, 6)
+		if err != nil {
+			slog.Warn("semantic knowledge vector search error", "agent_id", agentID, "error", err)
+		} else if len(records) > 0 {
+			semanticCount = len(records)
 			builder.WithSection(&SemanticKnowledgeSection{Records: records})
 		}
 	}
 
-	return builder.Build(), episodicCount
+	totalRetrieved := episodicCount + semanticCount
+	if totalRetrieved > 0 {
+		slog.Info("layer 7 cognitive memory retrieval completed",
+			"agent_id", agentID,
+			"episodic_count", episodicCount,
+			"semantic_count", semanticCount,
+			"total_fragments", totalRetrieved,
+		)
+	}
+
+	return builder.Build(), totalRetrieved
 }

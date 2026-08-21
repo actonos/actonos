@@ -38,7 +38,7 @@ func newWorkspaceToolRegistry(t *testing.T) (*ToolRegistry, *workspacepkg.Store,
 		t.Fatalf("opening test database: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	store, err := workspacepkg.NewStore(context.Background(), db.SQLDB())
+	store, err := workspacepkg.NewStore(context.Background(), db.SQLDB(), t.TempDir())
 	if err != nil {
 		t.Fatalf("creating workspace store: %v", err)
 	}

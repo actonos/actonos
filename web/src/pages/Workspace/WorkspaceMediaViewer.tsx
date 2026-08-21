@@ -14,16 +14,16 @@ import { api } from '@/lib/api';
 interface WorkspaceMediaViewerProps {
   path: string;
   kind: string;
-  dataUrl?: string;
+  rawUrl: string;
   size?: number;
 }
 
-export function WorkspaceMediaViewer({ path, kind, dataUrl, size = 0 }: WorkspaceMediaViewerProps) {
+export function WorkspaceMediaViewer({ path, kind, rawUrl, size = 0 }: WorkspaceMediaViewerProps) {
   const { t } = useTranslation('workspace');
   const [zoom, setZoom] = useState(1);
   const [imgError, setImgError] = useState(false);
 
-  const rawUrl = api.getWorkspaceRawUrl(path);
+  const mediaUrl = rawUrl || api.getWorkspaceRawUrl(path);
 
   if (kind === 'image') {
     return (
@@ -58,7 +58,7 @@ export function WorkspaceMediaViewer({ path, kind, dataUrl, size = 0 }: Workspac
           </div>
 
           <a
-            href={rawUrl}
+            href={mediaUrl}
             download={path.split('/').pop()}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-deep-ink/10 bg-canvas hover:bg-soft-meadow text-body-sm font-medium transition-colors"
           >
@@ -71,7 +71,7 @@ export function WorkspaceMediaViewer({ path, kind, dataUrl, size = 0 }: Workspac
         <div className="flex-1 flex items-center justify-center overflow-auto p-6 bg-soft-meadow/20">
           {!imgError ? (
             <img
-              src={dataUrl || rawUrl}
+              src={mediaUrl}
               alt={path}
               onError={() => setImgError(true)}
               style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
@@ -94,7 +94,7 @@ export function WorkspaceMediaViewer({ path, kind, dataUrl, size = 0 }: Workspac
         <div className="flex items-center justify-between p-3 border-b border-deep-ink/10 bg-soft-meadow/30">
           <span className="text-body-sm font-semibold">{t('preview.pdf')}</span>
           <a
-            href={rawUrl}
+            href={mediaUrl}
             download={path.split('/').pop()}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-deep-ink/10 bg-canvas hover:bg-soft-meadow text-body-sm font-medium transition-colors"
           >
@@ -104,7 +104,7 @@ export function WorkspaceMediaViewer({ path, kind, dataUrl, size = 0 }: Workspac
         </div>
         <div className="flex-1 w-full bg-slate/10 p-2">
           <iframe
-            src={dataUrl || rawUrl}
+            src={mediaUrl}
             title={path}
             className="w-full h-full rounded-xl border border-deep-ink/10 bg-white"
           />
@@ -118,9 +118,9 @@ export function WorkspaceMediaViewer({ path, kind, dataUrl, size = 0 }: Workspac
       <div className="h-full flex flex-col items-center justify-center p-8 bg-canvas text-deep-ink">
         <div className="max-w-md w-full p-6 rounded-[24px] border border-deep-ink/10 bg-soft-meadow/40 text-center flex flex-col gap-4">
           <div className="text-subheading font-bold truncate">{path.split('/').pop()}</div>
-          <audio controls src={dataUrl || rawUrl} className="w-full" />
+          <audio controls src={mediaUrl} className="w-full" />
           <a
-            href={rawUrl}
+            href={mediaUrl}
             download={path.split('/').pop()}
             className="mx-auto flex items-center gap-1.5 px-4 py-2 rounded-full bg-deep-ink text-canvas hover:bg-deep-ink/90 text-body-sm font-semibold transition-colors"
           >
@@ -138,7 +138,7 @@ export function WorkspaceMediaViewer({ path, kind, dataUrl, size = 0 }: Workspac
         <div className="flex items-center justify-between p-3 border-b border-deep-ink/10 bg-soft-meadow/30">
           <span className="text-body-sm font-semibold">{t('preview.video')}</span>
           <a
-            href={rawUrl}
+            href={mediaUrl}
             download={path.split('/').pop()}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-deep-ink/10 bg-canvas hover:bg-soft-meadow text-body-sm font-medium transition-colors"
           >
@@ -147,7 +147,7 @@ export function WorkspaceMediaViewer({ path, kind, dataUrl, size = 0 }: Workspac
           </a>
         </div>
         <div className="flex-1 flex items-center justify-center p-4 bg-soft-meadow/20">
-          <video controls src={dataUrl || rawUrl} className="max-h-full max-w-full rounded-xl border border-deep-ink/10" />
+          <video controls src={mediaUrl} className="max-h-full max-w-full rounded-xl border border-deep-ink/10" />
         </div>
       </div>
     );
@@ -178,7 +178,7 @@ export function WorkspaceMediaViewer({ path, kind, dataUrl, size = 0 }: Workspac
         </div>
 
         <a
-          href={rawUrl}
+          href={mediaUrl}
           download={path.split('/').pop()}
           className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-deep-ink text-canvas hover:bg-deep-ink/90 font-semibold text-body-sm transition-colors"
         >

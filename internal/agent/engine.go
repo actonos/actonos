@@ -560,13 +560,13 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 		Thought: "Retrieving user profile, procedural guidelines, and episodic memory...",
 	}
 	memStart := time.Now()
-	fullSystemPrompt, episodicCount := e.buildCognitivePrompt(ctx, agentID, agent, userMessage)
+	fullSystemPrompt, memoryCount := e.buildCognitivePrompt(ctx, agentID, agent, userMessage)
 	memDuration := time.Since(memStart).Milliseconds()
 
 	// Using for debug only, don't remove it
 	// fmt.Printf("\n================ [DEBUG STREAM SYSTEM PROMPT (%s)] ================\n%s\n===================================================================\n\n", agentID, fullSystemPrompt)
 
-	if episodicCount > 0 {
+	if memoryCount > 0 {
 		eventChan <- AgentStreamEvent{
 			Type: EventStreamAudit,
 			AuditLog: &AuditLogEntry{
@@ -574,7 +574,7 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 				AgentID:      agentID,
 				Action:       "cognitive_memory_retrieval",
 				Status:       "success",
-				Verification: fmt.Sprintf("Retrieved %d episodic memory fragments + user profile context", episodicCount),
+				Verification: fmt.Sprintf("Retrieved %d memory fragments (episodic diary + semantic vector knowledge)", memoryCount),
 				DurationMs:   memDuration,
 			},
 		}

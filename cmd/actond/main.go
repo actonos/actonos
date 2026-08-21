@@ -129,9 +129,9 @@ func main() {
 	}
 	defer db.Close()
 	slog.Info("database initialized (SQLite WAL mode)", "path", dbPath)
-	userWorkspace, err := workspacepkg.NewStore(ctx, db.SQLDB())
+	userWorkspace, err := workspacepkg.NewStore(ctx, db.SQLDB(), workspaceDir)
 	if err != nil {
-		slog.Error("failed to initialize database-backed user workspace", "error", err)
+		slog.Error("failed to initialize user workspace", "error", err)
 		os.Exit(1)
 	}
 
@@ -227,24 +227,6 @@ func main() {
 	}
 	agentsList, _ := agentMgr.List(ctx)
 	slog.Info("agent manager loaded", "agents_registered", len(agentsList))
-	agentIDs := make([]string, 0, len(agentsList))
-	for _, manifest := range agentsList {
-		agentIDs = append(agentIDs, manifest.AgentID)
-	}
-	migrationReport, err := userWorkspace.ImportLegacy(ctx, workspaceDir, agentsDir, agentIDs)
-	if err != nil {
-		slog.Error("legacy workspace migration failed", "error", err)
-		os.Exit(1)
-	}
-	slog.Info("legacy workspace migration ready",
-		"already_completed", migrationReport.AlreadyCompleted,
-		"imported_files", migrationReport.ImportedFiles,
-		"imported_folders", migrationReport.ImportedFolders,
-		"copied_agent_files", migrationReport.CopiedAgentFiles,
-		"conflicts", len(migrationReport.Conflicts),
-		"skipped_symlinks", len(migrationReport.SkippedSymlinks),
-		"legacy_preserved_at", migrationReport.PreservedLegacyAt,
-	)
 
 	approvalMgr := tools.NewApprovalManager(db.SQLDB())
 	toolReg.SetApprovalManager(approvalMgr)
@@ -297,7 +279,7 @@ func main() {
 	defer cronSched.Stop()
 
 	// Initialize Autonomous Task Backlog Manager
-	taskMgr, err := agent.NewTaskManager(db.SQLDB(), workspaceDir)
+	taskMgr, err := agent.NewTaskManager(db.SQLDB(), *dataDir)
 	if err != nil {
 		slog.Warn("failed to initialize task manager", "error", err)
 	}
@@ -311,7 +293,7 @@ func main() {
 	engine.SetSessionManager(sessionMgr)
 
 	// Initialize Autonomous Heartbeat Daemon
-	heartbeatDaemon := agent.NewHeartbeatDaemon(agentMgr, engine, eventBus, db.SQLDB(), workspaceDir, 5*time.Minute)
+	heartbeatDaemon := agent.NewHeartbeatDaemon(agentMgr, engine, eventBus, db.SQLDB(), *dataDir, 5*time.Minute)
 	if taskMgr != nil {
 		heartbeatDaemon.SetTaskManager(taskMgr)
 	}
