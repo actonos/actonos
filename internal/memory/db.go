@@ -72,6 +72,8 @@ func (d *DB) migrate() error {
 		id TEXT PRIMARY KEY,
 		agent_id TEXT NOT NULL,
 		title TEXT,
+		channel TEXT NOT NULL DEFAULT 'web',
+		is_pinned BOOLEAN NOT NULL DEFAULT 0,
 		created_at TIMESTAMP NOT NULL,
 		updated_at TIMESTAMP NOT NULL
 	);
@@ -306,8 +308,10 @@ func (d *DB) migrate() error {
 	defer cancel()
 
 	_, err := d.db.ExecContext(ctx, schema)
-	if err == nil {
-		_, _ = d.db.ExecContext(ctx, "ALTER TABLE agent_runs ADD COLUMN checkpoint_json TEXT")
-	}
+	// Non-destructive column migrations and index creation
+	_, _ = d.db.ExecContext(ctx, "ALTER TABLE agent_runs ADD COLUMN checkpoint_json TEXT")
+	_, _ = d.db.ExecContext(ctx, "ALTER TABLE conversations ADD COLUMN is_pinned BOOLEAN NOT NULL DEFAULT 0")
+	_, _ = d.db.ExecContext(ctx, "ALTER TABLE conversations ADD COLUMN channel TEXT NOT NULL DEFAULT 'web'")
+	_, _ = d.db.ExecContext(ctx, "CREATE INDEX IF NOT EXISTS idx_conversations_pinned ON conversations(is_pinned, updated_at)")
 	return err
 }

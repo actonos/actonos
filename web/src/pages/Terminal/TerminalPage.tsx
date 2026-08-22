@@ -114,16 +114,16 @@ export function TerminalPage() {
 
       socket.onclose = () => {
         setStatus('disconnected');
-        term.writeln('\r\n\x1b[33m⚡ Terminal session ended.\x1b[0m\r\n');
+        term.writeln('\r\n\x1b[33m[!] Terminal session ended.\x1b[0m\r\n');
       };
 
       socket.onerror = () => {
         setStatus('error');
-        term.writeln('\r\n\x1b[31m✖ WebSocket connection error.\x1b[0m\r\n');
+        term.writeln('\r\n\x1b[31m[x] WebSocket connection error.\x1b[0m\r\n');
       };
     } catch (err) {
       setStatus('error');
-      term.writeln(`\r\n\x1b[31m✖ Failed to connect: ${err}\x1b[0m\r\n`);
+      term.writeln(`\r\n\x1b[31m[x] Failed to connect: ${err}\x1b[0m\r\n`);
     }
   };
 

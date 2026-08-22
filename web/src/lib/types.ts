@@ -70,6 +70,8 @@ export interface ConversationItem {
   id: string;
   agent_id: string;
   title: string;
+  channel?: 'web' | 'telegram' | 'whatsapp' | 'discord' | 'mission' | 'system' | 'webhook' | string;
+  is_pinned?: boolean;
   message_count?: number;
   last_message?: string;
   created_at: string;

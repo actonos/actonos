@@ -296,9 +296,14 @@ export const api = {
   deleteConversation: (id: string) =>
     fetchJSON<{ status: string }>(`/conversations/${id}`, { method: 'DELETE' }),
   updateConversationTitle: (id: string, title: string) =>
-    fetchJSON<{ status: string; title: string }>(`/conversations/${id}`, {
+    fetchJSON<{ status: string; title?: string }>(`/conversations/${id}`, {
       method: 'PUT',
       body: JSON.stringify({ title }),
+    }),
+  togglePinConversation: (id: string, is_pinned: boolean) =>
+    fetchJSON<{ status: string; is_pinned: boolean }>(`/conversations/${id}/pin`, {
+      method: 'PUT',
+      body: JSON.stringify({ is_pinned }),
     }),
 
   // Tools Registry & MCP Host

@@ -59,5 +59,57 @@
   "copyResponse": "Sao chép phản hồi",
   "connecting": "Đang kết nối với tầng mô hình...",
   "thinkingProcess": "Quá trình suy nghĩ",
-  "showThinking": "Xem quá trình suy nghĩ ({{count}} bước)"
+  "showThinking": "Xem quá trình suy nghĩ ({{count}} bước)",
+  "backToSessions": "Quay lại danh sách",
+  "sessionsList": "Danh sách phiên chat",
+  "conversationWith": "Cuộc trò chuyện với {{name}}",
+  "table": {
+    "pin": "Ghim",
+    "id": "ID",
+    "title": "Tiêu đề",
+    "agent": "Agent",
+    "channel": "Kênh",
+    "latestMessage": "Tin nhắn mới nhất",
+    "createdAt": "Ngày tạo",
+    "updatedAt": "Hoạt động",
+    "actions": "Hành động"
+  },
+  "actions": {
+    "view": "Xem",
+    "rename": "Sửa tiêu đề",
+    "pin": "Ghim phiên",
+    "unpin": "Bỏ ghim",
+    "delete": "Xóa",
+    "copyId": "Sao chép ID",
+    "copiedId": "Đã chép ID"
+  },
+  "channels": {
+    "all": "Tất cả kênh",
+    "web": "Web UI",
+    "telegram": "Telegram",
+    "whatsapp": "WhatsApp",
+    "discord": "Discord",
+    "mission": "Nhiệm vụ (Mission)",
+    "system": "Hệ thống",
+    "webhook": "Webhook"
+  },
+  "stats": {
+    "totalSessions": "Tổng số phiên",
+    "activeAgents": "Agent tham gia",
+    "connectedChannels": "Kênh kết nối",
+    "pinnedSessions": "Phiên đã ghim"
+  },
+  "filters": {
+    "allChannels": "Tất cả kênh",
+    "pinnedOnly": "Đã ghim",
+    "allAgents": "Tất cả Agent",
+    "searchPlaceholder": "Tìm theo tiêu đề, nội dung, ID..."
+  },
+  "rename": {
+    "title": "Đổi tên phiên trò chuyện",
+    "label": "Tiêu đề phiên",
+    "placeholder": "Nhập tiêu đề mới...",
+    "save": "Lưu tiêu đề",
+    "cancel": "Hủy"
+  }
 }

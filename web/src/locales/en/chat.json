@@ -59,5 +59,57 @@
   "copyResponse": "Copy response",
   "connecting": "Connecting to model cascade...",
   "thinkingProcess": "Thinking Process",
-  "showThinking": "Show thinking process ({{count}} steps)"
+  "showThinking": "Show thinking process ({{count}} steps)",
+  "backToSessions": "Back to Sessions",
+  "sessionsList": "Sessions Hub",
+  "conversationWith": "Conversation with {{name}}",
+  "table": {
+    "pin": "Pin",
+    "id": "ID",
+    "title": "Title",
+    "agent": "Agent",
+    "channel": "Channel",
+    "latestMessage": "Latest Message",
+    "createdAt": "Created",
+    "updatedAt": "Last Active",
+    "actions": "Actions"
+  },
+  "actions": {
+    "view": "Open",
+    "rename": "Rename",
+    "pin": "Pin session",
+    "unpin": "Unpin session",
+    "delete": "Delete",
+    "copyId": "Copy ID",
+    "copiedId": "ID copied"
+  },
+  "channels": {
+    "all": "All Channels",
+    "web": "Web UI",
+    "telegram": "Telegram",
+    "whatsapp": "WhatsApp",
+    "discord": "Discord",
+    "mission": "Mission Control",
+    "system": "System",
+    "webhook": "Webhook"
+  },
+  "stats": {
+    "totalSessions": "Total Sessions",
+    "activeAgents": "Agents in Use",
+    "connectedChannels": "Connected Channels",
+    "pinnedSessions": "Pinned Sessions"
+  },
+  "filters": {
+    "allChannels": "All Channels",
+    "pinnedOnly": "Pinned",
+    "allAgents": "All Agents",
+    "searchPlaceholder": "Search by title, message, ID..."
+  },
+  "rename": {
+    "title": "Rename Conversation",
+    "label": "Session Title",
+    "placeholder": "Enter session title...",
+    "save": "Save Title",
+    "cancel": "Cancel"
+  }
 }

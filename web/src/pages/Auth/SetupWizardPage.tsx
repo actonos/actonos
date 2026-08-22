@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, type FormEvent } from 'react';
+import { useState, useMemo, type FormEvent } from 'react';
 import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
 import { getGroupedTimezones, detectUserTimezone } from '@/lib/timezones';
@@ -26,6 +26,21 @@ export interface SetupWizardPageProps {
   onCompleted: () => void;
 }
 
+const DEFAULT_VALUES: Record<'en' | 'vi', { userName: string; userRole: string; customInstructions: string }> = {
+  en: {
+    userName: 'Alex',
+    userRole: 'Project Lead & Creator',
+    customInstructions:
+      'Always communicate in a warm, concise, and helpful tone. Act as a thoughtful, supportive partner across any task. Proactively offer practical insights, ask clarifying questions when needed, and keep responses natural and easy to understand.',
+  },
+  vi: {
+    userName: 'Minh',
+    userRole: 'Trưởng nhóm & Quản lý dự án',
+    customInstructions:
+      'Luôn giao tiếp với giọng văn thân thiện, tự nhiên, súc tích và hữu ích. Đóng vai trò là một người cộng sự tận tâm, sẵn sàng hỗ trợ bạn trong mọi công việc. Chủ động đưa ra giải pháp thực tế, hỏi thêm khi cần làm rõ và tránh cách diễn đạt máy móc, khô cứng.',
+  },
+};
+
 export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
   const { t, i18n } = useTranslation('setup');
   const { success, error } = useToast();
@@ -35,14 +50,15 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
 
   const timezoneGroups = useMemo(() => getGroupedTimezones(), []);
 
-  // Form State - Default English as specified, auto-detect local timezone
-  const [userName, setUserName] = useState('Operator');
-  const [userRole, setUserRole] = useState('System Architect & Lead Developer');
-  const [language, setLanguage] = useState<'en' | 'vi'>('en');
+  // Determine initial language from i18n
+  const initialLang: 'en' | 'vi' = (i18n.resolvedLanguage === 'vi' || i18n.language === 'vi') ? 'vi' : 'en';
+
+  // Form State - Adapt defaults to selected language, auto-detect local timezone
+  const [language, setLanguage] = useState<'en' | 'vi'>(initialLang);
+  const [userName, setUserName] = useState(() => DEFAULT_VALUES[initialLang].userName);
+  const [userRole, setUserRole] = useState(() => DEFAULT_VALUES[initialLang].userRole);
   const [timezone, setTimezone] = useState(() => detectUserTimezone());
-  const [customInstructions, setCustomInstructions] = useState(
-    'Provide intelligent, natural, and empathetic responses. Act as a trusted senior engineering partner. Proactively solve problems and avoid robotic or stiff clichés.'
-  );
+  const [customInstructions, setCustomInstructions] = useState(() => DEFAULT_VALUES[initialLang].customInstructions);
   const { resolvedTheme } = useTheme();
 
   // Password State
@@ -50,14 +66,21 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  // Ensure default interface language on initial wizard mount
-  useEffect(() => {
-    i18n.changeLanguage('en');
-  }, [i18n]);
-
   const handleLanguageChange = (newLang: 'en' | 'vi') => {
+    const oldLang = language;
     setLanguage(newLang);
     i18n.changeLanguage(newLang);
+
+    // If the values are currently unchanged from the previous language's default or empty, switch to new language's defaults
+    if (!userName.trim() || userName === DEFAULT_VALUES[oldLang].userName) {
+      setUserName(DEFAULT_VALUES[newLang].userName);
+    }
+    if (!userRole.trim() || userRole === DEFAULT_VALUES[oldLang].userRole) {
+      setUserRole(DEFAULT_VALUES[newLang].userRole);
+    }
+    if (!customInstructions.trim() || customInstructions === DEFAULT_VALUES[oldLang].customInstructions) {
+      setCustomInstructions(DEFAULT_VALUES[newLang].customInstructions);
+    }
   };
 
   const handleNextFromStep1 = (e: FormEvent) => {

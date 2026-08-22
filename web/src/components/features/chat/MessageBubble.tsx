@@ -80,7 +80,7 @@ export function MessageBubble({
                       >
                         {reasoningSteps.length > 1 && (
                           <span className="font-semibold text-[10px] text-slate uppercase tracking-wider block mb-0.5">
-                            💭 {t('thinkingStep', { step: i + 1, defaultValue: `Step ${i + 1}` })}
+                            {t('thinkingStep', { step: i + 1, defaultValue: `Step ${i + 1}` })}
                           </span>
                         )}
                         {cleanReasoning(seg.text)}

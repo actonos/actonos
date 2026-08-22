@@ -310,6 +310,7 @@ func (s *Server) setupRoutes() {
 				r.Route("/{id}", func(r chi.Router) {
 					r.Get("/", s.handleGetConversation)
 					r.Put("/", s.handleUpdateConversation)
+					r.Put("/pin", s.handleTogglePinConversation)
 					r.Delete("/", s.handleDeleteConversation)
 				})
 			})
