@@ -1,7 +1,7 @@
 {
-  "eyebrow": "Proactive Autonomous Scheduling",
-  "title": "Cron Automations",
-  "scheduled": "Scheduled",
+  "eyebrow": "Automation & Scheduling",
+  "title": "Scheduled Automations",
+  "scheduled": "Active",
   "actions": {
     "refresh": "Refresh",
     "newTask": "Schedule New Task",
@@ -10,11 +10,11 @@
   },
   "tabs": {
     "tasks": "Scheduled Tasks ({{count}})",
-    "history": "Execution History ({{count}})"
+    "history": "Run History ({{count}})"
   },
   "history": {
-    "emptyTitle": "No Execution History Yet",
-    "emptyDescription": "When scheduled CRON jobs execute or autonomous pulses trigger, execution duration, tokens, and output logs will be tracked here.",
+    "emptyTitle": "No Run History Yet",
+    "emptyDescription": "When automated tasks run on schedule, their execution history, duration, and output results will be displayed here.",
     "columns": {
       "status": "Status",
       "time": "Executed Time",

@@ -1,20 +1,20 @@
 {
-  "eyebrow": "Lập lịch tự chủ chủ động",
-  "title": "Tự động hóa Cron",
-  "scheduled": "Đã lập lịch",
+  "eyebrow": "Lập lịch & Tự động",
+  "title": "Tác Vụ Định Kỳ",
+  "scheduled": "Đang chạy",
   "actions": {
     "refresh": "Làm mới",
-    "newTask": "Lập lịch tác vụ mới",
+    "newTask": "Tạo tác vụ định kỳ mới",
     "pause": "Tạm dừng",
-    "resume": "Mở lại"
+    "resume": "Bật lại"
   },
   "tabs": {
-    "tasks": "Tác vụ đã lập lịch ({{count}})",
-    "history": "Lịch sử thực thi ({{count}})"
+    "tasks": "Tác vụ đã lên lịch ({{count}})",
+    "history": "Lịch sử đã chạy ({{count}})"
   },
   "history": {
-    "emptyTitle": "Chưa có lịch sử thực thi",
-    "emptyDescription": "Khi tác vụ CRON hoặc pulse tự chủ chạy, thời lượng, token và nhật ký đầu ra sẽ được ghi lại tại đây.",
+    "emptyTitle": "Chưa có lịch sử chạy tác vụ",
+    "emptyDescription": "Khi các tác vụ định kỳ được kích hoạt tự động, kết quả thực hiện, thời gian chạy và nội dung phản hồi sẽ được lưu tại đây.",
     "columns": {
       "status": "Trạng thái",
       "time": "Thời gian thực thi",
