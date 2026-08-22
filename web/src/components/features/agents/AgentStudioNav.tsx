@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-export type AgentStudioSection = 'prompt' | 'soul' | 'memory' | 'model' | 'tools' | 'channels' | 'governance' | 'review';
+export type AgentStudioSection = 'prompt' | 'soul' | 'memory' | 'model' | 'tools' | 'channels' | 'heartbeat' | 'governance' | 'review';
 
 export function AgentStudioNav({
   value,
@@ -9,6 +9,7 @@ export function AgentStudioNav({
   toolCount,
   allChannels,
   channelCount,
+  heartbeatActive,
   onChange,
 }: {
   value: AgentStudioSection;
@@ -17,6 +18,7 @@ export function AgentStudioNav({
   toolCount: number;
   allChannels: boolean;
   channelCount: number;
+  heartbeatActive?: boolean;
   onChange: (section: AgentStudioSection) => void;
 }) {
   const { t } = useTranslation('agents');
@@ -27,6 +29,7 @@ export function AgentStudioNav({
     { value: 'model', label: t('studio.tabs.model', { status: modelReady ? t('studio.ready') : t('studio.keyNeeded') }) },
     { value: 'tools', label: t('studio.tabs.tools', { value: allTools ? t('studio.allTools') : toolCount }) },
     { value: 'channels', label: t('studio.tabs.channels', { value: allChannels ? t('studio.all') : channelCount }) },
+    { value: 'heartbeat', label: t('studio.tabs.heartbeat', { status: heartbeatActive ? t('studio.active') : t('studio.stopped') }) },
     { value: 'governance', label: t('studio.tabs.governance') },
     { value: 'review', label: t('studio.tabs.review') },
   ];

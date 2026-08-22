@@ -64,6 +64,13 @@
     "enabled": "Enabled",
     "remove": "Remove",
     "primary": "Primary",
+    "routingMode": "Message Routing Mode",
+    "routingExclusive": "Exclusive",
+    "routingExclusiveHelp": "Assigned agent only",
+    "routingMention": "@Mention",
+    "routingMentionHelp": "Route by @agent_name",
+    "routingFallback": "Fallback",
+    "routingFallbackHelp": "Default to Nova",
     "empty": "No accounts added yet",
     "emptyHint": "Connect your first bot token to start receiving and processing messages."
   },

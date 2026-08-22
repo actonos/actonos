@@ -395,16 +395,23 @@ func (d *DiscordAdapter) handleDispatch(ctx context.Context, eventType string, e
 			d.pairingMgr.TouchUser("discord", senderID)
 		}
 
-		slog.Info("discord inbound message received", "author", senderName, "channel_id", channelID, "text", text)
+		targetAgent, cleanText := ExtractAgentMention(text)
+		msgContent := cleanText
+		if msgContent == "" {
+			msgContent = text
+		}
+
+		slog.Info("discord inbound message received", "author", senderName, "channel_id", channelID, "text", text, "target_agent", targetAgent)
 
 		if d.bus != nil {
-			d.bus.Publish(bus.NewEvent(bus.EventAgentActionStarted, "discord", InboundMessage{
+			d.bus.Publish(bus.NewEvent(bus.EventChannelMessage, "discord", InboundMessage{
 				ChannelID:   "discord",
 				AccountID:   d.GetAccountID(),
 				SenderID:    senderID,
 				SenderName:  senderName,
-				TargetAgent: "default",
-				Content:     text,
+				TargetAgent: targetAgent,
+				MentionText: targetAgent,
+				Content:     msgContent,
 				Metadata: map[string]string{
 					"chat_id":    channelID,
 					"channel_id": channelID,

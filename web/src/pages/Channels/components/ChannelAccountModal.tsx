@@ -68,6 +68,7 @@ export function ChannelAccountModal({
   const [token, setToken] = useState('');
   const [phoneId, setPhoneId] = useState('');
   const [boundAgentIds, setBoundAgentIds] = useState<string[]>(['*']);
+  const [routingMode, setRoutingMode] = useState<'exclusive' | 'mention' | 'fallback'>('exclusive');
   const [availableAgents, setAvailableAgents] = useState<AgentManifest[]>([]);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
@@ -78,6 +79,7 @@ export function ChannelAccountModal({
       setToken('');
       setPhoneId('');
       setBoundAgentIds(['*']);
+      setRoutingMode('exclusive');
       setDeleteConfirmId(null);
 
       // Load agents list
@@ -104,6 +106,7 @@ export function ChannelAccountModal({
       token: token.trim(),
       phone_id: phoneId.trim() || undefined,
       bound_agent_ids: boundAgentIds.length > 0 ? boundAgentIds : ['*'],
+      routing_mode: routingMode,
       enabled: true,
     });
 
@@ -111,6 +114,7 @@ export function ChannelAccountModal({
     setToken('');
     setPhoneId('');
     setBoundAgentIds(['*']);
+    setRoutingMode('exclusive');
     setMode('manage');
   };
 
@@ -215,6 +219,11 @@ export function ChannelAccountModal({
                               {acc.bound_agent_ids.join(', ')}
                             </span>
                           ) : null}
+                          {acc.routing_mode && acc.routing_mode !== 'exclusive' && (
+                            <span className="inline-flex items-center gap-1 text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-md font-medium">
+                              {acc.routing_mode === 'mention' ? '@mention' : 'fallback'}
+                            </span>
+                          )}
                         </div>
                         <div className="text-caption font-mono text-slate truncate flex items-center gap-2 mt-0.5">
                           <span>{t('ui.token')}: {acc.token ? '••••••••' + acc.token.slice(-4) : '••••••'}</span>
@@ -372,6 +381,53 @@ export function ChannelAccountModal({
                       <span>{ag.name} <span className="text-[11px] font-mono text-slate">({ag.agent_id})</span></span>
                     </label>
                   ))}
+              </div>
+            </div>
+
+            {/* Message Routing Mode */}
+            <div>
+              <label className="text-caption font-semibold text-deep-ink block mb-1">
+                {t('accounts.routingMode', 'Message Routing Mode')}
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRoutingMode('exclusive')}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    routingMode === 'exclusive'
+                      ? 'border-deep-ink bg-soft-meadow ring-1 ring-deep-ink'
+                      : 'border-onyx/10 bg-canvas hover:border-onyx/30'
+                  }`}
+                >
+                  <span className="block text-[11px] font-semibold text-deep-ink">{t('accounts.routingExclusive', 'Exclusive')}</span>
+                  <span className="block text-[10px] text-slate mt-0.5 leading-tight">{t('accounts.routingExclusiveHelp', 'Assigned agent only')}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setRoutingMode('mention')}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    routingMode === 'mention'
+                      ? 'border-deep-ink bg-soft-meadow ring-1 ring-deep-ink'
+                      : 'border-onyx/10 bg-canvas hover:border-onyx/30'
+                  }`}
+                >
+                  <span className="block text-[11px] font-semibold text-deep-ink">@Mention</span>
+                  <span className="block text-[10px] text-slate mt-0.5 leading-tight">{t('accounts.routingMentionHelp', 'Route by @agent_name')}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setRoutingMode('fallback')}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    routingMode === 'fallback'
+                      ? 'border-deep-ink bg-soft-meadow ring-1 ring-deep-ink'
+                      : 'border-onyx/10 bg-canvas hover:border-onyx/30'
+                  }`}
+                >
+                  <span className="block text-[11px] font-semibold text-deep-ink">{t('accounts.routingFallback', 'Fallback')}</span>
+                  <span className="block text-[10px] text-slate mt-0.5 leading-tight">{t('accounts.routingFallbackHelp', 'Default to Nova')}</span>
+                </button>
               </div>
             </div>
 

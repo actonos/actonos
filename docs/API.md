@@ -255,6 +255,16 @@ Create a new agent manifest.
   "system_instructions": "You are an expert research analyst...",
   "authorized_tools": ["mcp_fetch", "browser_view"],
   "listen_channels": ["*"],
+  "heartbeat_config": {
+    "enabled": true,
+    "directives": "# Research Monitor\n- Review new arxiv preprints\n- Alert Telegram if relevant",
+    "interval_minutes": 60,
+    "target_channel": "telegram",
+    "target_account_id": "tg_support_bot",
+    "active_hours_start": "08:00",
+    "active_hours_end": "22:00",
+    "active_hours_timezone": "Asia/Ho_Chi_Minh"
+  },
   "delegation_scope": {
     "max_monthly_budget_usd": 50.0,
     "allowed_workspace_paths": ["/data/workspace/research/"],
@@ -333,12 +343,14 @@ Delete a task from the database and workspace `TASKS.md`.
 ## Heartbeat Coordinator & Autonomous Pulse
 
 Behavior follows [OpenClaw's Heartbeat contract](https://docs.openclaw.ai/vi/gateway/heartbeat): a periodic
-agent turn that reads `HEARTBEAT.md` strictly, never invents work, and stays silent unless something is
-actually worth surfacing. See `docs/ARCHITECTURE.md` §4.C for the full trigger/gating and response-contract
+agent turn that reads standing directives strictly, never invents work, and stays silent unless something is
+actually worth surfacing. See `docs/ARCHITECTURE.md` §3.C for the full trigger/gating and response-contract
 diagrams.
 
+> **Note**: ActonOS supports both **System Core Heartbeat** (managed below for `agent_system_core` and global mission task backlog) and **Per-Agent Autonomous Heartbeats** (configured individually per custom agent via `AgentManifest.heartbeat_config` under `POST /api/agents` and `PUT /api/agents/{agentID}`).
+
 ### `GET /api/heartbeat/config`
-Get current standing directives (`HEARTBEAT.md`), pulse interval, target channel, and response-contract
+Get current system standing directives (`HEARTBEAT.md`), pulse interval, target channel, and response-contract
 settings. Response body (`HeartbeatConfig`):
 
 | Field | Type | Default | Description |
@@ -433,10 +445,27 @@ Generate OAuth 2.1 PKCE authorization URL.
 Save direct API token for SaaS connector.
 
 ### `GET /api/integrations/channels` | `POST /api/integrations/channels`
-Get and configure multi-account credentials for Telegram, WhatsApp, and Discord with agent bindings.
+Get and configure multi-account credentials for Telegram, WhatsApp, and Discord with agent bindings and message routing modes.
+
+**Account Payload Schema (`ChannelAccount`):**
+```json
+{
+  "id": "tg_bot_1",
+  "name": "Support Bot",
+  "label": "Support Bot",
+  "channel": "telegram",
+  "token": "123456:ABC-DEF...",
+  "phone_id": "",
+  "bound_agent_ids": ["support_agent", "triage_agent"],
+  "routing_mode": "mention",
+  "enabled": true
+}
+```
+
+- `routing_mode`: `'exclusive'` (only assigned agents), `'mention'` (route by `@agent_name` in group chats), or `'fallback'` (default to `agent_system_core`).
 
 ### `GET /api/integrations/channels/accounts`
-List all configured channel accounts across all channels with their assigned agent bindings.
+List all configured channel accounts across all channels with their assigned agent bindings, routing modes, and live health status.
 
 ### `POST /api/integrations/pairing/code`
 Generate pairing code.

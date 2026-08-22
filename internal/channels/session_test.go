@@ -93,8 +93,8 @@ func TestChannelSessionManager_GetOrCreateAndHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create session: %v", err)
 	}
-	if convID != "conv_telegram_987654321" {
-		t.Errorf("expected conv_telegram_987654321, got %s", convID)
+	if convID != "conv_telegram_987654321_agent_system_core" {
+		t.Errorf("expected conv_telegram_987654321_agent_system_core, got %s", convID)
 	}
 
 	// Save user message

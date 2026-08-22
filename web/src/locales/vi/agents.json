@@ -164,6 +164,7 @@
       "model": "LLM & Mô hình ({{status}})",
       "tools": "Công cụ ({{value}})",
       "channels": "Kênh ({{value}})",
+      "heartbeat": "Heartbeat ({{status}})",
       "governance": "Quản trị & Phê duyệt",
       "review": "Kiểm tra và lưu"
     },
@@ -266,6 +267,28 @@
           "description": "Kích hoạt agent từ HTTP webhook"
         }
       }
+    },
+    "heartbeat": {
+      "title": "Nhịp tim tự hành (Autonomous Heartbeat)",
+      "description": "Cấu hình chu kỳ nhận thức, kiểm tra sức khỏe hệ thống và các chỉ thị định kỳ dành riêng cho Agent này.",
+      "enabledBadge": "Heartbeat đang hoạt động",
+      "disabledBadge": "Heartbeat đã tắt",
+      "modeLabel": "Chế độ Heartbeat",
+      "enabled": "Bật (Chu kỳ tự hành định kỳ)",
+      "disabled": "Tắt (Chỉ phản hồi thủ công khi nhận lệnh)",
+      "directivesLabel": "Chỉ thị tự hành định kỳ (Standing Directives)",
+      "directivesHelp": "Nội dung chỉ thị mà Agent sẽ đánh giá trong mỗi chu kỳ. Khi mọi thứ bình thường, Agent sẽ trả về HEARTBEAT_OK và giữ im lặng (Zero-Noise).",
+      "intervalLabel": "Chu kỳ xung nhịp (Interval)",
+      "intervalHelp": "Tần suất daemon đánh thức Agent để thực thi đánh giá nhận thức.",
+      "channelLabel": "Kênh đích nhận cảnh báo",
+      "channelHelp": "Nơi gửi thông báo tóm tắt hoặc báo cáo khi phát hiện vấn đề cần can thiệp.",
+      "activeHoursTitle": "Khung giờ hoạt động & Giới hạn tài khoản (Tùy chọn)",
+      "startHour": "Bắt đầu (HH:MM)",
+      "endHour": "Kết thúc (HH:MM)",
+      "targetAccount": "Mã tài khoản cụ thể (Account ID)",
+      "zeroNoiseNote": "Chính sách Zero-Noise: Nếu hệ thống bình thường và các chỉ thị không phát hiện vấn đề gì cần người vận hành xử lý, Agent chỉ ghi log và hoàn toàn không gửi thông báo rác.",
+      "disabledNoticeTitle": "Heartbeat đang tắt đối với Agent này",
+      "disabledNoticeDesc": "Bật Heartbeat nếu bạn muốn Agent này tự động thức dậy theo lịch trình, kiểm tra các chỉ thị định kỳ và chủ động gửi thông báo khi cần thiết."
     },
     "governance": {
       "title": "Quản trị & Quyền",

@@ -21,6 +21,17 @@ export interface TriggerRule {
   expression?: string;
 }
 
+export interface AgentHeartbeatConfig {
+  enabled: boolean;
+  interval_minutes?: number;
+  directives?: string;
+  target_channel?: string;
+  target_account_id?: string;
+  active_hours_start?: string;
+  active_hours_end?: string;
+  active_hours_timezone?: string;
+}
+
 export interface AgentManifest {
   agent_id: string;
   name: string;
@@ -33,6 +44,7 @@ export interface AgentManifest {
   authorized_tools: string[];
   /** Channels this agent listens to. ['*'] = all (default). */
   listen_channels: string[];
+  heartbeat_config?: AgentHeartbeatConfig;
   delegation_scope: DelegationScope;
   trigger_rules?: TriggerRule[];
   created_at?: string;
@@ -51,6 +63,7 @@ export interface ChannelAccount {
   enabled: boolean;
   bound_agent_ids?: string[]; // e.g. ['*'] or ['agent_support', 'agent_devops']
   default_chat_id?: string;
+  routing_mode?: 'exclusive' | 'mention' | 'fallback';
 }
 
 export interface ConversationItem {

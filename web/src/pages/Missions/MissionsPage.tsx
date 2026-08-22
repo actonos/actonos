@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
@@ -19,7 +19,6 @@ import {
   Trash2,
   Edit2,
   Sparkles,
-  Save,
   MessageSquare,
   Eye,
 } from 'lucide-react';
@@ -39,9 +38,9 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
   const { t } = useTranslation('missions');
   const { success, error, info } = useToast();
 
-  const [activeTab, setActiveTab] = useState<'tasks' | 'directives' | 'audit' | 'governance'>(() => {
+  const [activeTab, setActiveTab] = useState<'tasks' | 'audit' | 'governance'>(() => {
     const value = readHashParams().get('view');
-    return value === 'directives' || value === 'audit' || value === 'governance' ? value : 'tasks';
+    return value === 'audit' || value === 'governance' ? value : 'tasks';
   });
   const [tasks, setTasks] = useState<AutonomousTask[]>([]);
   const [heartbeatConfig, setHeartbeatConfig] = useState<HeartbeatConfigData>({
@@ -61,18 +60,14 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
 
   const [loading, setLoading] = useState(true);
   const [triggeringPulse, setTriggeringPulse] = useState(false);
-  const [savingDirectives, setSavingDirectives] = useState(false);
 
   // Modal states
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<AutonomousTask | null>(null);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [selectedRunDetail, setSelectedRunDetail] = useState<AgentRun | null>(null);
-  const [isDirectivesDirty, setIsDirectivesDirty] = useState(false);
-  const isDirectivesDirtyRef = useRef(false);
-  isDirectivesDirtyRef.current = isDirectivesDirty;
 
-  const changeTab = (tab: 'tasks' | 'directives' | 'audit' | 'governance') => {
+  const changeTab = (tab: 'tasks' | 'audit' | 'governance') => {
     setActiveTab(tab);
     setHashParam('view', tab === 'tasks' ? undefined : tab);
   };
@@ -94,9 +89,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
       ]);
 
       if (tasksRes && tasksRes.tasks) setTasks(tasksRes.tasks);
-      if (cfgRes && (!isBackground || !isDirectivesDirtyRef.current)) {
-        setHeartbeatConfig(cfgRes);
-      }
+      if (cfgRes) setHeartbeatConfig(cfgRes);
       if (runsRes) setHeartbeatRuns(runsRes);
       setApprovals(approvalsRes.approvals);
       setAgentRuns(agentRunsRes.runs);
@@ -172,19 +165,6 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
       error('Pulse execution failed', getErrorMessage(err));
     } finally {
       setTriggeringPulse(false);
-    }
-  };
-
-  const handleSaveDirectives = async () => {
-    setSavingDirectives(true);
-    try {
-      await api.saveHeartbeatConfig(heartbeatConfig);
-      setIsDirectivesDirty(false);
-      success(t('toast.directivesSaved', 'Directives Saved'), 'Standing HEARTBEAT instructions synchronized.');
-    } catch (err) {
-      error('Failed to save directives', getErrorMessage(err));
-    } finally {
-      setSavingDirectives(false);
     }
   };
 
@@ -334,7 +314,6 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
           className="mb-6 w-fit"
           options={[
             { value: 'tasks', label: t('tabs.tasks', { count: tasks.length }) },
-            { value: 'directives', label: t('tabs.directives') },
             { value: 'audit', label: t('tabs.audit', { count: heartbeatRuns.length }) },
             { value: 'governance', label: t('governance.tab', { count: approvals.length }) },
           ]}
@@ -513,95 +492,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
           </div>
         )}
 
-        {/* TAB 2: Standing Directives (HEARTBEAT.md) */}
-        {activeTab === 'directives' && (
-          <div className="space-y-6">
-            <Card className="p-6 border border-onyx/10 bg-canvas space-y-5 max-w-3xl">
-              <div className="flex items-center justify-between border-b border-onyx/10 pb-4">
-                <div>
-                  <h3 className="font-serif text-heading-sm text-deep-ink font-semibold flex items-center gap-2">
-                    <HeartPulse className="w-5 h-5 text-rose-600" />
-                    <span>{t('directives.title')}</span>
-                  </h3>
-                  <p className="text-caption text-slate mt-0.5">
-                    {t('directives.description')}
-                  </p>
-                </div>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  icon={<Save className="w-3.5 h-3.5" />}
-                  onClick={handleSaveDirectives}
-                  disabled={savingDirectives}
-                >
-                  {savingDirectives ? t('directives.saving') : t('directives.save')}
-                </Button>
-              </div>
-
-              {/* Directives Markdown Editor */}
-              <div className="space-y-2">
-                <label className="block text-caption font-semibold text-deep-ink">
-                  {t('directives.instructions')}
-                </label>
-                <textarea
-                  rows={8}
-                  value={heartbeatConfig.directives}
-                  onChange={(e) => {
-                    setIsDirectivesDirty(true);
-                    setHeartbeatConfig({ ...heartbeatConfig, directives: e.target.value });
-                  }}
-                  placeholder={t('directives.placeholder')}
-                  className="w-full bg-soft-meadow text-deep-ink font-mono text-[13px] p-4 rounded-2xl border border-onyx/10 focus:outline-none focus:border-onyx/30 resize-none leading-relaxed"
-                />
-              </div>
-
-              {/* Settings: Interval & Zero-Noise */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                <div>
-                  <label className="block text-caption font-semibold text-deep-ink mb-1.5">
-                    {t('directives.interval')}
-                  </label>
-                  <select
-                    value={heartbeatConfig.interval_minutes}
-                    onChange={(e) => {
-                      setIsDirectivesDirty(true);
-                      setHeartbeatConfig({ ...heartbeatConfig, interval_minutes: Number(e.target.value) });
-                    }}
-                    className="w-full bg-soft-meadow text-deep-ink text-body-sm font-sans p-2.5 rounded-full border border-onyx/10 focus:outline-none"
-                  >
-                    <option value={1}>{t('directives.intervals.one')}</option>
-                    <option value={5}>{t('directives.intervals.five')}</option>
-                    <option value={15}>{t('directives.intervals.fifteen')}</option>
-                    <option value={30}>{t('directives.intervals.thirty')}</option>
-                    <option value={60}>{t('directives.intervals.hour')}</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-caption font-semibold text-deep-ink mb-1.5">
-                    {t('directives.channel')}
-                  </label>
-                  <select
-                    value={heartbeatConfig.target_channel}
-                    onChange={(e) => {
-                      setIsDirectivesDirty(true);
-                      setHeartbeatConfig({ ...heartbeatConfig, target_channel: e.target.value });
-                    }}
-                    className="w-full bg-soft-meadow text-deep-ink text-body-sm font-sans p-2.5 rounded-full border border-onyx/10 focus:outline-none"
-                  >
-                    <option value="all">{t('channels.all')}</option>
-                    <option value="telegram">{t('channels.telegram')}</option>
-                    <option value="whatsapp">{t('channels.whatsapp')}</option>
-                    <option value="discord">{t('channels.discord')}</option>
-                    <option value="none">{t('channels.none')}</option>
-                  </select>
-                </div>
-              </div>
-            </Card>
-          </div>
-        )}
-
-        {/* TAB 3: Pulse Audit Ledger */}
+        {/* TAB 2: Pulse Audit Ledger */}
         {activeTab === 'audit' && (
           <div className="space-y-4">
             <Card className="p-6 border border-onyx/10 bg-canvas space-y-4">

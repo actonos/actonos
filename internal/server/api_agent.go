@@ -19,16 +19,17 @@ import (
 )
 
 type createAgentRequest struct {
-	Name               string                `json:"name"`
-	Description        string                `json:"description"`
-	AvatarIcon         string                `json:"avatar_icon"`
-	Status             agent.AgentStatus     `json:"status,omitempty"`
-	ModelConfig        llm.ModelConfig       `json:"model_config"`
-	SystemInstructions string                `json:"system_instructions"`
-	AuthorizedTools    []string              `json:"authorized_tools"`
-	ListenChannels     []string              `json:"listen_channels"`
-	DelegationScope    agent.DelegationScope `json:"delegation_scope"`
-	TriggerRules       []agent.TriggerRule   `json:"trigger_rules"`
+	Name               string                      `json:"name"`
+	Description        string                      `json:"description"`
+	AvatarIcon         string                      `json:"avatar_icon"`
+	Status             agent.AgentStatus           `json:"status,omitempty"`
+	ModelConfig        llm.ModelConfig             `json:"model_config"`
+	SystemInstructions string                      `json:"system_instructions"`
+	AuthorizedTools    []string                    `json:"authorized_tools"`
+	ListenChannels     []string                    `json:"listen_channels"`
+	HeartbeatConfig    *agent.AgentHeartbeatConfig `json:"heartbeat_config,omitempty"`
+	DelegationScope    agent.DelegationScope       `json:"delegation_scope"`
+	TriggerRules       []agent.TriggerRule         `json:"trigger_rules"`
 }
 
 func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
@@ -64,6 +65,7 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		SystemInstructions: req.SystemInstructions,
 		AuthorizedTools:    req.AuthorizedTools,
 		ListenChannels:     req.ListenChannels,
+		HeartbeatConfig:    req.HeartbeatConfig,
 		DelegationScope:    req.DelegationScope,
 		TriggerRules:       req.TriggerRules,
 	}
@@ -114,6 +116,7 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 		SystemInstructions: req.SystemInstructions,
 		AuthorizedTools:    req.AuthorizedTools,
 		ListenChannels:     req.ListenChannels,
+		HeartbeatConfig:    req.HeartbeatConfig,
 		DelegationScope:    req.DelegationScope,
 		TriggerRules:       req.TriggerRules,
 	}

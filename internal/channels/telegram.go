@@ -355,15 +355,22 @@ func (t *TelegramAdapter) handleInboundMessage(ctx context.Context, upd tgUpdate
 		t.pairingMgr.TouchUser("telegram", senderID)
 	}
 
+	targetAgent, cleanText := ExtractAgentMention(text)
+	msgContent := cleanText
+	if msgContent == "" {
+		msgContent = text
+	}
+
 	// Publish to Bus
 	if t.bus != nil {
-		t.bus.Publish(bus.NewEvent(bus.EventAgentActionStarted, "telegram", InboundMessage{
+		t.bus.Publish(bus.NewEvent(bus.EventChannelMessage, "telegram", InboundMessage{
 			ChannelID:   "telegram",
 			AccountID:   t.GetAccountID(),
 			SenderID:    senderID,
 			SenderName:  senderName,
-			TargetAgent: "default",
-			Content:     text,
+			TargetAgent: targetAgent,
+			MentionText: targetAgent,
+			Content:     msgContent,
 			Metadata: map[string]string{
 				"chat_id":    chatID,
 				"message_id": strconv.FormatInt(upd.Message.MessageID, 10),

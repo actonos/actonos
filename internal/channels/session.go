@@ -31,13 +31,19 @@ func (sm *ChannelSessionManager) SetEmbeddingSink(sink MessageEmbeddingSink) {
 	sm.embedding = sink
 }
 
-// GetOrCreateSession ensures a deterministic conversation session exists for a given channel & sender.
+// GetOrCreateSession ensures a deterministic conversation session exists for a given channel, sender, and agent.
 func (sm *ChannelSessionManager) GetOrCreateSession(ctx context.Context, channelID, senderID, senderName, firstMessage, agentID string) (string, error) {
-	if sm.db == nil {
-		return fmt.Sprintf("conv_%s_%s", channelID, senderID), nil
+	convID := fmt.Sprintf("conv_%s_%s", channelID, senderID)
+	if agentID != "" && channelID != "mission" {
+		convID = fmt.Sprintf("conv_%s_%s_%s", channelID, senderID, agentID)
+	} else if channelID == "mission" {
+		convID = fmt.Sprintf("conv_task_%s", senderID)
 	}
 
-	convID := fmt.Sprintf("conv_%s_%s", channelID, senderID)
+	if sm.db == nil {
+		return convID, nil
+	}
+
 	now := time.Now().UTC()
 
 	var existingTitle string

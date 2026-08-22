@@ -1402,11 +1402,21 @@ func (e *Engine) completeStreamIteration(
 			}
 			if chunk.DeltaContent != "" {
 				response.Content += chunk.DeltaContent
-				// Only emit prose if we are NOT inside a DSML or internal markup tag block.
-				// This prevents raw <｜｜DSML... tokens from ever flashing on the user's screen.
-				if !isInsideMarkupTag(response.Content) {
-					eventChan <- AgentStreamEvent{Type: EventStreamToken, Content: chunk.DeltaContent}
-					streamedTokens = true
+				// If the model is streaming thinking inside <think> tags, emit directly as reasoning
+				if isInsideThinkingBlock(response.Content) {
+					cleanDelta := stripThinkingTags(chunk.DeltaContent)
+					if cleanDelta != "" {
+						response.ReasoningContent += cleanDelta
+						eventChan <- AgentStreamEvent{Type: EventStreamReasoning, Reasoning: cleanDelta}
+					}
+				} else if !isInsideMarkupTag(response.Content) {
+					// Only emit prose if we are NOT inside a DSML or internal markup tag block.
+					// This prevents raw <｜｜DSML... tokens from ever flashing on the user's screen.
+					cleanDelta := stripThinkingTags(chunk.DeltaContent)
+					if cleanDelta != "" {
+						eventChan <- AgentStreamEvent{Type: EventStreamToken, Content: cleanDelta}
+						streamedTokens = true
+					}
 				}
 			}
 			if len(chunk.ToolCalls) > 0 {
@@ -1445,13 +1455,9 @@ DoneStream:
 		response.Content = cleaned
 	}
 
-	// This turn called tools, so any prose already streamed was preamble/DSML rather
-	// than the answer. Retract it and surface it as reasoning instead.
+	// This turn called tools, so retract any interim streamed tokens from the main answer buffer.
 	if len(response.ToolCalls) > 0 && streamedTokens {
 		eventChan <- AgentStreamEvent{Type: EventStreamTokenReset}
-		if preamble := strings.TrimSpace(response.Content); preamble != "" {
-			eventChan <- AgentStreamEvent{Type: EventStreamReasoning, Reasoning: preamble}
-		}
 	} else if len(response.ToolCalls) == 0 && streamedTokens && response.Content != rawStreamedContent {
 		// Tokens were streamed live, but DSML/thinking tags were stripped at stream end.
 		// Retract the raw stream and re-emit the clean content!
@@ -1465,6 +1471,31 @@ DoneStream:
 	}
 
 	return response, nil
+}
+
+// isInsideThinkingBlock reports if accumulated stream text is currently inside <think>, <thought>, etc.
+func isInsideThinkingBlock(accumulated string) bool {
+	lower := strings.ToLower(accumulated)
+	for _, openTag := range []string{"<think>", "<thought>", "<thinking>", "[think]", "[reasoning]"} {
+		closeTag := "</" + strings.TrimPrefix(strings.TrimSuffix(openTag, ">"), "<") + ">"
+		if strings.HasPrefix(openTag, "[") {
+			closeTag = "[/" + strings.TrimPrefix(strings.TrimSuffix(openTag, "]"), "[") + "]"
+		}
+		lastOpen := strings.LastIndex(lower, openTag)
+		if lastOpen != -1 {
+			lastClose := strings.LastIndex(lower, closeTag)
+			if lastClose < lastOpen {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// stripThinkingTags removes thinking markup open/close tags from incremental chunks.
+func stripThinkingTags(chunk string) string {
+	re := regexp.MustCompile(`(?i)</?(?:think|thought|thinking|\[/?(?:think|reasoning)\])>?`)
+	return re.ReplaceAllString(chunk, "")
 }
 
 // isInsideMarkupTag reports if accumulated stream text is currently inside a DSML, thinking, or tool call markup block.

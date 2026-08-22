@@ -44,25 +44,38 @@ const (
 	DefaultSystemAgentID = "agent_system_core"
 )
 
+// AgentHeartbeatConfig holds per-agent autonomous heartbeat directives and schedule parameters.
+type AgentHeartbeatConfig struct {
+	Enabled             bool   `json:"enabled"`
+	IntervalMinutes     int    `json:"interval_minutes,omitempty"`
+	Directives          string `json:"directives,omitempty"`
+	TargetChannel       string `json:"target_channel,omitempty"`
+	TargetAccountID     string `json:"target_account_id,omitempty"`
+	ActiveHoursStart    string `json:"active_hours_start,omitempty"`
+	ActiveHoursEnd      string `json:"active_hours_end,omitempty"`
+	ActiveHoursTimezone string `json:"active_hours_timezone,omitempty"`
+}
+
 // AgentManifest contains the complete declaration and configuration of an agent.
 type AgentManifest struct {
-	AgentID            string          `json:"agent_id"`
-	Name               string          `json:"name"`
-	Description        string          `json:"description"`
-	AvatarIcon         string          `json:"avatar_icon"`
-	Status             AgentStatus     `json:"status"`
-	IsSystem           bool            `json:"is_system,omitempty"`
-	ModelConfig        llm.ModelConfig `json:"model_config"`
-	SystemInstructions string          `json:"system_instructions"`
-	AuthorizedTools    []string        `json:"authorized_tools"`
+	AgentID            string                `json:"agent_id"`
+	Name               string                `json:"name"`
+	Description        string                `json:"description"`
+	AvatarIcon         string                `json:"avatar_icon"`
+	Status             AgentStatus           `json:"status"`
+	IsSystem           bool                  `json:"is_system,omitempty"`
+	ModelConfig        llm.ModelConfig       `json:"model_config"`
+	SystemInstructions string                `json:"system_instructions"`
+	AuthorizedTools    []string              `json:"authorized_tools"`
 	// ListenChannels defines which chat channels this agent responds to.
 	// ["*"] means all channels (default). Specific channel IDs like
-	// ["telegram", "discord"] restrict the agent to only those channels.
-	ListenChannels  []string        `json:"listen_channels"`
-	DelegationScope DelegationScope `json:"delegation_scope"`
-	TriggerRules    []TriggerRule   `json:"trigger_rules"`
-	CreatedAt       time.Time       `json:"created_at"`
-	UpdatedAt       time.Time       `json:"updated_at"`
+	// ["telegram", "discord"] or ["telegram:bot_1"] restrict the agent.
+	ListenChannels  []string              `json:"listen_channels"`
+	HeartbeatConfig *AgentHeartbeatConfig `json:"heartbeat_config,omitempty"`
+	DelegationScope DelegationScope       `json:"delegation_scope"`
+	TriggerRules    []TriggerRule         `json:"trigger_rules"`
+	CreatedAt       time.Time             `json:"created_at"`
+	UpdatedAt       time.Time             `json:"updated_at"`
 }
 
 // SubTask represents a decomposed work item assigned to a sub-agent.

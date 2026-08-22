@@ -138,13 +138,20 @@ func (w *WhatsAppAdapter) HandleInboundPayload(ctx context.Context, payload []by
 					w.pairingMgr.TouchUser("whatsapp", senderPhone)
 				}
 
+				targetAgent, cleanText := ExtractAgentMention(text)
+				msgContent := cleanText
+				if msgContent == "" {
+					msgContent = text
+				}
+
 				if w.bus != nil {
-					w.bus.Publish(bus.NewEvent(bus.EventAgentActionStarted, "whatsapp", InboundMessage{
+					w.bus.Publish(bus.NewEvent(bus.EventChannelMessage, "whatsapp", InboundMessage{
 						ChannelID:   "whatsapp",
 						SenderID:    senderPhone,
 						SenderName:  senderPhone,
-						TargetAgent: "default",
-						Content:     text,
+						TargetAgent: targetAgent,
+						MentionText: targetAgent,
+						Content:     msgContent,
 						Metadata: map[string]string{
 							"message_id": msg.ID,
 						},

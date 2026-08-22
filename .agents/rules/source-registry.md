@@ -226,12 +226,12 @@
 |:---|:---|:---|:---|
 | `Dashboard/` | `dashboard` | `DashboardPage` | System overview, agent summaries, token launcher |
 | `Agents/` | `agents` | `AgentsPage` | Agent list (responsive table) |
-| `Agents/` | `agent-studio` | `AgentStudioPage` | Agent detail editor (config, soul, memory) |
-| `Missions/` | `missions` | `MissionsPage` | Autonomous task matrix, standing directives, pulse audit, approval queue, durable run governance |
+| `Agents/` | `agent-studio` | `AgentStudioPage` | Agent detail editor (config, soul, memory, heartbeat, tools, channels, governance) |
+| `Missions/` | `missions` | `MissionsPage` | Autonomous task matrix, pulse audit ledger, approval queue, durable run governance |
 | `Operations/` | `operations` | `OperationsPage` | Live hardware/Docker telemetry, execution feed, canvas, terminal, task controls, approvals, and model cost |
 | `Chat/` | `chat` | `ChatPage` | Conversational interface |
 | `Automations/` | `automations` | `AutomationsPage` | Cron jobs, scheduled tasks |
-| `Channels/` | `channels` | `ChannelsPage` | Telegram, WhatsApp, Discord multi-account config |
+| `Channels/` | `channels` | `ChannelsPage` | Telegram, WhatsApp, Discord multi-account config & message routing |
 | `Connectors/` | `connectors` | `ConnectorsPage` | SaaS integrations (OAuth) |
 | `ToolHub/` | `tools` | `ToolHubPage` | MCP servers, WASM plugins |
 | `Workspace/` | `workspace` | `WorkspacePage` | File manager |
@@ -251,9 +251,12 @@
 | File | Component | Purpose |
 |:---|:---|:---|
 | `features/notifications/NotificationBell.tsx` | `NotificationBell` | Header notification trigger button & recent popup dropdown |
+| `features/agents/AgentHeartbeatSection.tsx` | `AgentHeartbeatSection` | Per-agent autonomous heartbeat, standing directives, interval, active hours |
+| `features/agents/AgentStudioNav.tsx` | `AgentStudioNav` | Sticky section navigation bar for Agent Studio |
 | `modals/TokenLedgerModal.tsx` | `TokenLedgerModal` | Comprehensive token usage analytics & ledger table |
 | `pages/Missions/components/TaskModal.tsx` | `TaskModal` | Mission backlog task create/edit modal |
 | `pages/AuditLogs/components/AuditLogDetailModal.tsx` | `AuditLogDetailModal` | Full audit log trace, cryptographic verification & JSON inspector |
+| `pages/Channels/components/ChannelAccountModal.tsx` | `ChannelAccountModal` | Multi-account bot credentials, agent bindings, and message routing mode |
 | `ui/Modal.tsx` | `Modal` | Accessible dialog container |
 | `ui/ConfirmModal.tsx` | `ConfirmModal` | Confirmation dialog with actions |
 
@@ -291,8 +294,10 @@ Both `en/` and `vi/` contain the following 18 namespace files:
 | Go Type (`internal/agent/types.go`, `tasks.go`, `memory/tokens.go`, `system/notifications.go`) | TS Type (`web/src/lib/types.ts`) | Notes |
 |:---|:---|:---|
 | `AutonomousTask` | `AutonomousTask` | Backlog missions, priority, status, progress, execution_log |
-| `HeartbeatConfig` | `HeartbeatConfigData` | Standing directives, interval, zero-noise |
+| `HeartbeatConfig` | `HeartbeatConfigData` | System core standing directives, interval, zero-noise |
+| `AgentHeartbeatConfig` | `AgentHeartbeatConfig` | Per-agent directives, interval, target channel/account, active hours |
 | `HeartbeatRun` | `HeartbeatRun` | Cognitive pulse execution audit record |
+| `ChannelAccount` | `ChannelAccount` | Multi-account credentials, bound agents, routing_mode (`exclusive`, `mention`, `fallback`) |
 | `Notification` | `NotificationItem` | Realtime notification alert with pagination & type |
 | `TokenUsageSummary` | `TokenUsageSummary` | Full token usage stats & trend models |
 | `TokenUsageRecord` | `TokenUsageRecord` | Token ledger transaction entry |

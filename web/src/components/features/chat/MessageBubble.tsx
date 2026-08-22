@@ -73,26 +73,19 @@ export function MessageBubble({
                     <span>{t('showThinking', { count: reasoningSteps.length, defaultValue: `Show thinking process (${reasoningSteps.length} steps)` })}</span>
                   </summary>
                   <div className="mt-2.5 space-y-2.5 border-t border-onyx/5 pt-2 max-h-60 overflow-y-auto">
-                    {message.segments!.map((seg, i) =>
-                      seg.type === 'reasoning' ? (
-                        <div
-                          key={`final-seg-${i}`}
-                          className="rounded-lg bg-canvas/80 p-2 text-[11px] text-deep-ink/80 whitespace-pre-wrap leading-relaxed border border-onyx/5"
-                        >
+                    {reasoningSteps.map((seg, i) => (
+                      <div
+                        key={`final-seg-${i}`}
+                        className="rounded-lg bg-canvas/80 p-2 text-[11px] text-deep-ink/80 whitespace-pre-wrap leading-relaxed border border-onyx/5"
+                      >
+                        {reasoningSteps.length > 1 && (
                           <span className="font-semibold text-[10px] text-slate uppercase tracking-wider block mb-0.5">
-                            💭 {t('thinkingProcess', 'Thinking Process')}
+                            💭 {t('thinkingStep', { step: i + 1, defaultValue: `Step ${i + 1}` })}
                           </span>
-                          {cleanReasoning(seg.text)}
-                        </div>
-                      ) : (
-                        <div
-                          key={`final-seg-${i}`}
-                          className="text-caption text-deep-ink/70 italic pl-2.5 border-l-2 border-onyx/15"
-                        >
-                          {seg.text.slice(0, 120)}{seg.text.length > 120 ? '...' : ''}
-                        </div>
-                      )
-                    )}
+                        )}
+                        {cleanReasoning(seg.text)}
+                      </div>
+                    ))}
                   </div>
                 </details>
               )}
@@ -116,19 +109,21 @@ export function MessageBubble({
             <div className="space-y-2.5">
               {message.segments!.map((seg, i) =>
                 seg.type === 'reasoning' ? (
-                  <details
-                    key={`stream-seg-${i}`}
-                    className="group rounded-xl border border-onyx/10 bg-canvas/60 p-2.5 font-mono text-caption text-slate"
-                    open
-                  >
-                    <summary className="flex cursor-pointer select-none items-center gap-2 font-semibold text-deep-ink">
-                      <Sparkles className="h-3.5 w-3.5 text-hi-yellow" />
-                      <span>{t('thinkingProcess', 'Thinking Process')}</span>
-                    </summary>
-                    <div className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap border-t border-onyx/5 pt-2 text-[11px] leading-relaxed text-deep-ink/80">
-                      {cleanReasoning(seg.text)}
-                    </div>
-                  </details>
+                  cleanReasoning(seg.text).length > 0 ? (
+                    <details
+                      key={`stream-seg-${i}`}
+                      className="group rounded-xl border border-onyx/10 bg-canvas/60 p-2.5 font-mono text-caption text-slate"
+                      open
+                    >
+                      <summary className="flex cursor-pointer select-none items-center gap-2 font-semibold text-deep-ink">
+                        <Sparkles className="h-3.5 w-3.5 text-hi-yellow" />
+                        <span>{t('thinkingProcess', 'Thinking Process')}</span>
+                      </summary>
+                      <div className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap border-t border-onyx/5 pt-2 text-[11px] leading-relaxed text-deep-ink/80">
+                        {cleanReasoning(seg.text)}
+                      </div>
+                    </details>
+                  ) : null
                 ) : (
                   <div key={`stream-seg-${i}`} className="font-sans text-body-sm leading-relaxed">
                     <MarkdownContent content={seg.text} isUser={false} />

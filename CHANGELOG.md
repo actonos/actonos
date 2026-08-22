@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Multi-Account Message Router, Inbound @Mention Dispatch & Agent-Aware Sessions**:
+  - Dedicated `MessageRouter` (`internal/channels/router.go`) decoupled from daemon entrypoint to coordinate multi-account inbound dispatch across Telegram, Discord, and WhatsApp.
+  - Inbound message agent mention parsing (`ExtractAgentMention`) supporting `@agent_name` and `/agent <name>` commands in group chats and private DMs.
+  - Channel account routing modes: `exclusive` (assigned agent only), `mention` (route by @mention with single-agent fallback), and `fallback` (default to `agent_system_core`).
+  - Deterministic agent-aware conversation session IDs (`conv_{channel}_{sender}_{agentID}`) ensuring isolated memory context and chat histories across different agents talking to the same user.
+  - New `routing_mode` selector, descriptions, and UI status badges in Channel Account management modal (`ChannelAccountModal.tsx`).
+- **Per-Agent Autonomous Heartbeat & Isolated Standing Directives**:
+  - Dedicated `AgentHeartbeatConfig` embedded in `AgentManifest` supporting per-agent standing directives, pulse intervals (5m - 24h), target alert channels (`telegram`, `discord`, `whatsapp`, `webhook`, `none`), target account IDs, and active hours windows.
+  - Heartbeat daemon evaluation loop (`checkCustomAgentPulses`) executing autonomous cycles for active custom agents with Zero-Noise classification and audit history.
+  - New **Heartbeat** configuration tab in Agent Studio (`AgentHeartbeatSection.tsx`) with Markdown standing directives editor, schedule interval picker, alert destination channel, active hours scoping, and status badge.
+  - Streamlined `MissionsPage.tsx`: Removed the legacy global directives tab, refocusing the Missions page on Task Backlog, Pulse Audit Ledger, and Human-in-the-loop Governance approvals.
 - **Dynamic Community Skills Registry, Requirements Verification & Skill Management**:
   - Live fetching of community skills from official GitHub registry (`https://raw.githubusercontent.com/actonos/actonos-skills/refs/heads/master/registry.json`) with multi-file package downloads and 1-hour TTL caching.
   - Metadata `requires` verification (`env`, `bins`, `os`, `config`) with execution gating and LLM prompt filtering to prevent broken tool invocations.

@@ -41,6 +41,7 @@ const (
 	// instead of the failure only ever reaching the server log.
 	EventChannelAdapterError     = "channel.adapter_error"
 	EventChannelAdapterRecovered = "channel.adapter_recovered"
+	EventChannelMessage          = "channel.message_inbound"
 	EventMCPServerError          = "mcp.server_error"
 	EventMCPServerRecovered      = "mcp.server_recovered"
 

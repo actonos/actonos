@@ -37,6 +37,7 @@ import { AgentIdentitySection } from '@/components/features/agents/AgentIdentity
 import { AgentGovernanceSection } from '@/components/features/agents/AgentGovernanceSection';
 import { AgentToolsSection } from '@/components/features/agents/AgentToolsSection';
 import { AgentChannelsSection } from '@/components/features/agents/AgentChannelsSection';
+import { AgentHeartbeatSection } from '@/components/features/agents/AgentHeartbeatSection';
 import { AgentTextSection } from '@/components/features/agents/AgentTextSection';
 import { AgentMemorySection } from '@/components/features/agents/AgentMemorySection';
 import { AgentReviewSection } from '@/components/features/agents/AgentReviewSection';
@@ -117,6 +118,16 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
   const [listenAllChannels, setListenAllChannels] = useState(true);
   const [selectedChannels, setSelectedChannels] = useState<string[]>(['telegram', 'discord', 'whatsapp', 'webhook']);
 
+  // Heartbeat Configuration
+  const [heartbeatEnabled, setHeartbeatEnabled] = useState(false);
+  const [heartbeatDirectives, setHeartbeatDirectives] = useState('');
+  const [heartbeatInterval, setHeartbeatInterval] = useState(60);
+  const [heartbeatTargetChannel, setHeartbeatTargetChannel] = useState('all');
+  const [heartbeatTargetAccount, setHeartbeatTargetAccount] = useState('');
+  const [heartbeatActiveStart, setHeartbeatActiveStart] = useState('');
+  const [heartbeatActiveEnd, setHeartbeatActiveEnd] = useState('');
+  const [heartbeatActiveTZ, setHeartbeatActiveTZ] = useState('');
+
   // Delegation Scope
   const [maxBudget, setMaxBudget] = useState(50);
   const [approvalLevel, setApprovalLevel] = useState<'Low' | 'Medium' | 'High'>('Medium');
@@ -126,11 +137,15 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
   const formSignature = useMemo(() => JSON.stringify({
     name, idSlug, description, avatarIcon, status, isSystem, primaryModel, fallbackModel,
     reasoningEffort, maxTokens, systemInstructions, soul, memoryMD, authorizedTools,
-    listenAllChannels, selectedChannels, maxBudget, approvalLevel, allowedPaths,
+    listenAllChannels, selectedChannels, heartbeatEnabled, heartbeatDirectives, heartbeatInterval,
+    heartbeatTargetChannel, heartbeatTargetAccount, heartbeatActiveStart, heartbeatActiveEnd,
+    heartbeatActiveTZ, maxBudget, approvalLevel, allowedPaths,
   }), [
     name, idSlug, description, avatarIcon, status, isSystem, primaryModel, fallbackModel,
     reasoningEffort, maxTokens, systemInstructions, soul, memoryMD, authorizedTools,
-    listenAllChannels, selectedChannels, maxBudget, approvalLevel, allowedPaths,
+    listenAllChannels, selectedChannels, heartbeatEnabled, heartbeatDirectives, heartbeatInterval,
+    heartbeatTargetChannel, heartbeatTargetAccount, heartbeatActiveStart, heartbeatActiveEnd,
+    heartbeatActiveTZ, maxBudget, approvalLevel, allowedPaths,
   ]);
   const isDirty = baselineRef.current !== '' && baselineRef.current !== formSignature;
   const validationErrors = useMemo(() => {
@@ -196,6 +211,17 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
           } else {
             setListenAllChannels(false);
             setSelectedChannels(channels);
+          }
+
+          if (agent.heartbeat_config) {
+            setHeartbeatEnabled(agent.heartbeat_config.enabled ?? false);
+            setHeartbeatDirectives(agent.heartbeat_config.directives || '');
+            setHeartbeatInterval(agent.heartbeat_config.interval_minutes || 60);
+            setHeartbeatTargetChannel(agent.heartbeat_config.target_channel || 'all');
+            setHeartbeatTargetAccount(agent.heartbeat_config.target_account_id || '');
+            setHeartbeatActiveStart(agent.heartbeat_config.active_hours_start || '');
+            setHeartbeatActiveEnd(agent.heartbeat_config.active_hours_end || '');
+            setHeartbeatActiveTZ(agent.heartbeat_config.active_hours_timezone || '');
           }
 
           if (agent.delegation_scope) {
@@ -286,6 +312,16 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
         system_instructions: systemInstructions,
         authorized_tools: authorizedTools,
         listen_channels,
+        heartbeat_config: {
+          enabled: heartbeatEnabled,
+          directives: heartbeatDirectives,
+          interval_minutes: heartbeatInterval,
+          target_channel: heartbeatTargetChannel,
+          target_account_id: heartbeatTargetAccount,
+          active_hours_start: heartbeatActiveStart,
+          active_hours_end: heartbeatActiveEnd,
+          active_hours_timezone: heartbeatActiveTZ,
+        },
         delegation_scope: {
           max_monthly_budget_usd: Number(maxBudget),
           allowed_workspace_paths: allowedPaths.split(',').map((p) => p.trim()).filter(Boolean),
@@ -552,6 +588,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
           toolCount={authorizedTools.length}
           allChannels={listenAllChannels}
           channelCount={selectedChannels.length}
+          heartbeatActive={heartbeatEnabled}
           onChange={setActiveTab}
         />
 
@@ -1261,6 +1298,27 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
           </Card>
         )}
 
+        {activeTab === 'heartbeat' && (
+          <AgentHeartbeatSection
+            enabled={heartbeatEnabled}
+            directives={heartbeatDirectives}
+            intervalMinutes={heartbeatInterval}
+            targetChannel={heartbeatTargetChannel}
+            targetAccountID={heartbeatTargetAccount}
+            activeHoursStart={heartbeatActiveStart}
+            activeHoursEnd={heartbeatActiveEnd}
+            activeHoursTimezone={heartbeatActiveTZ}
+            onEnabledChange={setHeartbeatEnabled}
+            onDirectivesChange={setHeartbeatDirectives}
+            onIntervalChange={setHeartbeatInterval}
+            onTargetChannelChange={setHeartbeatTargetChannel}
+            onTargetAccountIDChange={setHeartbeatTargetAccount}
+            onActiveHoursStartChange={setHeartbeatActiveStart}
+            onActiveHoursEndChange={setHeartbeatActiveEnd}
+            onActiveHoursTimezoneChange={setHeartbeatActiveTZ}
+          />
+        )}
+
         {activeTab === 'governance' && (
           <AgentGovernanceSection
             budget={maxBudget}
@@ -1281,6 +1339,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               { label: t('studio.review.reasoningEffort'), value: reasoningEffort.toUpperCase() },
               { label: t('studio.review.tools'), value: isAllToolsSelected ? t('studio.allTools') : String(authorizedTools.length) },
               { label: t('studio.review.channels'), value: listenAllChannels ? t('studio.all') : String(selectedChannels.length) },
+              { label: t('studio.review.heartbeat', 'Heartbeat'), value: heartbeatEnabled ? `${t('studio.active')} (${heartbeatInterval}m)` : t('studio.stopped') },
               { label: t('studio.review.approval'), value: approvalLevel },
               { label: t('studio.review.budget'), value: `$${maxBudget}` },
             ]}

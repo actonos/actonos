@@ -64,6 +64,13 @@
     "enabled": "Bật",
     "remove": "Xoá",
     "primary": "Chính",
+    "routingMode": "Chế độ điều hướng tin nhắn",
+    "routingExclusive": "Độc quyền",
+    "routingExclusiveHelp": "Chỉ agent được gán xử lý",
+    "routingMention": "@Mention",
+    "routingMentionHelp": "Điều hướng theo @tên_agent",
+    "routingFallback": "Dự phòng",
+    "routingFallbackHelp": "Mặc định về Nova",
     "empty": "Chưa có tài khoản nào được thêm",
     "emptyHint": "Kết nối token bot đầu tiên của bạn để bắt đầu nhận và xử lý tin nhắn tự động."
   },

@@ -373,6 +373,16 @@ graph TD
   intermediate thoughts inside SQLite `chat_sessions` per task ID
   (`conv_task_<id>`), allowing multi-step task execution without losing
   progress across pulses.
+- **Per-Agent Autonomous Heartbeat Pulses (`checkCustomAgentPulses`)**:
+  In addition to the system core backlog pulse, the Heartbeat daemon inspects all active
+  custom agents registered in `AgentManager`. For any agent with `HeartbeatConfig.Enabled == true`:
+  - Enforces independent active hours (`ActiveHoursStart/End/Timezone`).
+  - Enforces per-agent pulse interval (`IntervalMinutes`, min 5m).
+  - Prompts model with standing directives, agent's persona (`SOUL.md`), and authorized tools.
+  - Classifies model response via `classifyHeartbeatResponse()`.
+  - Delivers alerts to the agent's configured `TargetChannel` (`telegram`, `discord`, `whatsapp`, `webhook`, `none`)
+    and publishes `bus.EventAgentActionDone` for audit tracking while maintaining complete silence (`HEARTBEAT_OK`)
+    when directives report nominal status.
 - **Bi-directional Synchronization**: Changes in the Web UI, REST API, or
   Agent ReAct steps automatically synchronize between SQLite and
   `data/workspace/TASKS.md` and `data/workspace/HEARTBEAT.md`.
@@ -474,6 +484,40 @@ ActonOS connects dynamically to the OpenClaw / ActonOS Community Skills Registry
 3. **Enable / Disable Toggle & State Persistence**:
    - Individual installed skills can be toggled on/off via `PUT /api/tools/skills/{name}/toggle`.
    - State is persisted via a filesystem marker (`/data/skills/<slug>/.disabled`).
+
+### Inbound Message Routing & Multi-Account Dispatch (`MessageRouter`)
+
+Incoming chat messages across Telegram, Discord, and WhatsApp pass through an event-driven `MessageRouter` (`internal/channels/router.go`) to resolve the single target recipient agent, isolate working memory contexts, and execute autonomous ReAct steps:
+
+```mermaid
+graph TD
+    IN[Inbound Chat Message\nTelegram / Discord / WhatsApp] --> EXTRACT["ExtractAgentMention(text)\nParse @agent_name or /agent name"]
+    EXTRACT --> PUB["Publish EventChannelMessage\n('channel.message_inbound')"]
+    PUB --> ROUTER["MessageRouter.handleInboundMessage()"]
+
+    ROUTER --> RESOLVE{"ResolveAgent()"}
+    RESOLVE -- "@mention matched" --> AGENT_MENTION["Target: Mentioned Agent"]
+    RESOLVE -- "Account bound (single agent)" --> AGENT_BOUND["Target: Bound Agent"]
+    RESOLVE -- "listen_channels matches" --> AGENT_LISTEN["Target: First matching custom agent"]
+    RESOLVE -- "Fallback" --> AGENT_CORE["Target: agent_system_core (Nova)"]
+
+    AGENT_MENTION --> SESSION["GetOrCreateSession()\nconv_{channel}_{sender}_{agentID}"]
+    AGENT_BOUND --> SESSION
+    AGENT_LISTEN --> SESSION
+    AGENT_CORE --> SESSION
+
+    SESSION --> ENGINE["Engine.ExecuteStepWithHistory()\nPersona (SOUL.md) + Tools Sandbox"]
+    ENGINE --> SAVE["Save Message in Session Memory"]
+    SAVE --> OUT["ChannelManager.SendMessage()\nOutbound reply to original sender/channel"]
+```
+
+Key properties of message routing:
+- **Mention Parsing (`ExtractAgentMention`)**: Parses `@agent_name` and `/agent <name>` from text, cleaning the prompt sent to the LLM.
+- **Account Routing Modes (`ChannelAccount.RoutingMode`)**:
+  - `exclusive`: Only assigned/bound agents process messages from this bot.
+  - `mention`: Respects `@agent_name` in group chats and falls back to assigned agent in private DMs.
+  - `fallback`: Routes to Nova (`agent_system_core`) when no explicit binding or mention is found.
+- **Agent-Aware Conversation Session Isolation**: Session IDs are deterministically formatted as `conv_{channel}_{sender}_{agentID}`. When a user interacts with multiple agents in the same channel, each agent maintains a fully isolated memory diary and dialogue history.
 
 ### OAuth 2.1 & Token Refresh Daemon
 

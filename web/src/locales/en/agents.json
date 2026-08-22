@@ -164,6 +164,7 @@
       "model": "LLM & Reasoning ({{status}})",
       "tools": "Tools ({{value}})",
       "channels": "Channels ({{value}})",
+      "heartbeat": "Heartbeat ({{status}})",
       "governance": "Governance & Approvals",
       "review": "Review & save"
     },
@@ -266,6 +267,28 @@
           "description": "Trigger the agent from HTTP webhooks"
         }
       }
+    },
+    "heartbeat": {
+      "title": "Autonomous Agent Heartbeat",
+      "description": "Configure scheduled cognitive pulses, proactive health checks, and standing directives dedicated to this agent.",
+      "enabledBadge": "Heartbeat Active",
+      "disabledBadge": "Heartbeat Inactive",
+      "modeLabel": "Heartbeat Mode",
+      "enabled": "Enabled (Autonomous Pulse)",
+      "disabled": "Disabled (Manual / Reactive Only)",
+      "directivesLabel": "Standing Directives / Autonomous Orders",
+      "directivesHelp": "Specific instructions this agent evaluates on every pulse. When conditions are normal, the agent returns HEARTBEAT_OK with zero notification noise.",
+      "intervalLabel": "Pulse Interval",
+      "intervalHelp": "How frequently the daemon wakes this agent for a cognitive evaluation.",
+      "channelLabel": "Alert Destination Channel",
+      "channelHelp": "Where non-silent alert summaries and task completion notifications will be sent.",
+      "activeHoursTitle": "Active Hours & Account Scoping (Optional)",
+      "startHour": "Active Start (HH:MM)",
+      "endHour": "Active End (HH:MM)",
+      "targetAccount": "Specific Account ID",
+      "zeroNoiseNote": "Zero-Noise Policy: If all systems are nominal and directives find nothing requiring operator intervention, this agent logs the pulse and remains completely silent.",
+      "disabledNoticeTitle": "Heartbeat is currently turned off for this agent",
+      "disabledNoticeDesc": "Enable heartbeat if you want this agent to independently wake up on a schedule, inspect standing directives, and push notifications when needed."
     },
     "governance": {
       "title": "Governance & Permissions",

@@ -639,3 +639,87 @@ func TestReflectionPersistsRedactedPreferenceAndMemory(t *testing.T) {
 	cancel()
 	reflection.Stop()
 }
+
+func TestCustomAgentHeartbeatExecution(t *testing.T) {
+	db, eventBus := setupTestDB(t)
+	manager, err := NewAgentManager(db, eventBus)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create custom agent with HeartbeatConfig enabled
+	customAgent, err := manager.Create(context.Background(), AgentManifest{
+		Name:               "Ops Agent",
+		Description:        "Automated ops agent",
+		Status:             StatusActive,
+		ModelConfig:        llm.ModelConfig{PrimaryModel: "openai/gpt-4o"},
+		SystemInstructions: "You are Ops Agent.",
+		HeartbeatConfig: &AgentHeartbeatConfig{
+			Enabled:       true,
+			Directives:    "Check server metrics daily",
+			TargetChannel: "telegram",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	router := llm.NewModelCascadeRouter()
+	provider := llm.NewMockProvider("openai/gpt-4o", "Server metrics are 100% healthy.")
+	router.RegisterProvider("openai/gpt-4o", provider)
+	engine := NewEngine(manager, eventBus, router, nil)
+	daemon := NewHeartbeatDaemon(manager, engine, eventBus, db.SQLDB(), t.TempDir(), time.Hour)
+
+	// Subscribe to eventBus to verify proactive notification from custom agent
+	notifSub := eventBus.Subscribe(bus.EventAgentActionDone)
+
+	// Trigger manual pulse
+	run, err := daemon.TriggerManualPulse(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run == nil {
+		t.Fatal("expected run result")
+	}
+
+	// Verify notification published for custom agent
+	foundNotif := false
+	timeout := time.After(time.Second)
+	for !foundNotif {
+		select {
+		case ev := <-notifSub:
+			if payload, ok := ev.Payload.(map[string]any); ok {
+				if pType, ok := payload["type"].(string); ok && pType == "proactive_cron_notification" {
+					if ev.AgentID != customAgent.AgentID {
+						t.Errorf("expected notification from %s, got %s", customAgent.AgentID, ev.AgentID)
+					}
+					if payload["target_channel"] != "telegram" {
+						t.Errorf("expected target_channel=telegram, got %v", payload)
+					}
+					foundNotif = true
+				}
+			}
+		case <-timeout:
+			t.Fatal("timed out waiting for custom agent heartbeat notification")
+		}
+	}
+
+	// Verify runs recorded in SQLite
+	runs, err := daemon.GetRecentRuns(context.Background(), 10)
+	if err != nil || len(runs) < 2 {
+		t.Fatalf("expected at least 2 runs (system + custom agent), got %d (err=%v)", len(runs), err)
+	}
+
+	foundCustom := false
+	for _, r := range runs {
+		if r.AgentID == customAgent.AgentID {
+			foundCustom = true
+			if r.Status != "action_taken" {
+				t.Errorf("expected action_taken for custom agent, got %s", r.Status)
+			}
+		}
+	}
+	if !foundCustom {
+		t.Fatalf("did not find heartbeat run for custom agent %s", customAgent.AgentID)
+	}
+}
