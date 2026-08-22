@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import { SUPPORTED_LANGUAGES } from '@/components/ui/LanguageSelectModal';
 import { useRealtime } from '@/components/providers/RealtimeProvider';
+import { ConnectionStatusIndicator } from '@/components/features/telemetry/ConnectionStatusIndicator';
 import {
   LayoutDashboard,
   Bot,
@@ -253,25 +254,11 @@ export function Sidebar({
 
         {/* Bottom: System Status, Language & Collapse button */}
         <div className="p-3 border-t border-onyx/10 space-y-2 bg-soft-meadow">
-          {/* Live Status Pill */}
-          {!collapsed || showLangOverlay ? (
-            <div className="p-2.5 rounded-[14px] bg-canvas border border-onyx/5 flex items-center justify-between text-caption">
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                <span className="font-mono font-medium text-deep-ink">{t('status.connected', 'System Online')}</span>
-              </div>
-            </div>
-          ) : (
-            <div className="flex justify-center py-1" title={t('status.connected', 'System Online')}>
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-              </span>
-            </div>
-          )}
+          {/* Live Status Pill & Telemetry Popover */}
+          <ConnectionStatusIndicator
+            compact={collapsed && !showLangOverlay}
+            placement="sidebar"
+          />
 
           {/* Language Switcher & Collapse Toggle */}
           <div className={`flex items-center ${collapsed && !showLangOverlay ? 'flex-col gap-2 justify-center' : 'justify-between gap-2'}`}>

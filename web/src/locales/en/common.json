@@ -58,6 +58,34 @@
     "stale": "Stale",
     "noData": "No data"
   },
+  "splash": {
+    "bootTitle": "ActonOS Kernel",
+    "bootSubtitle": "Autonomous AI Agent Operating System",
+    "stages": {
+      "core": "Initializing Kernel Core...",
+      "vault": "Mounting Hardware-Bound Encrypted Vault...",
+      "realtime": "Connecting Realtime WebSocket Event Bus...",
+      "models": "Syncing Universal AI Model Catalog...",
+      "ready": "Kernel Ready"
+    }
+  },
+  "telemetry": {
+    "online": "Online",
+    "connecting": "Connecting...",
+    "offline": "Offline",
+    "reconnect": "Reconnect Now",
+    "wsConnected": "Realtime WebSocket Connected",
+    "wsDisconnected": "WebSocket Disconnected",
+    "activeAgents": "Active Agents",
+    "uptime": "Uptime",
+    "kernelVersion": "Kernel Version",
+    "systemLoad": "System Load"
+  },
+  "backgroundActivity": {
+    "tasksRunning": "{{count}} background task active",
+    "tasksRunning_other": "{{count}} background tasks active",
+    "viewOperations": "View Operations"
+  },
   "errorBoundary": {
     "title": "Something went wrong",
     "description": "An unexpected error occurred in the application view. The system kernel remains safe.",

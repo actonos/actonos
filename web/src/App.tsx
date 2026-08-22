@@ -13,7 +13,9 @@ import { RealtimeProvider } from '@/components/providers/RealtimeProvider';
 import { DensityProvider } from '@/components/providers/DensityProvider';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { ModelProvider } from '@/components/providers/ModelProvider';
-import { useTranslation } from 'react-i18next';
+import { SplashScreen } from '@/components/ui/SplashScreen';
+import { TopProgressBar } from '@/components/ui/TopProgressBar';
+import { BackgroundActivityPill } from '@/components/features/telemetry/BackgroundActivityPill';
 import { CommandPalette } from '@/components/features/search/CommandPalette';
 
 const DashboardPage = lazy(() => import('@/pages/Dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })));
@@ -45,7 +47,6 @@ export function tabFromLocation(): NavTab {
 }
 
 export function App() {
-  const { t } = useTranslation('common');
   const [authStatus, setAuthStatus] = useState<{
     loading: boolean;
     initialized: boolean;
@@ -65,6 +66,8 @@ export function App() {
   });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
+  const [isNavigating, setIsNavigating] = useState(false);
 
   const checkAuth = async () => {
     try {
@@ -89,7 +92,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    const syncLocation = () => {
+    const handleHashChange = () => {
       const nextTab = tabFromLocation();
       const route = window.location.hash.replace(/^#\/?/, '').split('?')[0];
       if (nextTab === 'agent-studio' && route.startsWith('agents/')) {
@@ -97,15 +100,15 @@ export function App() {
       }
       setActiveTab(nextTab);
     };
-    window.addEventListener('hashchange', syncLocation);
-    return () => window.removeEventListener('hashchange', syncLocation);
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
   useEffect(() => {
-    const handleShortcut = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === 'k') {
-        event.preventDefault();
-        setCommandOpen((current) => !current);
+    const handleShortcut = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setCommandOpen((prev) => !prev);
       }
     };
     window.addEventListener('keydown', handleShortcut);
@@ -113,8 +116,10 @@ export function App() {
   }, []);
 
   const navigateTab = (tab: NavTab) => {
+    setIsNavigating(true);
     if (window.location.hash !== `#/${tab}`) window.location.hash = `/${tab}`;
     setActiveTab(tab);
+    setTimeout(() => setIsNavigating(false), 240);
   };
 
   const handleLogout = async () => {
@@ -145,14 +150,11 @@ export function App() {
     setActiveTab('agent-studio');
   };
 
-  if (authStatus.loading) {
+  if (showSplash) {
     return (
-      <div className="min-h-screen bg-canvas flex items-center justify-center font-sans text-slate">
-        <div className="flex items-center gap-3 text-body-sm font-medium">
-          <div className="w-4 h-4 border-2 border-deep-ink border-t-transparent rounded-full animate-spin" />
-          <span>{t('startup')}</span>
-        </div>
-      </div>
+      <ThemeProvider>
+        <SplashScreen isReady={!authStatus.loading} onComplete={() => setShowSplash(false)} />
+      </ThemeProvider>
     );
   }
 
@@ -184,6 +186,8 @@ export function App() {
         <ModelProvider>
         <ActionProgressProvider>
         <div className="min-h-screen bg-canvas text-deep-ink selection:bg-hi-yellow selection:text-deep-ink font-sans flex">
+          <TopProgressBar isLoading={isNavigating} />
+          <BackgroundActivityPill onNavigateTab={navigateTab} />
           <ApprovalInterruption />
           <ActionProgressToast />
           <CommandPalette

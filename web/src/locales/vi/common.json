@@ -58,6 +58,34 @@
     "stale": "Dữ liệu cũ",
     "noData": "Chưa có dữ liệu"
   },
+  "splash": {
+    "bootTitle": "ActonOS Kernel",
+    "bootSubtitle": "Hệ điều hành Agent AI Tự chủ",
+    "stages": {
+      "core": "Khởi tạo Kernel Core...",
+      "vault": "Đồng bộ Kho khóa mã hóa & Phần cứng...",
+      "realtime": "Kết nối Realtime WebSocket Bus...",
+      "models": "Đồng bộ hóa Danh mục AI Model & Providers...",
+      "ready": "Kernel sẵn sàng"
+    }
+  },
+  "telemetry": {
+    "online": "Trực tuyến",
+    "connecting": "Đang kết nối...",
+    "offline": "Ngoại tuyến",
+    "reconnect": "Kết nối lại ngay",
+    "wsConnected": "Realtime WebSocket đã kết nối",
+    "wsDisconnected": "WebSocket đã ngắt kết nối",
+    "activeAgents": "Agent đang chạy",
+    "uptime": "Thời gian hoạt động",
+    "kernelVersion": "Phiên bản Kernel",
+    "systemLoad": "Tải hệ thống"
+  },
+  "backgroundActivity": {
+    "tasksRunning": "{{count}} tác vụ nền đang chạy",
+    "tasksRunning_other": "{{count}} tác vụ nền đang chạy",
+    "viewOperations": "Xem tiến trình"
+  },
   "errorBoundary": {
     "title": "Đã xảy ra lỗi",
     "description": "Đã xảy ra lỗi không mong muốn trong chế độ xem ứng dụng. Kernel hệ thống vẫn an toàn.",
