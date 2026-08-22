@@ -39,12 +39,12 @@ func TestBuildHostEnvironmentPrompt(t *testing.T) {
 		t.Errorf("prompt missing <workspace_storage_policy> XML tag, got:\n%s", prompt)
 	}
 
-	if !strings.Contains(prompt, "agent_private_workspace") {
-		t.Errorf("prompt missing agent_private_workspace rule, got:\n%s", prompt)
+	if !strings.Contains(prompt, "user_workspace_mandate") || !strings.Contains(prompt, "native_workspace_write") {
+		t.Errorf("prompt missing user_workspace_mandate rule, got:\n%s", prompt)
 	}
 
-	if !strings.Contains(prompt, "user_workspace_database") || !strings.Contains(prompt, "native_workspace_search") {
-		t.Errorf("prompt missing database workspace tool policy, got:\n%s", prompt)
+	if !strings.Contains(prompt, "agent_internal_scratchpad") {
+		t.Errorf("prompt missing agent_internal_scratchpad rule, got:\n%s", prompt)
 	}
 
 	if !strings.Contains(prompt, "<filesystem_layout>") {
@@ -53,8 +53,11 @@ func TestBuildHostEnvironmentPrompt(t *testing.T) {
 	if !strings.Contains(prompt, "<system_data_root") {
 		t.Errorf("prompt missing <system_data_root> tag, got:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "<agent_private_workspace") {
-		t.Errorf("prompt missing <agent_private_workspace> tag, got:\n%s", prompt)
+	if !strings.Contains(prompt, "<user_workspace") {
+		t.Errorf("prompt missing <user_workspace> tag, got:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "<agent_private_scratchpad") {
+		t.Errorf("prompt missing <agent_private_scratchpad> tag, got:\n%s", prompt)
 	}
 
 	if runtime.GOOS == "windows" {

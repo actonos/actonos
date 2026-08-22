@@ -403,6 +403,15 @@ func ExtractEmbeddedToolCalls(content string) (string, []ToolCall) {
 		}
 	}
 
+	// 6. Bare JSON tool calls (e.g. {"command":"..."}, {"path":"...", "content":"..."}, {"name":"native_..."})
+	if len(calls) == 0 {
+		cleanedAfterJSON, bareJSONCalls := findAndExtractBareJSONToolCalls(cleaned)
+		if len(bareJSONCalls) > 0 {
+			calls = append(calls, bareJSONCalls...)
+			cleaned = cleanedAfterJSON
+		}
+	}
+
 	// Clean all DSML / tool_call / invoke / markdown blocks from content
 	cleanBlockRe := regexp.MustCompile(`(?s)<[|｜]{1,2}DSML[|｜]{1,2}tool_calls>.*?</[|｜]{1,2}DSML[|｜]{1,2}tool_calls>|<[|｜]{1,2}tool call begin[|｜]{1,2}>.*?<[|｜]{1,2}tool call end[|｜]{1,2}>|<[|｜]{1,2}tool calls[|｜]{1,2}>.*?</[|｜]{1,2}tool calls[|｜]{1,2}>|<tool_call>.*?</tool_call>|<function_call>.*?</function_call>|<function=[^>]+>.*?</function>|` + "```(?:tool_call|function_call|tool)[\\s\\S]*?```")
 	cleaned = cleanBlockRe.ReplaceAllString(cleaned, "")
@@ -411,4 +420,131 @@ func ExtractEmbeddedToolCalls(content string) (string, []ToolCall) {
 	cleaned = strings.TrimSpace(cleaned)
 
 	return cleaned, calls
+}
+
+// findAndExtractBareJSONToolCalls extracts structured tool calls from raw JSON objects in model text.
+func findAndExtractBareJSONToolCalls(content string) (string, []ToolCall) {
+	if !strings.Contains(content, "{") || !strings.Contains(content, "}") {
+		return content, nil
+	}
+
+	var calls []ToolCall
+	var removeRanges [][2]int
+
+	inString := false
+	escape := false
+	braceDepth := 0
+	startIdx := -1
+
+	for i := 0; i < len(content); i++ {
+		c := content[i]
+		if escape {
+			escape = false
+			continue
+		}
+		if c == '\\' && inString {
+			escape = true
+			continue
+		}
+		if c == '"' {
+			inString = !inString
+			continue
+		}
+		if inString {
+			continue
+		}
+
+		if c == '{' {
+			if braceDepth == 0 {
+				startIdx = i
+			}
+			braceDepth++
+		} else if c == '}' {
+			if braceDepth > 0 {
+				braceDepth--
+				if braceDepth == 0 && startIdx != -1 {
+					candidate := content[startIdx : i+1]
+					var obj map[string]any
+					if err := json.Unmarshal([]byte(candidate), &obj); err == nil && len(obj) > 0 {
+						toolName := ""
+						argsJSON := candidate
+
+						// Explicit tool name
+						if t, ok := obj["name"].(string); ok && t != "" {
+							toolName = NormalizeToolName(t)
+							if args, ok := obj["arguments"]; ok {
+								if b, err := json.Marshal(args); err == nil {
+									argsJSON = string(b)
+								}
+							} else if args, ok := obj["parameters"]; ok {
+								if b, err := json.Marshal(args); err == nil {
+									argsJSON = string(b)
+								}
+							}
+						} else if t, ok := obj["tool"].(string); ok && t != "" {
+							toolName = NormalizeToolName(t)
+							if args, ok := obj["arguments"]; ok {
+								if b, err := json.Marshal(args); err == nil {
+									argsJSON = string(b)
+								}
+							} else if args, ok := obj["args"]; ok {
+								if b, err := json.Marshal(args); err == nil {
+									argsJSON = string(b)
+								}
+							}
+						} else if _, hasCmd := obj["command"]; hasCmd {
+							toolName = "native_exec"
+						} else if _, hasPath := obj["path"]; hasPath {
+							if _, hasContent := obj["content"]; hasContent {
+								toolName = "native_file_write"
+							} else if _, hasOld := obj["old_string"]; hasOld {
+								toolName = "native_file_edit"
+							} else if _, hasQuery := obj["query"]; hasQuery {
+								toolName = "native_file_search"
+							} else if _, hasPattern := obj["pattern"]; hasPattern {
+								toolName = "native_file_search"
+							} else if _, hasStart := obj["start_line"]; hasStart {
+								toolName = "native_file_read"
+							} else if _, hasLines := obj["line_numbers"]; hasLines {
+								toolName = "native_file_read"
+							}
+						}
+
+						if toolName != "" {
+							randBytes := make([]byte, 4)
+							_, _ = rand.Read(randBytes)
+							calls = append(calls, ToolCall{
+								ID:   "call_" + hex.EncodeToString(randBytes),
+								Type: "function",
+								Function: FunctionCall{
+									Name:      toolName,
+									Arguments: json.RawMessage(argsJSON),
+								},
+							})
+							removeRanges = append(removeRanges, [2]int{startIdx, i + 1})
+						}
+					}
+					startIdx = -1
+				}
+			}
+		}
+	}
+
+	if len(removeRanges) == 0 {
+		return content, nil
+	}
+
+	var sb strings.Builder
+	lastEnd := 0
+	for _, r := range removeRanges {
+		if r[0] > lastEnd {
+			sb.WriteString(content[lastEnd:r[0]])
+		}
+		lastEnd = r[1]
+	}
+	if lastEnd < len(content) {
+		sb.WriteString(content[lastEnd:])
+	}
+
+	return strings.TrimSpace(sb.String()), calls
 }

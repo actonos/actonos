@@ -115,8 +115,8 @@ func TestWorkspaceWriteSchemaDisambiguatesTextAndBinary(t *testing.T) {
 	if err := json.Unmarshal(tool.ParametersSchema(), &schema); err != nil {
 		t.Fatalf("invalid workspace write schema: %v", err)
 	}
-	if !strings.Contains(schema.Description, "exactly one") || len(schema.OneOf) != 2 {
-		t.Fatalf("schema does not explain the mutually exclusive payloads: %+v", schema)
+	if len(schema.OneOf) != 3 {
+		t.Fatalf("schema does not explain the 3 mutually exclusive payloads: %+v", schema)
 	}
 	seen := map[string]bool{}
 	for _, branch := range schema.OneOf {
@@ -125,8 +125,82 @@ func TestWorkspaceWriteSchemaDisambiguatesTextAndBinary(t *testing.T) {
 		}
 		seen[branch.Required[0]] = true
 	}
-	if !seen["content"] || !seen["content_base64"] {
-		t.Fatalf("schema branches do not cover both payloads: %#v", seen)
+	if !seen["content"] || !seen["content_base64"] || !seen["from_path"] {
+		t.Fatalf("schema branches do not cover all 3 payloads: %#v", seen)
+	}
+}
+
+func TestWorkspaceWriteWithFromPath(t *testing.T) {
+	registry, store, dataDir := newWorkspaceToolRegistry(t)
+	sink := &recordingWorkspaceMutationSink{}
+	registry.SetWorkspaceMutationSink(sink)
+	ctx := context.Background()
+	agentID := "agent_alpha"
+
+	// Create a private binary file in agent's private scratchpad
+	agentWs := filepath.Join(dataDir, "agents", agentID, "workspace", "subfolder")
+	if err := os.MkdirAll(agentWs, 0755); err != nil {
+		t.Fatal(err)
+	}
+	binaryPayload := []byte("%PDF-1.4\n1 0 obj\n<<\n>>\nendobj\n%%EOF\n")
+	scratchPath := filepath.Join(agentWs, "export.pdf")
+	if err := os.WriteFile(scratchPath, binaryPayload, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Write to user workspace via from_path
+	writeResult, err := registry.Execute(ctx, agentID, "native_workspace_write", json.RawMessage(`{
+		"name": "document.pdf",
+		"from_path": "subfolder/export.pdf"
+	}`))
+	if err != nil {
+		t.Fatalf("writing user workspace file via from_path: %v", err)
+	}
+	fileID, _ := writeResult.Data["file_id"].(string)
+	if fileID == "" || sink.fileID != fileID {
+		t.Fatalf("unexpected write result: %#v", writeResult)
+	}
+	assertNoHostPath(t, dataDir, writeResult)
+
+	// Verify content stored in user workspace store matches original binary bytes exactly
+	_, readBytes, err := store.Read(ctx, fileID, 0, 0)
+	if err != nil {
+		t.Fatalf("reading user workspace node: %v", err)
+	}
+	if !bytes.Equal(readBytes, binaryPayload) {
+		t.Fatalf("stored binary content mismatch: got %q, want %q", string(readBytes), string(binaryPayload))
+	}
+}
+
+func TestWorkspaceWriteRobustBase64AndTruncation(t *testing.T) {
+	registry, store, _ := newWorkspaceToolRegistry(t)
+	ctx := context.Background()
+	agentID := "agent_alpha"
+
+	// 1. Data URI prefix and newlines in base64
+	dataURIB64 := "data:application/pdf;base64, \\n JVBERi0xLjQK \\n JVRFU1QK"
+	expectedBytes, _ := base64.StdEncoding.DecodeString("JVBERi0xLjQKJVRFU1QK")
+
+	writeResult, err := registry.Execute(ctx, agentID, "native_workspace_write", json.RawMessage(`{
+		"name": "datauri.pdf",
+		"content_base64": "`+dataURIB64+`"
+	}`))
+	if err != nil {
+		t.Fatalf("writing with data URI base64 failed: %v", err)
+	}
+	fileID := writeResult.Data["file_id"].(string)
+	_, readBytes, err := store.Read(ctx, fileID, 0, 0)
+	if err != nil || !bytes.Equal(readBytes, expectedBytes) {
+		t.Fatalf("data URI base64 read mismatch: %v, %x", err, readBytes)
+	}
+
+	// 2. Truncated base64 marker rejection
+	_, err = registry.Execute(ctx, agentID, "native_workspace_write", json.RawMessage(`{
+		"name": "truncated.pdf",
+		"content_base64": "JVBERi0xLjQK...[truncated]"
+	}`))
+	if err == nil || !strings.Contains(err.Error(), "truncated") {
+		t.Fatalf("expected truncated error, got %v", err)
 	}
 }
 
@@ -144,10 +218,10 @@ func TestPrivateAgentFileToolsAreMutuallyIsolated(t *testing.T) {
 	if _, err := registry.Execute(ctx, "agent_alpha", "native_file_write", json.RawMessage(`{"path":"private.txt","content":"alpha-only"}`)); err != nil {
 		t.Fatalf("writing private file: %v", err)
 	}
-	alphaPath := filepath.Join(dataDir, "private.txt")
+	alphaPath := filepath.Join(dataDir, "agents", "agent_alpha", "workspace", "private.txt")
 	data, err := os.ReadFile(alphaPath)
 	if err != nil || string(data) != "alpha-only" {
-		t.Fatalf("private file not stored under data root: data=%q err=%v", data, err)
+		t.Fatalf("private file not stored under agent workspace: data=%q err=%v", data, err)
 	}
 	for _, input := range []string{`{"path":"../../../../../etc/passwd"}`, `{"path":"../../../../outside.txt"}`} {
 		if _, err := registry.Execute(ctx, "agent_alpha", "native_file_read", json.RawMessage(input)); err == nil {

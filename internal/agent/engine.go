@@ -1525,6 +1525,24 @@ func isInsideMarkupTag(accumulated string) bool {
 			}
 		}
 	}
+
+	// 3. Bare JSON tool call in progress: e.g. `{"command":` or `{"path":` or `{"name":"native_`
+	trimmed := strings.TrimSpace(accumulated)
+	lastBrace := strings.LastIndex(trimmed, "{")
+	if lastBrace != -1 {
+		lastCloseBrace := strings.LastIndex(trimmed, "}")
+		if lastCloseBrace < lastBrace {
+			fragment := strings.ToLower(trimmed[lastBrace:])
+			if strings.Contains(fragment, `"command"`) ||
+				strings.Contains(fragment, `"path"`) ||
+				strings.Contains(fragment, `"native_`) ||
+				strings.Contains(fragment, `"tool"`) ||
+				strings.Contains(fragment, `"arguments"`) {
+				return true
+			}
+		}
+	}
+
 	return false
 }
 

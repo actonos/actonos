@@ -235,3 +235,21 @@ func TestExtractEmbeddedToolCalls_UserReportedDeepSeekSnippet(t *testing.T) {
 		t.Errorf("cleaned content missing original prose: %q", cleaned)
 	}
 }
+
+func TestExtractEmbeddedToolCalls_BareJSONSnippets(t *testing.T) {
+	raw := `{"command":"python3 -c \"pts=[5,5,5,8,8,5,5,5,3,8,8,8,5,3,3,8,5,5,8,13,8];print(sum(pts))\""}{"path":"agents/agent_system_core/workspace/VieCharacter-agile-plan/03-product-backlog.md","content":"# Product Backlog — VieCharacter\n\n## Tổng quan","mode":"overwrite"}`
+
+	cleaned, calls := ExtractEmbeddedToolCalls(raw)
+	if len(calls) != 2 {
+		t.Fatalf("expected 2 extracted calls from bare JSON, got %d", len(calls))
+	}
+	if calls[0].Function.Name != "native_exec" {
+		t.Errorf("expected call[0] to be native_exec, got %q", calls[0].Function.Name)
+	}
+	if calls[1].Function.Name != "native_file_write" {
+		t.Errorf("expected call[1] to be native_file_write, got %q", calls[1].Function.Name)
+	}
+	if cleaned != "" {
+		t.Errorf("expected empty cleaned prose, got %q", cleaned)
+	}
+}

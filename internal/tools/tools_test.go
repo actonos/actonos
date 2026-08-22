@@ -40,7 +40,7 @@ func TestToolRegistry_NotifiesSuccessfulFileMutations(t *testing.T) {
 		json.RawMessage(`{"path":"notes.txt","content":"semantic content"}`)); err != nil {
 		t.Fatal(err)
 	}
-	wantPath := filepath.Join(workspace, "notes.txt")
+	wantPath := filepath.Join(workspace, "agents", "agent-files", "workspace", "notes.txt")
 	wantInfo, wantErr := os.Stat(wantPath)
 	gotInfo, gotErr := os.Stat(sink.path)
 	if sink.calls != 1 || wantErr != nil || gotErr != nil || !os.SameFile(wantInfo, gotInfo) || sink.agentID != "agent-files" || sink.deleted {
@@ -656,7 +656,7 @@ func TestFileWriteTool_RobustParsing(t *testing.T) {
 	agentID := "agent_parser"
 	tool := NewFileWriteTool(workspaceDir)
 	ctx := WithAgentID(context.Background(), agentID)
-	privateDir := workspaceDir
+	privateDir := filepath.Join(workspaceDir, "agents", agentID, "workspace")
 
 	// 1. Standard JSON
 	_, err := tool.Execute(ctx, json.RawMessage(`{"path": "email1.html", "content": "<h1>Hello</h1>"}`))
@@ -711,8 +711,8 @@ func TestAgentSpecificWorkspaceFileOperations(t *testing.T) {
 		t.Fatalf("native_file_write failed: %v", err)
 	}
 
-	// Verify it was written inside data directory root note.txt
-	expectedAgentFile := filepath.Join(tempDir, "note.txt")
+	// Verify it was written inside agent private workspace note.txt
+	expectedAgentFile := filepath.Join(tempDir, "agents", agentID, "workspace", "note.txt")
 	data, err := os.ReadFile(expectedAgentFile)
 	if err != nil {
 		t.Fatalf("expected file in data root %s: %v", expectedAgentFile, err)

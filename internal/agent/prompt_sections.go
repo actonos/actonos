@@ -26,7 +26,7 @@ func (s *MetaDirectiveSection) Render() string {
 	sb.WriteString("  <rule id=\"direct_delivery\">Deliver concrete answers, summaries, code, and findings directly. NEVER output canned greetings, capability menus, or self-introductions when responding to commands or questions.</rule>\n")
 	sb.WriteString("  <rule id=\"zero_robot_cliches\">NEVER produce robotic disclaimers ('As an AI...', 'I do not have feelings...'), generic filler, or repetitive apologies. Embody decisive, competent, authentic partnership.</rule>\n")
 	sb.WriteString("  <rule id=\"markdown_clarity\">Format all responses with clean GitHub-flavored Markdown, clear headings, bullet points, and syntax-highlighted code blocks.</rule>\n")
-	sb.WriteString("  <rule id=\"zero_markup_leaks\">When calling tools, invoke the native function calling mechanism. NEVER output raw DSML, XML, or pseudocode tags like `&lt;｜｜DSML｜｜tool_calls&gt;`, `&lt;｜｜DSML｜｜invoke&gt;`, `&lt;tool_call&gt;`, or `&lt;function=...&gt;` in your text response.</rule>\n")
+	sb.WriteString("  <rule id=\"zero_markup_leaks\">When calling tools, invoke the native function calling mechanism. NEVER output raw DSML, XML, or raw JSON argument blocks (e.g. `{\"command\":...}`, `{\"path\":...}`) in your text response. Tool operations MUST be invoked exclusively through real tool calls.</rule>\n")
 	sb.WriteString("</operating_standards>")
 	return sb.String()
 }
@@ -190,7 +190,8 @@ func (s *ConstraintsSection) Render() string {
 	sb.WriteString("  <rule id=\"verify_modifications\">After modifying code, files, or executing system changes, verify the status code and observations before declaring task completion.</rule>\n")
 	if s.AgentSlug != "" {
 		agentWs := filepath.ToSlash(filepath.Join("agents", s.AgentSlug, "workspace"))
-		fmt.Fprintf(&sb, "  <rule id=\"agent_workspace_discipline\">Your private storage directory is `%s/`. All task outputs, temporary scripts, and artifacts you create MUST be stored inside `%s/` unless explicitly instructed to create a global skill in 'skills/' or edit system config.</rule>\n", agentWs, agentWs)
+		fmt.Fprintf(&sb, "  <rule id=\"agent_workspace_discipline\">Your private storage directory is `%s/`. All internal temporary scripts, build artifacts, and intermediate scratchpad files MUST be stored inside `%s/`.</rule>\n", agentWs, agentWs)
+		sb.WriteString("  <rule id=\"user_workspace_mandate\">USER WORKSPACE MANDATE: Whenever the user asks to save, create, read, search, or delete files in their workspace (e.g. 'lưu vào workspace', 'tạo file cho tôi', 'đọc tài liệu workspace', 'lưu kế hoạch/tài liệu'), you MUST ALWAYS invoke `native_workspace_*` tools (`native_workspace_write`, `native_workspace_read`, `native_workspace_search`, `native_workspace_delete`). Files created with `native_file_write` are private internal scratchpads and are NOT visible to the user on their Workspace page. For binary files (PDF, images, archives, docs), build them in your scratchpad and publish with `native_workspace_write` using `from_path` (e.g. `native_workspace_write(name=\"plan.pdf\", from_path=\"plan.pdf\")`) to ensure lossless delivery without base64 truncation.</rule>\n")
 	}
 	for _, r := range s.AdditionalRules {
 		if r != "" {

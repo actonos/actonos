@@ -225,8 +225,30 @@ func (s *Server) executeWorkspaceWrite(ctx context.Context, raw json.RawMessage)
 	var content []byte
 	switch input.Encoding {
 	case "base64":
-		decoded, err := base64.StdEncoding.DecodeString(input.ContentBase64)
-		if err != nil {
+		cleaned := strings.TrimSpace(input.ContentBase64)
+		if idx := strings.Index(cleaned, ";base64,"); idx != -1 {
+			cleaned = cleaned[idx+8:]
+		}
+		cleaned = strings.Map(func(r rune) rune {
+			if r == '\r' || r == '\n' || r == ' ' || r == '\t' {
+				return -1
+			}
+			return r
+		}, cleaned)
+		var decoded []byte
+		var err error
+		if d, e := base64.StdEncoding.DecodeString(cleaned); e == nil {
+			decoded = d
+		} else if d, e := base64.RawStdEncoding.DecodeString(cleaned); e == nil {
+			decoded = d
+		} else if d, e := base64.URLEncoding.DecodeString(cleaned); e == nil {
+			decoded = d
+		} else if d, e := base64.RawURLEncoding.DecodeString(cleaned); e == nil {
+			decoded = d
+		} else {
+			err = e
+		}
+		if err != nil && len(decoded) == 0 {
 			return nil, fmt.Errorf("decoding workspace content: %w", err)
 		}
 		content = decoded

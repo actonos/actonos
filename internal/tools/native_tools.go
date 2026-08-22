@@ -77,7 +77,7 @@ func RegisterNativeToolsWithConfig(r *ToolRegistry, config NativeToolsConfig) {
 	if config.UserWorkspace != nil {
 		_ = r.Register(NewWorkspaceSearchTool(config.UserWorkspace))
 		_ = r.Register(NewWorkspaceReadTool(config.UserWorkspace))
-		_ = r.Register(NewWorkspaceWriteTool(config.UserWorkspace))
+		_ = r.Register(NewWorkspaceWriteTool(config.UserWorkspace, config.DataDir, config.AgentsDir))
 		_ = r.Register(NewWorkspaceDeleteTool(config.UserWorkspace))
 	}
 	_ = r.Register(NewWebSearchTool())
@@ -379,8 +379,11 @@ func parseFileWriteInput(inputJSON json.RawMessage) (string, string, string, err
 	return path, content, "overwrite", nil
 }
 
-// resolveTargetBaseDir returns the allowed root (dataDir) and base directory (dataDir) for path resolution.
-// All relative paths resolve directly inside the system data directory (e.g. 'skills/...', 'config/...', 'plugins/...', 'logs/...').
+// resolveTargetBaseDir returns the allowed root (dataDir), base directory, and target relative path
+// for path resolution. Paths targeting known system directories (skills/, config/, plugins/, logs/,
+// storage/, agents/, models/, overrides/, vectors/) resolve relative to the data root. All other
+// paths are automatically scoped to the calling agent's private workspace directory
+// (agents/{agentID}/workspace/) so that agents write to their own workspace by default.
 func resolveTargetBaseDir(ctx context.Context, dataDir, agentsDir, requestedPath string) (allowedRoot string, baseDir string, targetRelPath string, err error) {
 	if dataDir == "" {
 		dataDir = "./data"
@@ -402,9 +405,41 @@ func resolveTargetBaseDir(ctx context.Context, dataDir, agentsDir, requestedPath
 		cleanReq = strings.TrimPrefix(cleanReq, "data/")
 	}
 	if cleanReq == "data" || cleanReq == "" {
-		cleanReq = "."
+		// Empty or root path: resolve to agent workspace
+		agentID := AgentIDFromContext(ctx)
+		if validAgentWorkspaceSlug(agentID) {
+			agentWs := filepath.Join(absDataDir, "agents", agentID, "workspace")
+			if err := os.MkdirAll(agentWs, 0750); err != nil {
+				return "", "", "", fmt.Errorf("creating agent workspace: %w", err)
+			}
+			return absDataDir, agentWs, ".", nil
+		}
+		return absDataDir, absDataDir, ".", nil
 	}
 
+	// Check if the path explicitly targets a known system directory that lives
+	// directly under the data root. These are passed through verbatim.
+	systemPrefixes := []string{
+		"skills/", "config/", "plugins/", "logs/", "storage/",
+		"agents/", "models/", "overrides/", "vectors/", "workspace/",
+	}
+	for _, prefix := range systemPrefixes {
+		if strings.HasPrefix(cleanReq, prefix) || cleanReq == strings.TrimSuffix(prefix, "/") {
+			return absDataDir, absDataDir, cleanReq, nil
+		}
+	}
+
+	// All other paths are scoped to the calling agent's private workspace.
+	agentID := AgentIDFromContext(ctx)
+	if validAgentWorkspaceSlug(agentID) {
+		agentWs := filepath.Join(absDataDir, "agents", agentID, "workspace")
+		if err := os.MkdirAll(agentWs, 0750); err != nil {
+			return "", "", "", fmt.Errorf("creating agent workspace: %w", err)
+		}
+		return absDataDir, agentWs, cleanReq, nil
+	}
+
+	// No agent context: fall back to data root
 	return absDataDir, absDataDir, cleanReq, nil
 }
 
@@ -447,7 +482,7 @@ func NewFileReadTool(dataDir string, agentsDir ...string) *FileReadTool {
 
 func (t *FileReadTool) Name() string { return "native_file_read" }
 func (t *FileReadTool) Description() string {
-	return "Read contents of a file inside the data directory or your private workspace with line numbering and range slicing support."
+	return "Read internal scratchpad files, local logs, or skill files inside the agent's private directory or system data directory."
 }
 func (t *FileReadTool) Category() string { return "native" }
 
@@ -599,7 +634,7 @@ func NewFileWriteTool(dataDir string, agentsDir ...string) *FileWriteTool {
 
 func (t *FileWriteTool) Name() string { return "native_file_write" }
 func (t *FileWriteTool) Description() string {
-	return "Write, overwrite, or append content to a file in the data directory or your private workspace."
+	return "Write internal scratchpad files, local logs, build artifacts, or temporary scripts inside the agent's private directory. NOTE: Files written here are internal agent scratchpads and are NOT visible to the user on their Workspace page; use native_workspace_write to save user-facing files."
 }
 func (t *FileWriteTool) Category() string { return "native" }
 
