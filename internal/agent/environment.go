@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -211,9 +212,39 @@ func BuildAgentEnvironmentPrompt(dataDir, workspaceDir, agentSlug string) string
 		sb.WriteString("  </workspace_state>\n")
 	}
 
+	// 4. Live Connected SaaS Integrations
+	connectorsPath := filepath.Join(configDir, "connectors.json")
+	if data, err := os.ReadFile(connectorsPath); err == nil {
+		var stored map[string]struct {
+			Connected   bool   `json:"connected"`
+			Name        string `json:"name"`
+			AccountName string `json:"account_name"`
+		}
+		if err := json.Unmarshal(data, &stored); err == nil {
+			var active []string
+			for id, conn := range stored {
+				if conn.Connected {
+					acc := conn.AccountName
+					if acc == "" {
+						acc = "authenticated"
+					}
+					toolName := "connector_" + id
+					active = append(active, fmt.Sprintf("    <connector id=\"%s\" name=\"%s\" account=\"%s\" tool=\"%s\" status=\"connected\" />", id, conn.Name, acc, toolName))
+				}
+			}
+			if len(active) > 0 {
+				sb.WriteString("  <connected_integrations>\n")
+				for _, line := range active {
+					sb.WriteString(line + "\n")
+				}
+				sb.WriteString("  </connected_integrations>\n")
+			}
+		}
+	}
+
 	sb.WriteString("</environment>\n\n")
 
-	// 4. Dedicated Storage Policy & Global Data Access
+	// 5. Dedicated Storage Policy & Global Data Access
 	sb.WriteString("<workspace_storage_policy>\n")
 	sb.WriteString("  <rule id=\"user_workspace_mandate\">USER WORKSPACE (MANDATORY): Whenever interacting with user documents, or when the user says 'lưu vào workspace', 'save to workspace', 'tạo tài liệu', or asks to access their workspace files, you MUST use `native_workspace_*` tools (`native_workspace_write`, `native_workspace_read`, `native_workspace_search`, `native_workspace_delete`). Files saved here appear directly on the user's Workspace Page UI.</rule>\n")
 	fmt.Fprintf(&sb, "  <rule id=\"agent_internal_scratchpad\">AGENT SCRATCHPAD: Use `native_file_*` tools and `native_exec` ONLY for internal temporary scripts, building/compiling code, or running CLI tools in `%s/`. Do NOT expect the user to see files created by `native_file_write` unless they are published to the user workspace with `native_workspace_write`.</rule>\n", agentWorkspaceRel)
@@ -221,7 +252,7 @@ func BuildAgentEnvironmentPrompt(dataDir, workspaceDir, agentSlug string) string
 	sb.WriteString("  <rule id=\"system_structure\">SYSTEM STRUCTURE: System-level directories ('skills/', 'config/', 'plugins/', 'logs/', 'storage/') exist under data root. Only write to 'skills/' when explicitly creating/managing skills, and 'config/' for system configurations.</rule>\n")
 	sb.WriteString("</workspace_storage_policy>\n\n")
 
-	// 5. Dynamic Execution Best Practices based on detected environment tools
+	// 6. Dynamic Execution Best Practices based on detected environment tools
 	hasTool := func(bin string) bool {
 		for _, c := range caps {
 			if c.Installed && (c.Binary == bin || c.Name == bin) {

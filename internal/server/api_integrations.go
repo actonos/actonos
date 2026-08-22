@@ -15,6 +15,7 @@ import (
 
 	"github.com/actonos/actonos/internal/auth"
 	"github.com/actonos/actonos/internal/channels"
+	"github.com/actonos/actonos/internal/tools"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -680,6 +681,48 @@ func (s *Server) handleToggleIntegration(w http.ResponseWriter, r *http.Request)
 		"provider":  provider,
 		"connected": conn.Connected,
 	})
+}
+
+// GetConnectorToken implements tools.ConnectorTokenProvider for live, real-time token resolution without restart.
+func (s *Server) GetConnectorToken(ctx context.Context, providerID string) (string, bool, error) {
+	connectorsMu.RLock()
+	stored := s.loadStoredConnectors()
+	connectorsMu.RUnlock()
+
+	conn, exists := stored[providerID]
+	if !exists || !conn.Connected {
+		return "", false, nil
+	}
+
+	token := conn.DirectToken
+	if conn.AuthType == "oauth" && s.tokenDaemon != nil {
+		storedToken, err := s.tokenDaemon.GetToken(ctx, providerID)
+		if err == nil && storedToken != nil {
+			token = storedToken.AccessToken
+		}
+	}
+
+	return token, token != "", nil
+}
+
+// GetConnectedAccounts returns a list of all currently authenticated SaaS connectors.
+func (s *Server) GetConnectedAccounts(ctx context.Context) []tools.ConnectedAccountInfo {
+	connectorsMu.RLock()
+	stored := s.loadStoredConnectors()
+	connectorsMu.RUnlock()
+
+	var list []tools.ConnectedAccountInfo
+	for _, def := range defaultConnectors {
+		if conn, ok := stored[def.ID]; ok && conn.Connected {
+			list = append(list, tools.ConnectedAccountInfo{
+				ID:          conn.ID,
+				Name:        conn.Name,
+				AccountName: conn.AccountName,
+				Connected:   true,
+			})
+		}
+	}
+	return list
 }
 
 // Channels & Inbound Webhooks

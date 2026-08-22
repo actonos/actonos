@@ -191,6 +191,9 @@ func NewServer(cfg Config) *Server {
 	if s.toolReg != nil && s.channelMgr != nil {
 		s.toolReg.SetChannelSender(s.channelMgr)
 	}
+	if s.toolReg != nil {
+		tools.RegisterConnectorTools(s.toolReg, s)
+	}
 
 	s.setupRoutes()
 	return s
