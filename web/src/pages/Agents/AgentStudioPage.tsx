@@ -31,7 +31,8 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { AgentManifest, ApprovalLevel, ToolInfo, LLMProviderInfo } from '@/lib/types';
-import { LATEST_MODEL_CATALOG, getCategorizedModels } from '@/lib/models';
+import { useModelCatalog } from '@/components/providers/ModelProvider';
+import { getCategorizedModels } from '@/lib/models';
 import { AgentStudioNav, type AgentStudioSection } from '@/components/features/agents/AgentStudioNav';
 import { AgentIdentitySection } from '@/components/features/agents/AgentIdentitySection';
 import { AgentGovernanceSection } from '@/components/features/agents/AgentGovernanceSection';
@@ -77,6 +78,7 @@ const AVAILABLE_CHANNELS = [
 export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPageProps) {
   const { t } = useTranslation('agents');
   const { success, error, info } = useToast();
+  const { models: modelCatalog } = useModelCatalog();
   const isNew = agentID === 'new';
 
   const [activeTab, setActiveTab] = useState<StudioTab>('prompt');
@@ -192,10 +194,10 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             }
 
             // Check if models are not in the standard catalog to switch to custom text input
-            if (!LATEST_MODEL_CATALOG.some((m) => m.id === pMod)) {
+            if (!modelCatalog.some((m) => m.id === pMod)) {
               setCustomPrimaryMode(true);
             }
-            if (!LATEST_MODEL_CATALOG.some((m) => m.id === fMod)) {
+            if (!modelCatalog.some((m) => m.id === fMod)) {
               setCustomFallbackMode(true);
             }
           }

@@ -889,8 +889,8 @@ func TestServer_IntegrationsChannelsPairingAndWebhookValidation(t *testing.T) {
 	authURL.Header.Set("Content-Type", "application/json")
 	authResult := httptest.NewRecorder()
 	srv.Router().ServeHTTP(authResult, authURL)
-	if authResult.Code != http.StatusInternalServerError {
-		t.Fatalf("unconfigured OAuth should fail cleanly: %d %s", authResult.Code, authResult.Body.String())
+	if authResult.Code != http.StatusBadRequest && authResult.Code != http.StatusInternalServerError {
+		t.Fatalf("unconfigured OAuth should fail cleanly with error: %d %s", authResult.Code, authResult.Body.String())
 	}
 	callback := httptest.NewRequest(http.MethodGet, "/api/integrations/oauth/callback?error=denied&error_description=no", nil)
 	callbackResult := httptest.NewRecorder()

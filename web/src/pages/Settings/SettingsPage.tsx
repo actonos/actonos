@@ -48,13 +48,15 @@ import { useDensity, type UIDensity } from '@/components/providers/DensityProvid
 
 type SettingsTab = 'identity' | 'keys' | 'tokens' | 'network' | 'maintenance';
 
-import { PROVIDER_METAS, type ProviderMeta } from '@/lib/models';
+import { useModelCatalog } from '@/components/providers/ModelProvider';
+import type { ProviderMeta } from '@/lib/models';
 
 export function SettingsPage() {
   const { t } = useTranslation('settings');
   const { success, error, info } = useToast();
   const { theme, setTheme } = useTheme();
   const { density, setDensity } = useDensity();
+  const { providers: providerMetas } = useModelCatalog();
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
     const value = readHashParams().get('view');
     return ['identity', 'keys', 'tokens', 'network', 'maintenance'].includes(value || '')
@@ -285,7 +287,7 @@ export function SettingsPage() {
     }
   };
 
-  const configuredCount = PROVIDER_METAS.filter((m) => providersData[m.id]?.configured).length;
+  const configuredCount = providerMetas.filter((m: ProviderMeta) => providersData[m.id]?.configured).length;
 
   return (
     <div className="relative min-h-[calc(100vh-64px)]">
@@ -296,7 +298,7 @@ export function SettingsPage() {
           eyebrow={t('eyebrow')}
           title={t('title')}
           description={t('subtitle')}
-          badge={<Badge variant="neutral" className="font-mono">{t('header.activeModels', { configured: configuredCount, total: PROVIDER_METAS.length })}</Badge>}
+          badge={<Badge variant="neutral" className="font-mono">{t('header.activeModels', { configured: configuredCount, total: providerMetas.length })}</Badge>}
           actions={(
             <>
               <Button
@@ -566,7 +568,7 @@ export function SettingsPage() {
 
             {/* Providers Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {PROVIDER_METAS.map((meta) => {
+              {providerMetas.map((meta) => {
                 const pData = providersData[meta.id];
                 const isConfigured = pData?.configured;
                 const Icon = meta.icon;

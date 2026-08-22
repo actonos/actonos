@@ -575,3 +575,4 @@ export interface WorkspaceChunksResponse {
   chunk_count: number;
   chunks: SemanticChunkItem[];
 }
+

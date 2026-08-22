@@ -267,6 +267,7 @@ func (s *Server) setupRoutes() {
 
 			r.Get("/dashboard/summary", s.handleDashboardSummary)
 			r.Get("/realtime", s.handleRealtimeStream)
+			r.Get("/models", s.handleGetModelsCatalog)
 
 			// Agent Management, Soul & Cron
 			r.Route("/agents", func(r chi.Router) {

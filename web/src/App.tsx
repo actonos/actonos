@@ -12,6 +12,7 @@ import { ActionProgressProvider } from '@/components/providers/ActionProgressPro
 import { RealtimeProvider } from '@/components/providers/RealtimeProvider';
 import { DensityProvider } from '@/components/providers/DensityProvider';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
+import { ModelProvider } from '@/components/providers/ModelProvider';
 import { useTranslation } from 'react-i18next';
 import { CommandPalette } from '@/components/features/search/CommandPalette';
 
@@ -180,6 +181,7 @@ export function App() {
       <ToastProvider>
         <DensityProvider>
         <RealtimeProvider>
+        <ModelProvider>
         <ActionProgressProvider>
         <div className="min-h-screen bg-canvas text-deep-ink selection:bg-hi-yellow selection:text-deep-ink font-sans flex">
           <ApprovalInterruption />
@@ -256,12 +258,12 @@ export function App() {
                 )}
                 {activeTab === 'operations' && <OperationsPage />}
                 {activeTab === 'automations' && <AutomationsPage />}
+                {activeTab === 'channels' && <ChannelsPage />}
+                {activeTab === 'connectors' && <ConnectorsPage />}
                 {activeTab === 'tools' && <ToolHubPage />}
                 {activeTab === 'skills' && <SkillsPage />}
                 {activeTab === 'workspace' && <WorkspacePage />}
                 {activeTab === 'terminal' && <TerminalPage />}
-                {activeTab === 'channels' && <ChannelsPage />}
-                {activeTab === 'connectors' && <ConnectorsPage />}
                 {activeTab === 'notifications' && (
                   <NotificationsPage
                     onNavigateTab={navigateTab}
@@ -275,6 +277,7 @@ export function App() {
           </div>
         </div>
         </ActionProgressProvider>
+        </ModelProvider>
         </RealtimeProvider>
         </DensityProvider>
       </ToastProvider>

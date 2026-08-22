@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { LATEST_MODEL_CATALOG } from '@/lib/models';
+import { useModelCatalog } from '@/components/providers/ModelProvider';
 import type { AgentManifest, ApprovalLevel, ToolInfo } from '@/lib/types';
 
 export interface AgentFormModalProps {
@@ -23,6 +23,7 @@ export function AgentFormModal({
 }: AgentFormModalProps) {
   const { t } = useTranslation('agents');
   const { t: tCommon } = useTranslation('common');
+  const { models } = useModelCatalog();
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -140,7 +141,7 @@ export function AgentFormModal({
               onChange={(e) => setPrimaryModel(e.target.value)}
               className="w-full bg-white text-deep-ink font-sans text-body px-4 py-2.5 rounded-full border border-onyx focus:outline-none focus:ring-2 focus:ring-deep-ink"
             >
-              {LATEST_MODEL_CATALOG.map((m) => (
+              {models.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.providerName} — {m.name} {m.badge ? `(${m.badge})` : ''}
                 </option>
@@ -157,7 +158,7 @@ export function AgentFormModal({
               onChange={(e) => setFallbackModel(e.target.value)}
               className="w-full bg-white text-deep-ink font-sans text-body px-4 py-2.5 rounded-full border border-onyx focus:outline-none focus:ring-2 focus:ring-deep-ink"
             >
-              {LATEST_MODEL_CATALOG.map((m) => (
+              {models.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.providerName} — {m.name}
                 </option>
