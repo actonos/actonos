@@ -174,30 +174,18 @@ func (s *Server) getOAuthProviderConfig(providerID string, customClientID, custo
 			"https://www.googleapis.com/auth/userinfo.email",
 			"https://www.googleapis.com/auth/userinfo.profile",
 		}
-		if cfg.ClientID == "" {
-			cfg.ClientID = "actonos-google-client.apps.googleusercontent.com"
-		}
 	case "github":
 		cfg.AuthURL = "https://github.com/login/oauth/authorize"
 		cfg.TokenURL = "https://github.com/login/oauth/access_token"
 		cfg.Scopes = []string{"repo", "read:user", "user:email"}
-		if cfg.ClientID == "" {
-			cfg.ClientID = "Ov23liActonOSAppID"
-		}
 	case "notion":
 		cfg.AuthURL = "https://api.notion.com/v1/oauth/authorize"
 		cfg.TokenURL = "https://api.notion.com/v1/oauth/token"
 		cfg.Scopes = []string{"read_content", "update_content", "insert_content"}
-		if cfg.ClientID == "" {
-			cfg.ClientID = "acton-notion-client-id"
-		}
 	case "slack":
 		cfg.AuthURL = "https://slack.com/oauth/v2/authorize"
 		cfg.TokenURL = "https://slack.com/api/oauth.v2.access"
 		cfg.Scopes = []string{"chat:write", "channels:read", "channels:history", "users:read"}
-		if cfg.ClientID == "" {
-			cfg.ClientID = "acton-slack-client-id"
-		}
 	}
 
 	return cfg
@@ -402,19 +390,30 @@ func (s *Server) handleGetAuthURL(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = s.decodeJSON(r, &req)
 
-	connectorsMu.RLock()
+	connectorsMu.Lock()
 	stored := s.loadStoredConnectors()
-	connectorsMu.RUnlock()
-
 	existing := stored[provider]
-	clientID := req.ClientID
+	clientID := strings.TrimSpace(req.ClientID)
 	if clientID == "" {
-		clientID = existing.ClientID
+		clientID = strings.TrimSpace(existing.ClientID)
 	}
-	clientSecret := req.ClientSecret
+	clientSecret := strings.TrimSpace(req.ClientSecret)
 	if clientSecret == "" {
-		clientSecret = existing.ClientSecret
+		clientSecret = strings.TrimSpace(existing.ClientSecret)
 	}
+
+	if clientID == "" || clientSecret == "" {
+		connectorsMu.Unlock()
+		s.respondError(w, http.StatusBadRequest, "CREDENTIALS_REQUIRED", fmt.Sprintf("OAuth Client ID and Client Secret are required for %s. As an open-source system, ActonOS requires you to create your own OAuth App on %s and provide credentials.", provider, provider))
+		return
+	}
+
+	// Persist client credentials
+	existing.ClientID = clientID
+	existing.ClientSecret = clientSecret
+	stored[provider] = existing
+	_ = s.saveStoredConnectors(stored)
+	connectorsMu.Unlock()
 
 	cfg := s.getOAuthProviderConfig(provider, clientID, clientSecret)
 
