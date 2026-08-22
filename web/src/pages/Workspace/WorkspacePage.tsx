@@ -463,7 +463,7 @@ export function WorkspacePage() {
             }}
             onChatWithFile={() => {
               if (activeTab) {
-								window.location.hash = `#/chat?file_id=${encodeURIComponent(activeTab.id)}`;
+                window.location.hash = `#/chat?file_id=${encodeURIComponent(activeTab.id)}&file_path=${encodeURIComponent(activeTab.path || activeTab.name)}`;
               }
             }}
           />
@@ -484,7 +484,7 @@ export function WorkspacePage() {
           onDownload={handleDownload}
           onReindex={handleReindex}
           onChatWithFile={(file) => {
-			window.location.hash = `#/chat?file_id=${encodeURIComponent(file.id)}`;
+            window.location.hash = `#/chat?file_id=${encodeURIComponent(file.id)}&file_path=${encodeURIComponent(file.virtual_path || file.path || file.name)}`;
           }}
           onDelete={(file) => setDeleteModalTarget({ file })}
         />

@@ -3,9 +3,14 @@ import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { ChatHeader } from '@/components/features/chat/ChatHeader';
-import { ChatComposer } from '@/components/features/chat/ChatComposer';
+import {
+  ChatComposer,
+  type AttachedFile,
+  isSupportedTextOrCodeFile,
+  MAX_ATTACHMENT_SIZE_BYTES,
+  MAX_TEXT_INJECTION_CHARS,
+} from '@/components/features/chat/ChatComposer';
 import { MessageTimeline } from '@/components/features/chat/MessageTimeline';
-import { ChatSessionRail } from '@/components/features/chat/ChatSessionRail';
 import { ChatSessionsTable } from '@/components/features/chat/ChatSessionsTable';
 import { RenameSessionModal } from '@/components/features/chat/RenameSessionModal';
 import { BlobBackdrop } from '@/components/ui/BlobBackdrop';
@@ -15,6 +20,7 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { useToast } from '@/components/ui/Toast';
 import { useRealtime } from '@/components/providers/RealtimeProvider';
+import { readHashParams, setHashParam } from '@/lib/url-state';
 import {
   Bot,
   Sparkles,
@@ -22,10 +28,15 @@ import {
   Plus,
   ArrowLeft,
   ChevronDown,
+  Pin,
+  Edit3,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { api } from '@/lib/api';
-import type { AgentManifest, ConversationItem } from '@/lib/types';
+import type { AgentManifest, ConversationItem, ToolInfo } from '@/lib/types';
 import type { NavTab } from '@/components/layout/Sidebar';
+import type { AutocompleteFileItem } from '@/components/features/chat/ChatAutocompletePopover';
 import {
   type ChatMessage,
   type ToolCallTrace,
@@ -40,7 +51,7 @@ export interface ChatPageProps {
 export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
   const { t } = useTranslation('chat');
   const { t: tCommon } = useTranslation('common');
-  const { success, error, info } = useToast();
+  const { success, error } = useToast();
 
   // Mode: 'sessions' = Sessions Table Hub, 'chat' = Active Conversation Canvas
   const [viewMode, setViewMode] = useState<'sessions' | 'chat'>('sessions');
@@ -55,8 +66,13 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const [copiedConvId, setCopiedConvId] = useState(false);
   const [activeTab, setActiveTab] = useState<Record<string, 'traces' | 'audit'>>({});
   const [expandedTrace, setExpandedTrace] = useState<Record<string, boolean>>({});
+
+  // Skills & Files for Autocomplete
+  const [skills, setSkills] = useState<ToolInfo[]>([]);
+  const [workspaceFiles, setWorkspaceFiles] = useState<AutocompleteFileItem[]>([]);
 
   // Table Hub Filters & Search
   const [tableSearch, setTableSearch] = useState('');
@@ -64,20 +80,17 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
   const [tableChannel, setTableChannel] = useState('all');
   const [tablePinnedOnly, setTablePinnedOnly] = useState(false);
 
-  // Rail Search & Filter
-  const [sessionSearch, setSessionSearch] = useState('');
-  const [sessionFilterScope, setSessionFilterScope] = useState<'all' | 'agent'>('all');
-  const [sessionsOpen, setSessionsOpen] = useState(false);
-
   // Modals & Renaming
   const [deletingConvId, setDeletingConvId] = useState<string | null>(null);
   const [editingConv, setEditingConv] = useState<ConversationItem | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<AttachedFile[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const isAutoScrollEnabled = useRef(true);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const activeStreamAbortController = useRef<AbortController | null>(null);
 
   // Load agents and conversations
   const loadAgents = async () => {
@@ -102,6 +115,30 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
     }
   };
 
+  const loadSkillsAndFiles = async () => {
+    try {
+      const [skillsRes, filesRes] = await Promise.allSettled([
+        api.listTools(),
+        api.listWorkspaceFiles(),
+      ]);
+
+      if (skillsRes.status === 'fulfilled' && skillsRes.value?.tools) {
+        setSkills(skillsRes.value.tools);
+      }
+
+      if (filesRes.status === 'fulfilled' && filesRes.value?.files) {
+        const mapped: AutocompleteFileItem[] = filesRes.value.files.map((f) => ({
+          id: f.id,
+          name: f.name,
+          path: f.virtual_path || f.path || `/${f.name}`,
+          is_dir: f.is_dir,
+          size: f.size,
+        }));
+        setWorkspaceFiles(mapped);
+      }
+    } catch {}
+  };
+
   const selectConversation = async (convID: string) => {
     setActiveConvID(convID);
     localStorage.setItem('actonos_active_conv_id', convID);
@@ -109,7 +146,6 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
       const res = await api.getConversation(convID);
       if (res.conversation?.agent_id) {
         setActiveAgentID(res.conversation.agent_id);
-        onSelectAgentID?.(res.conversation.agent_id);
       }
       if (res.messages) {
         setMessages(
@@ -120,28 +156,36 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
                 const parsed = JSON.parse(m.tool_calls_json);
                 if (Array.isArray(parsed)) {
                   toolCalls = parsed.map((rawCall: unknown) => {
-                    const tc = typeof rawCall === 'object' && rawCall !== null
-                      ? rawCall as Record<string, unknown>
-                      : {};
-                    const fn = typeof tc.function === 'object' && tc.function !== null
-                      ? tc.function as Record<string, unknown>
-                      : {};
+                    const tc =
+                      typeof rawCall === 'object' && rawCall !== null
+                        ? (rawCall as Record<string, unknown>)
+                        : {};
+                    const fn =
+                      typeof tc.function === 'object' && tc.function !== null
+                        ? (tc.function as Record<string, unknown>)
+                        : {};
                     return {
-                      tool: typeof fn.name === 'string'
-                        ? fn.name
-                        : typeof tc.name === 'string' ? tc.name : 'native_tool',
+                      tool:
+                        typeof fn.name === 'string'
+                          ? fn.name
+                          : typeof tc.name === 'string'
+                            ? tc.name
+                            : 'native_tool',
                       args: fn.arguments,
                       status: 'success',
                     };
                   });
                 }
-              } catch { }
+              } catch {}
             }
             return {
               id: m.id,
               role: m.role === 'user' || m.role === 'assistant' ? m.role : 'system',
               content: m.content,
-              timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              timestamp: new Date(m.created_at).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
               toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
             };
           })
@@ -154,20 +198,116 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
     }
   };
 
+  // URL session_id and file_id Synchronization
+  const syncSessionFromUrl = async () => {
+    const params = readHashParams();
+    const urlSessionId = params.get('session_id');
+    const urlFileId = params.get('file_id');
+    const urlFilePath = params.get('file_path');
+
+    if (urlFileId) {
+      // Clear file query params from URL so it doesn't loop
+      setHashParam('file_id', undefined);
+      setHashParam('file_path', undefined);
+
+      try {
+        const fileDetail = await api.getWorkspaceFile(urlFileId);
+        if (fileDetail) {
+          const rawPath =
+            urlFilePath ||
+            (fileDetail as { virtual_path?: string }).virtual_path ||
+            (fileDetail as { name?: string }).name ||
+            'document';
+          const fileName = rawPath.split('/').pop() || rawPath;
+
+          if (!isSupportedTextOrCodeFile(fileName, fileDetail.mime)) {
+            error(t('attachments.unsupportedType', 'Only code, text, and document files are supported.'));
+          } else if ((fileDetail.size || 0) > MAX_ATTACHMENT_SIZE_BYTES) {
+            error(t('attachments.fileTooLarge', 'File size exceeds 5MB limit for code and document analysis.'));
+          } else {
+            let textContent = fileDetail.content || '';
+            if (textContent.length > MAX_TEXT_INJECTION_CHARS) {
+              const originalKb = ((fileDetail.size || 0) / 1024).toFixed(1);
+              textContent =
+                textContent.slice(0, MAX_TEXT_INJECTION_CHARS) +
+                `\n\n... [Content truncated: displaying first ${(MAX_TEXT_INJECTION_CHARS / 1024).toFixed(1)} KB of ${originalKb} KB] ...`;
+            }
+
+            const attachedWsFile: AttachedFile = {
+              id: `att_ws_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              name: fileName,
+              size: fileDetail.size || 0,
+              type: fileDetail.mime || 'text/plain',
+              textContent,
+              file_id: urlFileId,
+              path: rawPath,
+              isWorkspace: true,
+            };
+            setPendingAttachments((prev) => [...prev, attachedWsFile]);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load workspace file for chat:', err);
+      }
+
+      if (!activeConvID) {
+        const newConvId = `conv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        setHashParam('session_id', newConvId);
+        setActiveConvID(newConvId);
+        localStorage.setItem('actonos_active_conv_id', newConvId);
+        setMessages([]);
+      }
+      setViewMode('chat');
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 150);
+    } else if (urlSessionId) {
+      if (urlSessionId !== activeConvID) {
+        selectConversation(urlSessionId);
+      }
+      setViewMode('chat');
+    } else {
+      setViewMode('sessions');
+      setActiveConvID(null);
+    }
+  };
+
+  useEffect(() => {
+    loadAgents();
+    loadConversations();
+    loadSkillsAndFiles();
+    syncSessionFromUrl();
+
+    const handleHashChange = () => {
+      syncSessionFromUrl();
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
   const handleViewSession = (convID: string) => {
+    setHashParam('session_id', convID);
     selectConversation(convID);
     setViewMode('chat');
   };
 
   const handleNewChat = () => {
-    setActiveConvID(null);
-    localStorage.removeItem('actonos_active_conv_id');
+    const newConvId = `conv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    setHashParam('session_id', newConvId);
+    setActiveConvID(newConvId);
+    localStorage.setItem('actonos_active_conv_id', newConvId);
     setMessages([]);
     setViewMode('chat');
-    info(t('newSession', 'New Chat Session'), 'Type a message to start a real-time streamed session.');
     setTimeout(() => {
       inputRef.current?.focus();
     }, 100);
+  };
+
+  const handleBackToSessions = () => {
+    setHashParam('session_id', undefined);
+    setActiveConvID(null);
+    setViewMode('sessions');
+    loadConversations();
   };
 
   const handleTogglePin = async (convID: string, currentPinned: boolean) => {
@@ -179,7 +319,10 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
         if (!!a.is_pinned !== !!b.is_pinned) {
           return a.is_pinned ? -1 : 1;
         }
-        return new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime();
+        return (
+          new Date(b.updated_at || b.created_at).getTime() -
+          new Date(a.updated_at || a.created_at).getTime()
+        );
       });
     });
 
@@ -190,7 +333,6 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
         nextPinned ? 'Session pinned to top.' : 'Session unpinned.'
       );
     } catch (err) {
-      // Revert if failed
       loadConversations();
       error('Failed to update pin', getErrorMessage(err));
     }
@@ -204,13 +346,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
       setConversations(remaining);
       success(t('deleteSession', 'Session Deleted'), 'Conversation history cleared.');
       if (activeConvID === deletingConvId) {
-        if (remaining.length > 0) {
-          selectConversation(remaining[0].id);
-        } else {
-          setActiveConvID(null);
-          setMessages([]);
-          setViewMode('sessions');
-        }
+        handleBackToSessions();
       }
       setDeletingConvId(null);
     } catch (err) {
@@ -240,89 +376,94 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
   activeConvIDRef.current = activeConvID;
 
   useEffect(() => {
-    loadAgents();
-    loadConversations();
-  }, []);
-
-  useEffect(() => {
     if (selectedAgentID) {
       setActiveAgentID(selectedAgentID);
     }
   }, [selectedAgentID]);
 
-  // Real-time synchronization: pull incoming messages and update conversations list
+  // Real-time synchronization: sync when snapshot timestamp updates from WebSocket
   useEffect(() => {
+    if (!snapshot?.timestamp) return;
     let cancelled = false;
 
-    const syncRecentMessages = async () => {
+    const syncOnSocketEvent = async () => {
       if (loadingRef.current) return;
       const currentID = activeConvIDRef.current;
-      if (!currentID) return;
 
       try {
-        const res = await api.getConversation(currentID);
-        if (cancelled || !res.messages) return;
+        if (currentID) {
+          const res = await api.getConversation(currentID);
+          if (cancelled || !res.messages) return;
 
-        const newFormatted: ChatMessage[] = res.messages.map((m) => {
-          let toolCalls: ToolCallTrace[] = [];
-          if (m.tool_calls_json && m.tool_calls_json !== 'null' && m.tool_calls_json !== '[]') {
-            try {
-              const parsed = JSON.parse(m.tool_calls_json);
-              if (Array.isArray(parsed)) {
-                toolCalls = parsed.map((rawCall: unknown) => {
-                  const tc = typeof rawCall === 'object' && rawCall !== null ? rawCall as Record<string, unknown> : {};
-                  const fn = typeof tc.function === 'object' && tc.function !== null ? tc.function as Record<string, unknown> : {};
-                  return {
-                    tool: typeof fn.name === 'string' ? fn.name : typeof tc.name === 'string' ? tc.name : 'native_tool',
-                    args: fn.arguments,
-                    status: 'success',
-                  };
-                });
-              }
-            } catch { }
-          }
-          return {
-            id: m.id,
-            role: m.role === 'user' || m.role === 'assistant' ? m.role : 'system',
-            content: m.content,
-            timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-          };
-        });
+          const newFormatted: ChatMessage[] = res.messages.map((m) => {
+            let toolCalls: ToolCallTrace[] = [];
+            if (m.tool_calls_json && m.tool_calls_json !== 'null' && m.tool_calls_json !== '[]') {
+              try {
+                const parsed = JSON.parse(m.tool_calls_json);
+                if (Array.isArray(parsed)) {
+                  toolCalls = parsed.map((rawCall: unknown) => {
+                    const tc =
+                      typeof rawCall === 'object' && rawCall !== null
+                        ? (rawCall as Record<string, unknown>)
+                        : {};
+                    const fn =
+                      typeof tc.function === 'object' && tc.function !== null
+                        ? (tc.function as Record<string, unknown>)
+                        : {};
+                    return {
+                      tool:
+                        typeof fn.name === 'string'
+                          ? fn.name
+                          : typeof tc.name === 'string'
+                            ? tc.name
+                            : 'native_tool',
+                      args: fn.arguments,
+                      status: 'success',
+                    };
+                  });
+                }
+              } catch {}
+            }
+            return {
+              id: m.id,
+              role: m.role === 'user' || m.role === 'assistant' ? m.role : 'system',
+              content: m.content,
+              timestamp: new Date(m.created_at).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+              toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+            };
+          });
 
-        setMessages((prev) => {
-          if (newFormatted.length < prev.length) {
+          setMessages((prev) => {
+            if (newFormatted.length < prev.length) {
+              return prev;
+            }
+            if (
+              prev.length !== newFormatted.length ||
+              (prev.length > 0 &&
+                prev[prev.length - 1]?.content !== newFormatted[newFormatted.length - 1]?.content)
+            ) {
+              return newFormatted;
+            }
             return prev;
-          }
-          if (prev.length !== newFormatted.length || (prev.length > 0 && prev[prev.length - 1]?.content !== newFormatted[newFormatted.length - 1]?.content)) {
-            return newFormatted;
-          }
-          return prev;
-        });
-      } catch { }
+          });
+        }
+
+        const convsRes = await api.listConversations();
+        if (!cancelled && convsRes.conversations) {
+          setConversations(convsRes.conversations);
+        }
+      } catch {}
     };
 
-    const syncConversationsList = async () => {
-      try {
-        const res = await api.listConversations();
-        if (cancelled || !res.conversations) return;
-        setConversations(res.conversations);
-      } catch { }
-    };
-
-    syncRecentMessages();
-    syncConversationsList();
-
-    const interval = setInterval(() => {
-      syncRecentMessages();
-      syncConversationsList();
-    }, 2500);
+    syncOnSocketEvent();
 
     return () => {
       cancelled = true;
-      clearInterval(interval);
     };
-  }, [snapshot?.timestamp, activeConvID]);
+  }, [snapshot?.timestamp]);
 
   const handleScroll = () => {
     if (!messagesContainerRef.current) return;
@@ -396,18 +537,71 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
     }
   }, [viewMode, messages, loading]);
 
-  const handleSend = async (e?: FormEvent) => {
-    if (e) e.preventDefault();
-    if (!input.trim() || !activeAgentID || loading) return;
+  const handleCancelStreaming = () => {
+    if (activeStreamAbortController.current) {
+      activeStreamAbortController.current.abort();
+      activeStreamAbortController.current = null;
+    }
+    setLoading(false);
+  };
 
-    const userMsg = input.trim();
+  const handleSend = async (e?: FormEvent, attachedFiles: AttachedFile[] = []) => {
+    if (e) e.preventDefault();
+    if ((!input.trim() && attachedFiles.length === 0) || !activeAgentID || loading) return;
+
+    const rawUserInput = input.trim();
     setInput('');
+
+    // If there are attached text/workspace files, incorporate contents into the context for AI
+    let userMsgText = rawUserInput;
+    if (attachedFiles.length > 0) {
+      const fileContextParts: string[] = [];
+      attachedFiles.forEach((file) => {
+        if (file.isImage && file.previewUrl) {
+          const dims = file.width && file.height ? ` (${file.width}x${file.height})` : '';
+          fileContextParts.push(
+            `\n\n---\n[Attached Image: "${file.name}"${dims} (${(file.size / 1024).toFixed(1)} KB)]\n![${file.name}](${file.previewUrl})`
+          );
+        } else if (file.isWorkspace && file.file_id) {
+          fileContextParts.push(
+            `\n\n---\n[Attached User Workspace Document: "${file.name}" (File ID: ${file.file_id}, Path: ${file.path || file.name}, Size: ${(file.size / 1024).toFixed(1)} KB)]\n\`\`\`\n${file.textContent || '(content empty or binary)'}\n\`\`\``
+          );
+        } else if (file.textContent) {
+          fileContextParts.push(
+            `\n\n---\n[Attached File: "${file.name}" (${(file.size / 1024).toFixed(1)} KB)]\n\`\`\`\n${file.textContent}\n\`\`\``
+          );
+        } else {
+          fileContextParts.push(
+            `\n\n---\n[Attached File: "${file.name}" (${(file.size / 1024).toFixed(1)} KB, type: ${file.type})]`
+          );
+        }
+      });
+
+      userMsgText = rawUserInput
+        ? `${fileContextParts.join('')}\n\n[User Request]:\n${rawUserInput}`
+        : `${fileContextParts.join('')}\n\n[User Request]:\nVui lòng đọc, phân tích và giải đáp theo các tệp và hình ảnh đính kèm trên.`;
+    }
+
     const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     const userMsgObj: ChatMessage = {
       id: 'msg_' + Date.now(),
       role: 'user',
-      content: userMsg,
+      content: userMsgText,
+      displayContent: rawUserInput || (attachedFiles.length > 0 ? `Đã gửi ${attachedFiles.length} tệp đính kèm` : ''),
+      attachments: attachedFiles.map((att) => ({
+        name: att.name,
+        size: att.size,
+        type: att.type,
+        isWorkspace: att.isWorkspace,
+        file_id: att.file_id,
+        path: att.path,
+        previewUrl: att.previewUrl,
+        thumbnailUrl: att.thumbnailUrl,
+        isImage: att.isImage,
+        width: att.width,
+        height: att.height,
+      })),
       timestamp: now,
     };
 
@@ -417,7 +611,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
       role: 'assistant',
       content: '',
       timestamp: now,
-      thought: `Deliberating with ${activeAgent?.name || 'Agent'}...`,
+      thought: `Thinking with ${activeAgent?.name || 'Assistant'}...`,
       segments: [],
       toolCalls: [],
       auditLogs: [],
@@ -427,11 +621,18 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
     setMessages((prev) => [...prev, userMsgObj, currentAssistantMsg]);
     setLoading(true);
 
+    const abortController = new AbortController();
+    activeStreamAbortController.current = abortController;
+
     try {
-      const response = await api.streamChat(activeAgentID, {
-        conversation_id: activeConvID,
-        message: userMsg,
-      });
+      const response = await api.streamChat(
+        activeAgentID,
+        {
+          conversation_id: activeConvID,
+          message: userMsgText,
+        },
+        abortController.signal
+      );
 
       if (!response.ok) {
         if (response.status === 401) {
@@ -479,6 +680,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
               // Update session ID and title
               if (parsed.conversation_id) {
                 setActiveConvID(parsed.conversation_id);
+                setHashParam('session_id', parsed.conversation_id);
                 localStorage.setItem('actonos_active_conv_id', parsed.conversation_id);
                 setConversations((prev) => {
                   const exists = prev.some((c) => c.id === parsed.conversation_id);
@@ -488,7 +690,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
                         ? {
                             ...c,
                             title: parsed.title,
-                            last_message: userMsg,
+                            last_message: userMsgText,
                             updated_at: new Date().toISOString(),
                             message_count: (c.message_count || 0) + 2,
                           }
@@ -499,11 +701,11 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
                       {
                         id: parsed.conversation_id,
                         agent_id: activeAgentID,
-                        title: parsed.title || userMsg.slice(0, 35) + '...',
+                        title: parsed.title || userMsgText.slice(0, 35) + '...',
                         channel: 'web',
                         is_pinned: false,
                         message_count: 2,
-                        last_message: userMsg,
+                        last_message: userMsgText,
                         created_at: new Date().toISOString(),
                         updated_at: new Date().toISOString(),
                       },
@@ -546,7 +748,9 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
                   segments: segs,
                 };
               } else if (currentEvent === 'token_reset') {
-                const segs = (currentAssistantMsg.segments || []).filter((s) => s.type === 'reasoning');
+                const segs = (currentAssistantMsg.segments || []).filter(
+                  (s) => s.type === 'reasoning'
+                );
                 currentAssistantMsg = {
                   ...currentAssistantMsg,
                   content: '',
@@ -567,7 +771,12 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
                   ...currentAssistantMsg,
                   toolCalls: (currentAssistantMsg.toolCalls || []).map((tc) =>
                     tc.tool === parsed.tool
-                      ? { ...tc, result: parsed.result, status: parsed.status, latency_ms: parsed.latency_ms }
+                      ? {
+                          ...tc,
+                          result: parsed.result,
+                          status: parsed.status,
+                          latency_ms: parsed.latency_ms,
+                        }
                       : tc
                   ),
                 };
@@ -579,7 +788,12 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
               } else if (currentEvent === 'done') {
                 currentAssistantMsg = {
                   ...currentAssistantMsg,
-                  content: currentAssistantMsg.content || parsed.content || (currentAssistantMsg.toolCalls?.length ? 'Completed operations successfully.' : ''),
+                  content:
+                    currentAssistantMsg.content ||
+                    parsed.content ||
+                    (currentAssistantMsg.toolCalls?.length
+                      ? 'Completed operations successfully.'
+                      : ''),
                   model: parsed.model,
                   tokens_used: parsed.tokens_used,
                   thought: undefined,
@@ -607,16 +821,32 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
           }
         }
       }
-    } catch (err) {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantMsgId
-            ? { ...m, content: m.content + `\n\nExecution error: ${getErrorMessage(err)}`, thought: undefined }
-            : m
-        )
-      );
+    } catch (err: unknown) {
+      if ((err as { name?: string })?.name === 'AbortError') {
+        currentAssistantMsg = {
+          ...currentAssistantMsg,
+          thought: undefined,
+          finalized: true,
+        };
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantMsgId ? { ...currentAssistantMsg } : m))
+        );
+      } else {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? {
+                  ...m,
+                  content: m.content + `\n\nExecution error: ${getErrorMessage(err)}`,
+                  thought: undefined,
+                }
+              : m
+          )
+        );
+      }
     } finally {
       setLoading(false);
+      activeStreamAbortController.current = null;
     }
   };
 
@@ -632,24 +862,20 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
     setTimeout(() => setCopiedIdx(null), 2000);
   };
 
+  const handleCopyConvId = () => {
+    if (!activeConvID) return;
+    navigator.clipboard.writeText(activeConvID);
+    setCopiedConvId(true);
+    success(t('actions.copyId'), activeConvID);
+    setTimeout(() => setCopiedConvId(false), 2000);
+  };
+
   const toggleTrace = (msgId: string) => {
     setExpandedTrace((prev) => ({ ...prev, [msgId]: !prev[msgId] }));
   };
 
   const activeAgent = agents.find((a) => a.agent_id === activeAgentID) || agents[0];
   const activeConv = conversations.find((c) => c.id === activeConvID);
-
-  // Filter conversations for the side rail inside Chat view
-  const railFilteredConversations = conversations.filter((c) => {
-    if (sessionFilterScope === 'agent' && c.agent_id !== activeAgentID) {
-      return false;
-    }
-    if (sessionSearch.trim()) {
-      const q = sessionSearch.toLowerCase();
-      return c.title.toLowerCase().includes(q) || (c.last_message && c.last_message.toLowerCase().includes(q));
-    }
-    return true;
-  });
 
   const promptChips = [
     t('prompts.diagnostics'),
@@ -659,21 +885,20 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
   ];
 
   return (
-    <div className="relative flex flex-col min-h-[calc(100dvh-64px)]">
+    <div className="relative flex flex-col h-[calc(100vh-5rem)] overflow-hidden">
       <BlobBackdrop />
 
-      <PageContainer maxWidth="wide" className="flex-1 flex flex-col py-4 min-h-0">
+      <PageContainer maxWidth="wide" className="flex-1 flex flex-col py-2 min-h-0 overflow-hidden">
         <ChatHeader
           agent={activeAgent}
           viewMode={viewMode}
-          onOpenSessions={() => setSessionsOpen(true)}
-          onBackToSessions={() => setViewMode('sessions')}
+          onBackToSessions={handleBackToSessions}
           onNewSession={handleNewChat}
         />
 
         {/* Mode 1: Sessions Hub Table View (Default when accessing Chat) */}
         {viewMode === 'sessions' ? (
-          <div className="flex-1 mt-2">
+          <div className="flex-1 overflow-y-auto min-h-0 mt-2 pr-1">
             <ChatSessionsTable
               conversations={conversations}
               agents={agents}
@@ -693,108 +918,152 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
             />
           </div>
         ) : (
-          /* Mode 2: Active Chat Conversation Canvas */
-          <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 lg:grid-cols-12 mt-2">
-            <ChatSessionRail
-              agents={agents}
-              conversations={railFilteredConversations}
-              activeAgentID={activeAgentID}
-              activeConversationID={activeConvID}
-              search={sessionSearch}
-              scope={sessionFilterScope}
-              onAgentChange={(agentID) => {
-                setActiveAgentID(agentID);
-                onSelectAgentID?.(agentID);
-              }}
-              onConversationSelect={selectConversation}
-              onConversationDelete={setDeletingConvId}
-              onSearchChange={setSessionSearch}
-              onScopeChange={setSessionFilterScope}
-              onNew={handleNewChat}
-              open={sessionsOpen}
-              onClose={() => setSessionsOpen(false)}
-            />
-
-            {/* Right Column: Chat History & Input Canvas (8/9 Cols) */}
-            <Card className="lg:col-span-8 xl:col-span-9 flex flex-col justify-between p-4 sm:p-6 border border-onyx/10 h-full bg-canvas/80 min-h-0 shadow-xs overflow-hidden">
-              {/* Top Bar inside Chat Feed */}
-              <div className="flex items-center justify-between pb-3 border-b border-soft-meadow">
-                <div className="flex items-center gap-3 truncate">
+          /* Mode 2: Active Chat Conversation Canvas (Full width, no sidebar) */
+          <div className="flex-1 flex flex-col max-w-4xl w-full mx-auto mt-1 min-h-0 overflow-hidden">
+            <Card className="flex-1 flex flex-col p-4 sm:p-5 border border-onyx/10 h-full bg-canvas/95 min-h-0 shadow-sm overflow-hidden rounded-[24px]">
+              {/* Top Navigation Bar inside Chat Feed */}
+              <div className="flex items-center justify-between pb-3 border-b border-onyx/10 mb-2 shrink-0">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
                   <button
                     type="button"
-                    onClick={() => setViewMode('sessions')}
-                    className="p-2 rounded-full hover:bg-soft-meadow text-slate hover:text-deep-ink transition-colors cursor-pointer"
+                    onClick={handleBackToSessions}
+                    className="p-2 rounded-full hover:bg-soft-meadow text-slate hover:text-deep-ink transition-colors cursor-pointer shrink-0"
                     title={t('backToSessions')}
+                    aria-label={t('backToSessions')}
                   >
                     <ArrowLeft className="w-5 h-5" />
                   </button>
 
-                  <div className="w-10 h-10 rounded-full bg-deep-ink text-hi-yellow flex items-center justify-center border border-deep-ink shadow-xs shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-deep-ink text-hi-yellow flex items-center justify-center border border-deep-ink shadow-xs shrink-0">
                     {activeAgent?.avatar_icon === 'sparkles' || activeAgent?.is_system ? (
-                      <Sparkles className="w-5 h-5" />
+                      <Sparkles className="w-4 h-4" />
                     ) : (
-                      <Bot className="w-5 h-5" />
+                      <Bot className="w-4 h-4" />
                     )}
                   </div>
-                  <div className="truncate">
-                    <h3 className="font-serif text-heading-sm text-deep-ink flex items-center gap-2 truncate">
-                      <span className="truncate">{activeAgent?.name || 'Nova (Root System)'}</span>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      {/* Agent Selector Dropdown */}
+                      <select
+                        value={activeAgentID}
+                        onChange={(e) => {
+                          setActiveAgentID(e.target.value);
+                          onSelectAgentID?.(e.target.value);
+                        }}
+                        className="font-serif text-heading-sm font-semibold text-deep-ink bg-transparent hover:bg-soft-meadow/80 px-2 py-0.5 rounded-lg border-0 cursor-pointer focus:outline-none focus:ring-1 focus:ring-deep-ink truncate"
+                      >
+                        {agents.map((a) => (
+                          <option key={a.agent_id} value={a.agent_id}>
+                            {a.name} {a.is_system ? '(System)' : ''}
+                          </option>
+                        ))}
+                      </select>
                       {activeAgent?.is_system && <Badge variant="accent">{t('root')}</Badge>}
-                    </h3>
-                    <div className="flex items-center gap-2 text-caption text-slate font-mono text-[11px] truncate">
-                      <span className="truncate">{t('model', { name: activeAgent?.model_config.primary_model || 'claude-sonnet-4-6' })}</span>
-                      {activeConv && (
-                        <>
-                          <span>•</span>
-                          <span className="truncate max-w-[220px] text-deep-ink font-sans font-medium">
+                    </div>
+
+                    <div className="flex items-center gap-2 text-caption text-slate font-mono text-[11px] mt-0.5">
+                      {activeConv ? (
+                        <div className="flex items-center gap-1.5 truncate">
+                          <span className="font-sans font-medium text-deep-ink truncate max-w-[200px] sm:max-w-[280px]">
                             {activeConv.title}
                           </span>
+                          <button
+                            type="button"
+                            onClick={() => setEditingConv(activeConv)}
+                            className="p-1 rounded-full text-slate hover:text-deep-ink hover:bg-soft-meadow transition-colors"
+                            title={t('renameSession')}
+                          >
+                            <Edit3 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : null}
+
+                      {activeConvID && (
+                        <>
+                          <span>•</span>
+                          <button
+                            type="button"
+                            onClick={handleCopyConvId}
+                            className="flex items-center gap-1 text-[10px] text-slate hover:text-deep-ink bg-onyx/5 px-2 py-0.5 rounded-full transition-colors font-mono"
+                            title={t('actions.copyId')}
+                          >
+                            {copiedConvId ? (
+                              <Check className="w-3 h-3 text-emerald-600" />
+                            ) : (
+                              <Copy className="w-3 h-3" />
+                            )}
+                            <span className="truncate max-w-[90px]">{activeConvID}</span>
+                          </button>
                         </>
                       )}
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  {activeConvID && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon={<Trash2 className="w-3.5 h-3.5 text-red-500" />}
-                      onClick={() => setDeletingConvId(activeConvID)}
-                      title={t('clearConversation')}
-                    />
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {activeConv && (
+                    <button
+                      type="button"
+                      onClick={() => handleTogglePin(activeConv.id, !!activeConv.is_pinned)}
+                      className={`p-2 rounded-full transition-colors ${
+                        activeConv.is_pinned
+                          ? 'text-deep-ink bg-hi-yellow hover:bg-hi-yellow/80'
+                          : 'text-slate hover:text-deep-ink hover:bg-soft-meadow'
+                      }`}
+                      title={activeConv.is_pinned ? t('actions.unpin') : t('actions.pin')}
+                    >
+                      <Pin className={`w-4 h-4 ${activeConv.is_pinned ? 'fill-current' : ''}`} />
+                    </button>
                   )}
+
+                  {activeConvID && (
+                    <button
+                      type="button"
+                      onClick={() => setDeletingConvId(activeConvID)}
+                      className="p-2 rounded-full text-slate hover:text-red-600 hover:bg-red-50 transition-colors"
+                      title={t('deleteSession')}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+
                   <Button
-                    variant="primary"
+                    variant="ghost"
                     size="sm"
                     icon={<Plus className="w-3.5 h-3.5" />}
                     onClick={handleNewChat}
-                    className="lg:hidden text-caption px-3"
+                    className="font-medium ml-1"
                   >
                     {t('newShort')}
                   </Button>
                 </div>
               </div>
 
-              <MessageTimeline
-                messages={messages}
-                loading={loading}
-                agentName={activeAgent?.name || t('defaultAgent')}
-                prompts={promptChips}
-                copiedIndex={copiedIdx}
-                expandedTraces={expandedTrace}
-                traceTabs={activeTab}
-                endRef={messagesEndRef}
-                containerRef={messagesContainerRef}
-                onScroll={handleScroll}
-                onPrompt={handlePromptChip}
-                onCopy={handleCopy}
-                onToggleTrace={toggleTrace}
-                onTraceTabChange={(messageID, tab) => setActiveTab((previous) => ({ ...previous, [messageID]: tab }))}
-              />
+              {/* Message Timeline */}
+              <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+                <MessageTimeline
+                  messages={messages}
+                  loading={loading}
+                  agentName={activeAgent?.name || t('defaultAgent')}
+                  prompts={promptChips}
+                  copiedIndex={copiedIdx}
+                  expandedTraces={expandedTrace}
+                  traceTabs={activeTab}
+                  endRef={messagesEndRef}
+                  containerRef={messagesContainerRef}
+                  onScroll={handleScroll}
+                  onPrompt={handlePromptChip}
+                  onCopy={handleCopy}
+                  onToggleTrace={toggleTrace}
+                  onTraceTabChange={(messageID, tab) =>
+                    setActiveTab((previous) => ({ ...previous, [messageID]: tab }))
+                  }
+                />
+              </div>
 
-              <div className="relative">
+              {/* Input Area with Autocomplete, Attachments, and Voice */}
+              <div className="relative mt-2 shrink-0">
                 {showScrollBottom && (
                   <button
                     type="button"
@@ -803,7 +1072,9 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
                     title={t('scrollToBottom', 'Scroll to bottom')}
                   >
                     <ChevronDown className="w-3.5 h-3.5 text-slate dark:text-hi-yellow" />
-                    <span className="text-[11px] font-semibold">{t('scrollToBottom', 'Scroll to bottom')}</span>
+                    <span className="text-[11px] font-semibold">
+                      {t('scrollToBottom', 'Scroll to bottom')}
+                    </span>
                   </button>
                 )}
 
@@ -811,8 +1082,13 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
                   value={input}
                   loading={loading}
                   inputRef={inputRef}
+                  skills={skills}
+                  workspaceFiles={workspaceFiles}
+                  pendingAttachments={pendingAttachments}
+                  onClearPendingAttachments={() => setPendingAttachments([])}
                   onChange={setInput}
                   onSubmit={handleSend}
+                  onCancelLoading={handleCancelStreaming}
                 />
               </div>
             </Card>
@@ -834,11 +1110,13 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
         onClose={() => setDeletingConvId(null)}
         onConfirm={handleConfirmDeleteConv}
         title={t('deleteSession', 'Delete Conversation Session')}
-        description={t('deleteConfirm', 'Are you sure you want to permanently clear this conversation session history?')}
+        description={t(
+          'deleteConfirm',
+          'Are you sure you want to permanently clear this conversation session history?'
+        )}
         confirmLabel={t('deleteSession')}
         variant="danger"
       />
     </div>
   );
 }
-

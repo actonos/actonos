@@ -3,7 +3,7 @@
   "closeSessions": "Đóng danh sách phiên",
   "title": "Trò chuyện với AI",
   "subtitle": "Trò chuyện, đặt câu hỏi và cộng tác trực tiếp cùng các trợ lý AI thông minh.",
-  "placeholder": "Nhập câu hỏi hoặc nội dung bạn cần hỗ trợ...",
+  "placeholder": "Hỏi bất kỳ điều gì, gõ / để chọn kỹ năng, @ để gắn thẻ tệp...",
   "send": "Gửi",
   "streaming": "Đang suy nghĩ với {{model}}...",
   "selectAgent": "Trợ lý đang chọn",
@@ -49,7 +49,7 @@
   "manageAgents": "Quản lý trợ lý",
   "agents": "Trợ lý",
   "clearConversation": "Xóa cuộc trò chuyện",
-  "newShort": "+ Mới",
+  "newShort": "Mới",
   "startConversation": "Bắt đầu trò chuyện với {{name}}",
   "startDescription": "Nhận câu trả lời thông minh ngay tức thì và theo dõi từng bước trợ lý AI xử lý công việc.",
   "traces": "Hành động",
@@ -72,7 +72,12 @@
     "latestMessage": "Tin nhắn mới nhất",
     "createdAt": "Ngày tạo",
     "updatedAt": "Hoạt động",
-    "actions": "Hành động"
+    "conversation": "Cuộc trò chuyện",
+    "assistantAndChannel": "Trợ lý & Kênh",
+    "activity": "Hoạt động",
+    "actions": "Hành động",
+    "messagesCount_one": "{{count}} tin nhắn",
+    "messagesCount_other": "{{count}} tin nhắn"
   },
   "actions": {
     "view": "Xem",
@@ -111,5 +116,41 @@
     "placeholder": "Nhập tiêu đề mới...",
     "save": "Lưu tiêu đề",
     "cancel": "Hủy"
+  },
+  "attachments": {
+    "attachFile": "Đính kèm tệp hoặc hình ảnh",
+    "dropFiles": "Kéo thả tệp hoặc hình ảnh vào đây",
+    "removeFile": "Xóa tệp",
+    "fileSize": "{{size}}",
+    "fileCount_one": "{{count}} tệp đính kèm",
+    "fileCount_other": "{{count}} tệp đính kèm",
+    "fileTooLarge": "Dung lượng tệp vượt quá giới hạn 15MB",
+    "emptyFile": "Không thể đính kèm tệp rỗng (0 bytes)",
+    "unsupportedType": "Định dạng hỗ trợ: mã nguồn, văn bản, tài liệu (.pdf, .docx, .xlsx, .csv) và hình ảnh (.png, .jpg, .webp, .svg, .gif)",
+    "binaryDetected": "Phát hiện tệp nhị phân không được hỗ trợ. Vui lòng cung cấp tài liệu, mã nguồn hoặc hình ảnh hợp lệ.",
+    "duplicateFile": "Tệp này đã được đính kèm",
+    "parseFailed": "Không thể xử lý tệp {{name}}: {{error}}",
+    "viewImage": "Bấm để xem ảnh",
+    "openOriginal": "Mở ảnh gốc"
+  },
+  "voice": {
+    "startRecording": "Nhập bằng giọng nói",
+    "stopRecording": "Xong",
+    "cancelRecording": "Hủy",
+    "recording": "Đang ghi âm...",
+    "listening": "Đang lắng nghe...",
+    "notSupported": "Trình duyệt không hỗ trợ Web Speech API hoặc cần kết nối HTTPS / localhost",
+    "permissionDenied": "Quyền truy cập Microphone bị từ chối. Vui lòng cho phép quyền Microphone trong trình duyệt.",
+    "noSpeech": "Không nhận diện được giọng nói. Vui lòng thử nói vào micro."
+  },
+  "popover": {
+    "skills": "Kỹ năng & Lệnh tắt",
+    "workspaceFiles": "Tệp trong Workspace",
+    "noSkillsFound": "Không tìm thấy kỹ năng hoặc lệnh phù hợp",
+    "noFilesFound": "Không tìm thấy tệp phù hợp",
+    "systemCommand": "Hệ thống",
+    "installedSkill": "Kỹ năng",
+    "slashHint": "Gõ / để chọn kỹ năng",
+    "mentionHint": "Gõ @ để gắn thẻ tệp"
   }
 }

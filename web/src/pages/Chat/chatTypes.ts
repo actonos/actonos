@@ -22,10 +22,28 @@ export interface MessageSegment {
   text: string;
 }
 
+export interface ChatAttachment {
+  name: string;
+  size: number;
+  type?: string;
+  isWorkspace?: boolean;
+  file_id?: string;
+  path?: string;
+  previewUrl?: string;
+  thumbnailUrl?: string;
+  base64Data?: string;
+  textContent?: string;
+  isImage?: boolean;
+  width?: number;
+  height?: number;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
+  displayContent?: string;
+  attachments?: ChatAttachment[];
   timestamp: string;
   model?: string;
   tokens_used?: number;

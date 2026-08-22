@@ -3,7 +3,7 @@
   "closeSessions": "Close sessions",
   "title": "AI Chat",
   "subtitle": "Chat, ask questions, and collaborate with your AI assistants in real time.",
-  "placeholder": "Ask anything or describe what you need help with...",
+  "placeholder": "Ask anything, type / for skills, @ to mention files...",
   "send": "Send",
   "streaming": "Thinking with {{model}}...",
   "selectAgent": "Active Assistant",
@@ -49,7 +49,7 @@
   "manageAgents": "Manage Assistants",
   "agents": "Assistants",
   "clearConversation": "Clear Chat",
-  "newShort": "+ New",
+  "newShort": "New",
   "startConversation": "Start a conversation with {{name}}",
   "startDescription": "Get instant, intelligent responses and see how your assistant solves tasks step by step.",
   "traces": "Actions",
@@ -72,7 +72,12 @@
     "latestMessage": "Latest Message",
     "createdAt": "Created",
     "updatedAt": "Last Active",
-    "actions": "Actions"
+    "conversation": "Conversation",
+    "assistantAndChannel": "Assistant & Channel",
+    "activity": "Activity",
+    "actions": "Actions",
+    "messagesCount_one": "{{count}} message",
+    "messagesCount_other": "{{count}} messages"
   },
   "actions": {
     "view": "Open",
@@ -111,5 +116,41 @@
     "placeholder": "Enter session title...",
     "save": "Save Title",
     "cancel": "Cancel"
+  },
+  "attachments": {
+    "attachFile": "Attach files or images",
+    "dropFiles": "Drop files or images here to attach",
+    "removeFile": "Remove file",
+    "fileSize": "{{size}}",
+    "fileCount_one": "{{count}} file attached",
+    "fileCount_other": "{{count}} files attached",
+    "fileTooLarge": "File exceeds 15MB limit",
+    "emptyFile": "Cannot attach empty file (0 bytes)",
+    "unsupportedType": "Supported formats: code, text, documents (.pdf, .docx, .xlsx, .csv), and images (.png, .jpg, .webp, .svg, .gif)",
+    "binaryDetected": "Unsupported binary file detected. Please provide supported documents, code, or images.",
+    "duplicateFile": "File is already attached",
+    "parseFailed": "Failed to process {{name}}: {{error}}",
+    "viewImage": "Click to view image",
+    "openOriginal": "Open original"
+  },
+  "voice": {
+    "startRecording": "Voice input",
+    "stopRecording": "Done",
+    "cancelRecording": "Cancel",
+    "recording": "Recording...",
+    "listening": "Listening...",
+    "notSupported": "Voice input is not supported in this browser or requires HTTPS / localhost",
+    "permissionDenied": "Microphone access was denied. Please allow microphone permissions in your browser.",
+    "noSpeech": "No speech detected. Please speak into your microphone."
+  },
+  "popover": {
+    "skills": "Skills & Commands",
+    "workspaceFiles": "Workspace Files",
+    "noSkillsFound": "No matching skills or commands",
+    "noFilesFound": "No matching workspace files",
+    "systemCommand": "System",
+    "installedSkill": "Skill",
+    "slashHint": "Type / to select a skill",
+    "mentionHint": "Type @ to mention a file"
   }
 }

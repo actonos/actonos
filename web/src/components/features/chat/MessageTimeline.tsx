@@ -37,7 +37,7 @@ export function MessageTimeline({
     <div
       ref={containerRef}
       onScroll={onScroll}
-      className="my-4 flex-1 space-y-4 overflow-y-auto pr-2 min-h-0 relative"
+      className="h-full flex-1 space-y-4 overflow-y-auto pr-2 min-h-0 relative"
       aria-live="polite"
     >
       {messages.length === 0 ? (

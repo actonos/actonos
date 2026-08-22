@@ -274,11 +274,12 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ message, conversation_id: conversationID }),
     }),
-  streamChat: (agentID: string, data: { message: string; conversation_id?: string | null }) =>
+  streamChat: (agentID: string, data: { message: string; conversation_id?: string | null }, signal?: AbortSignal) =>
     fetch(`${API_BASE}/agents/${agentID}/chat`, {
       method: 'POST',
       headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ ...data, stream: true }),
+      signal,
     }),
 
   // Conversations

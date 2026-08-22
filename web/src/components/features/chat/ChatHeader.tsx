@@ -3,12 +3,11 @@ import type { AgentManifest } from '@/lib/types';
 import { Badge } from '@/components/ui/Badge';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
-import { ArrowLeft, MessagesSquare, Plus } from 'lucide-react';
+import { ArrowLeft, Plus } from 'lucide-react';
 
 export interface ChatHeaderProps {
   agent?: AgentManifest;
   viewMode?: 'sessions' | 'chat';
-  onOpenSessions?: () => void;
   onBackToSessions?: () => void;
   onNewSession?: () => void;
 }
@@ -16,7 +15,6 @@ export interface ChatHeaderProps {
 export function ChatHeader({
   agent,
   viewMode = 'sessions',
-  onOpenSessions,
   onBackToSessions,
   onNewSession,
 }: ChatHeaderProps) {
@@ -40,17 +38,6 @@ export function ChatHeader({
                   className="font-medium"
                 >
                   {t('backToSessions')}
-                </Button>
-              )}
-              {onOpenSessions && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  icon={<MessagesSquare className="h-4 w-4" />}
-                  onClick={onOpenSessions}
-                  className="lg:hidden"
-                >
-                  {t('sessions')}
                 </Button>
               )}
               {onNewSession && (
