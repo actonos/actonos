@@ -433,16 +433,7 @@ Send message to agent. Supports Server-Sent Events (SSE) streaming (`thought`, `
 
 ---
 
-## Integrations, Channels & Pairing
-
-### `GET /api/integrations`
-List SaaS integrations (Google, Notion, GitHub) and connection status.
-
-### `POST /api/integrations/{provider}/auth-url`
-Generate OAuth 2.1 PKCE authorization URL.
-
-### `POST /api/integrations/{provider}/token`
-Save direct API token for SaaS connector.
+## Channel Accounts & Device Pairing
 
 ### `GET /api/integrations/channels` | `POST /api/integrations/channels`
 Get and configure multi-account credentials for Telegram, WhatsApp, and Discord with agent bindings and message routing modes.
@@ -522,6 +513,51 @@ Browse online Tool Hub & Skill marketplace catalog.
 Install or remove a skill from the Tool Hub catalog.
 
 ---
+
+## Plugins (WasmLoader)
+
+### `GET /api/plugins`
+List all installed WASM plugins with their manifest, capabilities (`tool`, `channel`, `connector`), permissions, and running status.
+
+**Response `200 OK`**:
+```json
+{
+  "plugins": [
+    {
+      "id": "com.actonos.plugin.telegram",
+      "name": "Telegram Bot Gateway",
+      "version": "1.0.0",
+      "author": "ActonOS Team",
+      "description": "Telegram chat adapter and tool execution plugin",
+      "capabilities": ["channel", "tool"],
+      "permissions": {
+        "net_outbound": ["api.telegram.org"],
+        "storage": true,
+        "secrets": ["telegram_bot_token"],
+        "bus_events": ["channel:message:inbound"]
+      },
+      "enabled": true,
+      "status": "running"
+    }
+  ],
+  "count": 1
+}
+```
+
+### `POST /api/plugins/upload`
+Upload a `.wasm` binary and optional `manifest.json` multipart form data. If administrative approval is configured, returns `202 Accepted` with a pending approval request.
+
+### `POST /api/plugins/{id}/enable` | `POST /api/plugins/{id}/disable`
+Enable or disable a specific WASM plugin at runtime without restarting the daemon.
+
+### `DELETE /api/plugins/{id}`
+Uninstall a plugin and remove its binary and configuration from `/data/plugins/{id}`.
+
+### `GET /api/plugins/{id}/logs`
+Retrieve execution logs and telemetry emitted by the plugin sandbox.
+
+---
+
 
 ## Human Approval & Durable Runs
 

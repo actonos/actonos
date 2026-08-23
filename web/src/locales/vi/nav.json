@@ -12,8 +12,7 @@
     "skills": "Kỹ năng",
     "workspace": "Tệp",
     "terminal": "Terminal",
-    "channels": "Kênh chat",
-    "connectors": "Kết nối",
+    "plugins": "Plugin WASM",
     "notifications": "Thông báo",
     "audit-logs": "Nhật ký kiểm toán",
     "settings": "Cài đặt"
@@ -22,7 +21,7 @@
     "overview": "Tổng quan",
     "build": "Xây dựng",
     "capabilities": "Năng lực",
-    "connections": "Kết nối",
+    "extensions": "Phần mở rộng",
     "tools": "Công cụ",
     "system": "Hệ thống"
   },

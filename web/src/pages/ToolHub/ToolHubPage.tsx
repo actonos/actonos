@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { getErrorMessage } from '@/lib/errors';
 import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/layout/PageContainer';
@@ -14,7 +14,6 @@ import {
   Plus,
   RefreshCw,
   Search,
-  Upload,
   Wrench,
 } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -32,7 +31,6 @@ export function ToolHubPage() {
   const [loading, setLoading] = useState(true);
   const [servers, setServers] = useState<MCPServerStatus[]>([]);
   const { executeAction, isExecuting } = useActionProgress();
-  const wasmInputRef = useRef<HTMLInputElement>(null);
 
   const loadTools = async () => {
     try {
@@ -101,30 +99,10 @@ export function ToolHubPage() {
     });
   };
 
-  const handleUploadWASM = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    executeAction({
-      targetId: file.name,
-      title: t('wasm.uploadingTitle', { name: file.name, defaultValue: `Uploading WASM Plugin: ${file.name}` }),
-      steps: [
-        { id: 'auth', label: t('actionProgress.steps.auth', { defaultValue: 'Security Authorization & Approval' }) },
-        { id: 'verify', label: t('wasm.verifyingModule', { defaultValue: 'Validating WebAssembly Module & Loading' }) },
-      ],
-      action: () => api.uploadWASM(file),
-      onSuccess: () => {
-        success('WASM Uploaded', `Plugin ${file.name} installed.`);
-        loadTools();
-      },
-    });
-  };
-
   const categories = [
     { id: 'all', label: t('tabs.all', { count: tools.length }) },
     { id: 'native', label: t('tabs.native', 'Native') },
     { id: 'mcp', label: t('tabs.mcp', 'MCP') },
-    { id: 'wasm', label: t('tabs.wasm', 'WASM') },
   ];
 
   const filteredTools = tools.filter((tl) => {
@@ -141,50 +119,9 @@ export function ToolHubPage() {
 
       <PageContainer maxWidth="wide">
         <PageHeader eyebrow={t('eyebrow')} title={t('title')} description={t('subtitle')} actions={(
-          <Button variant="ghost" size="sm" icon={<RefreshCw className="h-3.5 w-3.5" />} onClick={loadTools}>
-            {t('actions.refresh')}
-          </Button>
-        )} />
-        {/* Header section */}
-        <div className="hidden flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6" aria-hidden="true">
-          <div className="flex-1">
-            <span className="text-caption uppercase tracking-wider text-slate font-semibold block mb-1">
-              {t('eyebrow', 'Tools')}
-            </span>
-            <h1 className="font-serif text-heading-lg text-deep-ink tracking-tight">
-              {t('title', 'Tools')}
-            </h1>
-            <p className="font-sans text-body text-slate mt-1 max-w-2xl">
-              {t(
-                'subtitle',
-                'System tools, MCP servers, and WASM plugins available for agents.'
-              )}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0 self-start sm:self-center">
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<RefreshCw className="w-3.5 h-3.5" />}
-              onClick={loadTools}
-            >
-              {t('actions.refresh', 'Refresh')}
-            </Button>
-            <input
-              type="file"
-              ref={wasmInputRef}
-              onChange={handleUploadWASM}
-              accept=".wasm"
-              className="hidden"
-            />
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<Upload className="w-3.5 h-3.5" />}
-              onClick={() => wasmInputRef.current?.click()}
-            >
-              {t('actions.uploadWasm', 'Upload WASM')}
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" icon={<RefreshCw className="h-3.5 w-3.5" />} onClick={loadTools}>
+              {t('actions.refresh')}
             </Button>
             <Button
               variant="primary"
@@ -195,7 +132,7 @@ export function ToolHubPage() {
               {t('actions.addMCP', 'Connect MCP')}
             </Button>
           </div>
-        </div>
+        )} />
 
         {/* Categories Bar & Search */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8">

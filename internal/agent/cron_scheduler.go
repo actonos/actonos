@@ -97,7 +97,7 @@ func (cs *CronScheduler) initDB() {
 		name TEXT NOT NULL,
 		cron_expr TEXT NOT NULL,
 		prompt TEXT NOT NULL,
-		target_channel TEXT NOT NULL DEFAULT 'telegram',
+		target_channel TEXT NOT NULL DEFAULT 'all',
 		target_account_id TEXT NOT NULL DEFAULT 'all',
 		target_recipient TEXT NOT NULL DEFAULT '',
 		enabled INTEGER NOT NULL DEFAULT 1,
@@ -191,7 +191,7 @@ func (cs *CronScheduler) RegisterJob(job CronJob) error {
 
 	jobCopy := job
 	if jobCopy.TargetChannel == "" {
-		jobCopy.TargetChannel = "telegram"
+		jobCopy.TargetChannel = "all"
 	}
 	if jobCopy.TargetRecipient == "" && cs.defaultRecipientGetter != nil {
 		jobCopy.TargetRecipient = cs.defaultRecipientGetter(jobCopy.TargetChannel)
@@ -285,7 +285,7 @@ func (cs *CronScheduler) ListJobs() []CronJob {
 // RegisterCron implements tools.CronSchedulerProvider.
 func (cs *CronScheduler) RegisterCron(id, agentID, cronExpr, prompt, targetChannel, targetAccountID, targetRecipient string) error {
 	if targetChannel == "" {
-		targetChannel = "telegram"
+		targetChannel = "all"
 	}
 	if targetAccountID == "" {
 		targetAccountID = "all"

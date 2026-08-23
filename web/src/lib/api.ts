@@ -2,13 +2,13 @@ import type {
   AgentManifest,
   CatalogResponse,
   ChannelAccount,
-  ConnectorInfo,
   LLMProviderInfo,
   ToolInfo,
   SystemMetrics,
   TailscaleStatus,
   MCPServerStatus,
   MutationResult,
+  PluginInfo,
 } from './types';
 import { API_BASE, fetchJSON, getAuthHeaders, HTTP_STATUS_ACCEPTED } from './api/client';
 import { operationsApi, type OTAStatus } from './api/operations';
@@ -337,7 +337,7 @@ export const api = {
   uploadWASM: (file: File) => {
     const fd = new FormData();
     fd.append('file', file);
-    return fetch(`${API_BASE}/tools/wasm`, {
+    return fetch(`${API_BASE}/plugins/upload`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: fd,
@@ -351,6 +351,28 @@ export const api = {
       return data as MutationResult<{ status: string; filename?: string }>;
     });
   },
+
+  // WASM Plugin Subsystem
+  listPlugins: () => fetchJSON<{ plugins: PluginInfo[]; count: number }>('/plugins'),
+  uploadPlugin: (file: File, id?: string, manifest?: string) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    if (id) fd.append('id', id);
+    if (manifest) fd.append('manifest', manifest);
+    return fetch(`${API_BASE}/plugins/upload`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: fd,
+    }).then(async (response) => {
+      if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
+      const envelope = await response.json();
+      return (envelope.data ?? envelope) as MutationResult<{ status: string; plugin: PluginInfo }>;
+    });
+  },
+  enablePlugin: (id: string) => fetchJSON<MutationResult<{ status: string; plugin: PluginInfo }>>(`/plugins/${encodeURIComponent(id)}/enable`, { method: 'POST' }),
+  disablePlugin: (id: string) => fetchJSON<MutationResult<{ status: string; plugin: PluginInfo }>>(`/plugins/${encodeURIComponent(id)}/disable`, { method: 'POST' }),
+  deletePlugin: (id: string) => fetchJSON<MutationResult<{ status: string; id: string }>>(`/plugins/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  getPluginLogs: (id: string) => fetchJSON<{ id: string; status: string; logs: string[] }>(`/plugins/${encodeURIComponent(id)}/logs`),
 
   // Skills Public Community Hub
   listHubCatalog: () => fetchJSON<{ catalog: HubSkillItem[]; count: number }>('/tools/hub/catalog'),
@@ -424,41 +446,6 @@ export const api = {
       '/system/ota/check',
       { method: 'POST' }
     ),
-
-  // SaaS Connectors & OAuth 2.1 PKCE
-  listIntegrations: () => fetchJSON<{ integrations: ConnectorInfo[]; count: number }>('/integrations'),
-  getAuthURL: (provider: string, client_id?: string, client_secret?: string, redirect_uri?: string) =>
-    fetchJSON<{ provider: string; auth_url: string; state: string; redirect_uri: string }>(
-      `/integrations/${provider}/auth-url`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ client_id, client_secret, redirect_uri }),
-      }
-    ),
-  saveDirectToken: (provider: string, token: string) =>
-    fetchJSON<{ status: string; provider: string; auth_type: string; identity: IntegrationIdentity }>(
-      `/integrations/${provider}/token`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ token }),
-      }
-    ),
-  saveConnectorConfig: (provider: string, client_id: string, client_secret: string) =>
-    fetchJSON<{ status: string }>(`/integrations/${provider}/config`, {
-      method: 'POST',
-      body: JSON.stringify({ client_id, client_secret }),
-    }),
-  testConnector: (provider: string) =>
-    fetchJSON<{ status: string; provider: string; latency_ms: number; identity: IntegrationIdentity }>(
-      `/integrations/${provider}/test`,
-      { method: 'POST' }
-    ),
-  disconnectConnector: (provider: string) =>
-    fetchJSON<{ status: string; provider: string }>(`/integrations/${provider}/disconnect`, {
-      method: 'POST',
-    }),
-  toggleIntegration: (provider: string) =>
-    fetchJSON<{ provider: string; connected: boolean }>(`/integrations/${provider}/toggle`, { method: 'POST' }),
 
   // Chat Channels
   getChannels: () =>
@@ -643,4 +630,8 @@ export const api = {
   },
   getWorkspaceRawUrl: (fileId: string, download?: boolean) =>
     `/api/workspace/raw?id=${encodeURIComponent(fileId)}${download ? '&download=1' : ''}`,
+  uninstallPlugin: (id: string) =>
+    fetchJSON<MutationResult<{ status: string; id: string }>>(`/plugins/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
 };

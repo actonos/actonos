@@ -22,6 +22,7 @@ import (
 	"github.com/actonos/actonos/internal/channels"
 	"github.com/actonos/actonos/internal/llm"
 	"github.com/actonos/actonos/internal/memory"
+	"github.com/actonos/actonos/internal/plugin"
 	"github.com/actonos/actonos/internal/system"
 	"github.com/actonos/actonos/internal/tools"
 	workspacepkg "github.com/actonos/actonos/internal/workspace"
@@ -141,6 +142,10 @@ func newTestServer(t *testing.T) *Server {
 		t.Fatalf("creating notification manager: %v", err)
 	}
 
+	pluginKV, _ := plugin.NewSQLiteKVStore(db.SQLDB())
+	wasmLoader, _ := plugin.NewWasmLoader(context.Background())
+	pluginMgr := plugin.NewManager(wasmLoader, toolReg, channelManager, eventBus, pluginKV, vault, filepath.Join(tempDir, "plugins"))
+
 	cfg := Config{
 		AgentManager:        agentMgr,
 		Engine:              engine,
@@ -161,6 +166,7 @@ func newTestServer(t *testing.T) *Server {
 		MCPHost:             mcpHost,
 		PairingManager:      pairingManager,
 		ChannelManager:      channelManager,
+		PluginManager:       pluginMgr,
 		HeartbeatDaemon:     heartbeat,
 		NotificationManager: notifMgr,
 		HAL:                 hal,
@@ -170,6 +176,7 @@ func newTestServer(t *testing.T) *Server {
 		WorkspaceStore:      workspaceStore,
 		SkillsDir:           filepath.Join(tempDir, "skills"),
 		WASMDir:             filepath.Join(tempDir, "tools", "wasm"),
+		PluginsDir:          filepath.Join(tempDir, "plugins"),
 		DataDir:             tempDir,
 	}
 
@@ -215,6 +222,87 @@ func TestServer_EmbeddingStatusAndWorkspaceQueue(t *testing.T) {
 	}
 	if operation != string(memory.EmbeddingDelete) || generation != 2 {
 		t.Fatalf("delete did not supersede upsert: operation=%s generation=%d", operation, generation)
+	}
+}
+
+func TestServer_PluginsEndpoint(t *testing.T) {
+	srv := newTestServer(t)
+
+	// 1. GET /api/plugins (empty)
+	req := httptest.NewRequest(http.MethodGet, "/api/plugins", nil)
+	w := httptest.NewRecorder()
+	srv.Router().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var res map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+		t.Fatalf("unmarshaling json response: %v", err)
+	}
+	data, ok := res["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected data wrapper in response: %v", res)
+	}
+	if count, ok := data["count"].(float64); !ok || count != 0 {
+		t.Errorf("expected count 0, got %v", data["count"])
+	}
+
+	// 2. POST /api/plugins/upload multipart
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", "test_plugin.wasm")
+	if err != nil {
+		t.Fatalf("creating form file: %v", err)
+	}
+	// minimal wasm binary
+	minimalWasm := []byte{0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00}
+	_, _ = part.Write(minimalWasm)
+	_ = writer.WriteField("id", "test_plugin")
+	_ = writer.Close()
+
+	uploadReq := httptest.NewRequest(http.MethodPost, "/api/plugins/upload", &body)
+	uploadReq.Header.Set("Content-Type", writer.FormDataContentType())
+	uploadW := httptest.NewRecorder()
+	srv.Router().ServeHTTP(uploadW, uploadReq)
+
+	if uploadW.Code != http.StatusOK {
+		t.Fatalf("expected 200 from upload, got %d: %s", uploadW.Code, uploadW.Body.String())
+	}
+
+	// 3. GET /api/plugins (now has 1)
+	req2 := httptest.NewRequest(http.MethodGet, "/api/plugins", nil)
+	w2 := httptest.NewRecorder()
+	srv.Router().ServeHTTP(w2, req2)
+	var res2 map[string]any
+	_ = json.Unmarshal(w2.Body.Bytes(), &res2)
+	data2 := res2["data"].(map[string]any)
+	if count, ok := data2["count"].(float64); !ok || count != 1 {
+		t.Errorf("expected count 1, got %v", data2["count"])
+	}
+
+	// 4. POST /api/plugins/{id}/disable
+	disReq := httptest.NewRequest(http.MethodPost, "/api/plugins/test_plugin/disable", nil)
+	disW := httptest.NewRecorder()
+	srv.Router().ServeHTTP(disW, disReq)
+	if disW.Code != http.StatusOK {
+		t.Fatalf("expected 200 from disable, got %d: %s", disW.Code, disW.Body.String())
+	}
+
+	// 5. POST /api/plugins/{id}/enable
+	enReq := httptest.NewRequest(http.MethodPost, "/api/plugins/test_plugin/enable", nil)
+	enW := httptest.NewRecorder()
+	srv.Router().ServeHTTP(enW, enReq)
+	if enW.Code != http.StatusOK {
+		t.Fatalf("expected 200 from enable, got %d: %s", enW.Code, enW.Body.String())
+	}
+
+	// 6. DELETE /api/plugins/{id}
+	delReq := httptest.NewRequest(http.MethodDelete, "/api/plugins/test_plugin", nil)
+	delW := httptest.NewRecorder()
+	srv.Router().ServeHTTP(delW, delReq)
+	if delW.Code != http.StatusOK {
+		t.Fatalf("expected 200 from delete, got %d: %s", delW.Code, delW.Body.String())
 	}
 }
 
@@ -845,7 +933,6 @@ func TestProviderKeyLegacyMigrationToVault(t *testing.T) {
 func TestServer_IntegrationsChannelsPairingAndWebhookValidation(t *testing.T) {
 	srv := newTestServer(t)
 	for _, endpoint := range []string{
-		"/api/integrations/",
 		"/api/integrations/channels",
 		"/api/integrations/channels/accounts",
 		"/api/integrations/authorizations",
@@ -856,47 +943,6 @@ func TestServer_IntegrationsChannelsPairingAndWebhookValidation(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Fatalf("GET %s failed: %d %s", endpoint, w.Code, w.Body.String())
 		}
-	}
-	config := httptest.NewRequest(http.MethodPost, "/api/integrations/custom/config", strings.NewReader(`{"client_id":"client","client_secret":"secret"}`))
-	config.Header.Set("Content-Type", "application/json")
-	configResult := httptest.NewRecorder()
-	srv.Router().ServeHTTP(configResult, config)
-	if configResult.Code != http.StatusOK {
-		t.Fatalf("connector config failed: %d %s", configResult.Code, configResult.Body.String())
-	}
-	token := httptest.NewRequest(http.MethodPost, "/api/integrations/custom/token", strings.NewReader(`{"token":"direct-token"}`))
-	token.Header.Set("Content-Type", "application/json")
-	tokenResult := httptest.NewRecorder()
-	srv.Router().ServeHTTP(tokenResult, token)
-	if tokenResult.Code != http.StatusOK {
-		t.Fatalf("custom connector token failed: %d %s", tokenResult.Code, tokenResult.Body.String())
-	}
-	testConnector := httptest.NewRequest(http.MethodPost, "/api/integrations/custom/test", nil)
-	testResult := httptest.NewRecorder()
-	srv.Router().ServeHTTP(testResult, testConnector)
-	if testResult.Code != http.StatusOK {
-		t.Fatalf("custom connector test failed: %d %s", testResult.Code, testResult.Body.String())
-	}
-	for _, action := range []string{"toggle", "disconnect"} {
-		req := httptest.NewRequest(http.MethodPost, "/api/integrations/custom/"+action, nil)
-		w := httptest.NewRecorder()
-		srv.Router().ServeHTTP(w, req)
-		if w.Code != http.StatusOK {
-			t.Fatalf("connector %s failed: %d %s", action, w.Code, w.Body.String())
-		}
-	}
-	authURL := httptest.NewRequest(http.MethodPost, "/api/integrations/github/auth-url", strings.NewReader(`{}`))
-	authURL.Header.Set("Content-Type", "application/json")
-	authResult := httptest.NewRecorder()
-	srv.Router().ServeHTTP(authResult, authURL)
-	if authResult.Code != http.StatusBadRequest && authResult.Code != http.StatusInternalServerError {
-		t.Fatalf("unconfigured OAuth should fail cleanly with error: %d %s", authResult.Code, authResult.Body.String())
-	}
-	callback := httptest.NewRequest(http.MethodGet, "/api/integrations/oauth/callback?error=denied&error_description=no", nil)
-	callbackResult := httptest.NewRecorder()
-	srv.Router().ServeHTTP(callbackResult, callback)
-	if callbackResult.Code != http.StatusFound {
-		t.Fatalf("OAuth error callback did not redirect: %d", callbackResult.Code)
 	}
 
 	channelBody := `{
@@ -947,20 +993,6 @@ func TestServer_IntegrationsChannelsPairingAndWebhookValidation(t *testing.T) {
 	srv.Router().ServeHTTP(revokeResult, revoke)
 	if revokeResult.Code != http.StatusOK {
 		t.Fatalf("authorization revoke failed: %d %s", revokeResult.Code, revokeResult.Body.String())
-	}
-	for _, webhook := range []struct {
-		method string
-		path   string
-	}{
-		{http.MethodGet, "/api/webhooks/whatsapp"},
-		{http.MethodPost, "/api/webhooks/whatsapp"},
-	} {
-		req := httptest.NewRequest(webhook.method, webhook.path, nil)
-		w := httptest.NewRecorder()
-		srv.Router().ServeHTTP(w, req)
-		if w.Code != http.StatusNotImplemented {
-			t.Fatalf("unconfigured webhook expected 501, got %d", w.Code)
-		}
 	}
 }
 

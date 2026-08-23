@@ -180,7 +180,7 @@ All persistent state lives under the `DATA_DIR` (default: `/data`):
 ├── logs/
 │   └── audit.jsonl      # OpenTelemetry structured audit log
 ├── overrides/           # Custom Web UI / prompt overrides
-├── plugins/             # WASM plugin files (.wasm)
+├── plugins/             # WASM plugin packages (/data/plugins/<id>/plugin.wasm + manifest.json)
 ├── skills/              # Skill script folders
 │   └── <skill_name>/
 │       ├── skill.json   # Tool schema

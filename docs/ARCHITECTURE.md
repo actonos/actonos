@@ -454,7 +454,7 @@ graph LR
     subgraph "Tool Registry"
         direction TB
         T1["Tier 1: MCP Host Engine\nstdio (local binary)\nSSE (remote/Internet)"]
-        T2["Tier 2: WASM Runtime (wazero)\n/data/plugins/*.wasm\nSandboxed in-memory execution"]
+        T2["Tier 2: Unified WASM Plugins (wazero)\n/data/plugins/\nTools · Channels · Connectors"]
         T3["Tier 3: Skill-as-a-Folder\n/data/skills/<name>/\nskill.json + run.sh/run.py\nfsnotify hot-reload"]
     end
 
@@ -462,6 +462,53 @@ graph LR
     LLM --> T2
     LLM --> T3
 ```
+
+### Unified WasmLoader Plugin Subsystem (`internal/plugin/`)
+
+ActonOS implements a unified, polyglot plugin architecture running on **Wazero** (100% pure Go WebAssembly runtime, `CGO_ENABLED=0` compliant). This consolidates Tools, Chat Channels, and SaaS Connectors into sandboxed `.wasm` packages.
+
+```mermaid
+graph TD
+    subgraph "ActonOS Host (Go Kernel)"
+        PM["PluginManager (/data/plugins/)"]
+        WZ["Wazero JIT Runtime (Pure Go)"]
+        SG["Security Gate (Egress Firewall & Vault Broker)"]
+        TR["ToolRegistry (Single Execution Boundary)"]
+        CM["ChannelManager (Dynamic Adapters)"]
+        EB["Unified Event Bus"]
+        HV["Hardware Vault"]
+    end
+
+    subgraph "WASM Plugin Sandbox (Linear Memory)"
+        MF["manifest.json (Capabilities & Permissions)"]
+        BC["plugin.wasm (Rust / TinyGo / AssemblyScript / C)"]
+        EX["Guest Exports: acton_plugin_init, acton_tool_execute, acton_channel_send"]
+    end
+
+    PM --> WZ
+    WZ --> BC
+    BC --> EX
+    
+    EX -- "Tool Execution" --> TR
+    EX -- "Inbound/Outbound Messages" --> CM
+    
+    BC -. "Host Syscall (HTTP Request)" .-> SG
+    SG -- "Domain Whitelist OK" --> HTTP["Outbound Network"]
+    BC -. "Host Syscall (Get Secret)" .-> SG
+    SG -- "RBAC Valid" --> HV
+    BC -. "Host Syscall (Emit Event)" .-> EB
+```
+
+#### Core Capabilities:
+1. **Tool Plugin**: Defines one or more agent tools with strict JSON schemas, executing directly through the `ToolRegistry` single execution boundary.
+2. **Channel Plugin**: Implements external chat protocols (Slack, Matrix, Zalo, Discord, Telegram), forwarding inbound messages to the `MessageRouter` via `host_emit_event` and receiving outbound messages via `acton_channel_send_message`.
+3. **Connector Plugin**: Exposes OAuth/API auth schemas, periodic synchronization hooks, and domain tools for third-party SaaS (GitHub, Jira, Notion, Linear).
+
+#### Security & Sandboxing Invariants:
+- **Egress Firewall**: Outbound HTTP calls via `host_http_request` are strictly constrained to domains declared in `manifest.permissions.net_outbound`.
+- **Hardware Vault Brokering**: Plugins receive scoped tokens/credentials dynamically without ever seeing raw Master Keys or unencrypted storage files.
+- **Resource & Timeout Quota**: Hard memory limits (32–64 MB per instance) and epoch-based execution deadlines (default 15s) with crash isolation (guest panics never crash `actond`).
+
 
 ### Community Skills Registry & Requirements Verification
 

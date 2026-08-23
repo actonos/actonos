@@ -12,8 +12,7 @@
     "skills": "Skills",
     "workspace": "Workspace",
     "terminal": "Terminal",
-    "channels": "Chat Channels",
-    "connectors": "Connectors",
+    "plugins": "Plugins",
     "notifications": "Notifications",
     "audit-logs": "Audit Logs",
     "settings": "Settings"
@@ -22,7 +21,7 @@
     "overview": "Overview",
     "build": "Build",
     "capabilities": "Capabilities",
-    "connections": "Connections",
+    "extensions": "Extensions",
     "tools": "Tools",
     "system": "System"
   },

@@ -41,20 +41,18 @@
       }
     }
   },
-  "eyebrow": "Tools",
-  "title": "Tools",
-  "subtitle": "System tools, MCP servers, and WASM plugins available for agents.",
+  "eyebrow": "Native Tools",
+  "title": "Native Tools",
+  "subtitle": "Core native system tools and MCP server extensions available for agents.",
   "tabs": {
     "all": "All ({{count}})",
     "native": "Native",
-    "mcp": "MCP",
-    "wasm": "WASM"
+    "mcp": "MCP"
   },
   "actions": {
     "addMCP": "Connect MCP",
     "testTool": "Test",
     "refresh": "Refresh",
-    "uploadWasm": "Upload WASM",
     "search": "Search tools..."
   },
   "mcpModal": {

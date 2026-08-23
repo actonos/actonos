@@ -8,7 +8,28 @@ import (
 	"github.com/actonos/actonos/internal/bus"
 )
 
-func TestChannelManager_MultiAccountLifecycle(t *testing.T) {
+type mockAdapter struct {
+	name      string
+	started   bool
+	stopped   bool
+	sentMsgs  []OutboundMessage
+}
+
+func (m *mockAdapter) Name() string { return m.name }
+func (m *mockAdapter) Start(ctx context.Context) error {
+	m.started = true
+	return nil
+}
+func (m *mockAdapter) Stop() error {
+	m.stopped = true
+	return nil
+}
+func (m *mockAdapter) SendMessage(ctx context.Context, msg OutboundMessage) error {
+	m.sentMsgs = append(m.sentMsgs, msg)
+	return nil
+}
+
+func TestChannelManager_DynamicAdapterLifecycle(t *testing.T) {
 	eventBus := bus.NewEventBus()
 	defer eventBus.Close()
 
@@ -21,93 +42,59 @@ func TestChannelManager_MultiAccountLifecycle(t *testing.T) {
 	}
 	defer mgr.Stop()
 
-	// Sync test accounts
-	accounts := []ChannelAccount{
-		{
-			ID:            "tg_support",
-			Name:          "Customer Support Bot",
-			Channel:       "telegram",
-			Token:         "", // empty token won't make HTTP calls
-			Enabled:       true,
-			BoundAgentIDs: []string{"agent_support"},
-			DefaultChatID: "123456",
-		},
-		{
-			ID:            "wa_hotline",
-			Name:          "WhatsApp Hotline",
-			Channel:       "whatsapp",
-			Token:         "",
-			Enabled:       true,
-			BoundAgentIDs: []string{"*"},
-			DefaultChatID: "+84901234567",
-		},
+	// Register dynamic adapter
+	mockTelegram := &mockAdapter{name: "telegram"}
+	if err := mgr.RegisterAdapter(mockTelegram); err != nil {
+		t.Fatalf("failed to register adapter: %v", err)
 	}
 
+	if !mockTelegram.started {
+		t.Error("expected adapter to be started upon registration")
+	}
+
+	// Retrieve adapter
+	adapter, exists := mgr.GetAdapter("telegram")
+	if !exists || adapter.Name() != "telegram" {
+		t.Errorf("expected to find telegram adapter, got %v", adapter)
+	}
+
+	// Send message
+	msg := OutboundMessage{
+		ChannelID: "telegram",
+		Recipient: "123456",
+		Content:   "Hello from ActonOS",
+	}
+	if err := mgr.SendMessage(ctx, msg); err != nil {
+		t.Fatalf("failed to send message: %v", err)
+	}
+
+	if len(mockTelegram.sentMsgs) != 1 || mockTelegram.sentMsgs[0].Content != "Hello from ActonOS" {
+		t.Errorf("expected message to be received by mock adapter, got %v", mockTelegram.sentMsgs)
+	}
+
+	// Test accounts sync and binding
+	accounts := []ChannelAccount{
+		{
+			ID:            "tg_main",
+			Name:          "Main Bot",
+			Channel:       "telegram",
+			Enabled:       true,
+			BoundAgentIDs: []string{"agent_support"},
+		},
+	}
 	if err := mgr.SyncAccounts(ctx, accounts); err != nil {
 		t.Fatalf("failed to sync accounts: %v", err)
 	}
 
-	accs := mgr.GetAccounts()
-	if len(accs) != 2 {
-		t.Fatalf("expected 2 accounts, got %d", len(accs))
-	}
-
-	// Test Agent Binding resolution
-	bound := mgr.FindBoundAgent("telegram", "tg_support")
-	if bound != "agent_support" {
+	if bound := mgr.FindBoundAgent("telegram", "tg_main"); bound != "agent_support" {
 		t.Errorf("expected bound agent 'agent_support', got '%s'", bound)
 	}
 
-	boundWildcard := mgr.FindBoundAgent("whatsapp", "wa_hotline")
-	if boundWildcard != "" {
-		t.Errorf("expected empty specific agent for wildcard '*', got '%s'", boundWildcard)
+	// Unregister adapter
+	if err := mgr.UnregisterAdapter("telegram"); err != nil {
+		t.Fatalf("failed to unregister adapter: %v", err)
+	}
+	if !mockTelegram.stopped {
+		t.Error("expected adapter to be stopped upon unregistration")
 	}
 }
-
-// TestChannelManager_AccountStatusTracksStartFailureAndPublishesEvent verifies
-// that a channel account which fails to start records a runtime status
-// (Connected=false, LastError set) and publishes EventChannelAdapterError,
-// so failures are visible via GetAccountStatuses and web notifications
-// instead of only reaching the server log.
-func TestChannelManager_AccountStatusTracksStartFailureAndPublishesEvent(t *testing.T) {
-	eventBus := bus.NewEventBus()
-	defer eventBus.Close()
-	errSub := eventBus.Subscribe(bus.EventChannelAdapterError)
-
-	mgr := NewChannelManager(eventBus, nil)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	if err := mgr.Start(ctx); err != nil {
-		t.Fatalf("failed to start ChannelManager: %v", err)
-	}
-	defer mgr.Stop()
-
-	acc := ChannelAccount{
-		ID:      "tg_broken",
-		Name:    "Broken Bot",
-		Channel: "telegram",
-		Token:   "invalid-token",
-		Enabled: true,
-		Metadata: map[string]string{
-			// Point at a URL that will fail immediately (connection refused)
-			// rather than making a real Telegram API call in tests.
-			"api_base": "http://127.0.0.1:1",
-		},
-	}
-	if err := mgr.SyncAccounts(ctx, []ChannelAccount{acc}); err != nil {
-		t.Fatalf("failed to sync accounts: %v", err)
-	}
-
-	// Telegram's Start() always returns nil immediately (polling happens in
-	// a background goroutine), so the failure must surface asynchronously
-	// via the poll loop's health reporting instead of the sync Start() path.
-	select {
-	case ev := <-errSub:
-		if ev.AgentID != "tg_broken" {
-			t.Fatalf("expected error event for tg_broken, got %s", ev.AgentID)
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("expected EventChannelAdapterError to be published for a broken telegram account")
-	}
-}
-

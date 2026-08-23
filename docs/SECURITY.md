@@ -66,13 +66,21 @@ cgroup terminates the process and rejects the action.
 
 #### Docker Mode
 
-- WASM plugins run in `wazero` (in-memory, no filesystem access)
 - Shell commands execute inside the existing container boundary
 - No host filesystem access beyond the `/data` volume
 
 On Windows/macOS development hosts, command execution is disabled by default.
 `ACTONOS_ALLOW_INSECURE_EXEC=1` is an explicit unsafe development override and
 must not be enabled in production.
+
+### WASM Plugin Sandboxing & Capability Model
+
+WASM plugins execute in **Wazero** within an isolated linear memory sandbox. They possess zero ambient authority:
+
+1. **Capability-Based Permissions**: Plugins declare requested permissions in `manifest.json` (`net_outbound`, `secrets`, `storage`, `bus_events`). All undeclared actions are denied by default.
+2. **Egress Network Firewall**: Outbound HTTP traffic from plugins is proxied through the host syscall `acton_net.http_request` and strictly filtered against `net_outbound` domain whitelists (e.g. `api.telegram.org`, `*.slack.com`). Direct raw TCP/UDP socket creation is impossible.
+3. **Hardware Vault Brokering**: Plugins cannot read host files or database tables. Scoped secrets requested via `acton_vault.get_secret` are validated against approved manifest permissions and dynamically decrypted from the AES-256-GCM Hardware Vault.
+4. **Resource Metering & Fault Isolation**: Each plugin instance is constrained to a 32–64 MB memory cap and an Epoch-based execution deadline (default 15s) to prevent infinite loops. Guest panics and memory traps are caught cleanly without crashing the `actond` daemon.
 
 ### Vault Encryption
 

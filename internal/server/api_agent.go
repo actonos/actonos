@@ -589,35 +589,14 @@ func (s *Server) handleRunCronJob(w http.ResponseWriter, r *http.Request) {
 
 		targetChan := job.TargetChannel
 		if targetChan == "" {
-			targetChan = "telegram"
+			targetChan = "all"
 		}
 
-		// Route to Telegram
-		if (targetChan == "telegram" || targetChan == "all") && s.tgAdapter != nil {
-			recipients := []string{}
-			if job.TargetRecipient != "" {
-				recipients = append(recipients, job.TargetRecipient)
-			} else if lastID := s.tgAdapter.GetLastChatID(); lastID != "" {
-				recipients = append(recipients, lastID)
-			} else {
-				recipients = s.tgAdapter.GetKnownChatIDs()
-			}
-
-			for _, rec := range recipients {
-				_ = s.tgAdapter.SendMessage(context.Background(), channels.OutboundMessage{
-					ChannelID: "telegram",
-					Recipient: rec,
-					Content:   fmt.Sprintf("⏰ **[Cron Reminder: %s]**\n\n%s", job.Name, resp.Content),
-				})
-			}
-		}
-
-		// Route to WhatsApp
-		if (targetChan == "whatsapp" || targetChan == "all") && s.waAdapter != nil && job.TargetRecipient != "" {
-			_ = s.waAdapter.SendMessage(context.Background(), channels.OutboundMessage{
-				ChannelID: "whatsapp",
+		if s.channelMgr != nil {
+			_ = s.channelMgr.SendMessage(context.Background(), channels.OutboundMessage{
+				ChannelID: targetChan,
 				Recipient: job.TargetRecipient,
-				Content:   fmt.Sprintf("⏰ *[Cron Reminder: %s]*\n\n%s", job.Name, resp.Content),
+				Content:   fmt.Sprintf("⏰ **[Cron Reminder: %s]**\n\n%s", job.Name, resp.Content),
 			})
 		}
 	}(*targetJob)

@@ -8,7 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Multi-Account Message Router, Inbound @Mention Dispatch & Agent-Aware Sessions**:
+- **Unified WasmLoader Plugin Architecture & Sandboxed Extensions**:
+  - Polyglot plugin execution engine (`internal/plugin/`) powered by Wazero (100% pure Go, zero CGO, `CGO_ENABLED=0` static binary compliant).
+  - Unified plugin model consolidating **Tools**, **Chat Channels**, and **SaaS Connectors** into portable `.wasm` packages with `manifest.json`.
+  - Sandboxed Host Syscalls (`acton_host`): `host_http_request` (with strict domain egress firewall), `host_get_secret` (AES-256-GCM Hardware Vault brokering), `host_kv_get/set` (scoped SQLite persistent storage), `host_emit_event` (ActonOS Event Bus), and `host_log`.
+  - Bridges: `WasmToolBridge` for `tools.ToolRegistry` (enforcing Single Execution Boundary), `WasmChannelBridge` for `channels.ChannelManager`, and `WasmConnectorBridge` for SaaS integrations.
+  - Lifecycle management: Hot-loading, runtime enable/disable, dynamic uninstallation, and REST API management endpoints (`/api/plugins/*`).
+  - Updated comprehensive documentation across `ARCHITECTURE.md`, `API.md`, `SECURITY.md`, `DEVELOPMENT.md`, and `.agents/rules/source-registry.md`.
+  - Complete TypeScript types and English / Vietnamese localization namespaces (`plugins.json`).
   - Dedicated `MessageRouter` (`internal/channels/router.go`) decoupled from daemon entrypoint to coordinate multi-account inbound dispatch across Telegram, Discord, and WhatsApp.
   - Inbound message agent mention parsing (`ExtractAgentMention`) supporting `@agent_name` and `/agent <name>` commands in group chats and private DMs.
   - Channel account routing modes: `exclusive` (assigned agent only), `mention` (route by @mention with single-agent fallback), and `fallback` (default to `agent_system_core`).

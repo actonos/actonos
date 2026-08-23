@@ -60,25 +60,7 @@ func TestPairingManager(t *testing.T) {
 	}
 }
 
-func TestWhatsAppWebhookVerification(t *testing.T) {
-	eb := bus.NewEventBus()
-	defer eb.Close()
-
-	pm, _ := NewPairingManager(nil)
-	wa := NewWhatsAppAdapter("fake_token", "123456", "my_secret_token", eb, pm)
-
-	challenge, ok := wa.VerifyWebhook("subscribe", "my_secret_token", "test_challenge_123")
-	if !ok || challenge != "test_challenge_123" {
-		t.Fatalf("webhook verification failed: ok=%v, challenge=%s", ok, challenge)
-	}
-
-	_, ok = wa.VerifyWebhook("subscribe", "wrong_token", "test_challenge_123")
-	if ok {
-		t.Fatal("webhook verification should fail with wrong token")
-	}
-}
-
-func TestDiscord_And_WebhookAdapter(t *testing.T) {
+func TestWebhookAdapter(t *testing.T) {
 	received := false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		received = true
@@ -89,25 +71,17 @@ func TestDiscord_And_WebhookAdapter(t *testing.T) {
 	eb := bus.NewEventBus()
 	defer eb.Close()
 
-	discord := NewDiscordAdapter(server.URL, eb)
-	_ = discord.Start(context.Background())
-
 	msg := OutboundMessage{
-		ChannelID: "discord",
+		ChannelID: "webhook",
 		Content:   "Test Alert from ActonOS",
-	}
-
-	if err := discord.SendMessage(context.Background(), msg); err != nil {
-		t.Fatalf("discord send failed: %v", err)
-	}
-
-	if !received {
-		t.Fatal("expected test server to receive message")
 	}
 
 	// Test webhook
 	webhook := NewWebhookAdapter(server.URL, eb)
 	if err := webhook.SendMessage(context.Background(), msg); err != nil {
 		t.Fatalf("webhook send failed: %v", err)
+	}
+	if !received {
+		t.Fatal("expected test server to receive message")
 	}
 }

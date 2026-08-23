@@ -20,7 +20,10 @@ var (
 	ErrWASMExecution = errors.New("wasm plugin execution failed")
 )
 
-// WASMTool represents an executable WebAssembly plugin tool.
+// Deprecated: WASMTool and WASMPluginManager in internal/tools are legacy prototypes
+// and have been superseded by the unified WASM Plugin Subsystem in internal/plugin
+// (WasmLoader, PluginManager, WasmToolBridge, WasmChannelBridge).
+// Kept for backward-compatibility with standalone tool runners.
 type WASMTool struct {
 	toolName    string
 	description string

@@ -1,0 +1,94 @@
+{
+  "eyebrow": "PHẦN MỞ RỘNG & RUNTIME",
+  "title": "Plugin WASM",
+  "subtitle": "Các phần mở rộng WebAssembly đa ngôn ngữ chạy trong sandbox bộ nhớ tuyến tính Wazero JIT với cơ chế khóa bảo mật và tường lửa domain egress.",
+  "runtimeBadge": "Wazero JIT Runtime • Sandbox Cô Lập An Toàn",
+  "stats": {
+    "total": "Tổng Plugin Đã Cài",
+    "active": "Đang Chạy & Kích Hoạt",
+    "channels": "Kênh Trò Chuyện",
+    "connectors": "Kết Nối SaaS"
+  },
+  "tabs": {
+    "all": "Tất Cả Plugin",
+    "channel": "Kênh Trò Chuyện",
+    "connector": "Kết Nối SaaS",
+    "tool": "Công Cụ Mở Rộng"
+  },
+  "search": {
+    "placeholder": "Tìm plugin theo tên, ID, tính năng, domain, tác giả...",
+    "statusFilter": "Tất cả trạng thái",
+    "filterByStatus": "Lọc theo trạng thái"
+  },
+  "upload": "Cài Đặt Plugin",
+  "uploadHelp": "Tải lên tệp nhị phân .wasm đã biên dịch và cấu hình manifest.json.",
+  "capabilities": {
+    "tool": "Công Cụ Mở Rộng",
+    "channel": "Kênh Trò Chuyện",
+    "connector": "Kết Nối SaaS"
+  },
+  "status": {
+    "running": "Đang chạy",
+    "stopped": "Đã dừng",
+    "disabled": "Đã tắt",
+    "error": "Lỗi"
+  },
+  "permissions": {
+    "title": "Phân Quyền Sandbox",
+    "netOutbound": "Tên Miền Egress",
+    "secrets": "Khóa Bảo Mật Vault",
+    "storage": "Lưu Trữ KV Bền Vững",
+    "busEvents": "Chủ Đề Event Bus"
+  },
+  "actions": {
+    "enable": "Bật",
+    "disable": "Tắt",
+    "uninstall": "Gỡ cài đặt",
+    "details": "Chi tiết",
+    "viewLogs": "Nhật ký",
+    "refresh": "Làm mới",
+    "useTemplate": "Dùng Mẫu Này",
+    "confirmUninstall": "Bạn có chắc chắn muốn gỡ cài đặt plugin '{{name}}'? Tệp nhị phân và cấu hình sẽ bị xóa vĩnh viễn."
+  },
+  "starters": {
+    "title": "Mẫu Plugin Khởi Đầu & Khung Mã Mẫu",
+    "subtitle": "Nhanh chóng tạo các tiện ích mở rộng bằng Rust, TinyGo, Zig hoặc AssemblyScript biên dịch ra WebAssembly.",
+    "telegramTitle": "Kênh Bot Telegram",
+    "telegramDesc": "Cổng kết nối Long-Polling / Webhook với xác thực mã PIN 6 số và hỗ trợ streaming tin nhắn.",
+    "discordTitle": "Kênh Discord Gateway",
+    "discordDesc": "Adapter WebSocket Gateway lắng nghe tin nhắn, định tuyến nhắc tên @ và phản hồi thẻ embed.",
+    "githubTitle": "Kết Nối SaaS GitHub",
+    "githubDesc": "Soi xét Issue, Pull Request và review code trong repository với cơ chế ủy quyền token an toàn.",
+    "databaseTitle": "Công Cụ SQLite & Postgres",
+    "databaseDesc": "Thực thi các truy vấn SQL sandboxed với kho lưu trữ key-value phân vùng bền vững.",
+    "scraperTitle": "Công Cụ Thu Thập Web",
+    "scraperDesc": "Trình tải dữ liệu HTTP ra ngoài với kiểm duyệt tên miền an toàn và trích xuất cấu trúc HTML.",
+    "cryptoTitle": "Công Cụ Tỷ Giá Thị Trường",
+    "cryptoDesc": "Lấy giá tiền mã hóa và chứng khoán theo thời gian thực với cơ chế tự động thăm dò định kỳ."
+  },
+  "modals": {
+    "uploadTitle": "Cài Đặt Plugin WASM",
+    "uploadSubtitle": "Tải lên module .wasm đã biên dịch và thiết lập phân quyền sandbox an toàn.",
+    "wasmFileLabel": "Tệp Nhị Phân WebAssembly (.wasm)",
+    "wasmDropzone": "Kéo thả tệp .wasm vào đây hoặc bấm để chọn tệp từ máy tính",
+    "chooseFile": "Chọn tệp",
+    "manifestLabel": "Cấu Hình Manifest Tùy Chỉnh (JSON tùy chọn)",
+    "manifestPlaceholder": "{\n  \"id\": \"custom.plugin\",\n  \"capabilities\": [\"tool\"],\n  \"permissions\": { \"net_outbound\": [\"api.example.com\"] }\n}",
+    "installBtn": "Cài Đặt & Kích Hoạt",
+    "installing": "Đang xác thực & cài đặt...",
+    "detailsTitle": "Chi Tiết Plugin & Phân Quyền Bảo Mật",
+    "logsTitle": "Nhật Ký Thực Thi Sandbox: {{id}}",
+    "noLogs": "Chưa có sự kiện thực thi nào được ghi nhận.",
+    "refreshLogs": "Làm mới nhật ký",
+    "toolsExported": "Công Cụ Xuất Ra ({{count}})",
+    "noTools": "Plugin này không xuất trực tiếp công cụ Agent nào.",
+    "templates": "Mẫu Có Sẵn"
+  },
+  "empty": {
+    "title": "Chưa Có Plugin Nào Được Cài Đặt",
+    "description": "Mở rộng khả năng của ActonOS bằng cách tải lên các tiện ích WebAssembly đa ngôn ngữ cho Kênh Chat, Tích hợp SaaS hoặc Công cụ xử lý.",
+    "noMatches": "Không tìm thấy plugin nào khớp với từ khóa tìm kiếm và bộ lọc hiện tại.",
+    "clearFilters": "Xóa Bộ Lọc",
+    "exploreStarters": "Khám Phá Các Mẫu Khởi Đầu"
+  }
+}

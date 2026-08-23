@@ -173,26 +173,6 @@ export interface TailscaleStatus {
   auth_key_set: boolean;
 }
 
-export interface ConnectorInfo {
-  id: string;
-  name: string;
-  category: string;
-  icon: string;
-  risk_level: 'Low' | 'Medium' | 'High';
-  description: string;
-  connected: boolean;
-  auth_type?: 'oauth' | 'token';
-  account_name?: string;
-  account_email?: string;
-  avatar_url?: string;
-  connected_at?: string;
-  scopes?: string[];
-  expires_at?: string;
-  client_id?: string;
-  client_secret?: string;
-  direct_token?: string;
-  isComingSoon?: boolean;
-}
 
 export interface LLMProviderInfo {
   id: string;
@@ -575,4 +555,43 @@ export interface WorkspaceChunksResponse {
   chunk_count: number;
   chunks: SemanticChunkItem[];
 }
+
+export type PluginCapability = 'tool' | 'channel' | 'connector';
+export type PluginStatus = 'running' | 'stopped' | 'disabled' | 'error';
+
+export interface PluginPermissions {
+  net_outbound?: string[];
+  secrets?: string[];
+  storage?: boolean;
+  bus_events?: string[];
+}
+
+export interface PluginToolDef {
+  name: string;
+  description: string;
+  parameters: Record<string, any>;
+}
+
+export interface PluginManifest {
+  id: string;
+  name: string;
+  version: string;
+  author?: string;
+  description?: string;
+  capabilities: PluginCapability[];
+  permissions: PluginPermissions;
+  tools?: PluginToolDef[];
+  config?: Record<string, string>;
+}
+
+export interface PluginInfo {
+  manifest: PluginManifest;
+  enabled: boolean;
+  status: PluginStatus;
+  error?: string;
+  loaded_at?: string;
+  path?: string;
+  memory_bytes?: number;
+}
+
 

@@ -1,0 +1,94 @@
+{
+  "eyebrow": "EXTENSIONS & RUNTIMES",
+  "title": "WASM Plugins",
+  "subtitle": "Polyglot sandboxed WebAssembly extensions running inside Wazero JIT runtime with hardware vault brokering and domain egress firewall.",
+  "runtimeBadge": "Wazero JIT Runtime • Fail-Closed Sandbox",
+  "stats": {
+    "total": "Total Installed",
+    "active": "Active & Running",
+    "channels": "Chat Channels",
+    "connectors": "SaaS Connectors"
+  },
+  "tabs": {
+    "all": "All Plugins",
+    "channel": "Chat Channels",
+    "connector": "SaaS Connectors",
+    "tool": "Tool Extensions"
+  },
+  "search": {
+    "placeholder": "Search plugins by name, ID, capability, domain, author...",
+    "statusFilter": "All Statuses",
+    "filterByStatus": "Filter by status"
+  },
+  "upload": "Upload Plugin",
+  "uploadHelp": "Upload a compiled .wasm binary and manifest.json configuration.",
+  "capabilities": {
+    "tool": "Tool Extension",
+    "channel": "Chat Channel",
+    "connector": "SaaS Connector"
+  },
+  "status": {
+    "running": "Running",
+    "stopped": "Stopped",
+    "disabled": "Disabled",
+    "error": "Error"
+  },
+  "permissions": {
+    "title": "Sandboxed Permissions",
+    "netOutbound": "Outbound Domains",
+    "secrets": "Vault Secrets",
+    "storage": "Persistent Storage",
+    "busEvents": "Event Bus Topics"
+  },
+  "actions": {
+    "enable": "Enable",
+    "disable": "Disable",
+    "uninstall": "Uninstall",
+    "details": "Details",
+    "viewLogs": "Logs",
+    "refresh": "Refresh",
+    "useTemplate": "Use Template",
+    "confirmUninstall": "Are you sure you want to uninstall plugin '{{name}}'? This will remove its binary and configuration."
+  },
+  "starters": {
+    "title": "Starter Plugin Templates & Scaffolding",
+    "subtitle": "Quickly bootstrap custom polyglot extensions in Rust, TinyGo, Zig, or AssemblyScript compiled to WebAssembly.",
+    "telegramTitle": "Telegram Bot Channel",
+    "telegramDesc": "Dual long-polling gateway with 6-digit pairing PIN verification and streaming support.",
+    "discordTitle": "Discord Gateway Channel",
+    "discordDesc": "Gateway WebSocket adapter with message listener, @mentions routing, and embed responses.",
+    "githubTitle": "GitHub SaaS Connector",
+    "githubDesc": "Inspect repository issues, pull requests, and review code with scoped token brokering.",
+    "databaseTitle": "Postgres & SQLite Tool",
+    "databaseDesc": "Execute sandboxed SQL queries with persistent scoped key-value storage.",
+    "scraperTitle": "Web Scraper & Crawler",
+    "scraperDesc": "Outbound HTTP fetcher with domain egress firewall compliance and HTML parsing.",
+    "cryptoTitle": "Live Market Ticker Tool",
+    "cryptoDesc": "Fetch real-time cryptocurrency and stock pricing with automated interval polling."
+  },
+  "modals": {
+    "uploadTitle": "Install WASM Plugin",
+    "uploadSubtitle": "Upload compiled .wasm module and configure sandboxed capabilities.",
+    "wasmFileLabel": "WebAssembly Binary (.wasm)",
+    "wasmDropzone": "Drag & drop your .wasm file here, or click to browse",
+    "chooseFile": "Browse File",
+    "manifestLabel": "Custom Manifest (Optional JSON)",
+    "manifestPlaceholder": "{\n  \"id\": \"custom.plugin\",\n  \"capabilities\": [\"tool\"],\n  \"permissions\": { \"net_outbound\": [\"api.example.com\"] }\n}",
+    "installBtn": "Install & Activate",
+    "installing": "Validating & Installing...",
+    "detailsTitle": "Plugin Details & Security Manifest",
+    "logsTitle": "Plugin Runtime Logs: {{id}}",
+    "noLogs": "No runtime log events recorded yet.",
+    "refreshLogs": "Refresh Logs",
+    "toolsExported": "Exported Tools ({{count}})",
+    "noTools": "No agent tools exported directly by this plugin.",
+    "templates": "Quick Templates"
+  },
+  "empty": {
+    "title": "No Plugins Installed Yet",
+    "description": "Expand ActonOS by uploading custom polyglot WebAssembly extensions for Messaging Channels, SaaS Integrations, or Tool Capabilities.",
+    "noMatches": "No plugins match your current search query and filters.",
+    "clearFilters": "Clear Filters",
+    "exploreStarters": "Explore Starter Templates"
+  }
+}

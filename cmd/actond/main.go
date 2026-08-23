@@ -21,6 +21,7 @@ import (
 	"github.com/actonos/actonos/internal/channels"
 	"github.com/actonos/actonos/internal/llm"
 	"github.com/actonos/actonos/internal/memory"
+	"github.com/actonos/actonos/internal/plugin"
 	"github.com/actonos/actonos/internal/server"
 	"github.com/actonos/actonos/internal/system"
 	"github.com/actonos/actonos/internal/tools"
@@ -207,8 +208,6 @@ func main() {
 		slog.Warn("failed to initialize persistent MCP registry", "error", err)
 	}
 	mcpHost.RestoreServers(ctx)
-	wasmManager := tools.NewWASMPluginManager(toolReg, pluginsDir)
-	_ = wasmManager.ScanAndRegisterPlugins(ctx)
 
 	skillWatcher := tools.NewSkillWatcher(toolReg, skillsDir)
 	skillWatcher.SetEventBus(eventBus)
@@ -315,6 +314,24 @@ func main() {
 
 	channelMgr := channels.NewChannelManager(eventBus, pairingMgr)
 	toolReg.SetChannelSender(channelMgr)
+
+	// 10b. Initialize Unified WasmLoader Plugin System
+	pluginKV, err := plugin.NewSQLiteKVStore(db.SQLDB())
+	if err != nil {
+		slog.Warn("failed to initialize plugin kv store", "error", err)
+	}
+	wasmLoader, err := plugin.NewWasmLoader(ctx)
+	if err != nil {
+		slog.Warn("failed to initialize wasm loader", "error", err)
+	}
+	var pluginMgr *plugin.Manager
+	if wasmLoader != nil {
+		pluginMgr = plugin.NewManager(wasmLoader, toolReg, channelMgr, eventBus, pluginKV, vault, pluginsDir)
+		if err := pluginMgr.ScanAndLoadAll(ctx); err != nil {
+			slog.Warn("failed to load wasm plugins", "error", err)
+		}
+		defer pluginMgr.Close(ctx)
+	}
 
 	// Load initial channel accounts from disk
 	loadAccountsFromDisk := func(ch string) []channels.ChannelAccount {
@@ -432,12 +449,12 @@ func main() {
 		Vault:               vault,
 		PairingManager:      pairingMgr,
 		ChannelManager:      channelMgr,
-		TelegramAdapter:     nil,
-		WhatsAppAdapter:     nil,
+		PluginManager:       pluginMgr,
 		WorkspaceDir:        workspaceDir,
 		WorkspaceStore:      userWorkspace,
 		SkillsDir:           skillsDir,
 		WASMDir:             pluginsDir,
+		PluginsDir:          pluginsDir,
 		DataDir:             *dataDir,
 		Version:             Version,
 		GitCommit:           GitCommit,

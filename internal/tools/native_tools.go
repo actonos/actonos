@@ -2005,7 +2005,7 @@ func (t *ChannelNotifyTool) ParametersSchema() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {
-			"channel": { "type": "string", "enum": ["telegram", "whatsapp", "discord", "all"], "description": "Target channel (default 'all')" },
+			"channel": { "type": "string", "description": "Target channel name or 'all' (default 'all')" },
 			"account_id": { "type": "string", "description": "Target account ID or 'all' (default 'all')" },
 			"recipient": { "type": "string", "description": "Optional recipient chat ID or phone number" },
 			"message": { "type": "string", "description": "Message content to send" }
@@ -2178,7 +2178,7 @@ func (t *CronScheduleTool) ParametersSchema() json.RawMessage {
 			"agent_id": { "type": "string", "description": "Target agent ID (defaults to 'agent_system_core')" },
 			"cron_expression": { "type": "string", "description": "Standard 5-part cron expression (e.g. '0 8 * * *' for 8:00 AM daily, '0 10 17 8 *' for 10:00 AM on August 17th)" },
 			"prompt": { "type": "string", "description": "Instructions/prompt that the agent will run autonomously on schedule to generate the reminder content" },
-			"target_channel": { "type": "string", "description": "Outbound channel to deliver the notification (e.g. 'telegram', 'whatsapp', 'all'). Default: 'telegram'" },
+			"target_channel": { "type": "string", "description": "Outbound channel to deliver notification (e.g. 'all', or channel plugin name). Default: 'all'" },
 			"target_account_id": { "type": "string", "description": "Target channel account ID or 'all' (default 'all')" },
 			"target_recipient": { "type": "string", "description": "Destination chat ID or phone number (optional, will automatically route to the user's active channel if omitted)" }
 		},
@@ -2239,7 +2239,7 @@ func (t *CronScheduleTool) Execute(ctx context.Context, inputJSON json.RawMessag
 			return nil, errors.New("prompt is required")
 		}
 		if input.TargetChannel == "" {
-			input.TargetChannel = "telegram"
+			input.TargetChannel = "all"
 		}
 		if input.TargetAccountID == "" {
 			input.TargetAccountID = "all"

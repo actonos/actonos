@@ -11,6 +11,7 @@ import (
 	"github.com/actonos/actonos/internal/channels"
 	"github.com/actonos/actonos/internal/llm"
 	"github.com/actonos/actonos/internal/memory"
+	"github.com/actonos/actonos/internal/plugin"
 	"github.com/actonos/actonos/internal/system"
 	"github.com/actonos/actonos/internal/tools"
 	workspacepkg "github.com/actonos/actonos/internal/workspace"
@@ -50,15 +51,15 @@ type Server struct {
 	vault          *memory.Vault
 	pairingMgr     *channels.PairingManager
 	channelMgr     *channels.ChannelManager
-	tgAdapter      *channels.TelegramAdapter
-	waAdapter      *channels.WhatsAppAdapter
 	skillWatcher   *tools.SkillWatcher
+	pluginMgr      *plugin.Manager
 	startTime      time.Time
 	dataDir        string
 	workspaceDir   string
 	workspaceStore *workspacepkg.Store
 	skillsDir      string
 	wasmDir        string
+	pluginsDir     string
 	version        string
 	gitCommit      string
 	buildTime      string
@@ -96,12 +97,12 @@ type Config struct {
 	Vault               *memory.Vault
 	PairingManager      *channels.PairingManager
 	ChannelManager      *channels.ChannelManager
-	TelegramAdapter     *channels.TelegramAdapter
-	WhatsAppAdapter     *channels.WhatsAppAdapter
+	PluginManager       *plugin.Manager
 	WorkspaceDir        string
 	WorkspaceStore      *workspacepkg.Store
 	SkillsDir           string
 	WASMDir             string
+	PluginsDir          string
 	DataDir             string
 	// Build metadata injected via -ldflags; see the Makefile LDFLAGS target.
 	Version   string
@@ -126,6 +127,10 @@ func NewServer(cfg Config) *Server {
 	wasmDir := cfg.WASMDir
 	if wasmDir == "" {
 		wasmDir = "./data/tools/wasm"
+	}
+	pluginsDir := cfg.PluginsDir
+	if pluginsDir == "" {
+		pluginsDir = "./data/plugins"
 	}
 	version := cfg.Version
 	if version == "" {
@@ -169,14 +174,14 @@ func NewServer(cfg Config) *Server {
 		vault:          cfg.Vault,
 		pairingMgr:     cfg.PairingManager,
 		channelMgr:     cfg.ChannelManager,
-		tgAdapter:      cfg.TelegramAdapter,
-		waAdapter:      cfg.WhatsAppAdapter,
+		pluginMgr:      cfg.PluginManager,
 		startTime:      time.Now(),
 		dataDir:        dataDir,
 		workspaceDir:   workspaceDir,
 		workspaceStore: cfg.WorkspaceStore,
 		skillsDir:      skillsDir,
 		wasmDir:        wasmDir,
+		pluginsDir:     pluginsDir,
 		version:        version,
 		gitCommit:      gitCommit,
 		buildTime:      buildTime,
@@ -190,9 +195,6 @@ func NewServer(cfg Config) *Server {
 	}
 	if s.toolReg != nil && s.channelMgr != nil {
 		s.toolReg.SetChannelSender(s.channelMgr)
-	}
-	if s.toolReg != nil {
-		tools.RegisterConnectorTools(s.toolReg, s)
 	}
 
 	s.setupRoutes()
@@ -250,15 +252,6 @@ func (s *Server) setupRoutes() {
 			r.Post("/login", s.handleLogin)
 			r.Post("/logout", s.handleLogout)
 			r.With(s.RequireAuthMiddleware).Put("/password", s.handleChangePassword)
-		})
-
-		// OAuth Callbacks
-		r.Get("/auth/callback", s.handleOAuthCallback)
-
-		// Webhooks (WhatsApp, Generic)
-		r.Route("/webhooks", func(r chi.Router) {
-			r.Get("/whatsapp", s.handleWhatsAppVerifyWebhook)
-			r.Post("/whatsapp", s.handleWhatsAppInboundWebhook)
 		})
 
 		// Protected Subsystems (Require valid token when initialized)
@@ -335,6 +328,16 @@ func (s *Server) setupRoutes() {
 				r.Post("/hub/uninstall", s.handleUninstallHubSkill)
 			})
 
+			// WasmLoader Plugin System
+			r.Route("/plugins", func(r chi.Router) {
+				r.Get("/", s.handleListPlugins)
+				r.Post("/upload", s.handleUploadPlugin)
+				r.Post("/{id}/enable", s.handleEnablePlugin)
+				r.Post("/{id}/disable", s.handleDisablePlugin)
+				r.Delete("/{id}", s.handleDeletePlugin)
+				r.Get("/{id}/logs", s.handleGetPluginLogs)
+			})
+
 			r.Route("/approvals", func(r chi.Router) {
 				r.Get("/", s.handleListApprovals)
 				r.Post("/{id}/approve", s.handleApproveAction)
@@ -352,16 +355,8 @@ func (s *Server) setupRoutes() {
 				r.Post("/wizard", s.handleSetupWizard)
 			})
 
-			// SaaS Integrations & Connectors & Channel Adapters & Pairing
+			// Channel Accounts & Device Pairing
 			r.Route("/integrations", func(r chi.Router) {
-				r.Get("/", s.handleListIntegrations)
-				r.Get("/oauth/callback", s.handleOAuthCallback)
-				r.Post("/{provider}/auth-url", s.handleGetAuthURL)
-				r.Post("/{provider}/token", s.handleSaveDirectToken)
-				r.Post("/{provider}/config", s.handleSaveProviderConfig)
-				r.Post("/{provider}/test", s.handleTestIntegration)
-				r.Post("/{provider}/disconnect", s.handleDisconnectIntegration)
-				r.Post("/{provider}/toggle", s.handleToggleIntegration)
 				r.Get("/channels", s.handleGetChannels)
 				r.Get("/channels/accounts", s.handleListAllChannelAccounts)
 				r.Post("/channels", s.handleSaveChannels)

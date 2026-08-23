@@ -119,10 +119,12 @@ actonos/
 │   │   ├── eventbus.go             # Go channel pub/sub
 │   │   └── messages.go             # Unified message format
 │   │
-│   ├── channels/                   # Communication Adapters
+│   ├── channels/                   # Communication Channel Core
 │   │   ├── adapter.go              # ChannelAdapter interface
-│   │   ├── telegram.go             # Telegram bot adapter
-│   │   ├── discord.go              # Discord bot adapter
+│   │   ├── manager.go              # Dynamic ChannelManager & dispatch
+│   │   ├── router.go               # Inbound message routing
+│   │   ├── session.go              # Session state tracking
+│   │   ├── pairing.go              # 6-digit security pairing codes
 │   │   └── webhook.go              # Generic webhook adapter
 │   │
 │   ├── llm/                        # LLM Provider Interface
@@ -134,10 +136,19 @@ actonos/
 │   │   ├── deepseek.go             # DeepSeek provider
 │   │   └── ollama.go               # Local Ollama provider
 │   │
+│   ├── plugin/                     # WasmLoader Unified Plugin Subsystem
+│   │   ├── types.go                # Manifest, capabilities & permissions
+│   │   ├── loader.go               # Wazero runtime, module compile cache
+│   │   ├── host_api.go             # Host syscalls (HTTP, Vault, Storage, Bus)
+│   │   ├── security_gate.go        # Egress domain firewall & RBAC checks
+│   │   ├── bridge_tool.go          # ToolRegistry execution bridge
+│   │   ├── bridge_channel.go       # ChannelManager dynamic adapter bridge
+│   │   ├── bridge_connector.go     # SaaS connector hooks & sync
+│   │   └── manager.go              # Plugin lifecycle & hot-reload
+│   │
 │   ├── tools/                      # Dynamic Tooling Hub
 │   │   ├── registry.go             # Centralized tool schema registry
 │   │   ├── mcp_client.go           # MCP host (stdio/SSE)
-│   │   ├── wasm_runner.go          # wazero WASM runtime
 │   │   ├── skill_watcher.go        # fsnotify skill folder watcher
 │   │   └── native_tools.go         # HTTP fetch, filesystem, sysinfo
 │   │
@@ -170,7 +181,8 @@ actonos/
 │       ├── api_setup.go            # Onboarding & Wi-Fi config API
 │       ├── api_agent.go            # Agent CRUD API
 │       ├── api_integrations.go     # OAuth & SaaS integration API
-│       ├── api_tools.go            # MCP, skills, WASM management API
+│       ├── api_plugins.go          # WASM Plugin management API
+│       ├── api_tools.go            # MCP and skills management API
 │       ├── api_system.go           # Hardware, Tailscale, OTA API
 │       └── static.go              # go:embed static assets
 │
@@ -632,8 +644,32 @@ git commit -m "test(auth): add token refresh daemon expiry edge cases"
    by the sandbox runtime.
 5. Run `cd web && npx tsc --noEmit && npm run build`, then the Go server tests.
 
+### Developing WASM Plugins (`internal/plugin/`)
+
+ActonOS supports building plugins in any language compiling to WebAssembly (`wasm32-wasi` or standard WASM).
+
+#### Plugin Package Structure
+A plugin package placed in `/data/plugins/<plugin-id>/` contains:
+- `manifest.json`: Metadata, declared capabilities (`tool`, `channel`, `connector`), permissions, and tool schemas.
+- `plugin.wasm`: Compiled WebAssembly bytecode.
+
+#### Guest Exports (WASM to Host)
+- `acton_alloc(size: u32) -> u32`: Allocates linear memory buffer.
+- `acton_free(ptr: u32, size: u32)`: Deallocates linear memory buffer.
+- `acton_plugin_init(cfg_ptr: u32, cfg_len: u32) -> i32`: Initializes plugin instance.
+- `acton_tool_execute(name_ptr: u32, name_len: u32, args_ptr: u32, args_len: u32) -> u64`: Executes a declared tool.
+- `acton_channel_send_message(msg_ptr: u32, msg_len: u32) -> i32`: Sends an outbound message to a recipient.
+
+#### Host Syscalls (Host to WASM)
+- `acton_net.http_request(req_ptr, req_len) -> u64`: Controlled HTTP requests validated against `permissions.net_outbound`.
+- `acton_vault.get_secret(key_ptr, key_len) -> u64`: Retrieves authorized secret tokens from Hardware Vault.
+- `acton_storage.kv_get(k_ptr, k_len) -> u64` / `acton_storage.kv_set(k_ptr, k_len, v_ptr, v_len) -> i32`: Sandboxed KV storage.
+- `acton_bus.emit_event(ev_ptr, ev_len) -> i32`: Emits inbound messages into ActonOS Event Bus.
+- `acton_sys.log(level: i32, msg_ptr: u32, msg_len: u32)`: Structured logging.
+
 ### Frontend UX workflow
 
 Use the shared UI primitives and the comfortable/compact density provider for every new route. Keep navigation grouped by workflow and use nested Agent Studio hashes for detail pages. Validate keyboard access, focus visibility, reduced motion, Vietnamese/English locale parity, and the authenticated browser matrix (390×844, 768×1024, 1440×900) before review.
 Agent Studio sections expose dirty-state protection, Settings tabs preserve URL state, and Setup Wizard exposes an accessible progress indicator. New multi-step flows should follow the same patterns.
 Authenticated Playwright coverage runs axe on every primary route, reloads hash-query views, and exercises the narrow-layout Chat session drawer. Allow route transitions to settle before evaluating computed contrast.
+

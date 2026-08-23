@@ -92,7 +92,16 @@
 | `POST` | `/api/tools/wasm` | `handleUploadWASM` | `api_tools.go` |
 | `GET` | `/api/tools/hub/catalog` | `handleListHubCatalog` | `api_tools.go` |
 | `POST` | `/api/tools/hub/install` | `handleInstallHubSkill` | `api_tools.go` |
-| `POST` | `/api/tools/hub/uninstall` | `handleUninstallHubSkill` | `api_tools.go` |
+#### Plugins (WasmLoader)
+
+| Method | Path | Handler | File |
+|:---|:---|:---|:---|
+| `GET` | `/api/plugins` | `handleListPlugins` | `api_plugins.go` |
+| `POST` | `/api/plugins/upload` | `handleUploadPlugin` | `api_plugins.go` |
+| `POST` | `/api/plugins/{id}/enable` | `handleEnablePlugin` | `api_plugins.go` |
+| `POST` | `/api/plugins/{id}/disable` | `handleDisablePlugin` | `api_plugins.go` |
+| `DELETE` | `/api/plugins/{id}` | `handleDeletePlugin` | `api_plugins.go` |
+| `GET` | `/api/plugins/{id}/logs` | `handleGetPluginLogs` | `api_plugins.go` |
 
 #### Human Approval & Agent Runs
 
@@ -111,19 +120,12 @@
 | `GET` | `/api/setup/status` | `handleGetSetupStatus` | `api_setup.go` |
 | `POST` | `/api/setup/wizard` | `handleSetupWizard` | `api_setup.go` |
 
-#### Integrations, Channels & Pairing
+#### Channel Accounts & Device Pairing
 
 | Method | Path | Handler | File |
 |:---|:---|:---|:---|
-| `GET` | `/api/integrations` | `handleListIntegrations` | `api_integrations.go` |
-| `GET` | `/api/integrations/oauth/callback` | `handleOAuthCallback` | `api_integrations.go` |
-| `POST` | `/api/integrations/{provider}/auth-url` | `handleGetAuthURL` | `api_integrations.go` |
-| `POST` | `/api/integrations/{provider}/token` | `handleSaveDirectToken` | `api_integrations.go` |
-| `POST` | `/api/integrations/{provider}/config` | `handleSaveProviderConfig` | `api_integrations.go` |
-| `POST` | `/api/integrations/{provider}/test` | `handleTestIntegration` | `api_integrations.go` |
-| `POST` | `/api/integrations/{provider}/disconnect` | `handleDisconnectIntegration` | `api_integrations.go` |
-| `POST` | `/api/integrations/{provider}/toggle` | `handleToggleIntegration` | `api_integrations.go` |
 | `GET` | `/api/integrations/channels` | `handleGetChannels` | `api_integrations.go` |
+| `GET` | `/api/integrations/channels/accounts` | `handleListAllChannelAccounts` | `api_integrations.go` |
 | `POST` | `/api/integrations/channels` | `handleSaveChannels` | `api_integrations.go` |
 | `POST` | `/api/integrations/pairing/code` | `handleGeneratePairingCode` | `api_integrations.go` |
 | `POST` | `/api/integrations/pairing/verify` | `handleVerifyPairingCode` | `api_integrations.go` |
@@ -209,14 +211,15 @@
 | `agent` | Agent engine, durable runs, manifests, tasks, cron, swarm, profile | `engine.go`, `runs.go`, `manager.go`, `types.go`, `tasks.go`, `swarm.go`, `planner.go`, `verifier.go`, `reflection.go`, `profile.go`, `heartbeat.go`, `context.go`, `cron_scheduler.go` |
 | `auth` | System auth, OAuth 2.1, token refresh, delegation | `system_auth.go`, `oauth2.go`, `token_refresher.go`, `delegation.go`, `state.go`, `dcr.go` |
 | `bus` | Event bus (Go channels) | `eventbus.go` |
-| `channels` | Multi-platform messaging adapters | `adapter.go`, `telegram.go`, `whatsapp.go`, `discord.go`, `pairing.go`, `session.go`, `webhook.go` |
+| `channels` | Unified messaging channel abstractions, session routing & pairing | `adapter.go`, `manager.go`, `router.go`, `pairing.go`, `session.go`, `webhook.go` |
 | `llm` | LLM provider abstraction, cascading, and true SSE streaming | `provider.go`, `router.go`, `openai.go`, `anthropic.go`, `gemini.go`, `deepseek.go` |
 | `memory` | Hybrid RAG, durable local embedding queue, workspace watcher, Chromem vector search, FTS5, token ledger, vault | `embedding.go`, `embedding_watcher.go`, `hybrid.go`, `vector.go`, `fts.go`, `decay.go`, `tokens.go`, `vault.go`, `db.go` |
+| `plugin` | WasmLoader unified polyglot plugin runtime, Wazero linear memory sandbox, host syscalls, security gate, bridges | `types.go`, `loader.go`, `host_api.go`, `security_gate.go`, `bridge_tool.go`, `bridge_channel.go`, `bridge_connector.go`, `manager.go` |
 | `sandbox` | Fail-closed command isolation and Linux cgroup enforcement | `executor.go`, `strong_linux.go`, `strong_other.go`, `bwrap_linux.go`, `jail_docker.go`, `subshell.go` |
 | `security` | Canonical workspace path containment and outbound SSRF protection | `path.go`, `network.go` |
-| `server` | HTTP router, configured data roots, durable approval/run APIs, administrative action dispatch, true SSE, static assets | `router.go`, `api_approvals.go`, `api_runs.go`, `admin_actions.go`, `api_*.go`, `static.go`, `layered_fs.go` |
+| `server` | HTTP router, configured data roots, durable approval/run APIs, administrative action dispatch, true SSE, static assets | `router.go`, `api_approvals.go`, `api_runs.go`, `api_plugins.go`, `admin_actions.go`, `api_*.go`, `static.go`, `layered_fs.go` |
 | `system` | HAL, hardware metrics, Tailscale, Wi-Fi, tamper-evident audit | `hal.go`, `hal_linux.go`, `hal_docker.go`, `tailscale.go`, `metrics.go`, `audit.go` |
-| `tools` | Authorized execution boundary, approvals, MCP, WASM, skill watcher, hub | `registry.go`, `approval.go`, `command_policy.go`, `mcp_client.go`, `wasm_runner.go`, `native_tools.go`, `skill_watcher.go`, `hub.go`, `browser_tool.go` |
+| `tools` | Authorized execution boundary, approvals, MCP, WASM, skill watcher, hub | `registry.go`, `approval.go`, `command_policy.go`, `mcp_client.go`, `native_tools.go`, `skill_watcher.go`, `hub.go`, `browser_tool.go` |
 
 ---
 
@@ -231,9 +234,9 @@
 | `Operations/` | `operations` | `OperationsPage` | Live hardware/Docker telemetry, execution feed, canvas, terminal, task controls, approvals, and model cost |
 | `Chat/` | `chat` | `ChatPage` | Conversational interface |
 | `Automations/` | `automations` | `AutomationsPage` | Cron jobs, scheduled tasks |
-| `Channels/` | `channels` | `ChannelsPage` | Telegram, WhatsApp, Discord multi-account config & message routing |
-| `Connectors/` | `connectors` | `ConnectorsPage` | SaaS integrations (OAuth) |
-| `ToolHub/` | `tools` | `ToolHubPage` | MCP servers, WASM plugins |
+| `Plugins/` | `plugins` | `PluginsPage` | Sandboxed WASM Plugin Hub (Tools, Chat Channels, SaaS Connectors) |
+| `ToolHub/` | `tools` | `ToolHubPage` | Native system tools & MCP servers |
+| `Skills/` | `skills` | `SkillsPage` | Skill-as-a-Folder packages & Community Skill Hub |
 | `Workspace/` | `workspace` | `WorkspacePage` | File manager |
 | `Terminal/` | `terminal` | `TerminalPage` | Direct interactive web terminal connected to host OS shell |
 | `Notifications/` | `notifications` | `NotificationsPage` | Full notification history, filters, pagination, clear actions |

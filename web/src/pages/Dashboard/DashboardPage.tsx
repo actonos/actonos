@@ -531,12 +531,12 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
               </button>
 
               <button
-                onClick={() => onNavigateTab('channels')}
+                onClick={() => onNavigateTab('plugins')}
                 className="w-full flex items-center justify-between p-3 rounded-2xl bg-soft-meadow hover:bg-black/5 text-deep-ink font-semibold text-body-sm transition-all text-left group cursor-pointer"
               >
                 <div className="flex items-center gap-2.5">
                   <Radio className="w-4 h-4 text-deep-ink" />
-                  <span>{t('launchpad.pairChannel', 'Chat Channels')}</span>
+                  <span>{t('launchpad.pairChannel', 'Plugins & Channels')}</span>
                 </div>
                 <ArrowUpRight className="w-4 h-4 text-slate group-hover:text-deep-ink transition-colors" />
               </button>

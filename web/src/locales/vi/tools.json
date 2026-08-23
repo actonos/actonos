@@ -41,20 +41,18 @@
       }
     }
   },
-  "eyebrow": "Công cụ",
-  "title": "Công cụ",
-  "subtitle": "Các công cụ hệ thống, MCP server và WASM plugin cho agent sử dụng.",
+  "eyebrow": "Công cụ hệ thống",
+  "title": "Công cụ gốc",
+  "subtitle": "Các công cụ hệ thống gốc và tiện ích mở rộng MCP server cho agent sử dụng.",
   "tabs": {
     "all": "Tất cả ({{count}})",
     "native": "Hệ thống",
-    "mcp": "MCP",
-    "wasm": "WASM"
+    "mcp": "MCP"
   },
   "actions": {
     "addMCP": "Kết nối MCP",
     "testTool": "Thử nghiệm",
     "refresh": "Làm mới",
-    "uploadWasm": "Tải lên WASM",
     "search": "Tìm công cụ..."
   },
   "mcpModal": {

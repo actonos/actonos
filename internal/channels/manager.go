@@ -11,40 +11,33 @@ import (
 	"github.com/actonos/actonos/internal/bus"
 )
 
-// ChannelManager coordinates multi-account messaging adapters across Telegram, WhatsApp, Discord, etc.
+// ChannelManager coordinates messaging adapters across dynamic WASM plugins and adapters.
 type ChannelManager struct {
-	mu          sync.RWMutex
-	eventBus    *bus.EventBus
-	pairingMgr  *PairingManager
-	accounts    map[string]ChannelAccount // keyed by account ID
-	tgAdapters  map[string]*TelegramAdapter
-	waAdapters  map[string]*WhatsAppAdapter
-	dcAdapters  map[string]*DiscordAdapter
-	statuses    map[string]AccountStatus // keyed by account ID; runtime health, not persisted config
-	ctx         context.Context
-	cancel      context.CancelFunc
+	mu         sync.RWMutex
+	eventBus   *bus.EventBus
+	pairingMgr *PairingManager
+	accounts   map[string]ChannelAccount // keyed by account ID
+	adapters   map[string]ChannelAdapter // keyed by lowercase adapter/channel name
+	statuses   map[string]AccountStatus  // keyed by account ID; runtime health
+	ctx        context.Context
+	cancel     context.CancelFunc
 }
 
-// AccountStatus is the in-memory (non-persisted, resets on daemon restart)
-// runtime health of a channel account adapter, surfaced through
-// GetAccountStatuses so the web UI and notifications can explain *why* a
-// channel isn't working instead of just showing it silently absent.
+// AccountStatus is the in-memory runtime health of a channel account adapter.
 type AccountStatus struct {
 	Connected   bool      `json:"connected"`
 	LastError   string    `json:"last_error,omitempty"`
 	LastErrorAt time.Time `json:"last_error_at,omitempty"`
 }
 
-// NewChannelManager initializes the multi-account channel manager.
+// NewChannelManager initializes the channel manager.
 func NewChannelManager(eventBus *bus.EventBus, pairingMgr *PairingManager) *ChannelManager {
 	ctx, cancel := context.WithCancel(context.Background())
 	m := &ChannelManager{
 		eventBus:   eventBus,
 		pairingMgr: pairingMgr,
 		accounts:   make(map[string]ChannelAccount),
-		tgAdapters: make(map[string]*TelegramAdapter),
-		waAdapters: make(map[string]*WhatsAppAdapter),
-		dcAdapters: make(map[string]*DiscordAdapter),
+		adapters:   make(map[string]ChannelAdapter),
 		statuses:   make(map[string]AccountStatus),
 		ctx:        ctx,
 		cancel:     cancel,
@@ -53,12 +46,6 @@ func NewChannelManager(eventBus *bus.EventBus, pairingMgr *PairingManager) *Chan
 	return m
 }
 
-// watchAdapterHealthEvents keeps m.statuses in sync with the
-// EventChannelAdapterError/Recovered events published either by the manager
-// itself (synchronous start failures) or directly by an adapter's background
-// poll/gateway loop (async runtime failures, e.g. an invalid token that only
-// surfaces once polling begins). This ensures GetAccountStatuses reflects
-// reality regardless of which layer detected the failure.
 func (m *ChannelManager) watchAdapterHealthEvents() {
 	if m.eventBus == nil {
 		return
@@ -102,7 +89,7 @@ func (m *ChannelManager) applyAdapterHealthEvent(ev bus.Event, recovered bool) {
 	m.statuses[accountID] = AccountStatus{Connected: false, LastError: errMsg, LastErrorAt: time.Now().UTC()}
 }
 
-// Start begins listening on all registered channel accounts.
+// Start begins listening on all registered channel adapters.
 func (m *ChannelManager) Start(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -111,23 +98,9 @@ func (m *ChannelManager) Start(ctx context.Context) error {
 		m.ctx = ctx
 	}
 
-	for id, acc := range m.accounts {
-		if !acc.Enabled {
-			continue
-		}
-		switch acc.Channel {
-		case "telegram":
-			if _, running := m.tgAdapters[id]; !running && acc.Token != "" {
-				m.startTelegramAccountLocked(ctx, acc)
-			}
-		case "whatsapp":
-			if _, running := m.waAdapters[id]; !running && acc.Token != "" {
-				m.startWhatsAppAccountLocked(ctx, acc)
-			}
-		case "discord":
-			if _, running := m.dcAdapters[id]; !running && acc.Token != "" {
-				m.startDiscordAccountLocked(ctx, acc)
-			}
+	for name, adapter := range m.adapters {
+		if err := adapter.Start(m.ctx); err != nil {
+			slog.Warn("failed to start channel adapter", "name", name, "error", err)
 		}
 	}
 	return nil
@@ -139,19 +112,60 @@ func (m *ChannelManager) Stop() error {
 	defer m.mu.Unlock()
 
 	m.cancel()
-	for _, a := range m.tgAdapters {
-		_ = a.Stop()
-	}
-	for _, a := range m.waAdapters {
-		_ = a.Stop()
-	}
-	for _, a := range m.dcAdapters {
+	for _, a := range m.adapters {
 		_ = a.Stop()
 	}
 	return nil
 }
 
-// SyncAccounts dynamically synchronizes and starts/stops account adapters.
+// RegisterAdapter registers a channel adapter (e.g. from WASM plugin or custom module).
+func (m *ChannelManager) RegisterAdapter(adapter ChannelAdapter) error {
+	if adapter == nil {
+		return fmt.Errorf("cannot register nil adapter")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	name := strings.ToLower(adapter.Name())
+	m.adapters[name] = adapter
+	if m.ctx != nil && m.ctx.Err() == nil {
+		_ = adapter.Start(m.ctx)
+	}
+	slog.Info("channel adapter registered", "name", name)
+	return nil
+}
+
+// RegisterDynamicAdapter is an alias for RegisterAdapter for backward compatibility.
+func (m *ChannelManager) RegisterDynamicAdapter(adapter ChannelAdapter) error {
+	return m.RegisterAdapter(adapter)
+}
+
+// UnregisterAdapter removes a channel adapter.
+func (m *ChannelManager) UnregisterAdapter(name string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := strings.ToLower(name)
+	if adapter, ok := m.adapters[key]; ok {
+		_ = adapter.Stop()
+		delete(m.adapters, key)
+		slog.Info("channel adapter unregistered", "name", name)
+	}
+	return nil
+}
+
+// UnregisterDynamicAdapter is an alias for UnregisterAdapter.
+func (m *ChannelManager) UnregisterDynamicAdapter(name string) error {
+	return m.UnregisterAdapter(name)
+}
+
+// GetAdapter retrieves a registered adapter by name.
+func (m *ChannelManager) GetAdapter(name string) (ChannelAdapter, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	a, ok := m.adapters[strings.ToLower(name)]
+	return a, ok
+}
+
+// SyncAccounts stores and synchronizes account configurations.
 func (m *ChannelManager) SyncAccounts(ctx context.Context, accounts []ChannelAccount) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -163,202 +177,11 @@ func (m *ChannelManager) SyncAccounts(ctx context.Context, accounts []ChannelAcc
 		}
 		newMap[acc.ID] = acc
 	}
-
-	// Stop removed, disabled, or token-changed adapters
-	for id, acc := range m.accounts {
-		newAcc, exists := newMap[id]
-		if !exists || !newAcc.Enabled || newAcc.Token != acc.Token {
-			if tg, ok := m.tgAdapters[id]; ok {
-				_ = tg.Stop()
-				delete(m.tgAdapters, id)
-			}
-			if wa, ok := m.waAdapters[id]; ok {
-				_ = wa.Stop()
-				delete(m.waAdapters, id)
-			}
-			if dc, ok := m.dcAdapters[id]; ok {
-				_ = dc.Stop()
-				delete(m.dcAdapters, id)
-			}
-		}
-	}
-
 	m.accounts = newMap
-
-	// Start or update active adapters
-	for _, acc := range newMap {
-		if !acc.Enabled {
-			continue
-		}
-		switch acc.Channel {
-		case "telegram":
-			if _, running := m.tgAdapters[acc.ID]; !running && acc.Token != "" {
-				m.startTelegramAccountLocked(ctx, acc)
-			}
-		case "whatsapp":
-			if _, running := m.waAdapters[acc.ID]; !running && acc.Token != "" {
-				m.startWhatsAppAccountLocked(ctx, acc)
-			}
-		case "discord":
-			if _, running := m.dcAdapters[acc.ID]; !running && acc.Token != "" {
-				m.startDiscordAccountLocked(ctx, acc)
-			}
-		}
-	}
-
 	return nil
 }
 
-func (m *ChannelManager) startAccountAdapterLocked(ctx context.Context, acc ChannelAccount) {
-	switch acc.Channel {
-	case "telegram":
-		m.startTelegramAccountLocked(ctx, acc)
-	case "whatsapp":
-		m.startWhatsAppAccountLocked(ctx, acc)
-	case "discord":
-		m.startDiscordAccountLocked(ctx, acc)
-	}
-}
-
-func (m *ChannelManager) startTelegramAccountLocked(_ context.Context, acc ChannelAccount) {
-	token := strings.TrimSpace(acc.Token)
-	if token == "" {
-		return
-	}
-	// Stop existing adapter for this account if any
-	if old, exists := m.tgAdapters[acc.ID]; exists {
-		_ = old.Stop()
-		delete(m.tgAdapters, acc.ID)
-	}
-	// Also stop any other adapter sharing the same token to prevent duplicate polling loops
-	for existingID, adapter := range m.tgAdapters {
-		if adapter.token == token {
-			_ = adapter.Stop()
-			delete(m.tgAdapters, existingID)
-		}
-	}
-
-	adapterCtx := m.ctx
-	if adapterCtx == nil || adapterCtx.Err() != nil {
-		m.ctx, m.cancel = context.WithCancel(context.Background())
-		adapterCtx = m.ctx
-	}
-	adapter := NewTelegramAdapter(token, m.eventBus, m.pairingMgr)
-	adapter.SetAccountID(acc.ID)
-	if apiBase := acc.Metadata["api_base"]; apiBase != "" {
-		adapter.SetAPIBaseURL(apiBase)
-	}
-	if err := adapter.Start(adapterCtx); err == nil {
-		m.tgAdapters[acc.ID] = adapter
-		m.recordAccountResultLocked(acc, "telegram", nil)
-		slog.Info("channel account started", "channel", "telegram", "account_id", acc.ID, "name", acc.Name)
-	} else {
-		m.recordAccountResultLocked(acc, "telegram", err)
-		slog.Warn("failed to start telegram account adapter", "account_id", acc.ID, "error", err)
-	}
-}
-
-func (m *ChannelManager) startWhatsAppAccountLocked(_ context.Context, acc ChannelAccount) {
-	token := strings.TrimSpace(acc.Token)
-	if token == "" {
-		return
-	}
-	if old, exists := m.waAdapters[acc.ID]; exists {
-		_ = old.Stop()
-		delete(m.waAdapters, acc.ID)
-	}
-	for existingID, adapter := range m.waAdapters {
-		if adapter.accessToken == token {
-			_ = adapter.Stop()
-			delete(m.waAdapters, existingID)
-		}
-	}
-
-	adapterCtx := m.ctx
-	if adapterCtx == nil || adapterCtx.Err() != nil {
-		m.ctx, m.cancel = context.WithCancel(context.Background())
-		adapterCtx = m.ctx
-	}
-	secret := acc.WebhookSecret
-	if secret == "" {
-		secret = "acton_verify_token"
-	}
-	adapter := NewWhatsAppAdapter(token, acc.PhoneID, secret, m.eventBus, m.pairingMgr)
-	if err := adapter.Start(adapterCtx); err == nil {
-		m.waAdapters[acc.ID] = adapter
-		m.recordAccountResultLocked(acc, "whatsapp", nil)
-		slog.Info("channel account started", "channel", "whatsapp", "account_id", acc.ID, "name", acc.Name)
-	} else {
-		m.recordAccountResultLocked(acc, "whatsapp", err)
-		slog.Warn("failed to start whatsapp account adapter", "account_id", acc.ID, "error", err)
-	}
-}
-
-func (m *ChannelManager) startDiscordAccountLocked(_ context.Context, acc ChannelAccount) {
-	token := strings.TrimSpace(acc.Token)
-	if token == "" {
-		return
-	}
-	if old, exists := m.dcAdapters[acc.ID]; exists {
-		_ = old.Stop()
-		delete(m.dcAdapters, acc.ID)
-	}
-	for existingID, adapter := range m.dcAdapters {
-		if adapter.token == token {
-			_ = adapter.Stop()
-			delete(m.dcAdapters, existingID)
-		}
-	}
-
-	adapterCtx := m.ctx
-	if adapterCtx == nil || adapterCtx.Err() != nil {
-		m.ctx, m.cancel = context.WithCancel(context.Background())
-		adapterCtx = m.ctx
-	}
-	adapter := NewDiscordAdapter(token, m.eventBus, m.pairingMgr)
-	adapter.SetAccountID(acc.ID)
-	if err := adapter.Start(adapterCtx); err == nil {
-		m.dcAdapters[acc.ID] = adapter
-		m.recordAccountResultLocked(acc, "discord", nil)
-		slog.Info("channel account started", "channel", "discord", "account_id", acc.ID, "name", acc.Name)
-	} else {
-		m.recordAccountResultLocked(acc, "discord", err)
-		slog.Warn("failed to start discord account adapter", "account_id", acc.ID, "error", err)
-	}
-}
-
-// recordAccountResultLocked updates the in-memory runtime status for an
-// account and, on a state transition (working -> broken or broken ->
-// working), publishes a bus event so operators can be notified on the web UI
-// instead of the failure only ever reaching the server log. Must be called
-// with m.mu already held.
-func (m *ChannelManager) recordAccountResultLocked(acc ChannelAccount, channel string, err error) {
-	prev := m.statuses[acc.ID]
-	if err == nil {
-		m.statuses[acc.ID] = AccountStatus{Connected: true}
-		if !prev.Connected && m.eventBus != nil {
-			m.eventBus.Publish(bus.NewEvent(bus.EventChannelAdapterRecovered, acc.ID, map[string]any{
-				"channel":    channel,
-				"account_id": acc.ID,
-				"name":       acc.Name,
-			}))
-		}
-		return
-	}
-	m.statuses[acc.ID] = AccountStatus{Connected: false, LastError: err.Error(), LastErrorAt: time.Now().UTC()}
-	if m.eventBus != nil {
-		m.eventBus.Publish(bus.NewEvent(bus.EventChannelAdapterError, acc.ID, map[string]any{
-			"channel":    channel,
-			"account_id": acc.ID,
-			"name":       acc.Name,
-			"error":      err.Error(),
-		}))
-	}
-}
-
-// GetAccountStatuses returns the in-memory runtime health of every known
-// channel account (keyed by account ID), independent of the persisted
-// enabled/disabled configuration.
+// GetAccountStatuses returns in-memory runtime health.
 func (m *ChannelManager) GetAccountStatuses() map[string]AccountStatus {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -411,7 +234,7 @@ func (m *ChannelManager) Send(ctx context.Context, channelID, accountID, recipie
 	})
 }
 
-// SendMessage dispatches an outbound message according to target channel, account, and recipient.
+// SendMessage dispatches an outbound message to matching channel adapters.
 func (m *ChannelManager) SendMessage(ctx context.Context, msg OutboundMessage) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -420,115 +243,22 @@ func (m *ChannelManager) SendMessage(ctx context.Context, msg OutboundMessage) e
 	if targetChannel == "" {
 		targetChannel = "all"
 	}
-	targetAccount := strings.TrimSpace(msg.AccountID)
 
 	var errs []string
+	dispatched := 0
 
-	// Telegram Dispatching
-	if targetChannel == "all" || targetChannel == "telegram" {
-		for id, adapter := range m.tgAdapters {
-			if targetAccount != "" && targetAccount != "all" && targetAccount != id {
-				continue
-			}
-			acc := m.accounts[id]
-			recipients := m.resolveRecipients(acc, adapter.GetLastChatID(), adapter.GetKnownChatIDs(), msg.Recipient)
-			for _, r := range recipients {
-				if err := adapter.SendMessage(ctx, OutboundMessage{
-					ChannelID: "telegram",
-					AccountID: id,
-					Recipient: r,
-					Content:   msg.Content,
-				}); err != nil {
-					errs = append(errs, fmt.Sprintf("telegram account %s: %v", id, err))
-				}
-			}
-		}
-	}
-
-	// WhatsApp Dispatching
-	if targetChannel == "all" || targetChannel == "whatsapp" {
-		for id, adapter := range m.waAdapters {
-			if targetAccount != "" && targetAccount != "all" && targetAccount != id {
-				continue
-			}
-			acc := m.accounts[id]
-			recipients := m.resolveRecipients(acc, "", nil, msg.Recipient)
-			for _, r := range recipients {
-				if err := adapter.SendMessage(ctx, OutboundMessage{
-					ChannelID: "whatsapp",
-					AccountID: id,
-					Recipient: r,
-					Content:   msg.Content,
-				}); err != nil {
-					errs = append(errs, fmt.Sprintf("whatsapp account %s: %v", id, err))
-				}
-			}
-		}
-	}
-
-	// Discord Dispatching
-	if targetChannel == "all" || targetChannel == "discord" {
-		for id, adapter := range m.dcAdapters {
-			if targetAccount != "" && targetAccount != "all" && targetAccount != id {
-				continue
-			}
-			acc := m.accounts[id]
-			recipients := m.resolveRecipients(acc, adapter.GetLastChannelID(), nil, msg.Recipient)
-			for _, r := range recipients {
-				if err := adapter.SendMessage(ctx, OutboundMessage{
-					ChannelID: "discord",
-					AccountID: id,
-					Recipient: r,
-					Content:   msg.Content,
-				}); err != nil {
-					errs = append(errs, fmt.Sprintf("discord account %s: %v", id, err))
-				}
+	for name, adapter := range m.adapters {
+		if targetChannel == "all" || targetChannel == name {
+			if err := adapter.SendMessage(ctx, msg); err != nil {
+				errs = append(errs, fmt.Sprintf("adapter %s: %v", name, err))
+			} else {
+				dispatched++
 			}
 		}
 	}
 
 	if len(errs) > 0 {
-		return fmt.Errorf("dispatch errors: %s", strings.Join(errs, "; "))
+		return fmt.Errorf("dispatch errors (%d succeeded): %s", dispatched, strings.Join(errs, "; "))
 	}
 	return nil
-}
-
-func (m *ChannelManager) resolveRecipients(acc ChannelAccount, lastID string, knownIDs []string, explicitRecipient string) []string {
-	if explicitRecipient != "" && explicitRecipient != "all" {
-		return []string{explicitRecipient}
-	}
-
-	var results []string
-	if acc.DefaultChatID != "" {
-		results = append(results, acc.DefaultChatID)
-	}
-	if lastID != "" && !contains(results, lastID) {
-		results = append(results, lastID)
-	}
-	for _, k := range knownIDs {
-		if !contains(results, k) {
-			results = append(results, k)
-		}
-	}
-
-	// If explicit recipient was "all" and we have pairing manager, also add authorized users
-	if (explicitRecipient == "all" || len(results) == 0) && m.pairingMgr != nil {
-		paired := m.pairingMgr.ListAuthorized(acc.Channel)
-		for _, p := range paired {
-			if !contains(results, p.SenderID) {
-				results = append(results, p.SenderID)
-			}
-		}
-	}
-
-	return results
-}
-
-func contains(arr []string, item string) bool {
-	for _, s := range arr {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }

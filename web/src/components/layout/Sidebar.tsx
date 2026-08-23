@@ -16,8 +16,6 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
-  Radio,
-  Link2,
   Globe,
   Search,
   Check,
@@ -26,6 +24,7 @@ import {
   ShieldCheck,
   Bell,
   Terminal,
+  Boxes,
 } from 'lucide-react';
 import { useTheme } from '../providers/ThemeProvider';
 
@@ -39,10 +38,9 @@ export type NavTab =
   | 'automations'
   | 'tools'
   | 'skills'
+  | 'plugins'
   | 'workspace'
   | 'terminal'
-  | 'channels'
-  | 'connectors'
   | 'notifications'
   | 'audit-logs'
   | 'settings';
@@ -54,7 +52,7 @@ interface NavItem {
 }
 
 interface NavSection {
-  label?: string;
+  label: string;
   items: NavItem[];
 }
 
@@ -104,17 +102,11 @@ export function Sidebar({
       ],
     },
     {
-      label: t('sections.connections', 'Connections'),
+      label: t('sections.extensions', 'Extensions'),
       items: [
-        { id: 'channels', label: t('links.channels', 'Chat Channels'), icon: Radio },
-        { id: 'connectors', label: t('links.connectors', 'Connectors'), icon: Link2 },
-      ],
-    },
-    {
-      label: t('sections.capabilities'),
-      items: [
-        { id: 'tools', label: t('links.tools', 'Tools'), icon: Wrench },
+        { id: 'plugins', label: t('links.plugins', 'Plugins'), icon: Boxes },
         { id: 'skills', label: t('links.skills', 'Skills'), icon: Sparkles },
+        { id: 'tools', label: t('links.tools', 'Native Tools'), icon: Wrench },
       ],
     },
     {

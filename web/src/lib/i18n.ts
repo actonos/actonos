@@ -12,9 +12,6 @@ import enSettings from '../locales/en/settings.json';
 import enChat from '../locales/en/chat.json';
 import enSetup from '../locales/en/setup.json';
 import enWorkspace from '../locales/en/workspace.json';
-import enIntegrations from '../locales/en/integrations.json';
-import enChannels from '../locales/en/channels.json';
-import enConnectors from '../locales/en/connectors.json';
 import enDashboard from '../locales/en/dashboard.json';
 import enMissions from '../locales/en/missions.json';
 import enOperations from '../locales/en/operations.json';
@@ -22,6 +19,7 @@ import enAutomations from '../locales/en/automations.json';
 import enAudit from '../locales/en/audit.json';
 import enNotifications from '../locales/en/notifications.json';
 import enTerminal from '../locales/en/terminal.json';
+import enPlugins from '../locales/en/plugins.json';
 
 // Vietnamese translations
 import viCommon from '../locales/vi/common.json';
@@ -33,9 +31,6 @@ import viSettings from '../locales/vi/settings.json';
 import viChat from '../locales/vi/chat.json';
 import viSetup from '../locales/vi/setup.json';
 import viWorkspace from '../locales/vi/workspace.json';
-import viIntegrations from '../locales/vi/integrations.json';
-import viChannels from '../locales/vi/channels.json';
-import viConnectors from '../locales/vi/connectors.json';
 import viDashboard from '../locales/vi/dashboard.json';
 import viMissions from '../locales/vi/missions.json';
 import viOperations from '../locales/vi/operations.json';
@@ -43,6 +38,7 @@ import viAutomations from '../locales/vi/automations.json';
 import viAudit from '../locales/vi/audit.json';
 import viNotifications from '../locales/vi/notifications.json';
 import viTerminal from '../locales/vi/terminal.json';
+import viPlugins from '../locales/vi/plugins.json';
 
 export const defaultNS = 'common';
 export const resources = {
@@ -56,9 +52,6 @@ export const resources = {
     chat: enChat,
     setup: enSetup,
     workspace: enWorkspace,
-    integrations: enIntegrations,
-    channels: enChannels,
-    connectors: enConnectors,
     dashboard: enDashboard,
     missions: enMissions,
     operations: enOperations,
@@ -66,6 +59,7 @@ export const resources = {
     audit: enAudit,
     notifications: enNotifications,
     terminal: enTerminal,
+    plugins: enPlugins,
   },
   vi: {
     common: viCommon,
@@ -77,9 +71,6 @@ export const resources = {
     chat: viChat,
     setup: viSetup,
     workspace: viWorkspace,
-    integrations: viIntegrations,
-    channels: viChannels,
-    connectors: viConnectors,
     dashboard: viDashboard,
     missions: viMissions,
     operations: viOperations,
@@ -87,6 +78,7 @@ export const resources = {
     audit: viAudit,
     notifications: viNotifications,
     terminal: viTerminal,
+    plugins: viPlugins,
   },
 } as const;
 
@@ -96,7 +88,25 @@ i18n
   .init({
     fallbackLng: 'en',
     defaultNS,
-    ns: ['common', 'nav', 'agents', 'tools', 'skills', 'settings', 'chat', 'setup', 'workspace', 'integrations', 'channels', 'connectors', 'dashboard', 'missions', 'operations', 'automations', 'audit', 'notifications', 'terminal'],
+    ns: [
+      'common',
+      'nav',
+      'agents',
+      'tools',
+      'skills',
+      'settings',
+      'chat',
+      'setup',
+      'workspace',
+      'dashboard',
+      'missions',
+      'operations',
+      'automations',
+      'audit',
+      'notifications',
+      'terminal',
+      'plugins',
+    ],
     resources,
     interpolation: {
       escapeValue: false,
