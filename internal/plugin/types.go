@@ -29,17 +29,36 @@ type PluginToolDef struct {
 	Parameters  json.RawMessage `json:"parameters"`
 }
 
+// PluginChannelDef describes an individual channel integration exported by the plugin.
+type PluginChannelDef struct {
+	Name            string `json:"name"`
+	DisplayName     string `json:"display_name"`
+	RequiresPairing bool   `json:"requires_pairing,omitempty"`
+}
+
+// PluginConnectorDef describes an individual SaaS connector exported by the plugin.
+type PluginConnectorDef struct {
+	Name        string   `json:"name"`
+	DisplayName string   `json:"display_name"`
+	AuthType    string   `json:"auth_type,omitempty"`
+	Actions     []string `json:"actions,omitempty"`
+}
+
 // PluginManifest represents the formal descriptor (manifest.json) of a plugin package.
 type PluginManifest struct {
-	ID           string            `json:"id"`
-	Name         string            `json:"name"`
-	Version      string            `json:"version"`
-	Author       string            `json:"author,omitempty"`
-	Description  string            `json:"description,omitempty"`
-	Capabilities []string          `json:"capabilities"`
-	Permissions  PluginPermissions `json:"permissions"`
-	Tools        []PluginToolDef   `json:"tools,omitempty"`
-	Config       map[string]string `json:"config,omitempty"`
+	ID           string               `json:"id"`
+	Name         string               `json:"name"`
+	Version      string               `json:"version"`
+	Author       string               `json:"author,omitempty"`
+	Description  string               `json:"description,omitempty"`
+	License      string               `json:"license,omitempty"`
+	Capabilities []string             `json:"capabilities"`
+	Permissions  PluginPermissions    `json:"permissions"`
+	Tools        []PluginToolDef      `json:"tools,omitempty"`
+	Channels     []PluginChannelDef   `json:"channels,omitempty"`
+	Connectors   []PluginConnectorDef `json:"connectors,omitempty"`
+	ConfigSchema json.RawMessage      `json:"config_schema,omitempty"`
+	Config       map[string]any       `json:"config,omitempty"`
 }
 
 // PluginStatus represents runtime lifecycle state of an active plugin.

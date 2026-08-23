@@ -141,6 +141,42 @@ func (v *Vault) GetSecret(ctx context.Context, keyName string) (string, error) {
 	return string(plaintextBytes), nil
 }
 
+// VaultSecretMeta represents metadata of a stored encrypted secret.
+type VaultSecretMeta struct {
+	Name      string    `json:"name"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// ListSecrets returns the metadata of all secrets currently stored in the vault.
+func (v *Vault) ListSecrets(ctx context.Context) ([]VaultSecretMeta, error) {
+	if v == nil || v.db == nil || v.db.db == nil {
+		return nil, errors.New("vault is unavailable")
+	}
+
+	query := `SELECT key_name, updated_at FROM vault_entries ORDER BY key_name ASC`
+	rows, err := v.db.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("listing vault secrets: %w", err)
+	}
+	defer rows.Close()
+
+	var list []VaultSecretMeta
+	for rows.Next() {
+		var meta VaultSecretMeta
+		if err := rows.Scan(&meta.Name, &meta.UpdatedAt); err != nil {
+			return nil, err
+		}
+		list = append(list, meta)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if list == nil {
+		list = []VaultSecretMeta{}
+	}
+	return list, nil
+}
+
 // DeleteSecret permanently removes a named secret from the encrypted vault.
 func (v *Vault) DeleteSecret(ctx context.Context, keyName string) error {
 	if v == nil || v.db == nil || v.db.db == nil {

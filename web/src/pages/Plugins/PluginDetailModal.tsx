@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Card } from '@/components/ui/Card';
 import type { PluginInfo } from '@/lib/types';
+import { PluginConfigForm } from './PluginConfigForm';
 import {
   Globe,
   Key,
@@ -14,26 +14,48 @@ import {
   Copy,
   Check,
   ShieldCheck,
-  Layers,
   Code2,
+  Sliders,
+  Settings2,
 } from 'lucide-react';
 
 export interface PluginDetailModalProps {
   plugin: PluginInfo | null;
   isOpen: boolean;
   onClose: () => void;
+  onPluginUpdated?: (plugin: PluginInfo) => void;
+  initialTab?: 'overview' | 'config' | 'tools' | 'raw';
 }
 
-export function PluginDetailModal({ plugin, isOpen, onClose }: PluginDetailModalProps) {
+export function PluginDetailModal({
+  plugin,
+  isOpen,
+  onClose,
+  onPluginUpdated,
+  initialTab = 'overview',
+}: PluginDetailModalProps) {
   const { t } = useTranslation('plugins');
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'tools' | 'raw'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'config' | 'tools' | 'raw'>(initialTab);
+
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab(initialTab);
+    }
+  }, [isOpen, initialTab]);
 
   if (!plugin) return null;
 
   const manifest = plugin.manifest;
   const permissions = manifest.permissions || {};
   const tools = manifest.tools || [];
+  const channels = manifest.channels || [];
+  const connectors = manifest.connectors || [];
+  const hasConfig = Boolean(
+    manifest.config_schema &&
+    manifest.config_schema.properties &&
+    Object.keys(manifest.config_schema.properties).length > 0
+  );
 
   const handleCopyManifest = () => {
     navigator.clipboard.writeText(JSON.stringify(manifest, null, 2));
@@ -48,65 +70,109 @@ export function PluginDetailModal({ plugin, isOpen, onClose }: PluginDetailModal
       title={manifest.name || manifest.id}
       maxWidth="max-w-3xl"
     >
-      <div className="space-y-5">
-        <div className="-mt-3 mb-2 font-mono text-caption text-slate">
-          ID: {manifest.id} • v{manifest.version || '1.0.0'}
+      <div className="space-y-6">
+        {/* Meta Header */}
+        <div className="-mt-3 mb-2 flex items-center justify-between font-mono text-caption text-slate">
+          <div>
+            ID: <span className="text-deep-ink font-semibold">{manifest.id}</span> • v{manifest.version || '1.0.0'}
+            {manifest.author && <span> • by {manifest.author}</span>}
+          </div>
+          {manifest.license && (
+            <span className="px-2.5 py-0.5 rounded-full bg-soft-meadow border border-onyx/10 text-[11px] font-semibold text-deep-ink">
+              {manifest.license}
+            </span>
+          )}
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="flex border-b border-onyx/10 pb-2 dark:border-onyx/30">
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setActiveTab('overview')}
-              className={`flex items-center gap-1.5 rounded-pill px-3 py-1.5 text-caption font-semibold transition-colors ${
-                activeTab === 'overview'
-                  ? 'bg-deep-ink text-canvas dark:bg-hi-yellow dark:text-deep-ink'
-                  : 'text-slate hover:bg-onyx/5 dark:hover:bg-onyx/20'
-              }`}
-            >
-              <ShieldCheck className="h-3.5 w-3.5" />
-              <span>Overview & Permissions</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('tools')}
-              className={`flex items-center gap-1.5 rounded-pill px-3 py-1.5 text-caption font-semibold transition-colors ${
-                activeTab === 'tools'
-                  ? 'bg-deep-ink text-canvas dark:bg-hi-yellow dark:text-deep-ink'
-                  : 'text-slate hover:bg-onyx/5 dark:hover:bg-onyx/20'
-              }`}
-            >
-              <Wrench className="h-3.5 w-3.5" />
-              <span>Exported Tools ({tools.length})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('raw')}
-              className={`flex items-center gap-1.5 rounded-pill px-3 py-1.5 text-caption font-semibold transition-colors ${
-                activeTab === 'raw'
-                  ? 'bg-deep-ink text-canvas dark:bg-hi-yellow dark:text-deep-ink'
-                  : 'text-slate hover:bg-onyx/5 dark:hover:bg-onyx/20'
-              }`}
-            >
-              <Code2 className="h-3.5 w-3.5" />
-              <span>Raw Manifest</span>
-            </button>
-          </div>
+        {/* Navigation Tabs Pill Control */}
+        <div className="flex max-w-full items-center gap-1 overflow-x-auto rounded-full border border-onyx/10 bg-soft-meadow p-1">
+          <button
+            type="button"
+            onClick={() => setActiveTab('overview')}
+            className={`shrink-0 rounded-full px-4 py-2 text-caption font-semibold transition-colors flex items-center gap-1.5 focus-visible:outline-none ${
+              activeTab === 'overview'
+                ? 'bg-deep-ink text-canvas shadow-xs'
+                : 'text-slate hover:bg-canvas hover:text-deep-ink'
+            }`}
+          >
+            <ShieldCheck className="h-3.5 w-3.5" />
+            <span>{t('tabs.overview', 'Overview & Permissions')}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('config')}
+            className={`shrink-0 rounded-full px-4 py-2 text-caption font-semibold transition-colors flex items-center gap-1.5 focus-visible:outline-none ${
+              activeTab === 'config'
+                ? 'bg-deep-ink text-canvas shadow-xs'
+                : 'text-slate hover:bg-canvas hover:text-deep-ink'
+            }`}
+          >
+            <Sliders className="h-3.5 w-3.5" />
+            <span>{t('tabs.config', 'Configuration & Secrets')}</span>
+            {hasConfig && (
+              <span className="w-2 h-2 rounded-full bg-status-warning" />
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('tools')}
+            className={`shrink-0 rounded-full px-4 py-2 text-caption font-semibold transition-colors flex items-center gap-1.5 focus-visible:outline-none ${
+              activeTab === 'tools'
+                ? 'bg-deep-ink text-canvas shadow-xs'
+                : 'text-slate hover:bg-canvas hover:text-deep-ink'
+            }`}
+          >
+            <Wrench className="h-3.5 w-3.5" />
+            <span>{t('tabs.tools', 'Exported Tools')} ({tools.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('raw')}
+            className={`shrink-0 rounded-full px-4 py-2 text-caption font-semibold transition-colors flex items-center gap-1.5 focus-visible:outline-none ${
+              activeTab === 'raw'
+                ? 'bg-deep-ink text-canvas shadow-xs'
+                : 'text-slate hover:bg-canvas hover:text-deep-ink'
+            }`}
+          >
+            <Code2 className="h-3.5 w-3.5" />
+            <span>{t('tabs.manifest', 'Manifest JSON')}</span>
+          </button>
         </div>
 
         {/* Tab 1: Overview & Permissions */}
         {activeTab === 'overview' && (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {manifest.description && (
-              <p className="text-body leading-relaxed text-slate dark:text-cream/80">
+              <p className="text-body leading-relaxed text-slate">
                 {manifest.description}
               </p>
             )}
 
+            {/* Subtle banner to configure */}
+            {hasConfig && (
+              <div className="p-4 rounded-2xl bg-soft-meadow border border-onyx/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                <div className="flex items-center gap-2.5 text-caption text-deep-ink font-medium">
+                  <Settings2 className="w-4 h-4 text-slate shrink-0" />
+                  <span>{t('config.bannerNotice', 'This plugin has configurable parameters and credentials.')}</span>
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  icon={<Sliders className="w-3.5 h-3.5" />}
+                  onClick={() => setActiveTab('config')}
+                  className="shrink-0 self-start sm:self-center"
+                >
+                  {t('config.configureNow', 'Configure')}
+                </Button>
+              </div>
+            )}
+
             {/* Capabilities */}
             <div>
-              <span className="mb-2 block text-caption font-semibold uppercase tracking-wider text-slate">
+              <span className="mb-2.5 block text-caption font-semibold uppercase tracking-wider text-slate">
                 Capabilities
               </span>
               <div className="flex flex-wrap gap-2">
@@ -120,156 +186,235 @@ export function PluginDetailModal({ plugin, isOpen, onClose }: PluginDetailModal
                         ? 'info'
                         : 'success'
                     }
-                    className="flex items-center gap-1 px-2.5 py-1 text-caption"
                   >
-                    <Layers className="h-3 w-3" />
-                    <span>{t(`capabilities.${cap}`, cap)}</span>
+                    {t(`capabilities.${cap}`, cap)}
                   </Badge>
                 ))}
               </div>
             </div>
 
+            {/* Channels exported */}
+            {channels.length > 0 && (
+              <div>
+                <span className="mb-2.5 block text-caption font-semibold uppercase tracking-wider text-slate">
+                  Channel Gateways
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {channels.map((ch) => (
+                    <div key={ch.name} className="p-4 rounded-2xl bg-soft-meadow border border-onyx/10 flex items-center justify-between">
+                      <div>
+                        <div className="font-serif font-bold text-body-sm text-deep-ink">{ch.display_name}</div>
+                        <div className="text-caption font-mono text-slate mt-0.5">@{ch.name}</div>
+                      </div>
+                      {ch.requires_pairing && (
+                        <Badge variant="accent">Pairing Code</Badge>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Connectors exported */}
+            {connectors.length > 0 && (
+              <div>
+                <span className="mb-2.5 block text-caption font-semibold uppercase tracking-wider text-slate">
+                  SaaS Connector Definitions
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {connectors.map((conn) => (
+                    <div key={conn.name} className="p-4 rounded-2xl bg-soft-meadow border border-onyx/10 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-serif font-bold text-body-sm text-deep-ink">{conn.display_name}</span>
+                        <span className="text-[10px] font-mono uppercase bg-canvas text-slate px-2 py-0.5 rounded-full border border-onyx/10 font-semibold">
+                          {conn.auth_type || 'oauth2'}
+                        </span>
+                      </div>
+                      {conn.actions && (
+                        <div className="text-[11px] text-slate font-mono">
+                          Actions: {conn.actions.join(', ')}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Sandboxed Permissions Checklist */}
             <div>
-              <span className="mb-2 block text-caption font-semibold uppercase tracking-wider text-slate">
+              <span className="mb-3 block text-caption font-semibold uppercase tracking-wider text-slate">
                 {t('permissions.title', 'Sandboxed Permissions')}
               </span>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {/* Outbound Network Domains */}
-                <Card className="border border-onyx/10 bg-card-surface/40 p-3.5 dark:border-onyx/20 dark:bg-onyx/20">
-                  <div className="flex items-center gap-2 font-semibold text-deep-ink dark:text-cream">
-                    <Globe className="h-4 w-4 text-blue-500" />
+                <div className="p-4 rounded-2xl bg-soft-meadow border border-onyx/10 space-y-2">
+                  <div className="flex items-center gap-2 font-semibold text-deep-ink text-body-sm">
+                    <Globe className="h-4 w-4 text-slate" />
                     <span>{t('permissions.netOutbound', 'Outbound Domains')}</span>
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-1.5 pt-1">
                     {(permissions.net_outbound || []).length > 0 ? (
                       permissions.net_outbound?.map((dom) => (
                         <span
                           key={dom}
-                          className="rounded bg-blue-50 px-2 py-0.5 font-mono text-caption text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                          className="inline-flex items-center gap-1 text-caption font-mono text-deep-ink bg-canvas px-2.5 py-1 rounded-full border border-onyx/10 shadow-2xs"
                         >
-                          {dom}
+                          <Globe className="w-3 h-3 text-slate" />
+                          <span>{dom}</span>
                         </span>
                       ))
                     ) : (
                       <span className="text-caption text-slate italic">Zero network access (Isolated)</span>
                     )}
                   </div>
-                </Card>
+                </div>
 
                 {/* Vault Secrets */}
-                <Card className="border border-onyx/10 bg-card-surface/40 p-3.5 dark:border-onyx/20 dark:bg-onyx/20">
-                  <div className="flex items-center gap-2 font-semibold text-deep-ink dark:text-cream">
-                    <Key className="h-4 w-4 text-amber-500" />
-                    <span>{t('permissions.secrets', 'Vault Secrets')}</span>
+                <div className="p-4 rounded-2xl bg-soft-meadow border border-onyx/10 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 font-semibold text-deep-ink text-body-sm">
+                      <Key className="h-4 w-4 text-slate" />
+                      <span>{t('permissions.secrets', 'Vault Secrets')}</span>
+                    </div>
+                    <span className="text-[10px] uppercase font-mono text-slate">AES-256-GCM</span>
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-1.5 pt-1">
                     {(permissions.secrets || []).length > 0 ? (
                       permissions.secrets?.map((sec) => (
                         <span
                           key={sec}
-                          className="rounded bg-amber-50 px-2 py-0.5 font-mono text-caption text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                          className="inline-flex items-center gap-1.5 text-caption font-mono text-deep-ink bg-canvas px-2.5 py-1 rounded-full border border-onyx/10 shadow-2xs"
                         >
-                          {sec}
+                          <Key className="w-3 h-3 text-slate" />
+                          <span>{sec}</span>
                         </span>
                       ))
                     ) : (
                       <span className="text-caption text-slate italic">No vault credentials requested</span>
                     )}
                   </div>
-                </Card>
+                </div>
 
                 {/* Persistent Storage */}
-                <Card className="border border-onyx/10 bg-card-surface/40 p-3.5 dark:border-onyx/20 dark:bg-onyx/20">
-                  <div className="flex items-center gap-2 font-semibold text-deep-ink dark:text-cream">
-                    <Database className="h-4 w-4 text-emerald-500" />
+                <div className="p-4 rounded-2xl bg-soft-meadow border border-onyx/10 space-y-2">
+                  <div className="flex items-center gap-2 font-semibold text-deep-ink text-body-sm">
+                    <Database className="h-4 w-4 text-slate" />
                     <span>{t('permissions.storage', 'Persistent Storage')}</span>
                   </div>
-                  <div className="mt-2">
+                  <div className="pt-1">
                     {permissions.storage ? (
-                      <span className="inline-flex items-center gap-1 text-caption font-semibold text-success">
-                        <Check className="h-3.5 w-3.5" /> Scoped KV Storage Enabled
+                      <span className="inline-flex items-center gap-1.5 text-caption font-medium text-status-success bg-canvas px-2.5 py-1 rounded-full border border-onyx/10 shadow-2xs">
+                        <Check className="h-3.5 w-3.5" /> Scoped SQLite KV Storage Enabled
                       </span>
                     ) : (
                       <span className="text-caption text-slate italic">Stateless (Storage disabled)</span>
                     )}
                   </div>
-                </Card>
+                </div>
 
                 {/* Event Bus Topics */}
-                <Card className="border border-onyx/10 bg-card-surface/40 p-3.5 dark:border-onyx/20 dark:bg-onyx/20">
-                  <div className="flex items-center gap-2 font-semibold text-deep-ink dark:text-cream">
-                    <Radio className="h-4 w-4 text-purple-500" />
+                <div className="p-4 rounded-2xl bg-soft-meadow border border-onyx/10 space-y-2">
+                  <div className="flex items-center gap-2 font-semibold text-deep-ink text-body-sm">
+                    <Radio className="h-4 w-4 text-slate" />
                     <span>{t('permissions.busEvents', 'Event Bus Topics')}</span>
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-1.5 pt-1">
                     {(permissions.bus_events || []).length > 0 ? (
-                      permissions.bus_events?.map((top) => (
+                      permissions.bus_events?.map((ev) => (
                         <span
-                          key={top}
-                          className="rounded bg-purple-50 px-2 py-0.5 font-mono text-caption text-purple-700 dark:bg-purple-950/40 dark:text-purple-300"
+                          key={ev}
+                          className="inline-flex items-center gap-1 text-caption font-mono text-deep-ink bg-canvas px-2.5 py-1 rounded-full border border-onyx/10 shadow-2xs"
                         >
-                          {top}
+                          <Radio className="w-3 h-3 text-slate" />
+                          <span>{ev}</span>
                         </span>
                       ))
                     ) : (
-                      <span className="text-caption text-slate italic">No event topics registered</span>
+                      <span className="text-caption text-slate italic">No bus topics allowed</span>
                     )}
                   </div>
-                </Card>
+                </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Tab 2: Exported Tools */}
+        {/* Tab 2: Dynamic Schema Configuration */}
+        {activeTab === 'config' && (
+          <div>
+            <PluginConfigForm
+              plugin={plugin}
+              onSaved={(updated) => {
+                if (onPluginUpdated) {
+                  onPluginUpdated(updated);
+                }
+              }}
+            />
+          </div>
+        )}
+
+        {/* Tab 3: Exported Tools */}
         {activeTab === 'tools' && (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {tools.length > 0 ? (
-              tools.map((tool) => (
-                <Card key={tool.name} className="border border-onyx/10 p-4 dark:border-onyx/20 dark:bg-onyx/20">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-body font-bold text-deep-ink dark:text-cream">
-                      {tool.name}
-                    </span>
-                    <Badge variant="neutral">WASM Tool</Badge>
-                  </div>
-                  <p className="mt-1 text-caption text-slate">{tool.description}</p>
-                  {tool.parameters && Object.keys(tool.parameters).length > 0 && (
-                    <div className="mt-3 rounded bg-canvas p-2.5 font-mono text-caption dark:bg-onyx/60">
-                      <pre className="overflow-x-auto text-deep-ink dark:text-cream/90">
-                        {JSON.stringify(tool.parameters, null, 2)}
-                      </pre>
+              <div className="space-y-3.5">
+                {tools.map((tool) => (
+                  <div key={tool.name} className="p-4 rounded-2xl bg-soft-meadow border border-onyx/10 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="font-mono text-body-sm font-bold text-deep-ink">
+                        {tool.name}
+                      </div>
+                      <span className="px-2.5 py-0.5 rounded-full bg-canvas border border-onyx/10 font-mono text-[11px] text-slate">
+                        WASM Export
+                      </span>
                     </div>
-                  )}
-                </Card>
-              ))
+                    {tool.description && (
+                      <p className="text-caption text-slate leading-relaxed">{tool.description}</p>
+                    )}
+                    {(tool.parameters || tool.schema) && (
+                      <div className="mt-3">
+                        <span className="mb-1.5 block text-[11px] font-semibold uppercase text-slate">
+                          Parameters Schema
+                        </span>
+                        <pre className="max-h-40 overflow-auto rounded-xl bg-canvas border border-onyx/10 p-3 font-mono text-[11px] text-deep-ink shadow-2xs">
+                          {JSON.stringify(tool.parameters || tool.schema, null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             ) : (
-              <div className="rounded-card border border-dashed border-onyx/15 p-6 text-center text-slate">
+              <div className="py-8 text-center text-caption text-slate bg-soft-meadow rounded-2xl border border-onyx/10">
                 {t('modals.noTools', 'No agent tools exported directly by this plugin.')}
               </div>
             )}
           </div>
         )}
 
-        {/* Tab 3: Raw Manifest */}
+        {/* Tab 4: Raw Manifest */}
         {activeTab === 'raw' && (
-          <div>
-            <div className="mb-2 flex items-center justify-end">
-              <Button type="button" variant="secondary" size="sm" onClick={handleCopyManifest}>
-                {copied ? <Check className="mr-1 h-3.5 w-3.5 text-success" /> : <Copy className="mr-1 h-3.5 w-3.5" />}
-                <span>{copied ? 'Copied!' : 'Copy JSON'}</span>
+          <div className="space-y-3">
+            <div className="flex justify-end">
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={copied ? <Check className="h-3.5 w-3.5 text-status-success" /> : <Copy className="h-3.5 w-3.5" />}
+                onClick={handleCopyManifest}
+              >
+                {copied ? 'Copied' : 'Copy JSON'}
               </Button>
             </div>
-            <div className="max-h-96 overflow-y-auto rounded-card border border-onyx/15 bg-canvas p-4 font-mono text-caption text-deep-ink dark:border-onyx/30 dark:bg-onyx/60 dark:text-cream">
-              <pre>{JSON.stringify(manifest, null, 2)}</pre>
-            </div>
+            <pre className="max-h-96 overflow-auto rounded-2xl bg-soft-meadow border border-onyx/10 p-4 font-mono text-caption text-deep-ink leading-relaxed shadow-xs">
+              {JSON.stringify(manifest, null, 2)}
+            </pre>
           </div>
         )}
 
-        {/* Footer */}
-        <div className="flex justify-end pt-2">
-          <Button type="button" variant="secondary" onClick={onClose}>
+        {/* Modal Action Buttons */}
+        <div className="flex justify-end border-t border-onyx/10 pt-4">
+          <Button variant="ghost" onClick={onClose}>
             Close
           </Button>
         </div>

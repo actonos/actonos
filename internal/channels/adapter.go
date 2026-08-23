@@ -34,10 +34,11 @@ type InboundMessage struct {
 
 // OutboundMessage represents a response to be dispatched out to a channel.
 type OutboundMessage struct {
-	ChannelID string `json:"channel_id"` // "telegram", "whatsapp", "discord", "all"
-	AccountID string `json:"account_id"` // specific account ID or ""/"all" for broadcast
-	Recipient string `json:"recipient"`  // specific recipient or ""/"all"
-	Content   string `json:"content"`
+	ChannelID string            `json:"channel_id"` // "telegram", "whatsapp", "discord", "all"
+	AccountID string            `json:"account_id"` // specific account ID or ""/"all" for broadcast
+	Recipient string            `json:"recipient"`  // specific recipient or ""/"all"
+	Content   string            `json:"content"`
+	Metadata  map[string]string `json:"metadata,omitempty"`
 }
 
 // ExtractAgentMention parses @agent_name, /agent agent_name, or @agent_id from user text.

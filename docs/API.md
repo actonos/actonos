@@ -545,7 +545,7 @@ List all installed WASM plugins with their manifest, capabilities (`tool`, `chan
 ```
 
 ### `POST /api/plugins/upload`
-Upload a `.wasm` binary and optional `manifest.json` multipart form data. If administrative approval is configured, returns `202 Accepted` with a pending approval request.
+Upload an `.actonpkg` package bundle (or compiled `.wasm` binary) via multipart form data (`file`). The server unpacks `manifest.json`, `plugin.wasm`, and optional signatures, activating the plugin sandbox in the Wazero runtime. If administrative approval is configured, returns `202 Accepted` with a pending approval request.
 
 ### `POST /api/plugins/{id}/enable` | `POST /api/plugins/{id}/disable`
 Enable or disable a specific WASM plugin at runtime without restarting the daemon.
@@ -555,6 +555,79 @@ Uninstall a plugin and remove its binary and configuration from `/data/plugins/{
 
 ### `GET /api/plugins/{id}/logs`
 Retrieve execution logs and telemetry emitted by the plugin sandbox.
+
+### `POST /api/plugins/{id}/config` | `PUT /api/plugins/{id}/config`
+Update plugin configuration values and persist declared Hardware Vault secrets. Immediately triggers a hot-reload of the plugin instance in the Wazero sandbox runtime.
+
+**Request Body**:
+```json
+{
+  "config": {
+    "poll_interval_seconds": 5,
+    "accounts": [
+      {
+        "account_id": "bot_support",
+        "default_agent": "agent_customer_care",
+        "enable_embeds": true
+      }
+    ]
+  },
+  "secrets": {
+    "discord_bot_token": "your_bot_token_here"
+  }
+}
+```
+
+---
+
+## Hardware Vault Secrets
+
+The Hardware Vault encrypts credentials at rest using AES-256-GCM and Argon2id key derivation, brokering access to authorized sandboxed WASM plugins and agents.
+
+### `GET /api/vault/secrets`
+List metadata for all encrypted secrets stored in the Hardware Vault.
+
+**Response `200 OK`**:
+```json
+{
+  "secrets": [
+    {
+      "name": "discord_bot_token",
+      "updated_at": "2026-08-24T00:50:00Z",
+      "is_provider": false
+    }
+  ],
+  "count": 1
+}
+```
+
+### `GET /api/vault/secrets/{name}`
+Retrieve masked credential metadata for a specific secret key.
+
+**Response `200 OK`**:
+```json
+{
+  "name": "discord_bot_token",
+  "configured": true,
+  "masked": "MTI••••••••NDU=",
+  "length": 32,
+  "is_provider": false
+}
+```
+
+### `POST /api/vault/secrets` | `PUT /api/vault/secrets/{name}`
+Encrypt and store a named secret credential in the vault database.
+
+**Request Body**:
+```json
+{
+  "name": "discord_bot_token",
+  "value": "your_bot_token_here"
+}
+```
+
+### `DELETE /api/vault/secrets/{name}`
+Permanently remove a named secret from the encrypted vault.
 
 ---
 

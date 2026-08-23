@@ -569,7 +569,22 @@ export interface PluginPermissions {
 export interface PluginToolDef {
   name: string;
   description: string;
-  parameters: Record<string, any>;
+  parameters?: Record<string, any>;
+  schema?: Record<string, any>;
+  category?: string;
+}
+
+export interface PluginChannelDef {
+  name: string;
+  display_name: string;
+  requires_pairing?: boolean;
+}
+
+export interface PluginConnectorDef {
+  name: string;
+  display_name: string;
+  auth_type?: string;
+  actions?: string[];
 }
 
 export interface PluginManifest {
@@ -578,10 +593,14 @@ export interface PluginManifest {
   version: string;
   author?: string;
   description?: string;
+  license?: string;
   capabilities: PluginCapability[];
   permissions: PluginPermissions;
   tools?: PluginToolDef[];
-  config?: Record<string, string>;
+  channels?: PluginChannelDef[];
+  connectors?: PluginConnectorDef[];
+  config_schema?: Record<string, any>;
+  config?: Record<string, any>;
 }
 
 export interface PluginInfo {
@@ -592,6 +611,12 @@ export interface PluginInfo {
   loaded_at?: string;
   path?: string;
   memory_bytes?: number;
+}
+
+export interface VaultSecretMeta {
+  name: string;
+  updated_at: string;
+  is_provider?: boolean;
 }
 
 

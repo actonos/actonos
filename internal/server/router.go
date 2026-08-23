@@ -336,6 +336,17 @@ func (s *Server) setupRoutes() {
 				r.Post("/{id}/disable", s.handleDisablePlugin)
 				r.Delete("/{id}", s.handleDeletePlugin)
 				r.Get("/{id}/logs", s.handleGetPluginLogs)
+				r.Post("/{id}/config", s.handleUpdatePluginConfig)
+				r.Put("/{id}/config", s.handleUpdatePluginConfig)
+			})
+
+			// Hardware-Bound Vault Secrets Management
+			r.Route("/vault", func(r chi.Router) {
+				r.Get("/secrets", s.handleListVaultSecrets)
+				r.Post("/secrets", s.handleSetVaultSecret)
+				r.Get("/secrets/{name}", s.handleGetVaultSecret)
+				r.Put("/secrets/{name}", s.handleSetVaultSecret)
+				r.Delete("/secrets/{name}", s.handleDeleteVaultSecret)
 			})
 
 			r.Route("/approvals", func(r chi.Router) {

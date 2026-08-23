@@ -1,6 +1,7 @@
 package server
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"database/sql"
@@ -303,6 +304,81 @@ func TestServer_PluginsEndpoint(t *testing.T) {
 	srv.Router().ServeHTTP(delW, delReq)
 	if delW.Code != http.StatusOK {
 		t.Fatalf("expected 200 from delete, got %d: %s", delW.Code, delW.Body.String())
+	}
+}
+
+func TestServer_PluginsEndpoint_ActonPkg(t *testing.T) {
+	srv := newTestServer(t)
+
+	// Create an in-memory .actonpkg zip bundle
+	var pkgBuf bytes.Buffer
+	zw := zip.NewWriter(&pkgBuf)
+
+	manifestData := []byte(`{
+		"id": "channel_discord",
+		"name": "Discord Channel Gateway",
+		"version": "1.0.0",
+		"capabilities": ["channel"],
+		"permissions": {
+			"net_outbound": ["discord.com"]
+		}
+	}`)
+	mw, err := zw.Create("manifest.json")
+	if err != nil {
+		t.Fatalf("creating manifest in zip: %v", err)
+	}
+	_, _ = mw.Write(manifestData)
+
+	minimalWasm := []byte{0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00}
+	ww, err := zw.Create("plugin.wasm")
+	if err != nil {
+		t.Fatalf("creating wasm in zip: %v", err)
+	}
+	_, _ = ww.Write(minimalWasm)
+
+	sw, err := zw.Create("signature.sig")
+	if err != nil {
+		t.Fatalf("creating sig in zip: %v", err)
+	}
+	_, _ = sw.Write([]byte("mock_signature_hex"))
+
+	_ = zw.Close()
+
+	// Upload .actonpkg
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", "channel-discord-1.0.0.actonpkg")
+	if err != nil {
+		t.Fatalf("creating form file: %v", err)
+	}
+	_, _ = part.Write(pkgBuf.Bytes())
+	_ = writer.Close()
+
+	uploadReq := httptest.NewRequest(http.MethodPost, "/api/plugins/upload", &body)
+	uploadReq.Header.Set("Content-Type", writer.FormDataContentType())
+	uploadW := httptest.NewRecorder()
+	srv.Router().ServeHTTP(uploadW, uploadReq)
+
+	if uploadW.Code != http.StatusOK {
+		t.Fatalf("expected 200 from upload .actonpkg, got %d: %s", uploadW.Code, uploadW.Body.String())
+	}
+
+	var uploadResp map[string]any
+	_ = json.Unmarshal(uploadW.Body.Bytes(), &uploadResp)
+	data := uploadResp["data"].(map[string]any)
+	if status, ok := data["status"].(string); !ok || status != "installed" {
+		t.Errorf("expected status 'installed', got %v", data["status"])
+	}
+
+	// Verify plugin list has channel_discord
+	listReq := httptest.NewRequest(http.MethodGet, "/api/plugins", nil)
+	listW := httptest.NewRecorder()
+	srv.Router().ServeHTTP(listW, listReq)
+	var listResp map[string]any
+	_ = json.Unmarshal(listW.Body.Bytes(), &listResp)
+	listData := listResp["data"].(map[string]any)
+	if count, ok := listData["count"].(float64); !ok || count != 1 {
+		t.Errorf("expected count 1, got %v", listData["count"])
 	}
 }
 
@@ -1202,3 +1278,148 @@ func TestServer_ApprovalAndRunEndpoints(t *testing.T) {
 		t.Fatalf("expected runs endpoint 200, got %d: %s", runsResponse.Code, runsResponse.Body.String())
 	}
 }
+
+func TestServer_VaultSecretsEndpoints(t *testing.T) {
+	srv := newTestServer(t)
+
+	// 1. GET /api/vault/secrets (initial empty)
+	reqList := httptest.NewRequest(http.MethodGet, "/api/vault/secrets", nil)
+	wList := httptest.NewRecorder()
+	srv.Router().ServeHTTP(wList, reqList)
+	if wList.Code != http.StatusOK {
+		t.Fatalf("expected 200 for list secrets, got %d: %s", wList.Code, wList.Body.String())
+	}
+
+	// 2. POST /api/vault/secrets (set custom secret)
+	reqSet := httptest.NewRequest(
+		http.MethodPost,
+		"/api/vault/secrets",
+		bytes.NewBufferString(`{"name":"discord_bot_token","value":"test_token_12345"}`),
+	)
+	reqSet.Header.Set("Content-Type", "application/json")
+	wSet := httptest.NewRecorder()
+	srv.Router().ServeHTTP(wSet, reqSet)
+	if wSet.Code != http.StatusOK {
+		t.Fatalf("expected 200 for set secret, got %d: %s", wSet.Code, wSet.Body.String())
+	}
+
+	// 3. GET /api/vault/secrets/discord_bot_token (check masked retrieval)
+	reqGet := httptest.NewRequest(http.MethodGet, "/api/vault/secrets/discord_bot_token", nil)
+	wGet := httptest.NewRecorder()
+	srv.Router().ServeHTTP(wGet, reqGet)
+	if wGet.Code != http.StatusOK {
+		t.Fatalf("expected 200 for get secret, got %d: %s", wGet.Code, wGet.Body.String())
+	}
+	var getResp struct {
+		Data struct {
+			Configured bool   `json:"configured"`
+			Masked     string `json:"masked"`
+		} `json:"data"`
+	}
+	_ = json.NewDecoder(wGet.Body).Decode(&getResp)
+	if !getResp.Data.Configured {
+		t.Errorf("expected secret to be configured")
+	}
+
+	// 4. GET /api/vault/secrets (count = 1)
+	reqList2 := httptest.NewRequest(http.MethodGet, "/api/vault/secrets", nil)
+	wList2 := httptest.NewRecorder()
+	srv.Router().ServeHTTP(wList2, reqList2)
+	var listResp struct {
+		Data struct {
+			Count   int `json:"count"`
+			Secrets []struct {
+				Name string `json:"name"`
+			} `json:"secrets"`
+		} `json:"data"`
+	}
+	_ = json.NewDecoder(wList2.Body).Decode(&listResp)
+	if listResp.Data.Count != 1 || listResp.Data.Secrets[0].Name != "discord_bot_token" {
+		t.Errorf("expected 1 secret with name 'discord_bot_token', got %+v", listResp.Data)
+	}
+
+	// 5. DELETE /api/vault/secrets/discord_bot_token
+	reqDel := httptest.NewRequest(http.MethodDelete, "/api/vault/secrets/discord_bot_token", nil)
+	wDel := httptest.NewRecorder()
+	srv.Router().ServeHTTP(wDel, reqDel)
+	if wDel.Code != http.StatusOK {
+		t.Fatalf("expected 200 for delete secret, got %d: %s", wDel.Code, wDel.Body.String())
+	}
+}
+
+func TestServer_PluginConfigEndpoint(t *testing.T) {
+	srv := newTestServer(t)
+
+	// Create and upload valid .actonpkg
+	var zipBuf bytes.Buffer
+	zw := zip.NewWriter(&zipBuf)
+
+	manifestContent := `{
+		"id": "test-channel-discord",
+		"name": "Discord Test Bot",
+		"version": "1.0.0",
+		"capabilities": ["channel"],
+		"permissions": {
+			"net_outbound": ["discord.com"],
+			"secrets": ["discord_bot_token"]
+		},
+		"config_schema": {
+			"type": "object",
+			"properties": {
+				"poll_interval": {
+					"type": "integer",
+					"default": 5
+				}
+			}
+		}
+	}`
+	fManifest, _ := zw.Create("manifest.json")
+	_, _ = fManifest.Write([]byte(manifestContent))
+
+	fWasm, _ := zw.Create("plugin.wasm")
+	_, _ = fWasm.Write([]byte("\x00asm\x01\x00\x00\x00"))
+	_ = zw.Close()
+
+	// 1. Upload plugin
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, _ := writer.CreateFormFile("file", "discord.actonpkg")
+	_, _ = part.Write(zipBuf.Bytes())
+	_ = writer.Close()
+
+	reqUpload := httptest.NewRequest(http.MethodPost, "/api/plugins/upload", body)
+	reqUpload.Header.Set("Content-Type", writer.FormDataContentType())
+	wUpload := httptest.NewRecorder()
+	srv.Router().ServeHTTP(wUpload, reqUpload)
+	if wUpload.Code != http.StatusOK {
+		t.Fatalf("expected 200 for package upload, got %d: %s", wUpload.Code, wUpload.Body.String())
+	}
+
+	// 2. Update config and vault secret via POST /api/plugins/{id}/config
+	configPayload := `{
+		"config": {
+			"poll_interval": 15,
+			"custom_prefix": "!"
+		},
+		"secrets": {
+			"discord_bot_token": "token_123456789"
+		}
+	}`
+	reqConfig := httptest.NewRequest(http.MethodPost, "/api/plugins/test-channel-discord/config", strings.NewReader(configPayload))
+	reqConfig.Header.Set("Content-Type", "application/json")
+	wConfig := httptest.NewRecorder()
+	srv.Router().ServeHTTP(wConfig, reqConfig)
+
+	if wConfig.Code != http.StatusOK {
+		t.Fatalf("expected 200 for plugin config update, got %d: %s", wConfig.Code, wConfig.Body.String())
+	}
+
+	// 3. Verify that secret was stored in Vault
+	reqSecret := httptest.NewRequest(http.MethodGet, "/api/vault/secrets/discord_bot_token", nil)
+	wSecret := httptest.NewRecorder()
+	srv.Router().ServeHTTP(wSecret, reqSecret)
+	if wSecret.Code != http.StatusOK {
+		t.Fatalf("expected 200 for vault secret verification, got %d", wSecret.Code)
+	}
+}
+

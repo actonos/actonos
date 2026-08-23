@@ -18,7 +18,9 @@ type WasmConnectorBridge struct {
 // NewWasmConnectorBridge creates a new WasmConnectorBridge.
 func NewWasmConnectorBridge(pluginID string, manifest PluginManifest, inst *PluginInstance) *WasmConnectorBridge {
 	name := pluginID
-	if n, ok := manifest.Config["connector_name"]; ok && n != "" {
+	if len(manifest.Connectors) > 0 && manifest.Connectors[0].Name != "" {
+		name = manifest.Connectors[0].Name
+	} else if n, ok := manifest.Config["connector_name"].(string); ok && n != "" {
 		name = n
 	}
 	return &WasmConnectorBridge{
@@ -69,7 +71,10 @@ func (c *WasmConnectorBridge) HandleWebhook(ctx context.Context, payload []byte)
 
 // GetAuthURLSchema returns OAuth or credential config schema for the connector.
 func (c *WasmConnectorBridge) GetConfigSchema() json.RawMessage {
-	if schemaStr, ok := c.manifest.Config["auth_schema"]; ok {
+	if len(c.manifest.ConfigSchema) > 0 {
+		return c.manifest.ConfigSchema
+	}
+	if schemaStr, ok := c.manifest.Config["auth_schema"].(string); ok {
 		return json.RawMessage(schemaStr)
 	}
 	return json.RawMessage(`{"type": "object", "properties": {}}`)

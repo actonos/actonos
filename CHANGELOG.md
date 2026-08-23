@@ -10,7 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Unified WasmLoader Plugin Architecture & Sandboxed Extensions**:
   - Polyglot plugin execution engine (`internal/plugin/`) powered by Wazero (100% pure Go, zero CGO, `CGO_ENABLED=0` static binary compliant).
-  - Unified plugin model consolidating **Tools**, **Chat Channels**, and **SaaS Connectors** into portable `.wasm` packages with `manifest.json`.
+  - Unified plugin model consolidating **Tools**, **Chat Channels**, and **SaaS Connectors** into portable `.actonpkg` package bundles with `manifest.json`, `plugin.wasm`, and optional Ed25519 signature files.
+  - Packaged Plugin Upload: Streamlined UI to directly accept `.actonpkg` bundles created with the ActonOS Plugin SDK (`acton-plugin pack`), removing legacy in-browser starter scaffolding.
   - Sandboxed Host Syscalls (`acton_host`): `host_http_request` (with strict domain egress firewall), `host_get_secret` (AES-256-GCM Hardware Vault brokering), `host_kv_get/set` (scoped SQLite persistent storage), `host_emit_event` (ActonOS Event Bus), and `host_log`.
   - Bridges: `WasmToolBridge` for `tools.ToolRegistry` (enforcing Single Execution Boundary), `WasmChannelBridge` for `channels.ChannelManager`, and `WasmConnectorBridge` for SaaS integrations.
   - Lifecycle management: Hot-loading, runtime enable/disable, dynamic uninstallation, and REST API management endpoints (`/api/plugins/*`).

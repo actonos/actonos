@@ -63,6 +63,18 @@ func (g *SecurityGate) CheckSecretAccess(secretKey string) error {
 		if allowed == "*" || allowed == secretKey {
 			return nil
 		}
+		if strings.HasSuffix(allowed, ".*") {
+			prefix := strings.TrimSuffix(allowed, ".*")
+			if strings.HasPrefix(secretKey, prefix+".") || secretKey == prefix {
+				return nil
+			}
+		}
+		if strings.HasSuffix(allowed, "*") {
+			prefix := strings.TrimSuffix(allowed, "*")
+			if strings.HasPrefix(secretKey, prefix) {
+				return nil
+			}
+		}
 	}
 
 	return fmt.Errorf("%w: secret %q is not authorized in manifest", ErrSecretUnauthorized, secretKey)
@@ -87,6 +99,18 @@ func (g *SecurityGate) CheckBusEvent(topic string) error {
 	for _, allowed := range g.manifest.Permissions.BusEvents {
 		if allowed == "*" || allowed == topic {
 			return nil
+		}
+		if strings.HasSuffix(allowed, ".*") {
+			prefix := strings.TrimSuffix(allowed, ".*")
+			if strings.HasPrefix(topic, prefix+".") || topic == prefix {
+				return nil
+			}
+		}
+		if strings.HasSuffix(allowed, "*") {
+			prefix := strings.TrimSuffix(allowed, "*")
+			if strings.HasPrefix(topic, prefix) {
+				return nil
+			}
 		}
 	}
 

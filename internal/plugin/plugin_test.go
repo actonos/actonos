@@ -4,13 +4,20 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/actonos/actonos/internal/bus"
 	"github.com/actonos/actonos/internal/channels"
 	"github.com/actonos/actonos/internal/tools"
+	"github.com/coder/websocket"
+	"github.com/tetratelabs/wazero"
 	_ "modernc.org/sqlite"
 )
 
@@ -225,4 +232,229 @@ func TestPluginManagerLifecycle(t *testing.T) {
 	if len(mgr.ListPlugins()) != 0 {
 		t.Errorf("expected 0 plugins after uninstall")
 	}
+}
+
+type mockSecretProvider struct {
+	secrets map[string]string
+}
+
+func (m *mockSecretProvider) GetSecret(ctx context.Context, secretName string) (string, error) {
+	if val, ok := m.secrets[secretName]; ok {
+		return val, nil
+	}
+	return "", fmt.Errorf("secret %s not found", secretName)
+}
+
+func TestSDKPluginWasmLifecycle(t *testing.T) {
+	wasmPath := `d:\Projects\ActonOS\build\data\plugins\channel-discord\plugin.wasm`
+	wasmBytes, err := os.ReadFile(wasmPath)
+	if err != nil {
+		t.Skip("plugin.wasm not found:", err)
+	}
+
+	ctx := context.Background()
+	r := wazero.NewRuntime(ctx)
+	defer r.Close(ctx)
+
+	cm, err := r.CompileModule(ctx, wasmBytes)
+	if err != nil {
+		t.Fatalf("failed to compile module: %v", err)
+	}
+
+	importedFns := cm.ImportedFunctions()
+	t.Logf("Total imported functions: %d", len(importedFns))
+	for _, fn := range importedFns {
+		mod, name, _ := fn.Import()
+		t.Logf("IMPORT: module=%s, name=%s, params=%v, results=%v", mod, name, fn.ParamTypes(), fn.ResultTypes())
+	}
+
+	exportedFns := cm.ExportedFunctions()
+	t.Logf("Total exported functions: %d", len(exportedFns))
+	for name, fn := range exportedFns {
+		t.Logf("EXPORT: name=%s, params=%v, results=%v", name, fn.ParamTypes(), fn.ResultTypes())
+	}
+
+	// Test full instantiation using WasmLoader
+	loader, err := NewWasmLoader(ctx)
+	if err != nil {
+		t.Fatalf("failed to create WasmLoader: %v", err)
+	}
+	defer loader.Close(ctx)
+
+	if _, err := loader.Compile(ctx, "channel-discord", wasmBytes); err != nil {
+		t.Fatalf("failed to compile module: %v", err)
+	}
+
+	manifest := PluginManifest{
+		ID:   "channel-discord",
+		Name: "Discord Bot Channel",
+		Permissions: PluginPermissions{
+			NetOutbound: []string{"discord.com"},
+			Secrets:     []string{"discord_bot_token", "discord_bot_tokens.*"},
+			Storage:     true,
+			BusEvents:   []string{"channel.discord.received", "channel.discord.sent"},
+		},
+		Config: map[string]any{
+			"accounts": []any{
+				map[string]any{
+					"account_id":        "astro",
+					"bot_token":         "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+					"display_name":      "Astro",
+					"default_agent":     "agent_system_core",
+					"listen_channel_id": "",
+				},
+			},
+			"poll_interval_seconds": 3,
+		},
+	}
+
+	mockSecrets := &mockSecretProvider{
+		secrets: map[string]string{
+			"discord_bot_token":          "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+			"discord_bot_tokens.default": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+			"discord_bot_tokens.astro":   "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+		},
+	}
+
+	hostCtx := &HostContext{
+		PluginID: "channel-discord",
+		Manifest: manifest,
+		Gate:     NewSecurityGate(manifest),
+		Secrets:  mockSecrets,
+		EventBus: bus.NewEventBus(),
+	}
+
+	inst, err := loader.Instantiate(ctx, "channel-discord", manifest, hostCtx)
+	if err != nil {
+		t.Fatalf("failed to instantiate channel-discord wasm: %v", err)
+	}
+	defer inst.Close(ctx)
+
+	t.Logf("Successfully instantiated channel-discord plugin!")
+
+	// Test poll
+	pollFn := inst.mod.ExportedFunction("acton_channel_poll")
+	if pollFn != nil {
+		execCtx := WithHostContext(ctx, hostCtx)
+		res, err := pollFn.Call(execCtx)
+		t.Logf("Poll result: res=%v, err=%v", res, err)
+	}
+	for _, l := range hostCtx.GetLogs() {
+		t.Logf("HOST LOG: %s", l)
+	}
+}
+
+func TestHostWebSocketGateway(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// 1. Create a test WebSocket server
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close(websocket.StatusNormalClosure, "done")
+
+		for {
+			mt, data, err := conn.Read(r.Context())
+			if err != nil {
+				return
+			}
+			// Echo message with prefix
+			reply := append([]byte("ECHO: "), data...)
+			if err := conn.Write(r.Context(), mt, reply); err != nil {
+				return
+			}
+		}
+	}))
+	defer s.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(s.URL, "http")
+
+	manifest := PluginManifest{
+		ID: "test-ws",
+		Permissions: PluginPermissions{
+			NetOutbound: []string{"127.0.0.1", "localhost"},
+		},
+	}
+
+	hostCtx := &HostContext{
+		PluginID: "test-ws",
+		Manifest: manifest,
+		Gate:     NewSecurityGate(manifest),
+	}
+
+	execCtx := WithHostContext(ctx, hostCtx)
+
+	// Test wsConnect via mock memory
+	r := wazero.NewRuntime(ctx)
+	defer r.Close(ctx)
+
+	if err := RegisterHostModule(ctx, r); err != nil {
+		t.Fatalf("RegisterHostModule failed: %v", err)
+	}
+
+	// Direct test of HostContext WS lifecycle
+	hBytes := []byte("{}")
+	_ = hBytes
+
+	// Dial using wsURL
+	connCtx, connCancel := context.WithCancel(context.Background())
+	conn, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		connCancel()
+		t.Fatalf("websocket.Dial failed: %v", err)
+	}
+
+	hostCtx.mu.Lock()
+	hostCtx.nextWSID = 1
+	wsConn := &HostWSConn{
+		id:       1,
+		url:      wsURL,
+		conn:     conn,
+		msgQueue: make(chan []byte, 10),
+		ctx:      connCtx,
+		cancel:   connCancel,
+	}
+	hostCtx.wsConns = map[int32]*HostWSConn{1: wsConn}
+	hostCtx.mu.Unlock()
+
+	go func(c *HostWSConn) {
+		defer c.close()
+		for {
+			_, data, err := c.conn.Read(c.ctx)
+			if err != nil {
+				return
+			}
+			c.msgQueue <- data
+		}
+	}(wsConn)
+
+	// Send message
+	writeCtx, writeCancel := context.WithTimeout(ctx, 2*time.Second)
+	defer writeCancel()
+	if err := wsConn.conn.Write(writeCtx, websocket.MessageText, []byte("Hello ActonOS")); err != nil {
+		t.Fatalf("wsConn.conn.Write failed: %v", err)
+	}
+
+	// Poll message
+	var received []byte
+	select {
+	case msg := <-wsConn.msgQueue:
+		received = msg
+	case <-time.After(3 * time.Second):
+		t.Fatalf("timed out waiting for echo response")
+	}
+
+	if string(received) != "ECHO: Hello ActonOS" {
+		t.Errorf("expected 'ECHO: Hello ActonOS', got '%s'", string(received))
+	}
+
+	// Close all
+	hostCtx.CloseAllWS()
+	if !wsConn.closed.Load() {
+		t.Errorf("expected wsConn to be marked closed")
+	}
+	_ = execCtx
 }

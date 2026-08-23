@@ -126,21 +126,45 @@ func (l *WasmLoader) Instantiate(ctx context.Context, pluginID string, manifest 
 		hostCtx:  hostCtx,
 	}
 
-	// Initialize plugin if it exports acton_plugin_init
+	// 1. Initialize WASI reactor if _initialize is exported (required by TinyGo and C reactors)
+	if initWasi := mod.ExportedFunction("_initialize"); initWasi != nil {
+		if _, err := initWasi.Call(ctx); err != nil {
+			_ = mod.Close(ctx)
+			return nil, fmt.Errorf("wasi _initialize failed: %w", err)
+		}
+	}
+
+	// 2. Initialize plugin if it exports acton_plugin_init
 	if initFn := mod.ExportedFunction("acton_plugin_init"); initFn != nil {
-		cfgBytes, _ := json.Marshal(manifest.Config)
 		execCtx := WithHostContext(ctx, hostCtx)
-		if len(cfgBytes) > 0 && allocFn != nil {
-			ptrLen, err := writeBufferToGuest(execCtx, hostCtx, cfgBytes)
-			if err == nil {
-				ptr := uint32(ptrLen >> 32)
-				length := uint32(ptrLen)
-				res, err := initFn.Call(execCtx, uint64(ptr), uint64(length))
-				if err != nil || (len(res) > 0 && res[0] != 0) {
-					_ = mod.Close(ctx)
-					return nil, fmt.Errorf("%w: code %v, err: %v", ErrPluginInitFailed, res, err)
+		var res []uint64
+		var initErr error
+
+		cfgBytes, _ := json.Marshal(manifest.Config)
+		hostCtx.mu.Lock()
+		hostCtx.LastResponse = cfgBytes
+		hostCtx.mu.Unlock()
+
+		if len(initFn.Definition().ParamTypes()) == 0 {
+			res, initErr = initFn.Call(execCtx)
+		} else {
+			if len(cfgBytes) > 0 && allocFn != nil {
+				ptrLen, err := writeBufferToGuest(execCtx, hostCtx, cfgBytes)
+				if err == nil {
+					ptr := uint32(ptrLen >> 32)
+					length := uint32(ptrLen)
+					res, initErr = initFn.Call(execCtx, uint64(ptr), uint64(length))
+				} else {
+					initErr = err
 				}
+			} else {
+				res, initErr = initFn.Call(execCtx, 0, 0)
 			}
+		}
+
+		if initErr != nil || (len(res) > 0 && res[0] != 0) {
+			_ = mod.Close(ctx)
+			return nil, fmt.Errorf("%w: code %v, err: %v", ErrPluginInitFailed, res, initErr)
 		}
 	}
 
@@ -197,14 +221,17 @@ func (inst *PluginInstance) ExecuteTool(ctx context.Context, toolName string, ar
 	return string(resBytes), nil
 }
 
-// SendChannelMessage calls acton_channel_send_message on the plugin instance.
+// SendChannelMessage calls acton_channel_send or acton_channel_send_message on the plugin instance.
 func (inst *PluginInstance) SendChannelMessage(ctx context.Context, msgJSON []byte) error {
 	inst.mu.Lock()
 	defer inst.mu.Unlock()
 
-	sendFn := inst.mod.ExportedFunction("acton_channel_send_message")
+	sendFn := inst.mod.ExportedFunction("acton_channel_send")
 	if sendFn == nil {
-		return fmt.Errorf("%w: acton_channel_send_message", ErrFunctionNotFound)
+		sendFn = inst.mod.ExportedFunction("acton_channel_send_message")
+	}
+	if sendFn == nil {
+		return fmt.Errorf("%w: acton_channel_send or acton_channel_send_message", ErrFunctionNotFound)
 	}
 
 	execCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
@@ -231,10 +258,54 @@ func (inst *PluginInstance) SendChannelMessage(ctx context.Context, msgJSON []by
 	return nil
 }
 
+// PollChannel calls acton_channel_poll on the plugin instance and returns any inbound message payload bytes.
+func (inst *PluginInstance) PollChannel(ctx context.Context) ([]byte, error) {
+	inst.mu.Lock()
+	defer inst.mu.Unlock()
+
+	pollFn := inst.mod.ExportedFunction("acton_channel_poll")
+	if pollFn == nil {
+		return nil, nil
+	}
+
+	execCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	execCtx = WithHostContext(execCtx, inst.hostCtx)
+
+	res, err := pollFn.Call(execCtx)
+	if err != nil {
+		return nil, fmt.Errorf("channel poll failed: %w", err)
+	}
+
+	if len(res) == 0 || res[0] == 0 {
+		return nil, nil
+	}
+
+	packed := res[0]
+	resPtr := uint32(packed >> 32)
+	resLen := uint32(packed)
+
+	if resLen == 0 {
+		return nil, nil
+	}
+
+	resBytes, err := readBufferFromMemory(inst.mod.Memory(), resPtr, resLen)
+	if err != nil {
+		return nil, fmt.Errorf("reading poll result: %w", err)
+	}
+
+	return resBytes, nil
+}
+
 // Close terminates and unloads the plugin instance.
 func (inst *PluginInstance) Close(ctx context.Context) error {
 	inst.mu.Lock()
 	defer inst.mu.Unlock()
+
+	if inst.hostCtx != nil {
+		inst.hostCtx.CloseAllWS()
+	}
 
 	if shutdownFn := inst.mod.ExportedFunction("acton_plugin_shutdown"); shutdownFn != nil {
 		execCtx := WithHostContext(ctx, inst.hostCtx)

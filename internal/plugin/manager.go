@@ -27,6 +27,7 @@ type loadedPluginState struct {
 	manifest        PluginManifest
 	info            PluginInfo
 	inst            *PluginInstance
+	hostCtx         *HostContext
 	toolBridges     []*WasmToolBridge
 	channelBridge   *WasmChannelBridge
 	connectorBridge *WasmConnectorBridge
@@ -134,6 +135,12 @@ func (m *Manager) loadFromFolder(ctx context.Context, id, dir string) error {
 	}
 
 	disabledMarker := filepath.Join(dir, ".disabled")
+	if !fileExists(disabledMarker) {
+		disabledMarker = filepath.Join(dir, id+".disabled")
+	}
+	if !fileExists(disabledMarker) {
+		disabledMarker = filepath.Join(m.pluginsDir, id+".disabled")
+	}
 	enabled := !fileExists(disabledMarker)
 
 	return m.activatePlugin(ctx, manifest, wasmBytes, dir, enabled)
@@ -216,6 +223,7 @@ func (m *Manager) activatePlugin(ctx context.Context, manifest PluginManifest, w
 	gate := NewSecurityGate(manifest)
 	hostCtx := &HostContext{
 		PluginID: id,
+		Manifest: manifest,
 		Gate:     gate,
 		KV:       m.kvStore,
 		Secrets:  m.secrets,
@@ -232,6 +240,7 @@ func (m *Manager) activatePlugin(ctx context.Context, manifest PluginManifest, w
 	}
 
 	state.inst = inst
+	state.hostCtx = hostCtx
 	state.info.Status = StatusRunning
 
 	// Register Tools
@@ -246,7 +255,7 @@ func (m *Manager) activatePlugin(ctx context.Context, manifest PluginManifest, w
 	// Register Channel Adapter if capability declared
 	for _, capStr := range manifest.Capabilities {
 		if PluginCapability(capStr) == CapabilityChannel && m.channelMgr != nil {
-			bridge := NewWasmChannelBridge(id, manifest, inst)
+			bridge := NewWasmChannelBridge(id, manifest, inst, m.eventBus)
 			if err := m.channelMgr.RegisterDynamicAdapter(bridge); err == nil {
 				state.channelBridge = bridge
 				_ = bridge.Start(ctx)
@@ -298,6 +307,8 @@ func (m *Manager) EnablePlugin(ctx context.Context, id string) error {
 
 	_ = os.Remove(filepath.Join(dir, ".disabled"))
 	_ = os.Remove(filepath.Join(dir, id+".disabled"))
+	_ = os.Remove(filepath.Join(m.pluginsDir, id+".disabled"))
+	_ = os.Remove(filepath.Join(m.pluginsDir, id, ".disabled"))
 
 	wasmPath := filepath.Join(dir, "plugin.wasm")
 	if !fileExists(wasmPath) {
@@ -326,7 +337,11 @@ func (m *Manager) DisablePlugin(ctx context.Context, id string) error {
 	state.info.Status = StatusDisabled
 	state.info.Enabled = false
 
-	_ = os.WriteFile(filepath.Join(state.dir, ".disabled"), []byte("disabled"), 0644)
+	if state.dir != "" {
+		_ = os.WriteFile(filepath.Join(state.dir, ".disabled"), []byte("disabled"), 0644)
+		_ = os.WriteFile(filepath.Join(state.dir, id+".disabled"), []byte("disabled"), 0644)
+	}
+	_ = os.WriteFile(filepath.Join(m.pluginsDir, id+".disabled"), []byte("disabled"), 0644)
 	return nil
 }
 
@@ -343,12 +358,14 @@ func (m *Manager) UninstallPlugin(ctx context.Context, id string) error {
 	m.deactivatePluginLocked(ctx, state)
 	delete(m.plugins, id)
 
-	if state.dir != "" && strings.HasPrefix(filepath.Clean(state.dir), filepath.Clean(m.pluginsDir)) {
+	if state.dir != "" {
 		_ = os.RemoveAll(state.dir)
-		_ = os.Remove(filepath.Join(m.pluginsDir, id+".wasm"))
-		_ = os.Remove(filepath.Join(m.pluginsDir, id+".json"))
-		_ = os.Remove(filepath.Join(m.pluginsDir, id+".disabled"))
 	}
+	_ = os.RemoveAll(filepath.Join(m.pluginsDir, id))
+	_ = os.Remove(filepath.Join(m.pluginsDir, id+".wasm"))
+	_ = os.Remove(filepath.Join(m.pluginsDir, id+".json"))
+	_ = os.Remove(filepath.Join(m.pluginsDir, id+".disabled"))
+	_ = os.Remove(filepath.Join(m.pluginsDir, id+".actonpkg"))
 
 	slog.Info("uninstalled wasm plugin", "id", id)
 	return nil
@@ -376,6 +393,18 @@ func (m *Manager) GetPlugin(id string) (PluginInfo, bool) {
 		return PluginInfo{}, false
 	}
 	return p.info, true
+}
+
+// GetPluginLogs returns buffered runtime execution logs for a plugin.
+func (m *Manager) GetPluginLogs(id string) []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	p, exists := m.plugins[id]
+	if !exists || p.hostCtx == nil {
+		return []string{}
+	}
+	return p.hostCtx.GetLogs()
 }
 
 // Close gracefully closes all active plugin instances and runtime.

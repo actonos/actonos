@@ -302,6 +302,7 @@ func (r *MessageRouter) Route(ctx context.Context, msg InboundMessage) error {
 				AccountID: msg.AccountID,
 				Recipient: senderID,
 				Content:   fmt.Sprintf("⚠️ Unable to process request: %v", execErr),
+				Metadata:  msg.Metadata,
 			})
 		}
 		return execErr
@@ -328,6 +329,7 @@ func (r *MessageRouter) Route(ctx context.Context, msg InboundMessage) error {
 			AccountID: msg.AccountID,
 			Recipient: senderID,
 			Content:   resp.Content,
+			Metadata:  msg.Metadata,
 		})
 	}
 

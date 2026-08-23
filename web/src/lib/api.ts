@@ -9,6 +9,7 @@ import type {
   MCPServerStatus,
   MutationResult,
   PluginInfo,
+  VaultSecretMeta,
 } from './types';
 import { API_BASE, fetchJSON, getAuthHeaders, HTTP_STATUS_ACCEPTED } from './api/client';
 import { operationsApi, type OTAStatus } from './api/operations';
@@ -373,6 +374,24 @@ export const api = {
   disablePlugin: (id: string) => fetchJSON<MutationResult<{ status: string; plugin: PluginInfo }>>(`/plugins/${encodeURIComponent(id)}/disable`, { method: 'POST' }),
   deletePlugin: (id: string) => fetchJSON<MutationResult<{ status: string; id: string }>>(`/plugins/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   getPluginLogs: (id: string) => fetchJSON<{ id: string; status: string; logs: string[] }>(`/plugins/${encodeURIComponent(id)}/logs`),
+  updatePluginConfig: (id: string, config: Record<string, any>, secrets?: Record<string, string>) =>
+    fetchJSON<MutationResult<{ status: string; plugin: PluginInfo }>>(`/plugins/${encodeURIComponent(id)}/config`, {
+      method: 'POST',
+      body: JSON.stringify({ config, secrets }),
+    }),
+
+  // Hardware Vault Secrets Management
+  listVaultSecrets: () => fetchJSON<{ secrets: VaultSecretMeta[]; count: number }>('/vault/secrets'),
+  getVaultSecret: (name: string) => fetchJSON<{ name: string; configured: boolean; masked: string; length: number; is_provider: boolean }>(`/vault/secrets/${encodeURIComponent(name)}`),
+  setVaultSecret: (name: string, value: string) =>
+    fetchJSON<MutationResult<{ status: string; name: string; updated_at: string }>>('/vault/secrets', {
+      method: 'POST',
+      body: JSON.stringify({ name, value }),
+    }),
+  deleteVaultSecret: (name: string) =>
+    fetchJSON<MutationResult<{ status: string; name: string }>>(`/vault/secrets/${encodeURIComponent(name)}`, {
+      method: 'DELETE',
+    }),
 
   // Skills Public Community Hub
   listHubCatalog: () => fetchJSON<{ catalog: HubSkillItem[]; count: number }>('/tools/hub/catalog'),

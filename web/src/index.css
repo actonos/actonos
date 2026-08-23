@@ -2,6 +2,8 @@
 @import "@fontsource-variable/noto-sans";
 @import "tailwindcss";
 
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, .dark, .dark *));
+
 @theme {
   /* Colors mapping to dynamic theme variables */
   --color-deep-ink: var(--color-deep-ink);
@@ -10,6 +12,7 @@
   --color-fuchsia: var(--color-fuchsia);
   --color-slate: var(--color-slate);
   --color-canvas: var(--color-canvas);
+  --color-cream: var(--color-cream);
   --color-soft-meadow: var(--color-soft-meadow);
   --color-charcoal: var(--color-charcoal);
   --color-onyx: var(--color-onyx);
@@ -52,6 +55,7 @@
   --color-fuchsia: #e261e5;
   --color-slate: #5f5c6e;
   --color-canvas: #f9fbf2;
+  --color-cream: #130e30;
   --color-soft-meadow: #eff2e5;
   --color-charcoal: #222222;
   --color-onyx: #000000;
@@ -81,6 +85,7 @@
   --color-fuchsia: #e261e5;
   --color-slate: #9c99b2;
   --color-canvas: #0e0c19;
+  --color-cream: #f5f4fb;
   --color-soft-meadow: #18152c;
   --color-charcoal: #272342;
   --color-onyx: #ffffff;
