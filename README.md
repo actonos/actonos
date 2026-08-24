@@ -26,22 +26,23 @@ A single-purpose appliance OS designed as a **customizable, self-governing agent
 | **Static Core Daemon** | The core system compiles into one `actond` binary (`CGO_ENABLED=0`); local ONNX inference runs in a separately packaged loopback helper. |
 | **Universal Agent Engine** | Create unlimited AI agents with custom personas, system prompts, tool bindings, LLM models, and delegation scopes. |
 | **Multi-Agent Swarm** | Agent-to-Agent delegation via Goroutines. Orchestration agents decompose tasks and dispatch to specialized sub-agents. |
+| **WasmLoader Plugin Engine** | Sandboxed WebAssembly runtime (Wazero pure Go) running Tools, Messaging Channels, and SaaS Connectors with strict egress firewalls and Hardware Vault brokering. |
 | **Dynamic Tooling Hub** | Hot-load MCP servers, WASM plugins, and Skill-as-a-Folder scripts at runtime — no restarts needed. |
 | **Dual-Runtime HAL** | Automatic environment detection: bare-metal (D-Bus, Wi-Fi Hotspot, Bubblewrap sandbox) or Docker (container metrics, jailed exec). |
 | **Hybrid Memory (RAG)** | SQLite FTS5 + Chromem-go vectors generated locally by pinned multilingual-e5-small ONNX, with a durable one-minute debounce queue. |
 | **Enterprise Auth** | OAuth 2.1 PKCE (S256), Dynamic Client Registration, background token refresh daemon. |
 | **Immutable OS Design** | Read-only system partition, all user data under `/data`. Atomic OTA updates with watchdog auto-rollback. |
-| **Zero-Config Onboarding** | Captive portal Wi-Fi setup, API key entry, OAuth 1-click SaaS connection, Tailscale mesh VPN. |
+| **Zero-Config Onboarding** | Captive portal Wi-Fi setup, API key entry, Tailscale mesh VPN. |
 | **Embedded Tailscale** | Native `tsnet` integration for end-to-end encrypted remote access without port forwarding. |
 
 ## Architecture Overview
 
 ```mermaid
 graph TB
-    subgraph "Layer 1 — Connectivity"
+    subgraph "Layer 1 — Connectivity & Ingress"
         TSNET["Tailscale tsnet<br/>E2E Mesh VPN"]
         WEBUI["Web UI SPA<br/>React 19 + Tailwind v4"]
-        EVENTS["Event Bus Adapters<br/>Telegram · Discord · Slack · MQTT"]
+        CHANNELS["WASM Channel Adapters<br/>Telegram · Discord · WhatsApp · Slack"]
         PORTAL["Zero-Config Portal<br/>Captive DNS @ 192.168.4.1"]
     end
 
@@ -52,14 +53,14 @@ graph TB
     end
 
     subgraph "Layer 3 — Auth & Integrations"
-        OAUTH["OAuth 2.1 Provider<br/>PKCE S256 + DCR"]
+        OAUTH["OAuth 2.1 Engine<br/>PKCE S256 + DCR"]
         REFRESH["Token Refresh<br/>Daemon"]
-        SAAS["SaaS Connectors<br/>Gmail · Drive · Notion · GitHub"]
+        CONNECTORS["WASM SaaS Connectors<br/>GitHub · Notion · Linear · Custom"]
     end
 
-    subgraph "Layer 4 — Dynamic Tooling"
+    subgraph "Layer 4 — Dynamic Tooling & Extensions"
         MCP["MCP Host Engine<br/>stdio / SSE"]
-        WASM["WASM Runtime<br/>wazero"]
+        WASM["WasmLoader (Wazero JIT)<br/>Tools · Channels · Connectors"]
         SKILLS["Skill-as-a-Folder<br/>fsnotify hot-reload"]
     end
 
@@ -82,14 +83,14 @@ graph TB
     end
 
     WEBUI --> CONFIGURATOR
-    EVENTS --> BUS
+    CHANNELS --> BUS
     TSNET --> WEBUI
     PORTAL --> WEBUI
     CONFIGURATOR --> SWARM
     SWARM --> DELEGATION
     DELEGATION --> OAUTH
     OAUTH --> REFRESH
-    REFRESH --> SAAS
+    REFRESH --> CONNECTORS
     CONFIGURATOR --> MCP
     CONFIGURATOR --> WASM
     CONFIGURATOR --> SKILLS
@@ -173,7 +174,8 @@ actonos/
 │   ├── agent/               # AI Agent Engine, Swarm, Planner, Verifier, Memory Reflection
 │   ├── auth/                # OAuth 2.1 PKCE, Token Refresh, Delegation Manager
 │   ├── bus/                 # Event-Driven Pub/Sub Channel Router
-│   ├── channels/            # Telegram, Discord, Webhook adapters
+│   ├── channels/            # Message routing, session state, pairing manager, account sync
+│   ├── plugin/              # WasmLoader runtime (Wazero), host syscalls, tool/channel/connector bridges
 │   ├── llm/                 # LLM Provider Interface & Cascade Router
 │   ├── tools/               # MCP Host, WASM Runner, Skill Watcher, Native Tools
 │   ├── sandbox/             # Bubblewrap (bare-metal) & Subshell (Docker) executors

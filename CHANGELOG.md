@@ -12,16 +12,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Polyglot plugin execution engine (`internal/plugin/`) powered by Wazero (100% pure Go, zero CGO, `CGO_ENABLED=0` static binary compliant).
   - Unified plugin model consolidating **Tools**, **Chat Channels**, and **SaaS Connectors** into portable `.actonpkg` package bundles with `manifest.json`, `plugin.wasm`, and optional Ed25519 signature files.
   - Packaged Plugin Upload: Streamlined UI to directly accept `.actonpkg` bundles created with the ActonOS Plugin SDK (`acton-plugin pack`), removing legacy in-browser starter scaffolding.
-  - Sandboxed Host Syscalls (`acton_host`): `host_http_request` (with strict domain egress firewall), `host_get_secret` (AES-256-GCM Hardware Vault brokering), `host_kv_get/set` (scoped SQLite persistent storage), `host_emit_event` (ActonOS Event Bus), and `host_log`.
+  - Granular Host Syscall modules: `acton_sys` (structured logging and response streaming), `acton_net` (sandboxed HTTP egress with domain whitelisting), `acton_ws` (real-time WebSocket gateway for streaming channel protocols), `acton_vault` (AES-256-GCM Hardware Vault brokering), `acton_storage` (scoped SQLite key-value persistence), `acton_bus` (event bus publisher), and `acton_host` (legacy compatibility module).
   - Bridges: `WasmToolBridge` for `tools.ToolRegistry` (enforcing Single Execution Boundary), `WasmChannelBridge` for `channels.ChannelManager`, and `WasmConnectorBridge` for SaaS integrations.
-  - Lifecycle management: Hot-loading, runtime enable/disable, dynamic uninstallation, and REST API management endpoints (`/api/plugins/*`).
-  - Updated comprehensive documentation across `ARCHITECTURE.md`, `API.md`, `SECURITY.md`, `DEVELOPMENT.md`, and `.agents/rules/source-registry.md`.
-  - Complete TypeScript types and English / Vietnamese localization namespaces (`plugins.json`).
+  - Lifecycle management: Hot-loading, runtime enable/disable, dynamic uninstallation, log telemetry, configuration update, and Hardware Vault secret persistence via `/api/plugins/*`.
+  - Comprehensive documentation across `ARCHITECTURE.md`, `API.md`, `SECURITY.md`, `DEVELOPMENT.md`, `CONTRIBUTING.md`, and `.agents/rules/source-registry.md`.
+  - Complete TypeScript types (`PluginInfo`, `PluginManifest`, `PluginCapability`, etc.) and English / Vietnamese localization namespaces (`plugins.json`).
   - Dedicated `MessageRouter` (`internal/channels/router.go`) decoupled from daemon entrypoint to coordinate multi-account inbound dispatch across Telegram, Discord, and WhatsApp.
   - Inbound message agent mention parsing (`ExtractAgentMention`) supporting `@agent_name` and `/agent <name>` commands in group chats and private DMs.
   - Channel account routing modes: `exclusive` (assigned agent only), `mention` (route by @mention with single-agent fallback), and `fallback` (default to `agent_system_core`).
   - Deterministic agent-aware conversation session IDs (`conv_{channel}_{sender}_{agentID}`) ensuring isolated memory context and chat histories across different agents talking to the same user.
-  - New `routing_mode` selector, descriptions, and UI status badges in Channel Account management modal (`ChannelAccountModal.tsx`).
+
+### Removed
+- **Legacy Native Channel Implementations & Standalone Pages**:
+  - Removed native hardcoded channel adapters (`internal/channels/discord.go`, `internal/channels/telegram.go`, `internal/channels/whatsapp.go`).
+  - Removed native connector tools (`internal/tools/connector_tools.go`, `internal/tools/connector_tools_test.go`).
+  - Removed standalone Channels and Connectors UI pages (`web/src/pages/Channels/*`, `web/src/pages/Connectors/*`) and deprecated locale files (`channels.json`, `connectors.json`, `integrations.json`).
+  - Removed legacy OAuth and WhatsApp webhook handlers from `internal/server/api_integrations.go`.
+
+### Changed
+- **Unified Plugins & Extensions Navigation**:
+  - Replaced legacy Channels and Connectors pages with the unified, modern **Plugins Hub** (`/plugins`, `PluginsPage.tsx`).
+  - Unified configuration, secrets management, live log streaming, and package upload into `PluginDetailModal.tsx`, `PluginUploadModal.tsx`, and `PluginLogsModal.tsx`.
 - **Per-Agent Autonomous Heartbeat & Isolated Standing Directives**:
   - Dedicated `AgentHeartbeatConfig` embedded in `AgentManifest` supporting per-agent standing directives, pulse intervals (5m - 24h), target alert channels (`telegram`, `discord`, `whatsapp`, `webhook`, `none`), target account IDs, and active hours windows.
   - Heartbeat daemon evaluation loop (`checkCustomAgentPulses`) executing autonomous cycles for active custom agents with Zero-Noise classification and audit history.

@@ -14,8 +14,10 @@
 - [Agent Management & Studio](#agent-management--studio)
 - [Cron Automations](#cron-automations)
 - [Chat & Conversations](#chat--conversations)
-- [Integrations, Channels & Pairing](#integrations-channels--pairing)
+- [Channel Accounts & Device Pairing](#channel-accounts--device-pairing)
 - [Tools & Tool Hub](#tools--tool-hub)
+- [Plugins (WasmLoader)](#plugins-wasmloader)
+- [Hardware Vault Secrets](#hardware-vault-secrets)
 - [Workspace File Manager](#workspace-file-manager)
 - [Error Format](#error-format)
 
@@ -23,7 +25,7 @@
 
 ## Authentication
 
-All API endpoints (except `/api/health`, `/api/auth/status`, `/api/auth/setup`, `/api/auth/login`, `/api/auth/callback`, `/api/webhooks/*`) require authentication when the system is initialized.
+All API endpoints (except `/api/health`, `/api/models`, `/api/notifications/push/vapid-key`, `/api/auth/status`, `/api/auth/setup`, `/api/auth/login`, `/api/auth/logout`) require authentication when the system is initialized.
 
 ```http
 Authorization: Bearer <session_token>

@@ -19,8 +19,10 @@ internal/server/
 ├── api_agent.go          # Agent CRUD, start/stop, chat, soul, memory-md, cron
 ├── api_tasks.go          # Autonomous Task matrix CRUD, Heartbeat config & manual pulse triggers
 ├── api_conversations.go  # Chat conversations and message history
-├── api_integrations.go   # OAuth, WhatsApp/Telegram/Discord channels, pairing
-├── api_tools.go          # MCP servers, WASM plugins, skills, hub marketplace
+├── api_plugins.go        # WASM plugin upload, enable/disable, logs, configuration & vault secrets
+├── api_vault.go          # Hardware-bound vault secret management
+├── api_integrations.go   # Channel accounts, pairing codes, sender authorization
+├── api_tools.go          # MCP servers, skills, tool execution, hub marketplace
 ├── api_workspace.go      # Workspace file browser, read/write/mkdir/upload
 ├── api_system.go         # Metrics, token usage ledger history, keys, identity, HAL
 ├── api_setup.go          # Legacy/standalone setup endpoints
@@ -84,12 +86,12 @@ func (s *Server) decodeJSON(r *http.Request, v any) error
 
 ### Public Routes
 - `GET /api/health`
+- `GET /api/models`
+- `GET /api/notifications/push/vapid-key`
 - `GET /api/auth/status`
 - `POST /api/auth/setup`
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
-- `GET /api/auth/callback`
-- `GET/POST /api/webhooks/whatsapp`
 
 ### Protected Subsystems
 All other routes are nested inside `r.Group` with `r.Use(s.RequireAuthMiddleware)`. Requests must include `Authorization: Bearer <token>` in the HTTP headers when authentication is initialized.

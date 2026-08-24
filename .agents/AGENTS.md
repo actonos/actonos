@@ -93,6 +93,6 @@ Use these skills for specialized development workflows:
 - `actonos-agent-dev` — Developing `internal/agent/` components
 - `actonos-api-dev` — Developing REST API endpoints
 - `actonos-frontend-dev` — Developing the React frontend
-- `actonos-channels-dev` — Developing `internal/channels/` adapters (Telegram, WhatsApp, Discord)
+- `actonos-channels-dev` — Developing messaging channel adapters via WASM Plugins and `internal/channels/` routing/pairing
 - `actonos-testing` — Writing and running tests
 - `actonos-release` — Version bumping and release management

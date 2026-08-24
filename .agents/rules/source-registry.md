@@ -13,13 +13,11 @@
 |:---|:---|:---|:---|
 | `GET` | `/api/health` | `handleHealth` | `router.go` |
 | `GET` | `/api/models` | `handleGetModelsCatalog` | `api_system.go` |
+| `GET` | `/api/notifications/push/vapid-key` | `handleGetVAPIDPublicKey` | `api_notifications.go` |
 | `GET` | `/api/auth/status` | `handleGetAuthStatus` | `api_auth.go` |
 | `POST` | `/api/auth/setup` | `handleSetupAuth` | `api_auth.go` |
 | `POST` | `/api/auth/login` | `handleLogin` | `api_auth.go` |
 | `POST` | `/api/auth/logout` | `handleLogout` | `api_auth.go` |
-| `GET` | `/api/auth/callback` | `handleOAuthCallback` | `api_integrations.go` |
-| `GET` | `/api/webhooks/whatsapp` | `handleWhatsAppVerifyWebhook` | `api_integrations.go` |
-| `POST` | `/api/webhooks/whatsapp` | `handleWhatsAppInboundWebhook` | `api_integrations.go` |
 
 ### Protected Routes (require auth via `RequireAuthMiddleware`)
 
@@ -102,6 +100,18 @@
 | `POST` | `/api/plugins/{id}/disable` | `handleDisablePlugin` | `api_plugins.go` |
 | `DELETE` | `/api/plugins/{id}` | `handleDeletePlugin` | `api_plugins.go` |
 | `GET` | `/api/plugins/{id}/logs` | `handleGetPluginLogs` | `api_plugins.go` |
+| `POST` | `/api/plugins/{id}/config` | `handleUpdatePluginConfig` | `api_plugins.go` |
+| `PUT` | `/api/plugins/{id}/config` | `handleUpdatePluginConfig` | `api_plugins.go` |
+
+#### Hardware-Bound Vault Secrets
+
+| Method | Path | Handler | File |
+|:---|:---|:---|:---|
+| `GET` | `/api/vault/secrets` | `handleListVaultSecrets` | `api_vault.go` |
+| `POST` | `/api/vault/secrets` | `handleSetVaultSecret` | `api_vault.go` |
+| `GET` | `/api/vault/secrets/{name}` | `handleGetVaultSecret` | `api_vault.go` |
+| `PUT` | `/api/vault/secrets/{name}` | `handleSetVaultSecret` | `api_vault.go` |
+| `DELETE` | `/api/vault/secrets/{name}` | `handleDeleteVaultSecret` | `api_vault.go` |
 
 #### Human Approval & Agent Runs
 
@@ -249,7 +259,7 @@
 
 ## UI Components (`web/src/components/`)
 
-### Modals (`modals/` & `ui/`)
+### Modals (`modals/` & `ui/` & Feature Modals)
 
 | File | Component | Purpose |
 |:---|:---|:---|
@@ -259,7 +269,9 @@
 | `modals/TokenLedgerModal.tsx` | `TokenLedgerModal` | Comprehensive token usage analytics & ledger table |
 | `pages/Missions/components/TaskModal.tsx` | `TaskModal` | Mission backlog task create/edit modal |
 | `pages/AuditLogs/components/AuditLogDetailModal.tsx` | `AuditLogDetailModal` | Full audit log trace, cryptographic verification & JSON inspector |
-| `pages/Channels/components/ChannelAccountModal.tsx` | `ChannelAccountModal` | Multi-account bot credentials, agent bindings, and message routing mode |
+| `pages/Plugins/PluginDetailModal.tsx` | `PluginDetailModal` | Plugin manifest, capabilities, config form, and secrets editor |
+| `pages/Plugins/PluginLogsModal.tsx` | `PluginLogsModal` | Live sandbox execution log stream for WASM plugin |
+| `pages/Plugins/PluginUploadModal.tsx` | `PluginUploadModal` | Upload and installation modal for `.actonpkg` package bundles |
 | `ui/Modal.tsx` | `Modal` | Accessible dialog container |
 | `ui/ConfirmModal.tsx` | `ConfirmModal` | Confirmation dialog with actions |
 
@@ -267,7 +279,7 @@
 
 ## Locale Namespaces (`web/src/locales/`)
 
-Both `en/` and `vi/` contain the following 18 namespace files:
+Both `en/` and `vi/` contain the following 16 active namespace files:
 
 | Namespace | File | UI Coverage |
 |:---|:---|:---|
@@ -279,13 +291,11 @@ Both `en/` and `vi/` contain the following 18 namespace files:
 | `agents` | `agents.json` | Agent table, create/edit modal |
 | `tools` | `tools.json` | MCP servers, tool management |
 | `skills` | `skills.json` | Skills marketplace |
+| `plugins` | `plugins.json` | WASM plugins hub, upload, detail modal, logs, config & secrets |
 | `settings` | `settings.json` | System settings, API keys, token ledger tab |
 | `notifications` | `notifications.json` | Notification center, browser push, history page |
 | `audit` | `audit.json` | Audit logs ledger, filters, cryptographic hash verification, detail modal |
 | `workspace` | `workspace.json` | File manager |
-| `integrations` | `integrations.json` | OAuth connectors |
-| `channels` | `channels.json` | Messaging channels config |
-| `connectors` | `connectors.json` | SaaS connector details |
 | `dashboard` | `dashboard.json` | Dashboard overview |
 | `automations` | `automations.json` | Cron jobs, scheduled tasks |
 | `operations` | `operations.json` | Live operations, runtime telemetry, approvals and cost |
@@ -294,7 +304,7 @@ Both `en/` and `vi/` contain the following 18 namespace files:
 
 ## Go Types ↔ TypeScript Types Mapping
 
-| Go Type (`internal/agent/types.go`, `tasks.go`, `memory/tokens.go`, `system/notifications.go`) | TS Type (`web/src/lib/types.ts`) | Notes |
+| Go Type (`internal/agent/types.go`, `plugin/types.go`, `tasks.go`, `memory/tokens.go`, `system/notifications.go`) | TS Type (`web/src/lib/types.ts`) | Notes |
 |:---|:---|:---|
 | `AutonomousTask` | `AutonomousTask` | Backlog missions, priority, status, progress, execution_log |
 | `HeartbeatConfig` | `HeartbeatConfigData` | System core standing directives, interval, zero-noise |
@@ -306,6 +316,13 @@ Both `en/` and `vi/` contain the following 18 namespace files:
 | `TokenUsageRecord` | `TokenUsageRecord` | Token ledger transaction entry |
 | `CronJob` | `CronJob` | Proactive cron definition |
 | `AgentManifest` | `AgentManifest` | Must stay in sync. Go uses `llm.ModelConfig`, TS has inline `ModelConfig` |
+| `PluginInfo` | `PluginInfo` | Full WASM plugin descriptor with manifest, status, and memory stats |
+| `PluginManifest` | `PluginManifest` | Plugin manifest descriptor, capabilities, permissions, config schemas |
+| `PluginPermissions` | `PluginPermissions` | Granular capability permissions (egress, vault, storage, bus) |
+| `PluginStatus` | `PluginStatus` | `running`, `stopped`, `disabled`, `error` |
+| `PluginToolDef` | `PluginToolDef` | Tool definition within plugin |
+| `PluginChannelDef` | `PluginChannelDef` | Channel adapter definition within plugin |
+| `PluginConnectorDef` | `PluginConnectorDef` | SaaS connector definition within plugin |
 | `DelegationScope` | `DelegationScope` | Same field names |
 | `TriggerRule` | `TriggerRule` | Same field names |
 | `AgentStatus` | `AgentStatus` | Values: `active`, `stopped`, `error` |
@@ -320,7 +337,6 @@ Both `en/` and `vi/` contain the following 18 namespace files:
 | — | `ToolInfo` | TS only |
 | — | `SystemMetrics` | TS only |
 | — | `TailscaleStatus` | TS only |
-| — | `ConnectorInfo` | TS only |
 | — | `LLMProviderInfo` | TS only |
 
 ---

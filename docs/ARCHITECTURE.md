@@ -118,10 +118,10 @@ Merges lexical search (SQLite FTS5) and semantic search (dense vector) scores us
 
 ```mermaid
 graph TB
-    subgraph "L1 — Connectivity & Interface"
+    subgraph "L1 — Connectivity & Ingress"
         TSNET["Tailscale tsnet\nE2E Mesh VPN"]
         WEBUI["Web UI SPA\nReact 19 + Tailwind v4\nvia go:embed"]
-        EVENTBUS["Event-Driven Bus\nTelegram · Discord\nSlack · MQTT · Webhooks"]
+        EVENTBUS["WASM Channel Adapters\nTelegram · Discord\nSlack · WhatsApp · Webhooks"]
         CAPTIVE["Zero-Config Portal\nCaptive DNS Hijack\n192.168.4.1 / acton.local"]
     end
 
@@ -134,12 +134,12 @@ graph TB
     subgraph "L3 — Enterprise Auth"
         OAUTH["OAuth 2.1 Provider\nPKCE S256 + DCR"]
         TOKENREFRESH["Token Refresh Daemon\n(Auto-renew 5min before expiry)"]
-        SAAS["SaaS Connectors\nGmail · Drive · Calendar\nNotion · GitHub · Slack\nSalesforce · Databases"]
+        SAAS["WASM SaaS Connectors\nGitHub · Notion · Linear\nSaaS APIs · Databases"]
     end
 
-    subgraph "L4 — Dynamic Tooling Hub"
+    subgraph "L4 — Dynamic Tooling & Extensions"
         MCPHOST["MCP Host Engine\nstdio / SSE"]
-        WASMRT["WASM Runtime\nwazero (Pure Go)"]
+        WASMRT["WasmLoader Runtime\nwazero (Pure Go WASM)"]
         SKILLDIR["Skill-as-a-Folder\nfsnotify hot-reload"]
     end
 
@@ -465,7 +465,7 @@ graph LR
 
 ### Unified WasmLoader Plugin Subsystem (`internal/plugin/`)
 
-ActonOS implements a unified, polyglot plugin architecture running on **Wazero** (100% pure Go WebAssembly runtime, `CGO_ENABLED=0` compliant). This consolidates Tools, Chat Channels, and SaaS Connectors into sandboxed `.wasm` packages.
+ActonOS implements a unified, polyglot plugin architecture running on **Wazero** (100% pure Go WebAssembly runtime, `CGO_ENABLED=0` compliant). This consolidates Tools, Chat Channels, and SaaS Connectors into sandboxed `.wasm` packages (distributed as `.actonpkg` zip bundles).
 
 ```mermaid
 graph TD
@@ -476,36 +476,47 @@ graph TD
         TR["ToolRegistry (Single Execution Boundary)"]
         CM["ChannelManager (Dynamic Adapters)"]
         EB["Unified Event Bus"]
-        HV["Hardware Vault"]
+        HV["Hardware Vault (AES-256-GCM)"]
+        KV["Isolated SQLite KV Storage"]
     end
 
     subgraph "WASM Plugin Sandbox (Linear Memory)"
         MF["manifest.json (Capabilities & Permissions)"]
-        BC["plugin.wasm (Rust / TinyGo / AssemblyScript / C)"]
-        EX["Guest Exports: acton_plugin_init, acton_tool_execute, acton_channel_send"]
+        BC["plugin.wasm (Rust / TinyGo / C / AssemblyScript)"]
+        EX["Guest Exports: acton_plugin_init, acton_tool_execute, acton_channel_send, acton_channel_poll"]
     end
 
     PM --> WZ
     WZ --> BC
     BC --> EX
     
-    EX -- "Tool Execution" --> TR
-    EX -- "Inbound/Outbound Messages" --> CM
+    EX -- "WasmToolBridge" --> TR
+    EX -- "WasmChannelBridge" --> CM
     
-    BC -. "Host Syscall (HTTP Request)" .-> SG
+    BC -. "Syscall acton_net: http_request" .-> SG
     SG -- "Domain Whitelist OK" --> HTTP["Outbound Network"]
-    BC -. "Host Syscall (Get Secret)" .-> SG
+    BC -. "Syscall acton_vault: get_secret" .-> SG
     SG -- "RBAC Valid" --> HV
-    BC -. "Host Syscall (Emit Event)" .-> EB
+    BC -. "Syscall acton_storage: kv_get/set" .-> KV
+    BC -. "Syscall acton_bus: emit_event" .-> EB
+    BC -. "Syscall acton_ws: ws_connect/send/poll" .-> WS["WebSocket Gateway"]
 ```
 
-#### Core Capabilities:
-1. **Tool Plugin**: Defines one or more agent tools with strict JSON schemas, executing directly through the `ToolRegistry` single execution boundary.
-2. **Channel Plugin**: Implements external chat protocols (Slack, Matrix, Zalo, Discord, Telegram), forwarding inbound messages to the `MessageRouter` via `host_emit_event` and receiving outbound messages via `acton_channel_send_message`.
-3. **Connector Plugin**: Exposes OAuth/API auth schemas, periodic synchronization hooks, and domain tools for third-party SaaS (GitHub, Jira, Notion, Linear).
+#### Core Capabilities & Bridges:
+1. **Tool Plugin (`WasmToolBridge`)**: Defines one or more agent tools with strict JSON schemas, executing directly through the `ToolRegistry` single execution boundary.
+2. **Channel Plugin (`WasmChannelBridge`)**: Implements external chat protocols (Telegram, Discord, Slack, WhatsApp, Zalo), receiving outbound messages via `acton_channel_send` and streaming inbound messages via `acton_channel_poll` or real-time WebSocket (`acton_ws`).
+3. **Connector Plugin (`WasmConnectorBridge`)**: Exposes SaaS authorization schemas, webhook receivers (`acton_connector_handle_webhook`), and bridged tools for third-party services (GitHub, Notion, Linear).
+
+#### Host Syscall Contracts:
+- **`acton_sys`**: Structured logging (`log`) and host response streaming (`read_response`).
+- **`acton_net`**: Sandboxed HTTP egress (`http_request`) validated against `manifest.permissions.net_outbound`.
+- **`acton_ws`**: Real-time WebSocket connection lifecycle (`ws_connect`, `ws_send`, `ws_poll`, `ws_close`).
+- **`acton_vault`**: Scoped credential retrieval (`get_secret`) from Hardware Vault (`manifest.permissions.secrets`).
+- **`acton_storage`**: Scoped SQLite key-value persistence (`kv_get`, `kv_set`).
+- **`acton_bus`**: System event publishing (`emit_event`) onto ActonOS Event Bus.
 
 #### Security & Sandboxing Invariants:
-- **Egress Firewall**: Outbound HTTP calls via `host_http_request` are strictly constrained to domains declared in `manifest.permissions.net_outbound`.
+- **Egress Firewall**: Outbound HTTP calls are strictly constrained to domains declared in `manifest.permissions.net_outbound`. Direct raw TCP/UDP socket access is impossible.
 - **Hardware Vault Brokering**: Plugins receive scoped tokens/credentials dynamically without ever seeing raw Master Keys or unencrypted storage files.
 - **Resource & Timeout Quota**: Hard memory limits (32–64 MB per instance) and epoch-based execution deadlines (default 15s) with crash isolation (guest panics never crash `actond`).
 
@@ -570,18 +581,18 @@ Key properties of message routing:
 
 All SaaS connections (Gmail, Notion, Figma, GitHub) authenticate via OAuth 2.1 with PKCE (S256). The `token_refresher.go` daemon automatically renews access tokens **5 minutes before expiry** to maintain seamless connectivity.
 
-### Integration Health Visibility (Channels, Connectors, MCP)
+### Integration Health Visibility (Plugins, Channels, MCP)
 
 A broken chat channel adapter, an expired/failed connector token, or a dead MCP server used to fail
 **silently** — a `slog.Warn` server log line and nothing else. There was no way for a user to discover
-*why* a channel/connector/tool stopped working short of reading the daemon's stdout. All three subsystems
+*why* a channel/connector/tool stopped working short of reading the daemon's stdout. All subsystems
 now funnel failures through the shared `EventBus` into persisted, web-visible notifications:
 
 ```mermaid
 graph TD
     subgraph "Failure sources"
-        TG["Telegram poll loop\n(fetchUpdates)"]
-        DC["Discord gateway\n(dial/reconnect)"]
+        TG["Telegram WASM poller\n(PollMessages)"]
+        DC["Discord WASM poller\n(ws_poll / gateway)"]
         CM["ChannelManager\n(adapter Start() failure)"]
         TR["TokenRefreshDaemon\n(CheckAndRefreshAll)"]
         MCPC["MCPClient.readLoop()\n(unexpected stdio close)"]
@@ -600,14 +611,14 @@ graph TD
     EB -->|"mcp.server_error/recovered"| NM
 
     NM -->|"15-min per-integration cooldown\n(shouldNotifyIntegration)"| DB[("notifications\ntable (SQLite)")]
-    DB --> WEB["Web UI\n/channels · /connectors · /tools"]
+    DB --> WEB["Web UI\n/plugins · /tools"]
 ```
 
 Key properties of this design:
 
-- **State-transition only, not per-retry**: a persistently broken Telegram token would otherwise poll every
-  ~500ms forever; `TelegramAdapter.reportPollHealth` / `DiscordAdapter.reportGatewayHealth` only publish an
-  event on the *first* failure after being healthy and the *first* success after a run of failures.
+- **State-transition only, not per-retry**: a persistently broken token would otherwise poll every
+  few seconds forever; channel bridges and pollers only publish an event on the *first* failure after
+  being healthy and the *first* success after a run of failures.
   `NotificationManager` additionally enforces its own 15-minute cooldown per integration (`connector:<id>`,
   `channel:<accountID>`, `mcp:<serverID>` dedup keys) so a flapping integration cannot spam the bell icon.
   A recovery event resets the cooldown immediately so the *next* failure (if any) is reported right away.
@@ -618,8 +629,8 @@ Key properties of this design:
   server whose process had already died, until the whole ActonOS process restarted. The `onClose` callback
   now removes the dead entry from `h.clients` immediately, so status reflects reality.
 - **Inline status, not just a toast**: `ChannelManager.GetAccountStatuses()` and `MCPServerStatus.LastError`
-  /`LastErrorAt` are also returned directly by `GET /api/integrations/channels/accounts` and the MCP list
-  endpoint, so the Channels/Tools pages can show a persistent "why is this broken" indicator, not just a
+  /`LastErrorAt` are also returned directly by `GET /api/integrations/channels/accounts`, `GET /api/plugins`, and the MCP list
+  endpoint, so the Plugins and Tools pages show a persistent "why is this broken" indicator, not just a
   one-time notification that can be missed or dismissed.
 
 ---

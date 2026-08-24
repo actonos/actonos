@@ -569,6 +569,7 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/):
 | `auth` | `internal/auth/` |
 | `bus` | `internal/bus/` |
 | `channels` | `internal/channels/` |
+| `plugin` | `internal/plugin/` |
 | `llm` | `internal/llm/` |
 | `tools` | `internal/tools/` |
 | `sandbox` | `internal/sandbox/` |
@@ -583,6 +584,7 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```bash
 git commit -m "feat(agent): implement multi-agent swarm delegation"
+git commit -m "feat(plugin): implement WebSocket gateway syscalls in host_api"
 git commit -m "fix(memory): prevent FTS5 index corruption on concurrent writes"
 git commit -m "docs: add deployment guide for Docker mode"
 git commit -m "refactor(llm): extract common retry logic into shared middleware"
@@ -601,12 +603,22 @@ git commit -m "test(auth): add token refresh daemon expiry edge cases"
 4. Add tests in `<provider>_test.go`
 5. Update `docs/API.md` with the new provider option
 
-### Adding a New Channel Adapter
+### Adding a New Channel Adapter (via WASM Plugin)
 
-1. Create `internal/channels/<channel>.go`
-2. Implement the `ChannelAdapter` interface from `adapter.go`
-3. Register in the event bus
-4. Add the channel option to the Web UI agent configuration page
+In ActonOS, external chat channels (Telegram, Discord, Slack, WhatsApp, Zalo) are implemented as sandboxed WASM plugins using the **ActonOS Plugin SDK**:
+
+1. Scaffold a channel plugin using the `acton-plugin` CLI or SDK:
+   ```bash
+   acton-plugin new my-chat-channel --type=channel
+   ```
+2. Implement `sdk.ChannelAdapter` (`SendMessage`, `PollMessages`, or WebSocket streaming with `ctx.WS()`).
+3. Declare `manifest.json` capabilities (`"capabilities": ["channel"]`), permissions (`net_outbound`, `secrets`), and configuration schema.
+4. Compile to WebAssembly and package:
+   ```bash
+   acton-plugin build
+   acton-plugin pack -out dist/my-chat-channel.actonpkg
+   ```
+5. Install via Web UI (`Plugins` page) or upload via `POST /api/plugins/upload`. `WasmChannelBridge` will dynamically register the adapter with `ChannelManager` and route messages to `MessageRouter`.
 
 ### Adding a New API Endpoint
 
@@ -646,26 +658,42 @@ git commit -m "test(auth): add token refresh daemon expiry edge cases"
 
 ### Developing WASM Plugins (`internal/plugin/`)
 
-ActonOS supports building plugins in any language compiling to WebAssembly (`wasm32-wasi` or standard WASM).
+ActonOS supports building plugins in any language compiling to WebAssembly (`wasip1` / `wasm32-wasi` or standard WASM).
 
-#### Plugin Package Structure
-A plugin package placed in `/data/plugins/<plugin-id>/` contains:
-- `manifest.json`: Metadata, declared capabilities (`tool`, `channel`, `connector`), permissions, and tool schemas.
+#### Plugin Package Bundle (`.actonpkg`)
+A production plugin package contains:
+- `manifest.json`: Metadata, declared capabilities (`tool`, `channel`, `connector`), permissions, config schemas, and tool definitions.
 - `plugin.wasm`: Compiled WebAssembly bytecode.
+- `signature.sig`: (Optional) Ed25519 digital signature.
+- `README.md`: (Optional) Plugin user guide and documentation.
 
 #### Guest Exports (WASM to Host)
-- `acton_alloc(size: u32) -> u32`: Allocates linear memory buffer.
+- `acton_alloc(size: u32) -> u32`: Allocates linear memory buffer in guest.
 - `acton_free(ptr: u32, size: u32)`: Deallocates linear memory buffer.
-- `acton_plugin_init(cfg_ptr: u32, cfg_len: u32) -> i32`: Initializes plugin instance.
-- `acton_tool_execute(name_ptr: u32, name_len: u32, args_ptr: u32, args_len: u32) -> u64`: Executes a declared tool.
-- `acton_channel_send_message(msg_ptr: u32, msg_len: u32) -> i32`: Sends an outbound message to a recipient.
+- `acton_plugin_init() -> i32`: Initializes plugin instance.
+- `acton_tool_execute(name_ptr: u32, name_len: u32, args_ptr: u32, args_len: u32) -> u64`: Executes a declared tool (returns packed `ptr << 32 | len`).
+- `acton_channel_send(msg_ptr: u32, msg_len: u32) -> i32`: Sends an outbound message to a recipient.
+- `acton_channel_poll() -> u64`: Polls for buffered inbound messages (returns packed `ptr << 32 | len`).
+- `acton_connector_handle_webhook(ptr: u32, len: u32) -> u64`: Dispatches incoming webhook payloads.
+- `acton_plugin_shutdown() -> i32`: Clean teardown hook.
 
 #### Host Syscalls (Host to WASM)
-- `acton_net.http_request(req_ptr, req_len) -> u64`: Controlled HTTP requests validated against `permissions.net_outbound`.
-- `acton_vault.get_secret(key_ptr, key_len) -> u64`: Retrieves authorized secret tokens from Hardware Vault.
-- `acton_storage.kv_get(k_ptr, k_len) -> u64` / `acton_storage.kv_set(k_ptr, k_len, v_ptr, v_len) -> i32`: Sandboxed KV storage.
-- `acton_bus.emit_event(ev_ptr, ev_len) -> i32`: Emits inbound messages into ActonOS Event Bus.
-- `acton_sys.log(level: i32, msg_ptr: u32, msg_len: u32)`: Structured logging.
+- **`acton_sys`**:
+  - `log(level: i32, ptr: u32, len: u32)`: Emits structured logs.
+  - `read_response(destPtr: u32, destLen: u32) -> i32`: Reads buffered host response.
+- **`acton_net`**:
+  - `http_request(req_ptr: u32, req_len: u32) -> u32`: Sandboxed HTTP requests validated against `permissions.net_outbound`.
+- **`acton_ws`**:
+  - `ws_connect(urlPtr, urlLen, hPtr, hLen) -> i32`: Establishes tracked WebSocket connection.
+  - `ws_send(handleID, msgType, dataPtr, dataLen) -> i32`: Sends text/binary frames.
+  - `ws_poll(handleID) -> i32`: Non-blocking poll for incoming WebSocket frames.
+  - `ws_close(handleID) -> i32`: Closes active WebSocket connection.
+- **`acton_vault`**:
+  - `get_secret(key_ptr: u32, key_len: u32) -> u32`: Retrieves authorized secret credentials from AES-256-GCM Hardware Vault.
+- **`acton_storage`**:
+  - `kv_get(key_ptr, key_len) -> u32` / `kv_set(k_ptr, k_len, v_ptr, v_len) -> i32`: Isolated SQLite key-value persistence.
+- **`acton_bus`**:
+  - `emit_event(topic_ptr, topic_len, payload_ptr, payload_len) -> i32`: Publishes system events onto ActonOS Event Bus.
 
 ### Frontend UX workflow
 

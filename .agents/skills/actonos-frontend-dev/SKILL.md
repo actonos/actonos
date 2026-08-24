@@ -94,15 +94,15 @@ Hardcoded strings in components violate build verification.
 | `setup.json` | Setup wizard, initial admin identity, password setup |
 | `chat.json` | Chat interface, streaming thoughts, tool invocation outputs |
 | `agents.json` | Agent management, agent table, manifest editor, memory inspector |
-| `tools.json` | Tool Hub, MCP servers, WASM plugins, tool status |
+| `tools.json` | Tool Hub, MCP servers, tool status |
 | `skills.json` | Skills registry, skill cards, marketplace actions |
+| `plugins.json` | Sandboxed WASM plugins hub, upload, detail modal, logs, configuration & secrets |
 | `automations.json` | Cron scheduler, automated periodic tasks, heartbeat |
-| `channels.json` | Messaging channels (Telegram, WhatsApp, Discord), account credentials |
-| `connectors.json` | SaaS integrations & OAuth connectors (Google, Notion, GitHub) |
 | `dashboard.json` | System metrics, quick actions, agent status cards |
-| `integrations.json` | Integration settings, API keys, pairing verification |
 | `workspace.json` | File manager, file preview, workspace browser |
+| `audit.json` | Audit logs ledger, filters, cryptographic hash verification, detail modal |
 | `settings.json` | System configuration, token ledger, backup snapshots, OTA updates, Tailscale |
+| `notifications.json` | Notification center, browser push, history page |
 | `operations.json` | Live telemetry, Docker, execution feed, canvas, terminal, queue, approvals, costs |
 
 ### Usage in Components
@@ -173,11 +173,19 @@ web/src/
 │   ├── Agents/AgentStudioPage.tsx        # 'agent-studio' (Config, Soul, Memory.md)
 │   ├── Chat/ChatPage.tsx                 # 'chat'
 │   ├── Automations/AutomationsPage.tsx   # 'automations'
-│   ├── Channels/ChannelsPage.tsx         # 'channels'
-│   ├── Connectors/ConnectorsPage.tsx     # 'connectors'
+│   ├── Missions/MissionsPage.tsx         # 'missions'
+│   ├── Operations/OperationsPage.tsx     # 'operations'
+│   ├── Plugins/
+│   │   ├── PluginsPage.tsx               # 'plugins' (WASM Plugin Hub)
+│   │   ├── PluginDetailModal.tsx         # Plugin manifest & config modal
+│   │   ├── PluginUploadModal.tsx         # .actonpkg bundle uploader
+│   │   └── PluginLogsModal.tsx           # Realtime sandbox log viewer
 │   ├── ToolHub/ToolHubPage.tsx           # 'tools'
 │   ├── Skills/SkillsPage.tsx             # 'skills'
 │   ├── Workspace/WorkspacePage.tsx       # 'workspace'
+│   ├── Terminal/TerminalPage.tsx         # 'terminal'
+│   ├── Notifications/NotificationsPage.tsx # 'notifications'
+│   ├── AuditLogs/AuditLogsPage.tsx       # 'audit-logs'
 │   ├── Settings/SettingsPage.tsx         # 'settings'
 │   └── Auth/
 │       ├── SetupWizardPage.tsx           # First-run onboarding

@@ -133,14 +133,15 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/) (
 
 ### Scopes
 
-Use the package name: `agent`, `auth`, `bus`, `channels`, `llm`, `tools`, `sandbox`, `memory`, `system`, `server`, `web`, `deploy`.
+Use the package name: `agent`, `auth`, `bus`, `channels`, `plugin`, `llm`, `tools`, `sandbox`, `memory`, `system`, `server`, `web`, `deploy`.
 
 ### Examples
 
 ```bash
 feat(agent): implement swarm delegation with configurable timeout
+feat(plugin): support real-time WebSocket syscalls for channel plugins
 fix(memory): prevent concurrent FTS5 write corruption
-docs: update API reference with new agent endpoints
+docs: update API reference with new plugin endpoints
 refactor(llm): extract retry logic into shared middleware
 test(auth): add edge case tests for expired token refresh
 build: upgrade Go to 1.26
