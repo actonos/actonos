@@ -569,8 +569,8 @@ export interface PluginPermissions {
 export interface PluginToolDef {
   name: string;
   description: string;
-  parameters?: Record<string, any>;
-  schema?: Record<string, any>;
+  parameters?: Record<string, unknown>;
+  schema?: Record<string, unknown>;
   category?: string;
 }
 
@@ -599,8 +599,8 @@ export interface PluginManifest {
   tools?: PluginToolDef[];
   channels?: PluginChannelDef[];
   connectors?: PluginConnectorDef[];
-  config_schema?: Record<string, any>;
-  config?: Record<string, any>;
+  config_schema?: Record<string, unknown>;
+  config?: Record<string, unknown>;
 }
 
 export interface PluginInfo {
@@ -611,6 +611,34 @@ export interface PluginInfo {
   loaded_at?: string;
   path?: string;
   memory_bytes?: number;
+}
+
+export interface RegistryPlugin {
+  id: string;
+  name: string;
+  version: string;
+  author?: string;
+  description?: string;
+  license?: string;
+  category?: string;
+  filename?: string;
+  icon?: string;
+  tags?: string[];
+  stars?: number;
+  download_url?: string;
+  url?: string;
+  sha256?: string;
+  size_bytes?: number;
+  size?: number;
+  capabilities?: PluginCapability[];
+  permissions?: PluginPermissions;
+  tools?: PluginToolDef[];
+  channels?: PluginChannelDef[];
+  connectors?: PluginConnectorDef[];
+  config_schema?: Record<string, unknown>;
+  installed?: boolean;
+  installed_status?: PluginStatus;
+  installed_version?: string;
 }
 
 export interface VaultSecretMeta {

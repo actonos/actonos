@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Inbound message agent mention parsing (`ExtractAgentMention`) supporting `@agent_name` and `/agent <name>` commands in group chats and private DMs.
   - Channel account routing modes: `exclusive` (assigned agent only), `mention` (route by @mention with single-agent fallback), and `fallback` (default to `agent_system_core`).
   - Deterministic agent-aware conversation session IDs (`conv_{channel}_{sender}_{agentID}`) ensuring isolated memory context and chat histories across different agents talking to the same user.
+- **Official Available Plugins Registry & 1-Click WASM Installer**:
+  - Live remote registry integration (`internal/plugin/registry.go`) fetching official curated pre-built WASM plugins directly from GitHub release downloads (`https://github.com/actonos/plugin-sdk/releases/latest/download/plugin-registry`) with 1-hour TTL caching, concurrent synchronization, and built-in offline fallback catalog.
+  - Real-time 1-Click installation pipeline (`POST /api/plugins/install`) downloading `.actonpkg` bundles or `.wasm` binaries, unpacking contents, verifying security sandbox permissions, hot-reloading into Wazero runtime, and emitting `bus.EventPluginProgress` and `bus.EventPluginInstalled` events.
+  - Modern Available Plugins UI tab in `PluginsPage.tsx` synchronized with the Skills page UX, featuring category badges, status segmentation (`All`, `Installed`, `Available`), star/recent/name sorting, multi-step progress bar (`useActionProgress`), and `PluginHubDetailModal.tsx` for deep inspection of capabilities, tools, and schemas before installing.
 
 ### Removed
 - **Legacy Native Channel Implementations & Standalone Pages**:

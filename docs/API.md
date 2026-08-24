@@ -546,6 +546,63 @@ List all installed WASM plugins with their manifest, capabilities (`tool`, `chan
 }
 ```
 
+### `GET /api/plugins/available`
+Fetch the available plugin catalog from the remote ActonOS release registry (`https://github.com/actonos/plugin-sdk/releases/latest/download/plugin-registry.json`). Returns official pre-built WASM plugins with author info, ratings, capabilities, permissions, and local installation status.
+
+**Response `200 OK`**:
+```json
+{
+  "catalog": [
+    {
+      "id": "discord",
+      "name": "Discord Channel Adapter",
+      "version": "1.0.0",
+      "author": "ActonOS Core Team",
+      "description": "Bi-directional Discord gateway supporting guild channels, DMs, and slash interactions.",
+      "category": "channel",
+      "tags": ["discord", "chat", "bot"],
+      "stars": 324,
+      "capabilities": ["channel"],
+      "permissions": {
+        "net_outbound": ["discord.com", "gateway.discord.gg"],
+        "secrets": ["DISCORD_BOT_TOKEN"],
+        "storage": true
+      },
+      "installed": false
+    }
+  ],
+  "count": 1
+}
+```
+
+### `POST /api/plugins/install`
+Download, unpack, verify, and hot-reload an official WASM plugin package (.actonpkg) from the release registry into the Wazero runtime. Emits real-time `plugin.progress` and `plugin.installed` events over the event bus.
+
+**Request Body**:
+```json
+{
+  "plugin_id": "discord",
+  "download_url": "https://github.com/actonos/plugin-sdk/releases/latest/download/discord.actonpkg"
+}
+```
+
+**Response `200 OK`**:
+```json
+{
+  "status": "installed",
+  "plugin": {
+    "manifest": {
+      "id": "discord",
+      "name": "Discord Channel Adapter",
+      "version": "1.0.0",
+      "capabilities": ["channel"]
+    },
+    "enabled": true,
+    "status": "running"
+  }
+}
+```
+
 ### `POST /api/plugins/upload`
 Upload an `.actonpkg` package bundle (or compiled `.wasm` binary) via multipart form data (`file`). The server unpacks `manifest.json`, `plugin.wasm`, and optional signatures, activating the plugin sandbox in the Wazero runtime. If administrative approval is configured, returns `202 Accepted` with a pending approval request.
 

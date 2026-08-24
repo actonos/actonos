@@ -3,11 +3,21 @@
   "title": "Plugin WASM",
   "subtitle": "Các phần mở rộng WebAssembly đa ngôn ngữ chạy trong sandbox bộ nhớ tuyến tính Wazero JIT với cơ chế khóa bảo mật và tường lửa domain egress.",
   "runtimeBadge": "Wazero JIT Runtime • Sandbox Cô Lập An Toàn",
+  "loading": "Đang tải danh sách plugin WASM...",
+  "views": {
+    "installed": "Plugin Đã Cài ({{count}})",
+    "available": "Kho Plugin Có Sẵn ({{count}})"
+  },
   "stats": {
     "total": "Tổng Plugin Đã Cài",
     "active": "Đang Chạy & Kích Hoạt",
     "channels": "Kênh Trò Chuyện",
-    "connectors": "Kết Nối SaaS"
+    "connectors": "Kết Nối SaaS",
+    "toolsActive": "{{count}} module công cụ đang hoạt động",
+    "jitSafe": "Nạp nóng JIT an toàn bộ nhớ",
+    "adaptersActive": "Bộ điều hợp tin nhắn động",
+    "vaultBrokered": "Ủy thác khóa bảo mật Vault",
+    "toolsCount": "{{count}} Công cụ"
   },
   "tabs": {
     "all": "Tất Cả Plugin",
@@ -34,11 +44,11 @@
     "error": "Lỗi"
   },
   "permissions": {
-    "title": "Phân Quyền Sandbox",
-    "netOutbound": "Tên Miền Egress",
-    "secrets": "Khóa Bảo Mật Vault",
-    "storage": "Lưu Trữ KV Bền Vững",
-    "busEvents": "Chủ Đề Event Bus"
+    "title": "Phân Quyền",
+    "netOutbound": "Truy Cập Mạng",
+    "secrets": "Khóa Bí Mật",
+    "storage": "Lưu Trữ",
+    "busEvents": "Sự Kiện"
   },
   "actions": {
     "enable": "Bật",
@@ -49,7 +59,69 @@
     "viewLogs": "Nhật ký",
     "refresh": "Làm mới",
     "cancel": "Hủy",
+    "copied": "Đã sao chép",
+    "copy": "Sao chép",
+    "clearSearch": "Xóa tìm kiếm",
+    "clearFilters": "Xóa bộ lọc",
     "confirmUninstall": "Bạn có chắc chắn muốn gỡ cài đặt plugin '{{name}}'? Tệp nhị phân và cấu hình sẽ bị xóa vĩnh viễn."
+  },
+  "hub": {
+    "loading": "Đang tải Kho Plugin chính thức...",
+    "title": "Kho Plugin Chính Thức",
+    "subtitle": "Các phần mở rộng WebAssembly được đội ngũ ActonOS xây dựng sẵn, cài đặt 1-click nhanh chóng.",
+    "byAuthor": "bởi {{author}}",
+    "install": "Cài đặt",
+    "installed": "Đã cài đặt",
+    "installing": "Đang cài đặt...",
+    "installingTitle": "Đang Cài Đặt Plugin: {{name}}",
+    "installingSubtitle": "Đang tải tệp gói, xác thực phân quyền sandbox và kích hoạt vào Wazero runtime.",
+    "statusFilter": {
+      "all": "Tất cả",
+      "installed": "Đã cài",
+      "available": "Chưa cài"
+    },
+    "sort": {
+      "label": "Sắp xếp:",
+      "stars": "Phổ biến nhất (Stars)",
+      "recent": "Mới cập nhật",
+      "name": "Tên (A-Z)"
+    },
+    "categories": {
+      "all": "Tất cả danh mục",
+      "channel": "Kênh Trò Chuyện",
+      "connector": "Kết Nối SaaS",
+      "tool": "Công Cụ Mở Rộng"
+    },
+    "modal": {
+      "overview": "Tổng Quan & Phân Quyền",
+      "capabilities": "Tính Năng & Công Cụ",
+      "configSchema": "Cấu Trúc Cấu Hình",
+      "rawManifest": "JSON Gốc",
+      "about": "Giới Thiệu Plugin",
+      "noDesc": "Plugin WebAssembly chính thức cho ActonOS.",
+      "capabilityTypes": "Tính Năng",
+      "tags": "Thẻ",
+      "noEgress": "Không (Không truy cập mạng)",
+      "noSecrets": "Không yêu cầu",
+      "storageGranted": "Đã bật",
+      "storageNone": "Không",
+      "busNone": "Tiêu chuẩn",
+      "viewSchema": "Xem Cấu Trúc Tham Số",
+      "channelId": "channel_id",
+      "requiresPairing": "Yêu cầu mã ghép đôi",
+      "authType": "xác thực"
+    },
+    "pagination": {
+      "loadMore": "Xem Thêm Plugin",
+      "showing": "Đang hiển thị {{shown}} trên {{total}} plugin"
+    }
+  },
+  "actionProgress": {
+    "steps": {
+      "auth": "Xác Thực & Phân Quyền Bảo Mật",
+      "download": "Tải Gói Cài Đặt (.actonpkg)",
+      "verify": "Kiểm Tra Sandbox & Kích Hoạt"
+    }
   },
   "modals": {
     "uploadTitle": "Cài Đặt Gói Plugin",
@@ -94,8 +166,9 @@
   },
   "empty": {
     "title": "Chưa Có Plugin Nào Được Cài Đặt",
-    "description": "Mở rộng khả năng của ActonOS bằng cách tải lên các gói WebAssembly .actonpkg cho Kênh Chat, Tích hợp SaaS hoặc Công cụ Agent.",
+    "description": "Mở rộng khả năng của ActonOS bằng cách tải lên các gói WebAssembly .actonpkg hoặc cài đặt từ Kho Plugin có sẵn.",
     "noMatches": "Không tìm thấy plugin nào khớp với từ khóa tìm kiếm và bộ lọc hiện tại.",
+    "adjustFilters": "Hãy thử thay đổi từ khóa tìm kiếm, bộ lọc trạng thái hoặc danh mục.",
     "clearFilters": "Xóa Bộ Lọc"
   }
 }

@@ -30,6 +30,11 @@ const (
 	EventSkillInstalled       = "skill.installed"
 	EventSkillUninstalled     = "skill.uninstalled"
 
+	// Plugin events
+	EventPluginProgress    = "plugin.progress"
+	EventPluginInstalled   = "plugin.installed"
+	EventPluginUninstalled = "plugin.uninstalled"
+
 	// Auth & Token events
 	EventTokenRefreshed = "auth.token_refreshed"
 	EventTokenExpired   = "auth.token_expired"

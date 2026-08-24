@@ -157,6 +157,9 @@ func RegisterHostModule(ctx context.Context, r wazero.Runtime) error {
 		NewFunctionBuilder().
 		WithFunc(hostKVSet).
 		Export("kv_set").
+		NewFunctionBuilder().
+		WithFunc(hostKVDelete).
+		Export("kv_delete").
 		Instantiate(ctx); err != nil {
 		return fmt.Errorf("instantiating acton_storage: %w", err)
 	}
@@ -202,6 +205,9 @@ func RegisterHostModule(ctx context.Context, r wazero.Runtime) error {
 		NewFunctionBuilder().
 		WithFunc(hostKVSet).
 		Export("host_kv_set").
+		NewFunctionBuilder().
+		WithFunc(hostKVDelete).
+		Export("host_kv_delete").
 		NewFunctionBuilder().
 		WithFunc(hostEmitEvent).
 		Export("host_emit_event").
@@ -817,6 +823,27 @@ func hostKVSet(ctx context.Context, m api.Module, keyPtr, keyLen, valPtr, valLen
 	}
 
 	if err := h.KV.Set(h.PluginID, string(keyBytes), string(valBytes)); err != nil {
+		return -1
+	}
+	return 0
+}
+
+func hostKVDelete(ctx context.Context, m api.Module, keyPtr, keyLen uint32) int32 {
+	h := HostContextFrom(ctx)
+	if h == nil || h.KV == nil {
+		return -1
+	}
+
+	if err := h.Gate.CheckStorageAccess(); err != nil {
+		return -1
+	}
+
+	keyBytes, err := readBufferFromMemory(m.Memory(), keyPtr, keyLen)
+	if err != nil {
+		return -1
+	}
+
+	if err := h.KV.Delete(h.PluginID, string(keyBytes)); err != nil {
 		return -1
 	}
 	return 0

@@ -265,7 +265,7 @@ export function PluginDetailModal({
                         </span>
                       ))
                     ) : (
-                      <span className="text-caption text-slate italic">Zero network access (Isolated)</span>
+                      <span className="text-caption text-slate italic">{t('hub.modal.noEgress', 'None')}</span>
                     )}
                   </div>
                 </div>
@@ -291,7 +291,7 @@ export function PluginDetailModal({
                         </span>
                       ))
                     ) : (
-                      <span className="text-caption text-slate italic">No vault credentials requested</span>
+                      <span className="text-caption text-slate italic">{t('hub.modal.noSecrets', 'None')}</span>
                     )}
                   </div>
                 </div>
@@ -300,15 +300,15 @@ export function PluginDetailModal({
                 <div className="p-4 rounded-2xl bg-soft-meadow border border-onyx/10 space-y-2">
                   <div className="flex items-center gap-2 font-semibold text-deep-ink text-body-sm">
                     <Database className="h-4 w-4 text-slate" />
-                    <span>{t('permissions.storage', 'Persistent Storage')}</span>
+                    <span>{t('permissions.storage', 'Storage')}</span>
                   </div>
                   <div className="pt-1">
                     {permissions.storage ? (
                       <span className="inline-flex items-center gap-1.5 text-caption font-medium text-status-success bg-canvas px-2.5 py-1 rounded-full border border-onyx/10 shadow-2xs">
-                        <Check className="h-3.5 w-3.5" /> Scoped SQLite KV Storage Enabled
+                        <Check className="h-3.5 w-3.5" /> {t('hub.modal.storageGranted', 'Enabled')}
                       </span>
                     ) : (
-                      <span className="text-caption text-slate italic">Stateless (Storage disabled)</span>
+                      <span className="text-caption text-slate italic">{t('hub.modal.storageNone', 'None')}</span>
                     )}
                   </div>
                 </div>
@@ -317,7 +317,7 @@ export function PluginDetailModal({
                 <div className="p-4 rounded-2xl bg-soft-meadow border border-onyx/10 space-y-2">
                   <div className="flex items-center gap-2 font-semibold text-deep-ink text-body-sm">
                     <Radio className="h-4 w-4 text-slate" />
-                    <span>{t('permissions.busEvents', 'Event Bus Topics')}</span>
+                    <span>{t('permissions.busEvents', 'Event Bus')}</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {(permissions.bus_events || []).length > 0 ? (
@@ -331,7 +331,7 @@ export function PluginDetailModal({
                         </span>
                       ))
                     ) : (
-                      <span className="text-caption text-slate italic">No bus topics allowed</span>
+                      <span className="text-caption text-slate italic">{t('hub.modal.busNone', 'Standard')}</span>
                     )}
                   </div>
                 </div>

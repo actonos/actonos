@@ -208,7 +208,7 @@ export function ActionProgressProvider({ children }: { children: ReactNode }) {
     [scheduleAutoDismiss]
   );
 
-  // Listen to Backend Realtime Progress Events ('skill.progress', etc.)
+  // Listen to Backend Realtime Progress Events ('skill.progress', 'plugin.progress', etc.)
   useEffect(() => {
     const handleBackendProgress = (event: Event) => {
       const detail = (event as CustomEvent<{
@@ -216,6 +216,7 @@ export function ActionProgressProvider({ children }: { children: ReactNode }) {
         agent_id?: string;
         payload: {
           skill_id?: string;
+          plugin_id?: string;
           step?: string;
           message?: string;
           progress?: number;
@@ -226,12 +227,13 @@ export function ActionProgressProvider({ children }: { children: ReactNode }) {
       }>).detail;
 
       if (!detail?.payload) return;
-      const { skill_id, message, progress } = detail.payload;
+      const { skill_id, plugin_id, message, progress } = detail.payload;
+      const targetEntityId = plugin_id || skill_id;
 
       setActions((prev) =>
         prev.map((a) => {
           if (
-            (skill_id && (a.targetId === skill_id || a.title.toLowerCase().includes(skill_id.toLowerCase()))) &&
+            (targetEntityId && (a.targetId === targetEntityId || a.title.toLowerCase().includes(targetEntityId.toLowerCase()))) &&
             (a.status === 'running' || a.status === 'waiting_approval')
           ) {
             let nextIndex = a.currentStepIndex;
@@ -262,8 +264,10 @@ export function ActionProgressProvider({ children }: { children: ReactNode }) {
     };
 
     window.addEventListener('actonos:skill-progress', handleBackendProgress);
+    window.addEventListener('actonos:plugin-progress', handleBackendProgress);
     return () => {
       window.removeEventListener('actonos:skill-progress', handleBackendProgress);
+      window.removeEventListener('actonos:plugin-progress', handleBackendProgress);
     };
   }, []);
 

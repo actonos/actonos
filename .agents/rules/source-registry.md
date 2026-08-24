@@ -95,6 +95,8 @@
 | Method | Path | Handler | File |
 |:---|:---|:---|:---|
 | `GET` | `/api/plugins` | `handleListPlugins` | `api_plugins.go` |
+| `GET` | `/api/plugins/available` | `handleListAvailablePlugins` | `api_plugins.go` |
+| `POST` | `/api/plugins/install` | `handleInstallAvailablePlugin` | `api_plugins.go` |
 | `POST` | `/api/plugins/upload` | `handleUploadPlugin` | `api_plugins.go` |
 | `POST` | `/api/plugins/{id}/enable` | `handleEnablePlugin` | `api_plugins.go` |
 | `POST` | `/api/plugins/{id}/disable` | `handleDisablePlugin` | `api_plugins.go` |

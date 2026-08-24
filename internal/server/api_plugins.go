@@ -1,8 +1,6 @@
 package server
 
 import (
-	"archive/zip"
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,48 +30,51 @@ func (s *Server) handleListPlugins(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func extractPluginPackage(r io.ReaderAt, size int64) (manifestBytes []byte, wasmBytes []byte, sigBytes []byte, readmeBytes []byte, err error) {
-	zr, err := zip.NewReader(r, size)
+func (s *Server) handleListAvailablePlugins(w http.ResponseWriter, r *http.Request) {
+	if s.pluginHubMgr == nil {
+		s.respondError(w, http.StatusNotImplemented, "PLUGIN_HUB_UNAVAILABLE", "plugin registry manager is not configured")
+		return
+	}
+
+	var installed []plugin.PluginInfo
+	if s.pluginMgr != nil {
+		installed = s.pluginMgr.ListPlugins()
+	}
+
+	catalog := s.pluginHubMgr.ListCatalog(r.Context(), installed)
+	s.respondJSON(w, http.StatusOK, map[string]any{
+		"catalog": catalog,
+		"count":   len(catalog),
+	})
+}
+
+type installPluginRequest struct {
+	PluginID    string `json:"plugin_id"`
+	DownloadURL string `json:"download_url,omitempty"`
+}
+
+func (s *Server) handleInstallAvailablePlugin(w http.ResponseWriter, r *http.Request) {
+	if s.pluginHubMgr == nil {
+		s.respondError(w, http.StatusNotImplemented, "PLUGIN_HUB_UNAVAILABLE", "plugin registry manager is not configured")
+		return
+	}
+
+	var req installPluginRequest
+	if err := s.decodeJSON(r, &req); err != nil || req.PluginID == "" {
+		s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", "plugin_id is required")
+		return
+	}
+
+	info, err := s.pluginHubMgr.InstallPlugin(r.Context(), req.PluginID, req.DownloadURL)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("invalid plugin package zip: %w", err)
+		s.respondError(w, http.StatusInternalServerError, "INSTALL_PLUGIN_FAILED", err.Error())
+		return
 	}
 
-	for _, f := range zr.File {
-		cleanName := filepath.Clean(f.Name)
-		if strings.HasPrefix(cleanName, "..") || filepath.IsAbs(cleanName) {
-			continue
-		}
-
-		rc, err := f.Open()
-		if err != nil {
-			continue
-		}
-		data, err := io.ReadAll(io.LimitReader(rc, 64<<20))
-		rc.Close()
-		if err != nil {
-			continue
-		}
-
-		switch cleanName {
-		case "manifest.json":
-			manifestBytes = data
-		case "plugin.wasm":
-			wasmBytes = data
-		case "signature.sig":
-			sigBytes = data
-		case "README.md":
-			readmeBytes = data
-		}
-	}
-
-	if len(manifestBytes) == 0 {
-		return nil, nil, nil, nil, errors.New("package is missing manifest.json")
-	}
-	if len(wasmBytes) == 0 {
-		return nil, nil, nil, nil, errors.New("package is missing plugin.wasm")
-	}
-
-	return manifestBytes, wasmBytes, sigBytes, readmeBytes, nil
+	s.respondJSON(w, http.StatusOK, map[string]any{
+		"status": "installed",
+		"plugin": info,
+	})
 }
 
 func (s *Server) handleUploadPlugin(w http.ResponseWriter, r *http.Request) {
@@ -115,7 +116,7 @@ func (s *Server) handleUploadPlugin(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if isZip {
-		mBytes, wBytes, sBytes, rBytes, err := extractPluginPackage(bytes.NewReader(fileBytes), int64(len(fileBytes)))
+		mBytes, wBytes, sBytes, rBytes, err := plugin.ExtractPluginPackage(fileBytes)
 		if err != nil {
 			s.respondError(w, http.StatusBadRequest, "INVALID_PACKAGE", fmt.Sprintf("failed to unpack .actonpkg: %v", err))
 			return

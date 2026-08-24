@@ -53,6 +53,7 @@ type Server struct {
 	channelMgr     *channels.ChannelManager
 	skillWatcher   *tools.SkillWatcher
 	pluginMgr      *plugin.Manager
+	pluginHubMgr   *plugin.PluginRegistryManager
 	startTime      time.Time
 	dataDir        string
 	workspaceDir   string
@@ -98,6 +99,7 @@ type Config struct {
 	PairingManager      *channels.PairingManager
 	ChannelManager      *channels.ChannelManager
 	PluginManager       *plugin.Manager
+	PluginHubManager    *plugin.PluginRegistryManager
 	WorkspaceDir        string
 	WorkspaceStore      *workspacepkg.Store
 	SkillsDir           string
@@ -175,6 +177,7 @@ func NewServer(cfg Config) *Server {
 		pairingMgr:     cfg.PairingManager,
 		channelMgr:     cfg.ChannelManager,
 		pluginMgr:      cfg.PluginManager,
+		pluginHubMgr:   cfg.PluginHubManager,
 		startTime:      time.Now(),
 		dataDir:        dataDir,
 		workspaceDir:   workspaceDir,
@@ -195,6 +198,9 @@ func NewServer(cfg Config) *Server {
 	}
 	if s.toolReg != nil && s.channelMgr != nil {
 		s.toolReg.SetChannelSender(s.channelMgr)
+	}
+	if s.pluginHubMgr == nil && s.pluginsDir != "" {
+		s.pluginHubMgr = plugin.NewPluginRegistryManager(s.pluginsDir, s.pluginMgr, s.bus)
 	}
 
 	s.setupRoutes()
@@ -331,6 +337,8 @@ func (s *Server) setupRoutes() {
 			// WasmLoader Plugin System
 			r.Route("/plugins", func(r chi.Router) {
 				r.Get("/", s.handleListPlugins)
+				r.Get("/available", s.handleListAvailablePlugins)
+				r.Post("/install", s.handleInstallAvailablePlugin)
 				r.Post("/upload", s.handleUploadPlugin)
 				r.Post("/{id}/enable", s.handleEnablePlugin)
 				r.Post("/{id}/disable", s.handleDisablePlugin)

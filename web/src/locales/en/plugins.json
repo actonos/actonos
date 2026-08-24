@@ -3,11 +3,21 @@
   "title": "WASM Plugins",
   "subtitle": "Polyglot sandboxed WebAssembly extensions running inside Wazero JIT runtime with hardware vault brokering and domain egress firewall.",
   "runtimeBadge": "Wazero JIT Runtime • Fail-Closed Sandbox",
+  "loading": "Loading WASM Plugins...",
+  "views": {
+    "installed": "Installed Plugins ({{count}})",
+    "available": "Available Plugins ({{count}})"
+  },
   "stats": {
     "total": "Total Installed",
     "active": "Active & Running",
     "channels": "Chat Channels",
-    "connectors": "SaaS Connectors"
+    "connectors": "SaaS Connectors",
+    "toolsActive": "{{count}} Tool modules active",
+    "jitSafe": "JIT hot-reloaded memory safe",
+    "adaptersActive": "Dynamic messaging adapters",
+    "vaultBrokered": "Vault token brokered",
+    "toolsCount": "{{count}} Tools"
   },
   "tabs": {
     "all": "All Plugins",
@@ -34,11 +44,11 @@
     "error": "Error"
   },
   "permissions": {
-    "title": "Sandboxed Permissions",
-    "netOutbound": "Outbound Domains",
+    "title": "Permissions",
+    "netOutbound": "Network Access",
     "secrets": "Vault Secrets",
-    "storage": "Persistent Storage",
-    "busEvents": "Event Bus Topics"
+    "storage": "Storage",
+    "busEvents": "Event Bus"
   },
   "actions": {
     "enable": "Enable",
@@ -49,7 +59,69 @@
     "viewLogs": "Logs",
     "refresh": "Refresh",
     "cancel": "Cancel",
+    "copied": "Copied",
+    "copy": "Copy",
+    "clearSearch": "Clear Search",
+    "clearFilters": "Clear Filters",
     "confirmUninstall": "Are you sure you want to uninstall plugin '{{name}}'? This will remove its binary and configuration."
+  },
+  "hub": {
+    "loading": "Loading Official Plugin Registry...",
+    "title": "Official Plugin Registry",
+    "subtitle": "Curated WebAssembly extensions built by the ActonOS core team for seamless 1-click installation.",
+    "byAuthor": "by {{author}}",
+    "install": "Install",
+    "installed": "Installed",
+    "installing": "Installing...",
+    "installingTitle": "Installing Plugin: {{name}}",
+    "installingSubtitle": "Downloading package files, verifying sandbox permissions, and hot-reloading into Wazero runtime.",
+    "statusFilter": {
+      "all": "All",
+      "installed": "Installed",
+      "available": "Available"
+    },
+    "sort": {
+      "label": "Sort:",
+      "stars": "Most Popular (Stars)",
+      "recent": "Recently Updated",
+      "name": "Name (A-Z)"
+    },
+    "categories": {
+      "all": "All Categories",
+      "channel": "Chat Channels",
+      "connector": "SaaS Connectors",
+      "tool": "Tool Extensions"
+    },
+    "modal": {
+      "overview": "Overview & Permissions",
+      "capabilities": "Capabilities & Tools",
+      "configSchema": "Configuration Schema",
+      "rawManifest": "Registry JSON",
+      "about": "About Plugin",
+      "noDesc": "Official WebAssembly plugin for ActonOS.",
+      "capabilityTypes": "Capabilities",
+      "tags": "Tags",
+      "noEgress": "None (No outbound network)",
+      "noSecrets": "None",
+      "storageGranted": "Enabled",
+      "storageNone": "None",
+      "busNone": "Standard",
+      "viewSchema": "View Parameters Schema",
+      "channelId": "channel_id",
+      "requiresPairing": "Requires Pairing Code",
+      "authType": "auth"
+    },
+    "pagination": {
+      "loadMore": "Load More Plugins",
+      "showing": "Showing {{shown}} of {{total}} plugins"
+    }
+  },
+  "actionProgress": {
+    "steps": {
+      "auth": "Security Authorization & Validation",
+      "download": "Package Acquisition & Download",
+      "verify": "Sandbox Verification & Hot-Reload"
+    }
   },
   "modals": {
     "uploadTitle": "Install Plugin Package",
@@ -94,8 +166,9 @@
   },
   "empty": {
     "title": "No Plugins Installed Yet",
-    "description": "Expand ActonOS by uploading .actonpkg WebAssembly packages for Chat Channels, SaaS Integrations, or Agent Tools.",
+    "description": "Expand ActonOS by uploading .actonpkg WebAssembly packages or installing from the Available Plugins registry.",
     "noMatches": "No plugins match your current search query and filters.",
+    "adjustFilters": "Try adjusting your search keywords, status filter, or category.",
     "clearFilters": "Clear Filters"
   }
 }

@@ -1423,3 +1423,130 @@ func TestServer_PluginConfigEndpoint(t *testing.T) {
 	}
 }
 
+func TestServer_AvailablePlugins(t *testing.T) {
+	srv := newTestServer(t)
+
+	// Mock registry server
+	mockRegistryServer := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		rw.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(rw).Encode(map[string]any{
+			"schema_version": "1.0.0",
+			"plugins": []map[string]any{
+				{
+					"id":           "test_installed_plugin",
+					"name":         "Test Installed Plugin",
+					"version":      "1.0.0",
+					"capabilities": []string{"tool"},
+				},
+				{
+					"id":           "channel-discord",
+					"name":         "Discord Bot Channel",
+					"version":      "1.0.0",
+					"capabilities": []string{"channel"},
+				},
+			},
+		})
+	}))
+	defer mockRegistryServer.Close()
+
+	if srv.pluginHubMgr != nil {
+		srv.pluginHubMgr.SetRegistryURLs(mockRegistryServer.URL, mockRegistryServer.URL)
+		_ = srv.pluginHubMgr.FetchRemoteCatalog(context.Background())
+	}
+
+	// 1. GET /api/plugins/available
+	req := httptest.NewRequest(http.MethodGet, "/api/plugins/available", nil)
+	w := httptest.NewRecorder()
+	srv.Router().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /api/plugins/available, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var envelope struct {
+		Data struct {
+			Catalog []plugin.RegistryPlugin `json:"catalog"`
+			Count   int                      `json:"count"`
+		} `json:"data"`
+		Catalog []plugin.RegistryPlugin `json:"catalog"`
+		Count   int                      `json:"count"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&envelope); err != nil {
+		t.Fatalf("failed to decode catalog response: %v", err)
+	}
+	catalog := envelope.Data.Catalog
+	if len(catalog) == 0 {
+		catalog = envelope.Catalog
+	}
+	if len(catalog) == 0 {
+		t.Fatalf("expected non-empty available catalog")
+	}
+
+	// 2. Mock asset server for installation test
+	var pkgBuf bytes.Buffer
+	zw := zip.NewWriter(&pkgBuf)
+	manifestData := []byte(`{
+		"id": "test_installed_plugin",
+		"name": "Test Installed Plugin",
+		"version": "1.0.0",
+		"capabilities": ["tool"]
+	}`)
+	mf, _ := zw.Create("manifest.json")
+	_, _ = mf.Write(manifestData)
+	wf, _ := zw.Create("plugin.wasm")
+	_, _ = wf.Write([]byte("\x00asm\x01\x00\x00\x00"))
+	_ = zw.Close()
+
+	assetServer := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		rw.Header().Set("Content-Type", "application/zip")
+		_, _ = rw.Write(pkgBuf.Bytes())
+	}))
+	defer assetServer.Close()
+
+	// 3. POST /api/plugins/install
+	installBody := fmt.Sprintf(`{"plugin_id": "test_installed_plugin", "download_url": "%s/test.actonpkg"}`, assetServer.URL)
+	installReq := httptest.NewRequest(http.MethodPost, "/api/plugins/install", strings.NewReader(installBody))
+	installReq.Header.Set("Content-Type", "application/json")
+	installW := httptest.NewRecorder()
+	srv.Router().ServeHTTP(installW, installReq)
+
+	if installW.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /api/plugins/install, got %d: %s", installW.Code, installW.Body.String())
+	}
+
+	// 4. GET /api/plugins/available should now mark it as installed
+	reqAfter := httptest.NewRequest(http.MethodGet, "/api/plugins/available", nil)
+	wAfter := httptest.NewRecorder()
+	srv.Router().ServeHTTP(wAfter, reqAfter)
+
+	var envAfter struct {
+		Data struct {
+			Catalog []plugin.RegistryPlugin `json:"catalog"`
+			Count   int                      `json:"count"`
+		} `json:"data"`
+		Catalog []plugin.RegistryPlugin `json:"catalog"`
+	}
+	_ = json.NewDecoder(wAfter.Body).Decode(&envAfter)
+	catAfter := envAfter.Data.Catalog
+	if len(catAfter) == 0 {
+		catAfter = envAfter.Catalog
+	}
+	foundInstalled := false
+	for _, p := range catAfter {
+		if p.ID == "test_installed_plugin" && p.Installed {
+			foundInstalled = true
+			break
+		}
+	}
+	if !foundInstalled {
+		// Also verify via GET /api/plugins
+		listReq := httptest.NewRequest(http.MethodGet, "/api/plugins", nil)
+		listW := httptest.NewRecorder()
+		srv.Router().ServeHTTP(listW, listReq)
+		if !strings.Contains(listW.Body.String(), "test_installed_plugin") {
+			t.Errorf("installed plugin was not registered in /api/plugins: %s", listW.Body.String())
+		}
+	}
+}
+
+

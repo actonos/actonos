@@ -41,8 +41,14 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
             if (next.event.type === 'skill.progress') {
               window.dispatchEvent(new CustomEvent('actonos:skill-progress', { detail: next.event }));
             }
+            if (next.event.type === 'plugin.progress') {
+              window.dispatchEvent(new CustomEvent('actonos:plugin-progress', { detail: next.event }));
+            }
             if (next.event.type === 'skill.installed' || next.event.type === 'skill.uninstalled') {
               window.dispatchEvent(new CustomEvent('actonos:tools-updated', { detail: next.event }));
+            }
+            if (next.event.type === 'plugin.installed' || next.event.type === 'plugin.uninstalled') {
+              window.dispatchEvent(new CustomEvent('actonos:plugins-updated', { detail: next.event }));
             }
           }
         } catch {

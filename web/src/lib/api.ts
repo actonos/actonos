@@ -9,6 +9,7 @@ import type {
   MCPServerStatus,
   MutationResult,
   PluginInfo,
+  RegistryPlugin,
   VaultSecretMeta,
 } from './types';
 import { API_BASE, fetchJSON, getAuthHeaders, HTTP_STATUS_ACCEPTED } from './api/client';
@@ -355,6 +356,12 @@ export const api = {
 
   // WASM Plugin Subsystem
   listPlugins: () => fetchJSON<{ plugins: PluginInfo[]; count: number }>('/plugins'),
+  listAvailablePlugins: () => fetchJSON<{ catalog: RegistryPlugin[]; count: number }>('/plugins/available'),
+  installAvailablePlugin: (pluginId: string, downloadUrl?: string) =>
+    fetchJSON<MutationResult<{ status: string; plugin: PluginInfo }>>('/plugins/install', {
+      method: 'POST',
+      body: JSON.stringify({ plugin_id: pluginId, download_url: downloadUrl }),
+    }),
   uploadPlugin: (file: File, id?: string, manifest?: string) => {
     const fd = new FormData();
     fd.append('file', file);
@@ -374,7 +381,7 @@ export const api = {
   disablePlugin: (id: string) => fetchJSON<MutationResult<{ status: string; plugin: PluginInfo }>>(`/plugins/${encodeURIComponent(id)}/disable`, { method: 'POST' }),
   deletePlugin: (id: string) => fetchJSON<MutationResult<{ status: string; id: string }>>(`/plugins/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   getPluginLogs: (id: string) => fetchJSON<{ id: string; status: string; logs: string[] }>(`/plugins/${encodeURIComponent(id)}/logs`),
-  updatePluginConfig: (id: string, config: Record<string, any>, secrets?: Record<string, string>) =>
+  updatePluginConfig: (id: string, config: Record<string, unknown>, secrets?: Record<string, string>) =>
     fetchJSON<MutationResult<{ status: string; plugin: PluginInfo }>>(`/plugins/${encodeURIComponent(id)}/config`, {
       method: 'POST',
       body: JSON.stringify({ config, secrets }),
