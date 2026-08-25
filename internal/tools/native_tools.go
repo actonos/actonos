@@ -86,6 +86,26 @@ func RegisterNativeToolsWithConfig(r *ToolRegistry, config NativeToolsConfig) {
 	_ = r.Register(NewBrowserNavigateTool())
 	_ = r.Register(NewBrowserScreenshotTool(config.AgentsDir))
 	_ = r.Register(NewCronScheduleTool(nil))
+	_ = r.Register(NewTaskEnqueueTool(nil))
+}
+
+// MissionBacklogProvider lets the agent enqueue unattended follow-up work.
+type MissionBacklogProvider interface {
+	EnqueueMission(ctx context.Context, title, description, assignedAgentID string) (id string, err error)
+}
+
+// AttachMissionBacklog connects native_task_enqueue to the autonomous task backlog.
+func AttachMissionBacklog(r *ToolRegistry, backlog MissionBacklogProvider) {
+	if r == nil {
+		return
+	}
+	if t, err := r.Get("native_task_enqueue"); err == nil {
+		if et, ok := t.(*TaskEnqueueTool); ok {
+			et.SetBacklog(backlog)
+			return
+		}
+	}
+	_ = r.Register(NewTaskEnqueueTool(backlog))
 }
 
 // AttachCronScheduler connects the active CronScheduler to native_cron_schedule.
@@ -2184,6 +2204,68 @@ func (t *CronScheduleTool) ParametersSchema() json.RawMessage {
 		},
 		"required": ["action"]
 	}`)
+}
+
+// -----------------------------------------------------------------------------
+// 12. Task enqueue tool
+// -----------------------------------------------------------------------------
+
+type TaskEnqueueTool struct {
+	backlog MissionBacklogProvider
+}
+
+func NewTaskEnqueueTool(backlog MissionBacklogProvider) *TaskEnqueueTool {
+	return &TaskEnqueueTool{backlog: backlog}
+}
+
+func (t *TaskEnqueueTool) SetBacklog(backlog MissionBacklogProvider) {
+	t.backlog = backlog
+}
+
+func (t *TaskEnqueueTool) Name() string { return "native_task_enqueue" }
+func (t *TaskEnqueueTool) Description() string {
+	return "Enqueue a background mission for the 24/7 agent loop. Use when work should continue unattended after this turn. Do not use for a one-shot chat answer."
+}
+func (t *TaskEnqueueTool) Category() string { return "native" }
+
+func (t *TaskEnqueueTool) ParametersSchema() json.RawMessage {
+	return json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"title": {"type": "string", "description": "Short mission title"},
+			"description": {"type": "string", "description": "What the autonomous loop should accomplish"},
+			"assigned_agent_id": {"type": "string", "description": "Agent to run the mission (default auto)"}
+		},
+		"required": ["title"]
+	}`)
+}
+
+func (t *TaskEnqueueTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {
+	if t == nil || t.backlog == nil {
+		return nil, fmt.Errorf("mission backlog is not configured")
+	}
+	inputJSON = NormalizeToolInput(inputJSON)
+	var input struct {
+		Title           string `json:"title"`
+		Description     string `json:"description"`
+		AssignedAgentID string `json:"assigned_agent_id"`
+	}
+	if err := json.Unmarshal(inputJSON, &input); err != nil {
+		return nil, fmt.Errorf("parsing task enqueue input: %w", err)
+	}
+	id, err := t.backlog.EnqueueMission(ctx, input.Title, input.Description, input.AssignedAgentID)
+	if err != nil {
+		return nil, fmt.Errorf("enqueueing mission: %w", err)
+	}
+	return &ToolResult{
+		Content: fmt.Sprintf("Enqueued mission %s (%s) for unattended execution.", id, strings.TrimSpace(input.Title)),
+		Data: map[string]any{
+			"task_id":           id,
+			"title":             strings.TrimSpace(input.Title),
+			"created_by":        "agent",
+			"assigned_agent_id": input.AssignedAgentID,
+		},
+	}, nil
 }
 
 func (t *CronScheduleTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {

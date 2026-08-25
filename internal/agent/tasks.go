@@ -193,6 +193,26 @@ func (tm *TaskManager) CreateTask(ctx context.Context, t AutonomousTask) (*Auton
 	return &t, nil
 }
 
+// EnqueueMission records agent-originated unattended work for the 24/7 loop.
+func (tm *TaskManager) EnqueueMission(ctx context.Context, title, description, assignedAgentID string) (string, error) {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return "", fmt.Errorf("mission title is required")
+	}
+	created, err := tm.CreateTask(ctx, AutonomousTask{
+		Title:           title,
+		Description:     strings.TrimSpace(description),
+		AssignedAgentID: strings.TrimSpace(assignedAgentID),
+		CreatedBy:       "agent",
+		Status:          "pending",
+		Priority:        "p2_normal",
+	})
+	if err != nil {
+		return "", err
+	}
+	return created.ID, nil
+}
+
 // GetTask retrieves a single task by ID.
 func (tm *TaskManager) GetTask(ctx context.Context, id string) (*AutonomousTask, error) {
 	tm.mu.RLock()

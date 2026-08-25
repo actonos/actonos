@@ -133,6 +133,162 @@ func TestHeartbeatSkipsLegacySystemTasks(t *testing.T) {
 	}
 }
 
+type stubApprovalList struct {
+	items []tools.ApprovalRequest
+}
+
+func (s stubApprovalList) List(context.Context, string, int) ([]tools.ApprovalRequest, error) {
+	return s.items, nil
+}
+
+func TestHeartbeatPicksUpAgentOriginatedMission(t *testing.T) {
+	db, eventBus := setupTestDB(t)
+	manager, err := NewAgentManager(db, eventBus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	taskManager, err := NewTaskManager(db.SQLDB(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := taskManager.CreateTask(context.Background(), AutonomousTask{
+		Title: "Follow up on the campaign", Description: "Draft the next email.", CreatedBy: "agent", TargetChannel: "none",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	provider := llm.NewMockProvider("openai/gpt-4o", "Drafted the next email with evidence.")
+	router := llm.NewModelCascadeRouter()
+	router.RegisterProvider("openai/gpt-4o", provider)
+	engine := NewEngine(manager, eventBus, router, nil)
+	engine.SetTaskManager(taskManager)
+	daemon := NewHeartbeatDaemon(manager, engine, eventBus, db.SQLDB(), t.TempDir(), time.Minute)
+	daemon.SetTaskManager(taskManager)
+	daemon.SetSessionManager(nil)
+
+	run, err := daemon.TriggerManualPulse(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if provider.CompleteCalls == 0 || run.TokensUsed == 0 {
+		t.Fatalf("agent-originated mission was not advanced: run=%+v calls=%d", run, provider.CompleteCalls)
+	}
+	updated, err := taskManager.GetTask(context.Background(), task.ID)
+	if err != nil || updated.Status == "pending" {
+		t.Fatalf("expected agent mission to leave pending, got %+v err=%v", updated, err)
+	}
+}
+
+func TestHeartbeatDoesNotSpendTokensOnBlockedOrApprovalPausedMissions(t *testing.T) {
+	tests := []struct {
+		name   string
+		task   AutonomousTask
+		approvals []tools.ApprovalRequest
+		wantSkip string
+	}{
+		{
+			name: "blocked_mission",
+			task: AutonomousTask{
+				Title: "Stalled campaign", Description: "Needs operator review.", CreatedBy: "user",
+				Status: "blocked", TargetChannel: "none",
+			},
+			wantSkip: "blocked",
+		},
+		{
+			name: "approval_paused_in_progress",
+			task: AutonomousTask{
+				Title: "Write files", Description: "Waiting on approval.", CreatedBy: "user",
+				Status: "in_progress", AssignedAgentID: "agent_system_core", TargetChannel: "none",
+			},
+			approvals: []tools.ApprovalRequest{{
+				ID: "apr_pause", AgentID: "agent_system_core", ToolName: "native_file_write", Status: "pending",
+			}},
+			wantSkip: "approval",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, eventBus := setupTestDB(t)
+			manager, err := NewAgentManager(db, eventBus)
+			if err != nil {
+				t.Fatal(err)
+			}
+			taskManager, err := NewTaskManager(db.SQLDB(), t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := taskManager.CreateTask(context.Background(), tt.task); err != nil {
+				t.Fatal(err)
+			}
+			if err := taskManager.SaveHeartbeatConfig(context.Background(), HeartbeatConfig{
+				Enabled: true, IntervalMinutes: 60, Directives: "Check the deployment health endpoint now.",
+			}); err != nil {
+				t.Fatal(err)
+			}
+
+			provider := llm.NewMockProvider("openai/gpt-4o", "invented a retry")
+			router := llm.NewModelCascadeRouter()
+			router.RegisterProvider("openai/gpt-4o", provider)
+			engine := NewEngine(manager, eventBus, router, nil)
+			daemon := NewHeartbeatDaemon(manager, engine, eventBus, db.SQLDB(), t.TempDir(), time.Minute)
+			daemon.SetTaskManager(taskManager)
+			daemon.SetSessionManager(nil)
+			if len(tt.approvals) > 0 {
+				daemon.SetApprovalManager(stubApprovalList{items: tt.approvals})
+			}
+
+			run, err := daemon.TriggerManualPulse(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if provider.CompleteCalls != 0 || run.TokensUsed != 0 {
+				t.Fatalf("human-wait pulse spent tokens: run=%+v calls=%d", run, provider.CompleteCalls)
+			}
+			if run.Status != "skipped" || !strings.Contains(strings.ToLower(run.Summary), tt.wantSkip) {
+				t.Fatalf("expected skipped human-wait run mentioning %q, got %+v", tt.wantSkip, run)
+			}
+			listed, err := taskManager.ListTasks(context.Background(), tt.task.Status, "")
+			if err != nil || len(listed) != 1 {
+				t.Fatalf("human-needed mission disappeared: %+v err=%v", listed, err)
+			}
+		})
+	}
+}
+
+func TestNativeTaskEnqueueCreatesAgentMission(t *testing.T) {
+	db, _ := setupTestDB(t)
+	taskManager, err := NewTaskManager(db.SQLDB(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry := tools.NewToolRegistry(nil)
+	tools.RegisterNativeTools(registry, t.TempDir())
+	tools.AttachMissionBacklog(registry, taskManager)
+
+	res, err := registry.Execute(context.Background(), DefaultSystemAgentID, "native_task_enqueue", []byte(`{"title":"Follow-up research","description":"Collect sources overnight."}`))
+	if err != nil {
+		t.Fatalf("native_task_enqueue execute: %v", err)
+	}
+	if res == nil || !strings.Contains(res.Content, "Follow-up research") {
+		t.Fatalf("expected enqueue confirmation, got %+v", res)
+	}
+	listed, err := taskManager.ListTasks(context.Background(), "pending", "")
+	if err != nil || len(listed) != 1 {
+		t.Fatalf("expected one pending mission, got %+v err=%v", listed, err)
+	}
+	if listed[0].CreatedBy == "system" || listed[0].CreatedBy != "agent" {
+		t.Fatalf("enqueued mission must be non-system agent work, got created_by=%q", listed[0].CreatedBy)
+	}
+	if listed[0].Title != "Follow-up research" {
+		t.Fatalf("unexpected title: %q", listed[0].Title)
+	}
+	if _, err := registry.Execute(context.Background(), DefaultSystemAgentID, "native_task_enqueue", []byte(`{"title":"   "}`)); err == nil {
+		t.Fatal("empty title must not enqueue a mission")
+	}
+}
+
 func TestHeartbeatExcludesCronFromRoutineToolsWhenQuotaFull(t *testing.T) {
 	db, eventBus := setupTestDB(t)
 	manager, err := NewAgentManager(db, eventBus)

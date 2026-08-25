@@ -14,7 +14,9 @@ import (
 // PlanStep represents a single decomposed step in a complex goal.
 type PlanStep struct {
 	ID           string   `json:"id"`
+	Title        string   `json:"title,omitempty"`
 	Description  string   `json:"description"`
+	Acceptance   string   `json:"acceptance,omitempty"`
 	AgentRole    string   `json:"agent_role"` // "code", "data", "report", "general" or specific agent_id
 	Dependencies []string `json:"dependencies"`
 	Status       string   `json:"status"` // "pending", "in_progress", "completed", "failed"
@@ -83,35 +85,126 @@ func (p *Planner) DecomposeGoal(ctx context.Context, goal string, availableAgent
 	resp, err := p.llmRouter.CompleteWithCascade(ctx, cascade, messages, opts)
 	if err != nil {
 		slog.Warn("planner fallback to basic decomposition", "cascade", cascade, "error", err)
-		fallbackRole := "general"
-		if len(availableAgents) > 0 && availableAgents[0].AgentID != "" {
-			fallbackRole = availableAgents[0].AgentID
-		}
-		plan.Steps = []PlanStep{
-			{ID: "task_1", Description: "Execute initial analysis for: " + goal, AgentRole: fallbackRole, Status: "pending"},
-			{ID: "task_2", Description: "Consolidate and verify results for: " + goal, AgentRole: fallbackRole, Dependencies: []string{"task_1"}, Status: "pending"},
-		}
+		plan.Steps = defaultPlanSteps(goal, availableAgents)
 		return plan, nil
 	}
 
 	var steps []PlanStep
 	if err := ExtractAndUnmarshalJSON(resp.Content, &steps); err != nil {
 		slog.Warn("planner failed to parse JSON, falling back to default plan", "error", err, "raw", resp.Content)
-		fallbackRole := "general"
-		if len(availableAgents) > 0 && availableAgents[0].AgentID != "" {
-			fallbackRole = availableAgents[0].AgentID
-		}
-		plan.Steps = []PlanStep{
-			{ID: "task_1", Description: goal, AgentRole: fallbackRole, Status: "pending"},
-		}
+		plan.Steps = defaultPlanSteps(goal, availableAgents)
 		return plan, nil
 	}
 
-	for i := range steps {
-		steps[i].Status = "pending"
+	plan.Steps = normalizePlanSteps(steps, fallbackPlanRole(availableAgents))
+	if len(plan.Steps) == 0 {
+		plan.Steps = defaultPlanSteps(goal, availableAgents)
 	}
-	plan.Steps = steps
 	return plan, nil
+}
+
+func fallbackPlanRole(agents []AgentManifest) string {
+	if len(agents) > 0 && agents[0].AgentID != "" {
+		return agents[0].AgentID
+	}
+	return "general"
+}
+
+func defaultPlanSteps(goal string, agents []AgentManifest) []PlanStep {
+	role := fallbackPlanRole(agents)
+	trimmed := strings.TrimSpace(goal)
+	return []PlanStep{
+		{
+			ID:          "task_1",
+			Title:       "Gather inputs",
+			Description: "Collect the facts, files, and constraints required to execute: " + trimmed,
+			Acceptance:  "Named sources or files are identified and the execution constraints are explicit.",
+			AgentRole:   role,
+			Status:      "pending",
+		},
+		{
+			ID:           "task_2",
+			Title:        "Produce and verify",
+			Description:  "Create the requested deliverable and verify it against the original goal: " + trimmed,
+			Acceptance:   "The deliverable exists with tool evidence and matches the goal.",
+			AgentRole:    role,
+			Dependencies: []string{"task_1"},
+			Status:       "pending",
+		},
+	}
+}
+
+const maxPlanSteps = 5
+
+func normalizePlanSteps(steps []PlanStep, fallbackRole string) []PlanStep {
+	if fallbackRole == "" {
+		fallbackRole = "general"
+	}
+	seen := make(map[string]bool)
+	out := make([]PlanStep, 0, len(steps))
+	for _, step := range steps {
+		if len(out) >= maxPlanSteps {
+			break
+		}
+		title := collapseSpace(step.Title)
+		desc := collapseSpace(step.Description)
+		if desc == "" {
+			desc = title
+		}
+		if desc == "" {
+			continue
+		}
+		id := collapseSpace(step.ID)
+		if id == "" {
+			id = fmt.Sprintf("task_%d", len(out)+1)
+		}
+		if seen[id] {
+			id = fmt.Sprintf("task_%d", len(out)+1)
+		}
+		seen[id] = true
+		role := collapseSpace(step.AgentRole)
+		if role == "" {
+			role = fallbackRole
+		}
+		var deps []string
+		depSeen := map[string]bool{}
+		for _, dep := range step.Dependencies {
+			dep = collapseSpace(dep)
+			if dep == "" || dep == id || depSeen[dep] {
+				continue
+			}
+			depSeen[dep] = true
+			deps = append(deps, dep)
+		}
+		out = append(out, PlanStep{
+			ID:           id,
+			Title:        title,
+			Description:  desc,
+			Acceptance:   collapseSpace(step.Acceptance),
+			AgentRole:    role,
+			Dependencies: deps,
+			Status:       "pending",
+			Result:       step.Result,
+		})
+	}
+	known := make(map[string]bool, len(out))
+	for _, step := range out {
+		known[step.ID] = true
+	}
+	for i := range out {
+		filtered := out[i].Dependencies[:0]
+		for _, dep := range out[i].Dependencies {
+			if known[dep] {
+				filtered = append(filtered, dep)
+			}
+		}
+		out[i].Dependencies = filtered
+	}
+	return out
+}
+
+func collapseSpace(s string) string {
+	return strings.Join(strings.Fields(strings.TrimSpace(s)), " ")
 }
 
 // ExecutePlan runs each step in topological order, respecting dependencies.

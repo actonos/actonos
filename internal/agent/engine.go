@@ -341,9 +341,17 @@ func (e *Engine) ExecuteNextPlanStep(ctx context.Context, agentID, goal string, 
 		if _, lookupErr := e.agentMgr.Get(ctx, step.AgentRole); lookupErr == nil {
 			execAgentID = step.AgentRole
 		} else if e.swarm != nil {
+			spawnTitle := step.Title
+			if spawnTitle == "" {
+				spawnTitle = step.ID
+			}
+			spawnPrompt := step.Description
+			if step.Acceptance != "" {
+				spawnPrompt = step.Description + "\nAcceptance: " + step.Acceptance
+			}
 			resultCh, spawnErr := e.swarm.SpawnSubAgent(ctx, agentID, SubTask{
-				Title:           step.ID,
-				Prompt:          step.Description,
+				Title:           spawnTitle,
+				Prompt:          spawnPrompt,
 				AssignedAgentID: step.AgentRole,
 			})
 			if spawnErr == nil {
@@ -358,7 +366,11 @@ func (e *Engine) ExecuteNextPlanStep(ctx context.Context, agentID, goal string, 
 			}
 		}
 	}
-	prompt := BuildPlanStepPrompt(step.ID, goal, step.Description, step.AgentRole, "", SkillCatalogFrom(ctx)...)
+	stepBrief := step.Description
+	if strings.TrimSpace(step.Title) != "" && !strings.EqualFold(strings.TrimSpace(step.Title), strings.TrimSpace(step.Description)) {
+		stepBrief = step.Title + " — " + step.Description
+	}
+	prompt := BuildPlanStepPrompt(step.ID, goal, stepBrief, step.AgentRole, step.Acceptance, SkillCatalogFrom(ctx)...)
 	resp, execErr := e.ExecuteStepWithHistory(ctx, execAgentID, prompt, history)
 	if execErr != nil {
 		plan.MarkStep(step.ID, "failed", execErr.Error())

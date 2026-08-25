@@ -403,6 +403,8 @@ func NormalizeToolName(name string) string {
 		return "native_workspace_write"
 	case "workspace_delete", "delete_workspace", "user_file_delete":
 		return "native_workspace_delete"
+	case "task_enqueue", "enqueue_task", "enqueue_mission", "create_task", "create_mission", "native_task_create":
+		return "native_task_enqueue"
 	case "subshell", "bash", "sh", "exec", "powershell", "terminal", "run_command", "shell":
 		return "native_subshell"
 	case "browser", "browser_open", "web_browser":

@@ -193,6 +193,9 @@ func NewServer(cfg Config) *Server {
 	if s.engine != nil && s.taskMgr != nil {
 		s.engine.SetTaskManager(s.taskMgr)
 	}
+	if s.toolReg != nil && s.taskMgr != nil {
+		tools.AttachMissionBacklog(s.toolReg, s.taskMgr)
+	}
 	if s.heartbeat != nil && s.approvalMgr != nil {
 		s.heartbeat.SetApprovalManager(s.approvalMgr)
 	}

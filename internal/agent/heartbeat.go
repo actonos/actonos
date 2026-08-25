@@ -368,72 +368,7 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) (run *Hea
 		}
 	}
 
-	var activeTask *AutonomousTask
-	if h.taskMgr != nil {
-		// Priority order: in_progress first, then pending
-		inProg, _ := h.taskMgr.ListTasks(ctx, "in_progress", "")
-		for i := range inProg {
-			t := &inProg[i]
-			if t.CreatedBy == "system" {
-				continue
-			}
-			// Check if this in_progress task is currently paused waiting for operator approval
-			if h.approvalMgr != nil {
-				pendingApprovals, err := h.approvalMgr.List(ctx, "pending", 50)
-				if err == nil && len(pendingApprovals) > 0 {
-					isPendingApproval := false
-					for _, pa := range pendingApprovals {
-						if pa.AgentID == t.AssignedAgentID || pa.AgentID == primaryAgentID {
-							isPendingApproval = true
-							break
-						}
-					}
-					if isPendingApproval {
-						slog.Info("task execution is paused waiting for operator approval; skipping cycle", "task_id", t.ID)
-						continue
-					}
-				}
-			}
-			activeTask = t
-			break
-		}
-		if activeTask == nil {
-			pending, _ := h.taskMgr.ListTasks(ctx, "pending", "")
-			for i := range pending {
-				if pending[i].CreatedBy == "system" {
-					continue
-				}
-				candidateAgent := pending[i].AssignedAgentID
-				if candidateAgent == "" || candidateAgent == "auto" {
-					candidateAgent = primaryAgentID
-				}
-				// Only skip launching THIS task if an approval is pending for
-				// its own assigned agent — an unrelated approval elsewhere in
-				// the system must never block the entire backlog from making
-				// progress.
-				if h.approvalMgr != nil {
-					pendingApprovals, err := h.approvalMgr.List(ctx, "pending", 50)
-					if err == nil && len(pendingApprovals) > 0 {
-						isBlockedByApproval := false
-						for _, pa := range pendingApprovals {
-							if pa.AgentID == candidateAgent {
-								isBlockedByApproval = true
-								break
-							}
-						}
-						if isBlockedByApproval {
-							slog.Info("task launch deferred: its assigned agent has a pending approval", "task_id", pending[i].ID, "agent_id", candidateAgent)
-							continue
-						}
-					}
-				}
-				activeTask = &pending[i]
-				if activeTask != nil {
-					break
-				}
-			}
-		}
-	}
+	activeTask, humanWait := h.selectRunnableMission(ctx, primaryAgentID)
 
 	run = &HeartbeatRun{
 		AgentID:    primaryAgentID,
@@ -443,14 +378,23 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) (run *Hea
 	_, _ = rand.Read(b)
 	run.ID = "hb_" + hex.EncodeToString(b)
 
-	// A heartbeat without a task or an actionable scratchpad must stay entirely
-	// silent. Calling the model here lets it invent work such as a cron schedule.
-	if activeTask == nil && !hasActionableHeartbeatDirectives(standingDirectives) {
-		run.Status = "ok"
-		run.Summary = "System nominal. Zero tasks pending. No actionable heartbeat directives."
-		h.recordRun(*run)
-		h.checkCustomAgentPulses(ctx, now, manual)
-		return run
+	// Cheap classifier: only spend tokens when there is runnable work.
+	// Blocked / approval-paused missions stay visible and must not burn a
+	// completion call inventing a retry — even if standing directives exist.
+	if activeTask == nil {
+		if humanWait != "" {
+			run.Status = "skipped"
+			run.Summary = humanWait
+			h.recordRun(*run)
+			return run
+		}
+		if !hasActionableHeartbeatDirectives(standingDirectives) {
+			run.Status = "ok"
+			run.Summary = "System nominal. Zero tasks pending. No actionable heartbeat directives."
+			h.recordRun(*run)
+			h.checkCustomAgentPulses(ctx, now, manual)
+			return run
+		}
 	}
 
 	// CASE A: Active Task Execution with Session Resume Memory
@@ -1225,6 +1169,77 @@ func shortSummary(content string, maxLen int) string {
 		return cleaned[:maxLen-3] + "..."
 	}
 	return cleaned
+}
+
+func isLegacySystemMission(t AutonomousTask) bool {
+	return t.CreatedBy == "system"
+}
+
+func (h *HeartbeatDaemon) agentHasPendingApproval(ctx context.Context, agentID string) bool {
+	if h.approvalMgr == nil || agentID == "" {
+		return false
+	}
+	pendingApprovals, err := h.approvalMgr.List(ctx, "pending", 50)
+	if err != nil || len(pendingApprovals) == 0 {
+		return false
+	}
+	for _, pa := range pendingApprovals {
+		if pa.AgentID == agentID {
+			return true
+		}
+	}
+	return false
+}
+
+// selectRunnableMission picks in_progress then pending work that is not a
+// legacy system seed and is not paused on a pending approval. humanWait is
+// set when the only remaining missions need an operator.
+func (h *HeartbeatDaemon) selectRunnableMission(ctx context.Context, primaryAgentID string) (*AutonomousTask, string) {
+	if h.taskMgr == nil {
+		return nil, ""
+	}
+	humanWait := ""
+	inProg, _ := h.taskMgr.ListTasks(ctx, "in_progress", "")
+	for i := range inProg {
+		t := &inProg[i]
+		if isLegacySystemMission(*t) {
+			continue
+		}
+		assigned := t.AssignedAgentID
+		if assigned == "" || assigned == "auto" {
+			assigned = primaryAgentID
+		}
+		if h.agentHasPendingApproval(ctx, assigned) {
+			humanWait = "paused: operator approval required"
+			slog.Info("task execution is paused waiting for operator approval; skipping cycle", "task_id", t.ID)
+			continue
+		}
+		return t, ""
+	}
+	pending, _ := h.taskMgr.ListTasks(ctx, "pending", "")
+	for i := range pending {
+		if isLegacySystemMission(pending[i]) {
+			continue
+		}
+		candidateAgent := pending[i].AssignedAgentID
+		if candidateAgent == "" || candidateAgent == "auto" {
+			candidateAgent = primaryAgentID
+		}
+		if h.agentHasPendingApproval(ctx, candidateAgent) {
+			humanWait = "paused: operator approval required"
+			slog.Info("task launch deferred: its assigned agent has a pending approval", "task_id", pending[i].ID, "agent_id", candidateAgent)
+			continue
+		}
+		return &pending[i], ""
+	}
+	blocked, _ := h.taskMgr.ListTasks(ctx, "blocked", "")
+	for i := range blocked {
+		if isLegacySystemMission(blocked[i]) {
+			continue
+		}
+		return nil, "blocked: operator review required"
+	}
+	return nil, humanWait
 }
 
 func hasActionableHeartbeatDirectives(content string) bool {

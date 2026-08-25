@@ -110,6 +110,58 @@ func TestBuildPlannerPrompt(t *testing.T) {
 	if !strings.Contains(prompt, "<output_schema>") {
 		t.Errorf("expected planner prompt to include output schema")
 	}
+	for _, needle := range []string{
+		`"title"`,
+		`"acceptance"`,
+		"one deliverable",
+		"Forbidden steps",
+		"task_1",
+	} {
+		if !strings.Contains(prompt, needle) {
+			t.Errorf("expected planner prompt to contain %q, got:\n%s", needle, prompt)
+		}
+	}
+}
+
+func TestNormalizePlanSteps(t *testing.T) {
+	got := normalizePlanSteps([]PlanStep{
+		{ID: "task_1", Title: "  Gather  facts ", Description: "", AgentRole: "", Dependencies: []string{"", "task_1", "ghost"}},
+		{ID: "task_1", Description: "Write the report", Acceptance: "report.md exists", Dependencies: []string{"task_1"}},
+		{Description: "   "},
+		{ID: "task_3", Description: "Verify the report", Dependencies: []string{"task_1"}},
+		{ID: "task_4", Description: "extra 1"},
+		{ID: "task_5", Description: "extra 2"},
+		{ID: "task_6", Description: "should be dropped"},
+	}, "agent_code")
+	if len(got) != 5 {
+		t.Fatalf("expected cap of 5 usable steps, got %d: %+v", len(got), got)
+	}
+	if got[0].ID != "task_1" || got[0].Description != "Gather facts" || got[0].AgentRole != "agent_code" {
+		t.Fatalf("first step not normalized: %+v", got[0])
+	}
+	if len(got[0].Dependencies) != 0 {
+		t.Fatalf("self and unknown deps must be dropped: %+v", got[0].Dependencies)
+	}
+	if got[1].ID == "task_1" {
+		t.Fatalf("duplicate ids must be rewritten: %+v", got[1])
+	}
+	if got[1].Acceptance != "report.md exists" {
+		t.Fatalf("acceptance dropped: %+v", got[1])
+	}
+	ids := map[string]bool{}
+	for _, step := range got {
+		if ids[step.ID] {
+			t.Fatalf("duplicate id survived: %s", step.ID)
+		}
+		ids[step.ID] = true
+	}
+	for _, step := range got {
+		for _, dep := range step.Dependencies {
+			if !ids[dep] {
+				t.Fatalf("unknown dependency %q on %s", dep, step.ID)
+			}
+		}
+	}
 }
 
 func TestBuildReflectionPrompt(t *testing.T) {

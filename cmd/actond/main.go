@@ -306,6 +306,7 @@ func main() {
 	}
 	if taskMgr != nil {
 		engine.SetTaskManager(taskMgr)
+		tools.AttachMissionBacklog(toolReg, taskMgr)
 	}
 
 	// Multi-Channel Cognitive Session Manager
