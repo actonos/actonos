@@ -520,7 +520,11 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) (run *Hea
 			_ = h.sessionMgr.SaveMessage(ctx, convID, assignedAgent, "user", userPrompt, nil)
 		}
 
-		prompt := BuildHeartbeatMissionPrompt(activeTask.Title, activeTask.Description, standingDirectives)
+		var skills []SkillPromptEntry
+		if h.engine != nil {
+			skills = h.engine.SkillCatalogForAgent(ctx, assignedAgent)
+		}
+		prompt := BuildHeartbeatMissionPrompt(activeTask.Title, activeTask.Description, standingDirectives, skills...)
 
 		// Suppress episodic memory for heartbeat task execution to prevent stale
 		// memories from deleted tasks from contaminating the current task context.
@@ -528,6 +532,7 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) (run *Hea
 		taskCtx = context.WithValue(taskCtx, "suppress_episodic_memory", false)
 		taskCtx = context.WithValue(taskCtx, "heartbeat_headless_mode", true)
 		taskCtx = WithExecutionSource(taskCtx, "heartbeat")
+		taskCtx = WithSkillCatalog(taskCtx, skills)
 		if h.cronSched != nil && h.cronSched.CountJobsForAgent(assignedAgent) >= DefaultCronJobsPerAgent {
 			taskCtx = tools.WithDeniedTools(taskCtx, "native_cron_schedule")
 		}

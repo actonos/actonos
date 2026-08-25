@@ -233,6 +233,63 @@ func (s *SemanticKnowledgeSection) Render() string {
 	return sb.String()
 }
 
+// SkillPromptEntry is a compact enabled-skill row for cognitive and mission prompts.
+type SkillPromptEntry struct {
+	Name        string
+	Description string
+	Path        string
+}
+
+const skillDescriptionLimit = 240
+
+func truncateSkillDescription(desc string) string {
+	desc = strings.TrimSpace(desc)
+	if desc == "" {
+		return ""
+	}
+	runes := []rune(desc)
+	if len(runes) <= skillDescriptionLimit {
+		return desc
+	}
+	return string(runes[:skillDescriptionLimit]) + "…"
+}
+
+func renderAvailableSkills(skills []SkillPromptEntry) string {
+	if len(skills) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "<available_skills count=\"%d\">\n", len(skills))
+	sb.WriteString("  <directive>These skills are enabled and callable as tools. When a skill matches the current goal, invoke that skill tool FIRST and follow its returned instructions before improvising.</directive>\n")
+	for _, sk := range skills {
+		desc := truncateSkillDescription(sk.Description)
+		if desc == "" {
+			desc = sk.Name
+		}
+		fmt.Fprintf(&sb, "  <skill name=\"%s\"", EscapeXMLAttribute(sk.Name))
+		if sk.Path != "" {
+			fmt.Fprintf(&sb, " path=\"%s\"", EscapeXMLAttribute(sk.Path))
+		}
+		fmt.Fprintf(&sb, ">%s</skill>\n", escapePromptXML(desc))
+	}
+	sb.WriteString("</available_skills>")
+	return sb.String()
+}
+
+// SkillsSection injects the enabled skill catalog into the cognitive system prompt.
+type SkillsSection struct {
+	Skills []SkillPromptEntry
+}
+
+func (s *SkillsSection) Name() string  { return "available_skills" }
+func (s *SkillsSection) IsEmpty() bool { return s == nil || len(s.Skills) == 0 }
+func (s *SkillsSection) Render() string {
+	if s == nil {
+		return ""
+	}
+	return renderAvailableSkills(s.Skills)
+}
+
 func escapePromptXML(value string) string {
 	value = strings.ReplaceAll(value, "&", "&amp;")
 	value = strings.ReplaceAll(value, "<", "&lt;")

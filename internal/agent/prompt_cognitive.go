@@ -8,10 +8,32 @@ import (
 )
 
 type conversationContextKey struct{}
+type skillCatalogContextKey struct{}
 
 // WithConversationContext scopes semantic retrieval to the active conversation.
 func WithConversationContext(ctx context.Context, conversationID string) context.Context {
 	return context.WithValue(ctx, conversationContextKey{}, conversationID)
+}
+
+// WithSkillCatalog attaches enabled skills so cognitive, planner, and mission
+// prompts can inject the same catalog without extra plumbing.
+func WithSkillCatalog(ctx context.Context, skills []SkillPromptEntry) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if len(skills) == 0 {
+		return ctx
+	}
+	return context.WithValue(ctx, skillCatalogContextKey{}, skills)
+}
+
+// SkillCatalogFrom returns the enabled-skill catalog stored on ctx, if any.
+func SkillCatalogFrom(ctx context.Context) []SkillPromptEntry {
+	if ctx == nil {
+		return nil
+	}
+	skills, _ := ctx.Value(skillCatalogContextKey{}).([]SkillPromptEntry)
+	return skills
 }
 
 // BuildCognitiveSystemPrompt constructs a complete 7-layer Cognitive System Prompt
@@ -26,6 +48,7 @@ func BuildCognitiveSystemPrompt(
 	mem *memory.HybridEngine,
 	embedding *memory.EmbeddingService,
 	userMessage string,
+	extraSkills ...SkillPromptEntry,
 ) (string, int) {
 	builder := NewPromptBuilder()
 
@@ -57,6 +80,12 @@ func BuildCognitiveSystemPrompt(
 		WorkspaceDir: workspaceDir,
 		AgentSlug:    agentSlug,
 	})
+
+	if skills := SkillCatalogFrom(ctx); len(skills) > 0 {
+		builder.WithSection(&SkillsSection{Skills: skills})
+	} else if len(extraSkills) > 0 {
+		builder.WithSection(&SkillsSection{Skills: extraSkills})
+	}
 
 	// Layer 3: Agent Soul (if available)
 	if profileMgr != nil {

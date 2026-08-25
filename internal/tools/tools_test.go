@@ -317,6 +317,48 @@ func TestToolRegistry_ToLLMToolDefinitions(t *testing.T) {
 	}
 }
 
+func TestEnabledSkillCatalogSkipsDisabledAndUnauthorized(t *testing.T) {
+	tempDir := t.TempDir()
+	enabledDir := filepath.Join(tempDir, "email-marketing")
+	disabledDir := filepath.Join(tempDir, "unused-skill")
+	_ = os.MkdirAll(enabledDir, 0755)
+	_ = os.MkdirAll(disabledDir, 0755)
+	_ = os.WriteFile(filepath.Join(enabledDir, "SKILL.md"), []byte("---\nname: email-marketing\ndescription: Draft marketing emails\n---\n\nWrite the email.\n"), 0644)
+	_ = os.WriteFile(filepath.Join(disabledDir, "SKILL.md"), []byte("---\nname: unused-skill\ndescription: Should be hidden\n---\n\nHidden.\n"), 0644)
+
+	registry := NewToolRegistry(nil)
+	enabled, err := NewSkillTool(enabledDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	disabled, err := NewSkillTool(disabledDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := disabled.SetEnabled(false); err != nil {
+		t.Fatal(err)
+	}
+	registry.RegisterOrReplace(enabled)
+	registry.RegisterOrReplace(disabled)
+
+	all := registry.EnabledSkillCatalog("*")
+	if len(all) != 1 || all[0].Name != "skill_email-marketing" {
+		t.Fatalf("expected only enabled skill, got %+v", all)
+	}
+	if all[0].Path != "skills/email-marketing/SKILL.md" {
+		t.Fatalf("unexpected skill path: %s", all[0].Path)
+	}
+	if none := registry.EnabledSkillCatalog(); len(none) != 0 {
+		t.Fatalf("empty authorized list must hide skills, got %+v", none)
+	}
+	if denied := registry.EnabledSkillCatalog("native_file_read"); len(denied) != 0 {
+		t.Fatalf("unauthorized skill leaked into catalog: %+v", denied)
+	}
+	if allowed := registry.EnabledSkillCatalog("skill_email-marketing"); len(allowed) != 1 {
+		t.Fatalf("explicit authorization should include the skill, got %+v", allowed)
+	}
+}
+
 func TestSkillWatcher_LoadSkill(t *testing.T) {
 	tempDir := t.TempDir()
 	skillsDir := filepath.Join(tempDir, "skills")

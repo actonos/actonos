@@ -56,6 +56,43 @@ func TestBuildCognitiveSystemPrompt(t *testing.T) {
 	}
 }
 
+func TestBuildCognitiveAndMissionPromptsInjectEnabledSkills(t *testing.T) {
+	skills := []SkillPromptEntry{{
+		Name:        "skill_email_marketing",
+		Description: "Draft and iterate on marketing emails",
+		Path:        "skills/email-marketing/SKILL.md",
+	}}
+	ctx := WithSkillCatalog(context.Background(), skills)
+	agent := &AgentManifest{
+		AgentID: "agent_lead", Name: "Lead", AuthorizedTools: []string{"*"},
+	}
+	prompt, _ := BuildCognitiveSystemPrompt(ctx, agent.AgentID, agent, "/data", "/data/workspace", nil, nil, nil, "Write a campaign")
+	if !strings.Contains(prompt, "<available_skills") || !strings.Contains(prompt, "skill_email_marketing") {
+		t.Fatalf("cognitive prompt missing enabled skills:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "invoke that skill tool FIRST") {
+		t.Fatalf("cognitive prompt missing skill-use directive:\n%s", prompt)
+	}
+
+	mission := BuildHeartbeatMissionPrompt("Write campaign", "Create a marketing email", "", skills...)
+	if !strings.Contains(mission, "<available_skills") || !strings.Contains(mission, "skill_email_marketing") {
+		t.Fatalf("mission prompt missing enabled skills:\n%s", mission)
+	}
+	if !strings.Contains(mission, "invoke that skill tool FIRST") {
+		t.Fatalf("mission prompt missing skill-use rule:\n%s", mission)
+	}
+
+	planner := BuildPlannerPrompt("Create a marketing email", nil, skills...)
+	if !strings.Contains(planner, "skill_email_marketing") || !strings.Contains(planner, "include an early step that invokes that skill tool") {
+		t.Fatalf("planner prompt missing skill catalog:\n%s", planner)
+	}
+
+	step := BuildPlanStepPrompt("task_1", "Create a marketing email", "Draft the email", "general", "", skills...)
+	if !strings.Contains(step, "skill_email_marketing") || !strings.Contains(step, "call that skill tool before producing the deliverable") {
+		t.Fatalf("plan step prompt missing skill catalog:\n%s", step)
+	}
+}
+
 func TestBuildPlannerPrompt(t *testing.T) {
 	agents := []AgentManifest{
 		{AgentID: "agent_code", Name: "Coder", AuthorizedTools: []string{"native_exec"}},

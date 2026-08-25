@@ -6,7 +6,7 @@ import (
 )
 
 // BuildHeartbeatMissionPrompt formats the autonomous backlog mission execution cycle prompt.
-func BuildHeartbeatMissionPrompt(taskTitle, taskDesc, standingDirectives string) string {
+func BuildHeartbeatMissionPrompt(taskTitle, taskDesc, standingDirectives string, skills ...SkillPromptEntry) string {
 	var sb strings.Builder
 	sb.WriteString("<autonomous_mission_cycle>\n")
 	fmt.Fprintf(&sb, "  <mission_title>%s</mission_title>\n", taskTitle)
@@ -16,8 +16,16 @@ func BuildHeartbeatMissionPrompt(taskTitle, taskDesc, standingDirectives string)
 	if standingDirectives != "" {
 		fmt.Fprintf(&sb, "  <standing_directives>\n%s\n  </standing_directives>\n", indentContent(strings.TrimSpace(standingDirectives), "    "))
 	}
+	if catalog := renderAvailableSkills(skills); catalog != "" {
+		sb.WriteString("  ")
+		sb.WriteString(strings.ReplaceAll(catalog, "\n", "\n  "))
+		sb.WriteString("\n")
+	}
 	sb.WriteString("  <execution_protocol>\n")
 	sb.WriteString("    <rule>Autonomously inspect, execute, and verify concrete progress toward completing this mission using your authorized tools.</rule>\n")
+	if len(skills) > 0 {
+		sb.WriteString("    <rule>If an available skill matches this mission, invoke that skill tool FIRST and follow its returned instructions before improvising the deliverable.</rule>\n")
+	}
 	sb.WriteString("    <rule>Provide a decisive progress report summarizing tool actions taken and verified state changes.</rule>\n")
 	sb.WriteString("    <rule>Do NOT call `native_channel_notify` unless the mission directive explicitly instructs you to send an external message. Deliver your final output directly in your response.</rule>\n")
 	sb.WriteString("    <rule>Do exactly what was requested. Deliver the result directly without conversational filler, pleasantries, or asking follow-up questions (e.g. never ask 'do you want me to do more?').</rule>\n")

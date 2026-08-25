@@ -179,7 +179,58 @@ func (e *Engine) RecordTokenUsage(ctx context.Context, agentID, model, provider,
 // buildCognitivePrompt synthesizes all 7 cognitive layers into a structured XML cognitive context
 // using the unified PromptBuilder architecture.
 func (e *Engine) buildCognitivePrompt(ctx context.Context, agentID string, agent *AgentManifest, userMessage string) (string, int) {
+	ctx = e.withSkillCatalog(ctx, agent)
 	return BuildCognitiveSystemPrompt(ctx, agentID, agent, e.dataDir, e.workspaceDir, e.profileMgr, e.memory, e.embedding, userMessage)
+}
+
+func (e *Engine) withSkillCatalog(ctx context.Context, agent *AgentManifest) context.Context {
+	if len(SkillCatalogFrom(ctx)) > 0 {
+		return ctx
+	}
+	return WithSkillCatalog(ctx, e.skillCatalogForAgent(agent))
+}
+
+func (e *Engine) withSkillCatalogForID(ctx context.Context, agentID string) context.Context {
+	if len(SkillCatalogFrom(ctx)) > 0 {
+		return ctx
+	}
+	return WithSkillCatalog(ctx, e.SkillCatalogForAgent(ctx, agentID))
+}
+
+// SkillCatalogForAgent returns enabled skills the agent is allowed to invoke.
+func (e *Engine) SkillCatalogForAgent(ctx context.Context, agentID string) []SkillPromptEntry {
+	if e == nil || e.tools == nil {
+		return nil
+	}
+	var authorized []string
+	if e.agentMgr != nil && agentID != "" {
+		if agent, err := e.agentMgr.Get(ctx, agentID); err == nil && agent != nil {
+			authorized = agent.AuthorizedTools
+		}
+	}
+	return e.skillCatalog(authorized)
+}
+
+func (e *Engine) skillCatalogForAgent(agent *AgentManifest) []SkillPromptEntry {
+	if agent == nil {
+		return e.skillCatalog(nil)
+	}
+	return e.skillCatalog(agent.AuthorizedTools)
+}
+
+func (e *Engine) skillCatalog(authorized []string) []SkillPromptEntry {
+	if e == nil || e.tools == nil {
+		return nil
+	}
+	raw := e.tools.EnabledSkillCatalog(authorized...)
+	if len(raw) == 0 {
+		return nil
+	}
+	out := make([]SkillPromptEntry, 0, len(raw))
+	for _, entry := range raw {
+		out = append(out, SkillPromptEntry{Name: entry.Name, Description: entry.Description, Path: entry.Path})
+	}
+	return out
 }
 
 // ExecuteStep runs a single cognitive iteration of the ReAct state machine.
@@ -214,6 +265,7 @@ func (e *Engine) ExecuteNextPlanStep(ctx context.Context, agentID, goal string, 
 		resp, err := e.ExecuteStepWithHistory(ctx, agentID, goal, history)
 		return resp, plan, err
 	}
+	ctx = e.withSkillCatalogForID(ctx, agentID)
 	if plan == nil || len(plan.Steps) == 0 {
 		agents, err := e.agentMgr.List(ctx)
 		if err != nil {
@@ -265,7 +317,7 @@ func (e *Engine) ExecuteNextPlanStep(ctx context.Context, agentID, goal string, 
 			}
 		}
 	}
-	prompt := BuildPlanStepPrompt(step.ID, goal, step.Description, step.AgentRole, "")
+	prompt := BuildPlanStepPrompt(step.ID, goal, step.Description, step.AgentRole, "", SkillCatalogFrom(ctx)...)
 	resp, execErr := e.ExecuteStepWithHistory(ctx, execAgentID, prompt, history)
 	if execErr != nil {
 		plan.MarkStep(step.ID, "failed", execErr.Error())
@@ -335,6 +387,7 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 	if agent.Status != StatusActive {
 		return nil, fmt.Errorf("agent %s is not active (status=%s)", agentID, agent.Status)
 	}
+	ctx = e.withSkillCatalog(ctx, agent)
 	source := sourceFromContextOrMessage(ctx, userMessage, "chat")
 	if err := e.checkBudget(ctx, agent, source); err != nil {
 		return nil, err

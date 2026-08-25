@@ -85,6 +85,13 @@ type ToolInfo struct {
 	MissingRequirements []string           `json:"missing_requirements,omitempty"`
 }
 
+// SkillCatalogEntry is the compact prompt-facing view of an enabled skill.
+type SkillCatalogEntry struct {
+	Name        string
+	Description string
+	Path        string
+}
+
 func toolToInfo(t Tool) ToolInfo {
 	info := ToolInfo{
 		Name:            t.Name(),
@@ -480,6 +487,50 @@ func (r *ToolRegistry) ToLLMToolDefinitions(authorizedTools []string, excludedTo
 		}
 	}
 	return defs
+}
+
+// EnabledSkillCatalog returns enabled skills whose requirements are satisfied,
+// optionally filtered to an agent's authorized tool list. Wildcard "*" includes
+// every enabled skill; an empty authorized list includes none.
+func (r *ToolRegistry) EnabledSkillCatalog(authorizedTools ...string) []SkillCatalogEntry {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	allowAll := false
+	authMap := make(map[string]bool, len(authorizedTools))
+	for _, a := range authorizedTools {
+		if a == "*" {
+			allowAll = true
+		}
+		if a != "" {
+			authMap[a] = true
+		}
+	}
+
+	var out []SkillCatalogEntry
+	for _, t := range r.tools {
+		st, ok := t.(*SkillTool)
+		if !ok || !st.IsEnabled() || !st.RequirementsMet() {
+			continue
+		}
+		name := st.Name()
+		if !allowAll && !authMap[name] {
+			continue
+		}
+		entry := SkillCatalogEntry{
+			Name:        name,
+			Description: strings.TrimSpace(st.Description()),
+		}
+		if folder := st.FolderPath(); folder != "" {
+			entry.Path = filepath.ToSlash(filepath.Join("skills", filepath.Base(folder), "SKILL.md"))
+		}
+		out = append(out, entry)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
 }
 
 // NormalizeToolInput converts raw string, double-JSON-encoded, or malformed inputs into valid JSON object bytes.

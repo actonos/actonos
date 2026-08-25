@@ -71,7 +71,7 @@ func (p *Planner) DecomposeGoal(ctx context.Context, goal string, availableAgent
 		cascade = []string{"anthropic/claude-sonnet-4.5", "google/gemini-2.5-flash"}
 	}
 
-	prompt := BuildPlannerPrompt(goal, availableAgents)
+	prompt := BuildPlannerPrompt(goal, availableAgents, SkillCatalogFrom(ctx)...)
 	messages := []llm.Message{
 		{Role: "user", Content: prompt},
 	}
