@@ -377,7 +377,7 @@ func HostContextFrom(ctx context.Context) *HostContext {
 	return nil
 }
 
-const maxPluginHTTPBody = 1 << 20
+const maxPluginHTTPBody = 32 << 20
 
 func sandboxedHTTPClient(h *HostContext, timeout time.Duration) *http.Client {
 	gate := (*SecurityGate)(nil)
