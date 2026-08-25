@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strings"
 	"time"
@@ -347,6 +348,13 @@ func (e *Engine) ExecuteNextPlanStep(ctx context.Context, agentID, goal string, 
 	if err != nil {
 		return nil, plan, err
 	}
+	if step == nil && plan.reopenApprovalFailedSteps() {
+		e.persistTaskPlan(ctx, plan)
+		step, err = e.planner.NextReadyStep(plan)
+		if err != nil {
+			return nil, plan, err
+		}
+	}
 	if step == nil {
 		if plan.AllStepsCompleted() {
 			return &llm.Response{Content: plan.CompletionSummary()}, plan, nil
@@ -391,7 +399,13 @@ func (e *Engine) ExecuteNextPlanStep(ctx context.Context, agentID, goal string, 
 	prompt := BuildPlanStepPrompt(step.ID, goal, stepBrief, step.AgentRole, step.Acceptance, SkillCatalogFrom(ctx)...)
 	resp, execErr := e.ExecuteStepWithHistory(ctx, execAgentID, prompt, history)
 	if execErr != nil {
-		plan.MarkStep(step.ID, "failed", execErr.Error())
+		var approvalErr *tools.ApprovalRequiredError
+		if errors.As(execErr, &approvalErr) {
+			plan.MarkStep(step.ID, StepStatusPaused, approvalPausedMarker+" "+execErr.Error())
+			e.persistTaskPlan(ctx, plan)
+			return resp, plan, execErr
+		}
+		plan.MarkStep(step.ID, StepStatusFailed, execErr.Error())
 		e.persistTaskPlan(ctx, plan)
 		return resp, plan, execErr
 	}
@@ -1392,45 +1406,17 @@ func (e *Engine) ResumeApproved(ctx context.Context, approval tools.ApprovalRequ
 			}
 			e.RecordTokenUsage(execCtx, checkpoint.AgentID, modelName, "", checkpoint.Source, "", usage)
 
-			// Sync and complete autonomous task if this run was for a Task
-			targetTaskID := checkpoint.TaskID
-			if targetTaskID == "" {
-				re := regexp.MustCompile(`Task ID:\s*([^\s|]+)`)
-				if match := re.FindStringSubmatch(checkpoint.Goal); len(match) > 1 {
-					targetTaskID = match[1]
+			e.finishPlanStepAfterResume(execCtx, checkpoint, response)
+			if drainResp, drainErr := e.drainMissionAfterResume(execCtx, checkpoint); drainErr != nil {
+				var approvalErr *tools.ApprovalRequiredError
+				if errors.As(drainErr, &approvalErr) {
+					return drainResp, drainErr
 				}
+				slog.Warn("draining remaining plan steps after approval resume failed", "task_id", checkpoint.TaskID, "error", drainErr)
+			} else if drainResp != nil && strings.TrimSpace(drainResp.Content) != "" {
+				response = drainResp
 			}
-			if targetTaskID != "" && e.taskMgr != nil {
-				if task, err := e.taskMgr.GetTask(execCtx, targetTaskID); err == nil && task != nil {
-					content := strings.TrimSpace(response.Content)
-					shortLog := shortSummary(content, 250)
-					if strings.Contains(content, "[TASK_COMPLETED]") && (e.verifier == nil || e.verifier.VerifyTaskCompletion(task.Description, content, response.ToolCalls)) {
-						task.Status = "completed"
-						task.Progress = 100
-						now := time.Now().UTC()
-						task.CompletedAt = &now
-						task.ExecutionLog = shortLog
-					} else if strings.Contains(content, "[TASK_BLOCKED") {
-						task.Status = "blocked"
-						task.ExecutionLog = shortLog
-					} else {
-						task.Status = "in_progress"
-						task.ExecutionLog = shortLog
-					}
-					_ = e.taskMgr.UpdateTask(execCtx, *task)
-					if e.sessionMgr != nil && task.SessionID != "" {
-						_ = e.sessionMgr.SaveMessage(execCtx, task.SessionID, checkpoint.AgentID, "assistant", response.Content, response.ToolCalls)
-					}
-					if e.bus != nil {
-						e.bus.Publish(bus.NewEvent(bus.EventAgentActionDone, checkpoint.AgentID, map[string]any{
-							"task_id":  task.ID,
-							"status":   task.Status,
-							"progress": task.Progress,
-							"summary":  task.ExecutionLog,
-						}))
-					}
-				}
-			}
+			e.syncMissionAfterResume(execCtx, checkpoint, response)
 
 			return response, nil
 		}
@@ -1534,7 +1520,10 @@ func (e *Engine) saveApprovalCheckpoint(
 	if run == nil || e.runStore == nil {
 		return
 	}
-	taskID, _ := ctx.Value("task_id").(string)
+	taskID := tools.TaskIDFromContext(ctx)
+	if taskID == "" {
+		taskID, _ = ctx.Value("task_id").(string)
+	}
 	// The approval was hashed over the normalized input, so the checkpoint must
 	// persist the same form or the resume-time hash comparison will not match.
 	pending.Function.Arguments = tools.NormalizeToolInput(pending.Function.Arguments)
@@ -1844,6 +1833,135 @@ func isInsideMarkupTag(accumulated string) bool {
 	}
 
 	return false
+}
+
+func resumeTaskID(ctx context.Context, checkpoint *RunCheckpoint) string {
+	if checkpoint != nil && strings.TrimSpace(checkpoint.TaskID) != "" {
+		return strings.TrimSpace(checkpoint.TaskID)
+	}
+	if id := tools.TaskIDFromContext(ctx); id != "" {
+		return id
+	}
+	if checkpoint == nil {
+		return ""
+	}
+	re := regexp.MustCompile(`Task ID:\s*([^\s|]+)`)
+	if match := re.FindStringSubmatch(checkpoint.Goal); len(match) > 1 {
+		return match[1]
+	}
+	return ""
+}
+
+func (e *Engine) finishPlanStepAfterResume(ctx context.Context, checkpoint *RunCheckpoint, resp *llm.Response) {
+	if e.taskMgr == nil || checkpoint == nil {
+		return
+	}
+	taskID := resumeTaskID(ctx, checkpoint)
+	if taskID == "" {
+		return
+	}
+	task, err := e.taskMgr.GetTask(ctx, taskID)
+	if err != nil || task == nil || task.Plan == nil {
+		return
+	}
+	stepID := PlanStepIDFromPrompt(checkpoint.Goal)
+	if stepID == "" {
+		for _, step := range task.Plan.Steps {
+			if step.Status == StepStatusPaused || (step.Status == StepStatusFailed && isApprovalPauseResult(step.Result)) {
+				stepID = step.ID
+				break
+			}
+		}
+	}
+	if stepID == "" {
+		return
+	}
+	content := ""
+	if resp != nil {
+		content = resp.Content
+	}
+	if IsCannedOrEmptyCompletion(content) {
+		task.Plan.MarkStep(stepID, StepStatusPending, content)
+	} else {
+		task.Plan.MarkStep(stepID, StepStatusCompleted, content)
+	}
+	if task.Status == "blocked" {
+		task.Status = "in_progress"
+		task.CompletedAt = nil
+	}
+	e.writeTaskPlan(ctx, task, task.Plan)
+}
+
+func (e *Engine) drainMissionAfterResume(ctx context.Context, checkpoint *RunCheckpoint) (*llm.Response, error) {
+	if e.planner == nil || e.taskMgr == nil || checkpoint == nil {
+		return nil, nil
+	}
+	taskID := resumeTaskID(ctx, checkpoint)
+	if taskID == "" {
+		return nil, nil
+	}
+	task, err := e.taskMgr.GetTask(ctx, taskID)
+	if err != nil || task == nil || task.Plan == nil || !task.Plan.HasReadyStep() {
+		return nil, nil
+	}
+	drainCtx := context.WithValue(ctx, "task_id", taskID)
+	drainCtx = tools.WithTaskID(drainCtx, taskID)
+	if checkpoint.Source != "" {
+		drainCtx = WithExecutionSource(drainCtx, checkpoint.Source)
+	}
+	return e.ExecuteAutonomousGoal(drainCtx, checkpoint.AgentID, missionWorkGoal(task.Title, task.Description), nil)
+}
+
+func (e *Engine) syncMissionAfterResume(ctx context.Context, checkpoint *RunCheckpoint, response *llm.Response) {
+	if e.taskMgr == nil || checkpoint == nil {
+		return
+	}
+	taskID := resumeTaskID(ctx, checkpoint)
+	if taskID == "" {
+		return
+	}
+	task, err := e.taskMgr.GetTask(ctx, taskID)
+	if err != nil || task == nil {
+		return
+	}
+	content := ""
+	var calls []llm.ToolCall
+	if response != nil {
+		content = strings.TrimSpace(response.Content)
+		calls = response.ToolCalls
+	}
+	shortLog := shortSummary(content, 250)
+	planOpen := task.Plan != nil && len(task.Plan.Steps) > 0 && !task.Plan.AllStepsCompleted()
+	planDone := task.Plan != nil && task.Plan.AllStepsCompleted()
+	switch {
+	case planOpen:
+		task.Status = "in_progress"
+		task.ExecutionLog = shortLog
+	case strings.Contains(content, "[TASK_BLOCKED"):
+		task.Status = "blocked"
+		task.ExecutionLog = shortLog
+	case planDone || (strings.Contains(content, "[TASK_COMPLETED]") && (e.verifier == nil || e.verifier.VerifyTaskCompletion(task.Description, content, calls))):
+		task.Status = "completed"
+		task.Progress = 100
+		now := time.Now().UTC()
+		task.CompletedAt = &now
+		task.ExecutionLog = shortLog
+	default:
+		task.Status = "in_progress"
+		task.ExecutionLog = shortLog
+	}
+	_ = e.taskMgr.UpdateTask(ctx, *task)
+	if e.sessionMgr != nil && task.SessionID != "" {
+		_ = e.sessionMgr.SaveMessage(ctx, task.SessionID, checkpoint.AgentID, "assistant", content, calls)
+	}
+	if e.bus != nil {
+		e.bus.Publish(bus.NewEvent(bus.EventAgentActionDone, checkpoint.AgentID, map[string]any{
+			"task_id":  task.ID,
+			"status":   task.Status,
+			"progress": task.Progress,
+			"summary":  task.ExecutionLog,
+		}))
+	}
 }
 
 func (e *Engine) blockTaskOnResumeFailure(ctx context.Context, checkpoint *RunCheckpoint, reason string) {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"strings"
 	"time"
 
@@ -18,6 +19,15 @@ const (
 	StepKindResearch = "research"
 	// StepKindVerify checks prior artifacts; prose is enough to close the step.
 	StepKindVerify = "verify"
+
+	StepStatusPending    = "pending"
+	StepStatusInProgress = "in_progress"
+	StepStatusCompleted  = "completed"
+	StepStatusFailed     = "failed"
+	// StepStatusPaused is an approval wait. It is not a failure; ResumeApproved continues it.
+	StepStatusPaused = "paused"
+
+	approvalPausedMarker = "[APPROVAL_PAUSED]"
 )
 
 // PlanStep represents a single decomposed step in a complex goal.
@@ -30,7 +40,7 @@ type PlanStep struct {
 	Kind         string   `json:"kind,omitempty"`   // produce | research | verify
 	Atomic       bool     `json:"atomic,omitempty"` // whole goal is this single step
 	Dependencies []string `json:"dependencies"`
-	Status       string   `json:"status"` // "pending", "in_progress", "completed", "failed"
+	Status       string   `json:"status"` // pending | in_progress | completed | failed | paused
 	Result       string   `json:"result,omitempty"`
 }
 
@@ -239,6 +249,41 @@ func normalizeStepKind(kind string) string {
 
 func (s *PlanStep) requiresArtifact() bool {
 	return s != nil && s.Kind == StepKindProduce
+}
+
+var planStepIDRe = regexp.MustCompile(`<step_id>([^<]+)</step_id>`)
+
+// PlanStepIDFromPrompt extracts the DAG step id from a plan-step execution prompt.
+func PlanStepIDFromPrompt(prompt string) string {
+	match := planStepIDRe.FindStringSubmatch(prompt)
+	if len(match) != 2 {
+		return ""
+	}
+	return strings.TrimSpace(match[1])
+}
+
+func isApprovalPauseResult(result string) bool {
+	return strings.Contains(result, approvalPausedMarker) ||
+		strings.Contains(strings.ToLower(result), "human approval required") ||
+		strings.Contains(result, "approval_id=")
+}
+
+// reopenApprovalFailedSteps turns approval-shaped failures back into pending
+// work so a mission that was marked failed when a tool paused for approval
+// can continue after the operator decides.
+func (p *TaskPlan) reopenApprovalFailedSteps() bool {
+	if p == nil {
+		return false
+	}
+	changed := false
+	for i := range p.Steps {
+		step := &p.Steps[i]
+		if step.Status == StepStatusFailed && isApprovalPauseResult(step.Result) {
+			step.Status = StepStatusPending
+			changed = true
+		}
+	}
+	return changed
 }
 
 // ExecutePlan runs each step in topological order, respecting dependencies.

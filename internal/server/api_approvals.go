@@ -107,6 +107,9 @@ func (s *Server) handleApproveAction(w http.ResponseWriter, r *http.Request) {
 						}
 					}
 				}
+				if s.heartbeat != nil {
+					s.heartbeat.TriggerWakeup()
+				}
 			}()
 			s.respondJSON(w, http.StatusOK, map[string]any{
 				"approval": item,

@@ -57,6 +57,26 @@ func TestPlannerExpandsNonAtomicSingleStepRegardlessOfGoalLanguage(t *testing.T)
 	}
 }
 
+func TestReopenApprovalFailedSteps(t *testing.T) {
+	plan := &TaskPlan{Steps: []PlanStep{
+		{ID: "task_1", Status: StepStatusFailed, Result: approvalPausedMarker + " human approval required: approval_id=a1"},
+		{ID: "task_2", Status: StepStatusPending, Dependencies: []string{"task_1"}},
+		{ID: "task_3", Status: StepStatusFailed, Result: "tool execution blocked: disk full"},
+	}}
+	if !plan.reopenApprovalFailedSteps() {
+		t.Fatal("expected approval-failed step to reopen")
+	}
+	if plan.StepStatus("task_1") != StepStatusPending {
+		t.Fatalf("task_1 should be pending, got %q", plan.StepStatus("task_1"))
+	}
+	if plan.StepStatus("task_3") != StepStatusFailed {
+		t.Fatal("real failures must stay failed")
+	}
+	if PlanStepIDFromPrompt(BuildPlanStepPrompt("task_2", "goal", "do it", "general", "")) != "task_2" {
+		t.Fatal("step id not extracted from plan-step prompt")
+	}
+}
+
 func TestPlanner_ExecutePlan(t *testing.T) {
 	planner := NewPlanner(nil)
 	plan := &TaskPlan{Steps: []PlanStep{

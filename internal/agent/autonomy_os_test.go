@@ -804,3 +804,146 @@ func TestHeartbeatOpenPlanDoesNotCompleteAfterFirstStep(t *testing.T) {
 		t.Fatalf("expected in_progress while task_2 remains, got %+v run=%+v", got, run)
 	}
 }
+
+func TestApprovalPauseDoesNotFailPlanAndResumeContinues(t *testing.T) {
+	db, eventBus := setupTestDB(t)
+	agentMgr, err := NewAgentManager(db, eventBus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace := t.TempDir()
+	approvalMgr := tools.NewApprovalManager(db.SQLDB())
+	registry := tools.NewToolRegistry(eventBus)
+	tools.RegisterNativeTools(registry, workspace)
+	registry.SetApprovalManager(approvalMgr)
+	registry.SetPolicyResolver(func(context.Context, string) (tools.AgentToolPolicy, error) {
+		return tools.AgentToolPolicy{AuthorizedTools: []string{"native_file_write"}, ApprovalThreshold: "High", AllowedPaths: []string{"*"}}, nil
+	})
+	taskMgr, err := NewTaskManager(db.SQLDB(), workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := taskMgr.CreateTask(context.Background(), AutonomousTask{
+		Title: "Write two files", Description: "Create part one then part two", CreatedBy: "user", TargetChannel: "none",
+		Plan: &TaskPlan{Goal: "Create part one then part two", Steps: []PlanStep{
+			{ID: "task_1", Description: "Write part one", Status: "pending"},
+			{ID: "task_2", Description: "Write part two", Status: "pending", Dependencies: []string{"task_1"}},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	provider := llm.NewMockProvider("resume-model", "")
+	provider.CompleteFunc = func(_ context.Context, messages []llm.Message, _ llm.CompletionOptions) (*llm.Response, error) {
+		content := lastUserContent(messages)
+		if strings.Contains(content, "<step_id>task_2</step_id>") {
+			return &llm.Response{Model: "resume-model", Content: "Wrote part two with verified evidence.", Usage: llm.Usage{TotalTokens: 4}}, nil
+		}
+		if len(messages) > 0 && messages[len(messages)-1].Role == llm.RoleTool {
+			return &llm.Response{Model: "resume-model", Content: "Wrote part one after approval.", Usage: llm.Usage{TotalTokens: 4}}, nil
+		}
+		return &llm.Response{
+			Model: "resume-model",
+			ToolCalls: []llm.ToolCall{{
+				ID: "call-write", Type: "function",
+				Function: llm.FunctionCall{Name: "native_file_write", Arguments: json.RawMessage(`{"path":"part-1.txt","content":"one"}`)},
+			}},
+		}, nil
+	}
+	router := llm.NewModelCascadeRouter()
+	router.RegisterProvider("resume-model", provider)
+	engine := NewEngine(agentMgr, eventBus, router, nil)
+	engine.SetToolRegistry(registry)
+	engine.SetRunStore(NewRunStore(db.SQLDB()))
+	engine.SetPlanner(NewPlanner(router))
+	engine.SetTaskManager(taskMgr)
+
+	manifest, err := agentMgr.Create(context.Background(), AgentManifest{
+		Name: "Resume", Status: StatusActive,
+		ModelConfig: llm.ModelConfig{PrimaryModel: "resume-model"},
+		AuthorizedTools: []string{"native_file_write"},
+		DelegationScope: DelegationScope{AllowedWorkspacePaths: []string{"*"}, RequireHumanApproval: ApprovalHigh},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.WithValue(context.Background(), "task_id", task.ID)
+	ctx = tools.WithTaskID(ctx, task.ID)
+	_, err = engine.ExecuteAutonomousGoal(ctx, manifest.AgentID, task.Description, nil)
+	var approvalRequired *tools.ApprovalRequiredError
+	if !errors.As(err, &approvalRequired) {
+		t.Fatalf("expected approval pause, got %v", err)
+	}
+	paused, err := taskMgr.GetTask(context.Background(), task.ID)
+	if err != nil || paused.Plan == nil || paused.Plan.StepStatus("task_1") != StepStatusPaused {
+		t.Fatalf("approval must pause the plan step, not fail it: %+v err=%v", paused, err)
+	}
+	if paused.Plan.StepStatus("task_2") == "completed" {
+		t.Fatal("task_2 must not complete while task_1 is paused")
+	}
+
+	if _, err := approvalMgr.Decide(context.Background(), approvalRequired.Approval.ID, "approved", "test", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engine.ResumeApproved(context.Background(), approvalRequired.Approval); err != nil {
+		t.Fatal(err)
+	}
+	got, err := taskMgr.GetTask(context.Background(), task.ID)
+	if err != nil || got.Plan == nil {
+		t.Fatalf("missing task after resume: %+v err=%v", got, err)
+	}
+	if got.Plan.StepStatus("task_1") != StepStatusCompleted {
+		t.Fatalf("resumed step must complete, got %+v", got.Plan)
+	}
+	if got.Plan.StepStatus("task_2") != StepStatusCompleted {
+		t.Fatalf("remaining plan steps must drain after approval, got %+v", got.Plan)
+	}
+	if got.Status != "completed" {
+		t.Fatalf("finished DAG after approval resume: %+v", got)
+	}
+}
+
+func TestApprovalFailedPlanStepIsReopened(t *testing.T) {
+	db, eventBus := setupTestDB(t)
+	manager, err := NewAgentManager(db, eventBus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	taskManager, err := NewTaskManager(db.SQLDB(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := taskManager.CreateTask(context.Background(), AutonomousTask{
+		Title: "Stuck after approve", Description: "continue the series", CreatedBy: "user",
+		Plan: &TaskPlan{Goal: "continue the series", Steps: []PlanStep{
+			{ID: "task_1", Description: "first", Status: "failed", Result: "human approval required: approval_id=appr_1 tool=native_file_write risk=High"},
+			{ID: "task_2", Description: "second", Status: "pending", Dependencies: []string{"task_1"}},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var executed []string
+	provider := llm.NewMockProvider("openai/gpt-4o", "")
+	provider.CompleteFunc = func(_ context.Context, messages []llm.Message, _ llm.CompletionOptions) (*llm.Response, error) {
+		stepID := planStepFromPrompt(lastUserContent(messages))
+		if stepID != "" {
+			executed = append(executed, stepID)
+		}
+		return &llm.Response{Model: "openai/gpt-4o", Content: "Completed " + stepID + " with verified evidence.", Usage: llm.Usage{TotalTokens: 4}}, nil
+	}
+	router := llm.NewModelCascadeRouter()
+	router.RegisterProvider("openai/gpt-4o", provider)
+	engine := NewEngine(manager, eventBus, router, nil)
+	engine.SetPlanner(NewPlanner(router))
+	engine.SetTaskManager(taskManager)
+	ctx := context.WithValue(context.Background(), "task_id", task.ID)
+	resp, err := engine.ExecuteAutonomousGoal(ctx, DefaultSystemAgentID, task.Description, nil)
+	if err != nil {
+		t.Fatalf("reopened approval-failed step should run: %v", err)
+	}
+	if len(executed) < 2 || executed[0] != "task_1" || executed[1] != "task_2" {
+		t.Fatalf("expected recovered DAG to run task_1 then task_2, got %v resp=%v", executed, resp)
+	}
+}
