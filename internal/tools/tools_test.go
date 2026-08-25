@@ -585,6 +585,80 @@ func TestApprovalManagerLifecycleAndExactHash(t *testing.T) {
 	}
 }
 
+func TestApprovalGrantSkipsLaterToolApprovals(t *testing.T) {
+	db, err := memory.Open(filepath.Join(t.TempDir(), "approval-grants.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	manager := NewApprovalManager(db.SQLDB())
+	registry := NewToolRegistry(nil)
+	RegisterNativeTools(registry, t.TempDir())
+	registry.SetApprovalManager(manager)
+	registry.SetPolicyResolver(func(context.Context, string) (AgentToolPolicy, error) {
+		return AgentToolPolicy{AuthorizedTools: []string{"*"}, ApprovalThreshold: "High", AllowedPaths: []string{"*"}}, nil
+	})
+	ctx := WithTaskID(context.Background(), "task_campaign")
+	firstInput := json.RawMessage(`{"path":"a.txt","content":"one"}`)
+	_, err = registry.Execute(ctx, "agent-a", "native_file_write", firstInput)
+	var approvalErr *ApprovalRequiredError
+	if !errors.As(err, &approvalErr) || approvalErr.Approval.TaskID != "task_campaign" {
+		t.Fatalf("expected pending approval with task id, got %+v err=%v", approvalErr, err)
+	}
+	if _, err := manager.Decide(ctx, approvalErr.Approval.ID, "approved", "operator", "ok"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.CreateGrant(ctx, &approvalErr.Approval, DontAskTask, "operator"); err != nil {
+		t.Fatal(err)
+	}
+
+	secondInput := json.RawMessage(`{"path":"b.txt","content":"two"}`)
+	if _, err := registry.Execute(ctx, "agent-a", "native_file_write", secondInput); err != nil {
+		t.Fatalf("task grant should skip later approvals for the same tool: %v", err)
+	}
+
+	otherTask := WithTaskID(context.Background(), "task_other")
+	if _, err := registry.Execute(otherTask, "agent-a", "native_file_write", secondInput); !errors.As(err, &approvalErr) {
+		t.Fatalf("task grant must not apply to a different mission, got %v", err)
+	}
+
+	todayItem, err := manager.Request(context.Background(), "trace-today", "agent-b", "native_file_write", "High", firstInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Decide(ctx, todayItem.ID, "approved", "operator", "ok"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.CreateGrant(ctx, todayItem, DontAskToday, "operator"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := registry.Execute(context.Background(), "agent-b", "native_file_write", secondInput); err != nil {
+		t.Fatalf("today grant should skip later approvals: %v", err)
+	}
+	if _, err := registry.Execute(context.Background(), "agent-b", "native_file_delete", json.RawMessage(`{"path":"a.txt"}`)); !errors.As(err, &approvalErr) {
+		t.Fatalf("grant must not cover a different tool, got %v", err)
+	}
+	if GrantEligibleTool("admin_workspace_write") {
+		t.Fatal("admin actions must not receive dont-ask-again grants")
+	}
+}
+
+func TestCreateGrantRequiresTaskID(t *testing.T) {
+	db, err := memory.Open(filepath.Join(t.TempDir(), "approval-grant-task.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	manager := NewApprovalManager(db.SQLDB())
+	item, err := manager.Request(context.Background(), "trace", "agent-a", "native_file_write", "High", json.RawMessage(`{"path":"a.txt"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.CreateGrant(context.Background(), item, DontAskTask, "operator"); err == nil {
+		t.Fatal("expected task grant without task_id to fail")
+	}
+}
+
 func TestToolRegistryMetadataNormalizationAndRemoval(t *testing.T) {
 	registry := NewToolRegistry(nil)
 	RegisterNativeTools(registry, t.TempDir())

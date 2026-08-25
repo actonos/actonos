@@ -187,6 +187,32 @@ func WithApprovalID(ctx context.Context, approvalID string) context.Context {
 	return context.WithValue(ctx, approvalContextKey, approvalID)
 }
 
+type taskIDContextKey struct{}
+
+// WithTaskID attaches the autonomous mission id so approval grants can be
+// scoped to "don't ask again for this task".
+func WithTaskID(ctx context.Context, taskID string) context.Context {
+	if strings.TrimSpace(taskID) == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, taskIDContextKey{}, taskID)
+}
+
+// TaskIDFromContext returns the mission id on ctx, including the legacy
+// string key used by heartbeat.
+func TaskIDFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	if val, ok := ctx.Value(taskIDContextKey{}).(string); ok && strings.TrimSpace(val) != "" {
+		return strings.TrimSpace(val)
+	}
+	if val, _ := ctx.Value("task_id").(string); strings.TrimSpace(val) != "" {
+		return strings.TrimSpace(val)
+	}
+	return ""
+}
+
 type bypassApprovalContextKey struct{}
 
 // WithBypassApproval marks the context to bypass interactive approval requirements (e.g. for background cron jobs).
@@ -661,30 +687,45 @@ func (r *ToolRegistry) Execute(ctx context.Context, agentID, name string, inputJ
 	}
 
 	if resolver != nil && approvalRequired(policy.ApprovalThreshold, riskLevel) && !IsApprovalBypassed(ctx) {
-		approvalID, _ := ctx.Value(approvalContextKey).(string)
-		if approvalID == "" {
-			request, requestErr := approvalManager.Request(ctx, traceID, agentID, name, riskLevel, normalizedInput)
-			if requestErr != nil {
-				return nil, fmt.Errorf("requesting approval: %w", requestErr)
+		skipExactApproval := false
+		if approvalManager != nil && GrantEligibleTool(name) {
+			grant, grantErr := approvalManager.ActiveGrant(ctx, agentID, name, TaskIDFromContext(ctx))
+			if grantErr != nil {
+				return nil, fmt.Errorf("checking approval grant: %w", grantErr)
 			}
-			if r.auditLogger != nil {
-				r.auditLogger.LogAudit(traceID, agentID, name, riskLevel, "Blocked", ErrApprovalRequired.Error(), 0)
+			if grant != nil {
+				skipExactApproval = true
+				if r.auditLogger != nil {
+					r.auditLogger.LogAudit(traceID, agentID, name, riskLevel, "Granted", grant.ID, 0)
+				}
 			}
-			// Only publish the bus event (and therefore surface a new web
-			// notification) for a genuinely new approval. A reused pending
-			// approval means the operator was already asked once.
-			if r.bus != nil && request.IsNew() {
-				r.bus.Publish(bus.NewEvent("approval:required", agentID, map[string]any{
-					"approval": *request,
-				}))
-			}
-			return nil, &ApprovalRequiredError{Approval: *request}
 		}
-		if approvalManager == nil {
-			return nil, errors.New("approval manager is unavailable")
-		}
-		if err := approvalManager.ValidateApproved(ctx, approvalID, agentID, name, normalizedInput); err != nil {
-			return nil, fmt.Errorf("validating approval: %w", err)
+		if !skipExactApproval {
+			approvalID, _ := ctx.Value(approvalContextKey).(string)
+			if approvalID == "" {
+				request, requestErr := approvalManager.Request(ctx, traceID, agentID, name, riskLevel, normalizedInput)
+				if requestErr != nil {
+					return nil, fmt.Errorf("requesting approval: %w", requestErr)
+				}
+				if r.auditLogger != nil {
+					r.auditLogger.LogAudit(traceID, agentID, name, riskLevel, "Blocked", ErrApprovalRequired.Error(), 0)
+				}
+				// Only publish the bus event (and therefore surface a new web
+				// notification) for a genuinely new approval. A reused pending
+				// approval means the operator was already asked once.
+				if r.bus != nil && request.IsNew() {
+					r.bus.Publish(bus.NewEvent("approval:required", agentID, map[string]any{
+						"approval": *request,
+					}))
+				}
+				return nil, &ApprovalRequiredError{Approval: *request}
+			}
+			if approvalManager == nil {
+				return nil, errors.New("approval manager is unavailable")
+			}
+			if err := approvalManager.ValidateApproved(ctx, approvalID, agentID, name, normalizedInput); err != nil {
+				return nil, fmt.Errorf("validating approval: %w", err)
+			}
 		}
 	}
 

@@ -2,6 +2,7 @@ import type {
   AgentRun,
   ApprovalRequest,
   CronExecutionRecord,
+  DontAskAgain,
   HeartbeatRun,
   MutationResult,
   RunEvent,
@@ -32,10 +33,10 @@ export const operationsApi = {
     fetchJSON<{ approvals: ApprovalRequest[] }>(
       `/approvals?status=${encodeURIComponent(status)}`
     ),
-  approveAction: (id: string, reason = '') =>
+  approveAction: (id: string, reason = '', dontAskAgain?: DontAskAgain) =>
     fetchJSON<{ approval: ApprovalRequest; result: unknown }>(
       `/approvals/${id}/approve`,
-      { method: 'POST', body: JSON.stringify({ reason }) }
+      { method: 'POST', body: JSON.stringify({ reason, dont_ask_again: dontAskAgain || undefined }) }
     ),
   rejectAction: (id: string, reason = '') =>
     fetchJSON<ApprovalRequest>(`/approvals/${id}/reject`, {

@@ -359,6 +359,8 @@ export interface HeartbeatRun {
 
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'expired';
 
+export type DontAskAgain = 'task' | 'today';
+
 export interface ApprovalRequest {
   id: string;
   trace_id: string;
@@ -373,6 +375,7 @@ export interface ApprovalRequest {
   expires_at: string;
   decided_at?: string;
   decided_by?: string;
+  task_id?: string;
 }
 
 export interface ApprovalRequiredResult {

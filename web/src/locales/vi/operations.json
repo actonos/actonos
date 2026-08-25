@@ -92,7 +92,11 @@
     "rejected": "Đã từ chối thao tác",
     "failed": "Không thể xử lý phê duyệt",
     "approvedFeedback": "Đã kiểm tra và chấp thuận từ Theo dõi trực tiếp",
-    "defaultFeedback": "Người vận hành đã từ chối từ Theo dõi trực tiếp"
+    "defaultFeedback": "Người vận hành đã từ chối từ Theo dõi trực tiếp",
+    "dontAskTask": "Không hỏi lại cho task này",
+    "dontAskToday": "Không hỏi lại hết hôm nay",
+    "grantedToday": "{{tool}} sẽ không hỏi lại hết hôm nay",
+    "grantedTask": "{{tool}} sẽ không hỏi lại cho task này"
   },
   "units": {
     "milliseconds": "{{value}} ms",

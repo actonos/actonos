@@ -701,8 +701,21 @@ List durable approval requests. Supported filters include `pending`, `approved`,
 Approve and execute the exact action recorded by the request. Optional body:
 
 ```json
-{ "reason": "Reviewed by the system administrator" }
+{
+  "reason": "Reviewed by the system administrator",
+  "dont_ask_again": "task"
+}
 ```
+
+`dont_ask_again` is optional:
+
+- `task` — skip later approvals for this agent and tool while the same
+  mission (`task_id`) is running. Rejected if the approval is not tied to a mission.
+- `today` — skip later approvals for this agent and tool until the end of the
+  current UTC day (at least one hour).
+
+Administrative actions (`admin_*`, MCP connect) cannot receive a waiver. The
+current action is still executed immediately after approval.
 
 ### `POST /api/approvals/{id}/reject`
 Reject a pending action without executing it.

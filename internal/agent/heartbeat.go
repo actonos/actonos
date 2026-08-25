@@ -529,6 +529,7 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) (run *Hea
 		// Suppress episodic memory for heartbeat task execution to prevent stale
 		// memories from deleted tasks from contaminating the current task context.
 		taskCtx := context.WithValue(ctx, "task_id", activeTask.ID)
+		taskCtx = tools.WithTaskID(taskCtx, activeTask.ID)
 		taskCtx = context.WithValue(taskCtx, "suppress_episodic_memory", false)
 		taskCtx = context.WithValue(taskCtx, "heartbeat_headless_mode", true)
 		taskCtx = WithExecutionSource(taskCtx, "heartbeat")

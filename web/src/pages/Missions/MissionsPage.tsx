@@ -24,7 +24,8 @@ import {
 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { api } from '@/lib/api';
-import type { AgentRun, ApprovalRequest, AutonomousTask, HeartbeatConfigData, HeartbeatRun, TaskPriority, TaskStatus } from '@/lib/types';
+import type { AgentRun, ApprovalRequest, AutonomousTask, DontAskAgain, HeartbeatConfigData, HeartbeatRun, TaskPriority, TaskStatus } from '@/lib/types';
+import { ApprovalDecisionBar } from '@/components/features/governance/ApprovalDecisionBar';
 import { TaskModal } from './components/TaskModal';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
@@ -168,11 +169,18 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
     }
   };
 
-  const handleApproval = async (approval: ApprovalRequest, approved: boolean) => {
+  const handleApproval = async (approval: ApprovalRequest, approved: boolean, dontAskAgain?: DontAskAgain) => {
     try {
       if (approved) {
-        await api.approveAction(approval.id, t('governance.reviewedReason'));
-        success(t('governance.approvedTitle'), approval.tool_name);
+        await api.approveAction(approval.id, t('governance.reviewedReason'), dontAskAgain);
+        success(
+          t('governance.approvedTitle'),
+          dontAskAgain === 'today'
+            ? t('governance.grantedToday', { tool: approval.tool_name })
+            : dontAskAgain === 'task'
+              ? t('governance.grantedTask', { tool: approval.tool_name })
+              : approval.tool_name
+        );
       } else {
         await api.rejectAction(approval.id, t('governance.rejectedReason'));
         info(t('governance.rejectedTitle'), approval.tool_name);
@@ -586,14 +594,18 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                   <pre className="max-h-32 overflow-auto rounded-2xl bg-canvas p-3 text-[11px] text-slate">
                     {JSON.stringify(approval.input, null, 2)}
                   </pre>
-                  <div className="flex justify-end gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => handleApproval(approval, false)}>
-                      {t('governance.reject')}
-                    </Button>
-                    <Button variant="primary" size="sm" onClick={() => handleApproval(approval, true)}>
-                      {t('governance.approve')}
-                    </Button>
-                  </div>
+                  <ApprovalDecisionBar
+                    approval={approval}
+                    deciding={false}
+                    labels={{
+                      reject: t('governance.reject'),
+                      approve: t('governance.approve'),
+                      dontAskTask: t('governance.dontAskTask'),
+                      dontAskToday: t('governance.dontAskToday'),
+                    }}
+                    onReject={() => handleApproval(approval, false)}
+                    onApprove={(dontAskAgain) => handleApproval(approval, true, dontAskAgain)}
+                  />
                 </div>
               ))}
             </Card>

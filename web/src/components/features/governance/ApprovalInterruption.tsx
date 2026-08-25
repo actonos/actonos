@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/lib/api';
-import type { ApprovalRequest } from '@/lib/types';
+import type { ApprovalRequest, DontAskAgain } from '@/lib/types';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { useRealtime } from '@/components/providers/RealtimeProvider';
+import { ApprovalDecisionBar } from './ApprovalDecisionBar';
 
 export function ApprovalInterruption() {
   const { t } = useTranslation('operations');
@@ -57,12 +57,19 @@ export function ApprovalInterruption() {
 
   if (!approval) return null;
 
-  const decide = async (approved: boolean) => {
+  const decide = async (approved: boolean, dontAskAgain?: DontAskAgain) => {
     setDeciding(true);
     try {
       if (approved) {
-        await api.approveAction(approval.id, feedback.trim() || t('approval.approvedFeedback'));
-        success(t('approval.approved'), approval.tool_name);
+        await api.approveAction(approval.id, feedback.trim() || t('approval.approvedFeedback'), dontAskAgain);
+        success(
+          t('approval.approved'),
+          dontAskAgain === 'today'
+            ? t('approval.grantedToday', { tool: approval.tool_name })
+            : dontAskAgain === 'task'
+              ? t('approval.grantedTask', { tool: approval.tool_name })
+              : approval.tool_name
+        );
         window.dispatchEvent(
           new CustomEvent('actonos:approval-decided', {
             detail: { id: approval.id, approved: true, tool: approval.tool_name },
@@ -122,10 +129,18 @@ export function ApprovalInterruption() {
           rows={3}
           className="w-full mb-4 rounded-[18px] border border-onyx/15 bg-soft-meadow px-4 py-3 text-body-sm"
         />
-        <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
-          <Button variant="ghost" disabled={deciding} onClick={() => decide(false)}>{t('approval.reject')}</Button>
-          <Button variant="primary" disabled={deciding} onClick={() => decide(true)}>{t('approval.approve')}</Button>
-        </div>
+        <ApprovalDecisionBar
+          approval={approval}
+          deciding={deciding}
+          labels={{
+            reject: t('approval.reject'),
+            approve: t('approval.approve'),
+            dontAskTask: t('approval.dontAskTask'),
+            dontAskToday: t('approval.dontAskToday'),
+          }}
+          onReject={() => decide(false)}
+          onApprove={(dontAskAgain) => decide(true, dontAskAgain)}
+        />
       </Card>
     </div>
   );

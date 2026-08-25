@@ -148,7 +148,8 @@ func (s *Server) decideApproval(w http.ResponseWriter, r *http.Request, decision
 		return nil, false
 	}
 	var req struct {
-		Reason string `json:"reason"`
+		Reason       string `json:"reason"`
+		DontAskAgain string `json:"dont_ask_again"`
 	}
 	if r.ContentLength > 0 {
 		if err := s.decodeJSON(r, &req); err != nil {
@@ -156,7 +157,28 @@ func (s *Server) decideApproval(w http.ResponseWriter, r *http.Request, decision
 			return nil, false
 		}
 	}
-	item, err := s.approvalMgr.Decide(r.Context(), chi.URLParam(r, "id"), decision, "system_admin", req.Reason)
+	req.DontAskAgain = strings.TrimSpace(req.DontAskAgain)
+	id := chi.URLParam(r, "id")
+	if decision == "approved" && req.DontAskAgain != "" {
+		current, getErr := s.approvalMgr.Get(r.Context(), id)
+		if getErr != nil {
+			s.respondError(w, http.StatusBadRequest, "APPROVAL_DECISION_FAILED", getErr.Error())
+			return nil, false
+		}
+		if req.DontAskAgain != tools.DontAskTask && req.DontAskAgain != tools.DontAskToday {
+			s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", "dont_ask_again must be task or today")
+			return nil, false
+		}
+		if !tools.GrantEligibleTool(current.ToolName) {
+			s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", "dont-ask-again is not available for this action")
+			return nil, false
+		}
+		if req.DontAskAgain == tools.DontAskTask && strings.TrimSpace(current.TaskID) == "" {
+			s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", "dont-ask-again for this task requires a mission task")
+			return nil, false
+		}
+	}
+	item, err := s.approvalMgr.Decide(r.Context(), id, decision, "system_admin", req.Reason)
 	if err != nil {
 		status := http.StatusBadRequest
 		if errors.Is(err, tools.ErrApprovalInvalid) || errors.Is(err, tools.ErrApprovalNotPending) {
@@ -164,6 +186,11 @@ func (s *Server) decideApproval(w http.ResponseWriter, r *http.Request, decision
 		}
 		s.respondError(w, status, "APPROVAL_DECISION_FAILED", err.Error())
 		return nil, false
+	}
+	if decision == "approved" && req.DontAskAgain != "" {
+		if _, grantErr := s.approvalMgr.CreateGrant(r.Context(), item, req.DontAskAgain, "system_admin"); grantErr != nil {
+			slog.Warn("approval grant was not recorded", "approval_id", item.ID, "scope", req.DontAskAgain, "error", grantErr)
+		}
 	}
 	return item, true
 }

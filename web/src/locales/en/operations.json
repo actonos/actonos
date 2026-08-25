@@ -92,7 +92,11 @@
     "rejected": "Action rejected",
     "failed": "Approval decision failed",
     "approvedFeedback": "Reviewed and approved from Live Operations",
-    "defaultFeedback": "Rejected by the operator from Live Operations"
+    "defaultFeedback": "Rejected by the operator from Live Operations",
+    "dontAskTask": "Don't ask again for this task",
+    "dontAskToday": "Don't ask again today",
+    "grantedToday": "{{tool}} will not ask again today",
+    "grantedTask": "{{tool}} will not ask again for this task"
   },
   "units": {
     "milliseconds": "{{value}} ms",

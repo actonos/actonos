@@ -191,10 +191,24 @@ func (d *DB) migrate() error {
 		requested_at TIMESTAMP NOT NULL,
 		expires_at TIMESTAMP NOT NULL,
 		decided_at TIMESTAMP,
-		decided_by TEXT
+		decided_by TEXT,
+		task_id TEXT NOT NULL DEFAULT ''
 	);
 	CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status, requested_at);
 	CREATE INDEX IF NOT EXISTS idx_approvals_action_hash ON approvals(action_hash);
+
+	CREATE TABLE IF NOT EXISTS approval_grants (
+		id TEXT PRIMARY KEY,
+		agent_id TEXT NOT NULL,
+		tool_name TEXT NOT NULL,
+		scope TEXT NOT NULL,
+		task_id TEXT NOT NULL DEFAULT '',
+		expires_at TIMESTAMP NOT NULL,
+		created_at TIMESTAMP NOT NULL,
+		created_by TEXT NOT NULL DEFAULT '',
+		source_approval_id TEXT NOT NULL DEFAULT ''
+	);
+	CREATE INDEX IF NOT EXISTS idx_approval_grants_lookup ON approval_grants(agent_id, tool_name, scope, expires_at);
 
 	CREATE TABLE IF NOT EXISTS agent_runs (
 		id TEXT PRIMARY KEY,
@@ -310,6 +324,7 @@ func (d *DB) migrate() error {
 	_, err := d.db.ExecContext(ctx, schema)
 	// Non-destructive column migrations and index creation
 	_, _ = d.db.ExecContext(ctx, "ALTER TABLE agent_runs ADD COLUMN checkpoint_json TEXT")
+	_, _ = d.db.ExecContext(ctx, "ALTER TABLE approvals ADD COLUMN task_id TEXT NOT NULL DEFAULT ''")
 	_, _ = d.db.ExecContext(ctx, "ALTER TABLE conversations ADD COLUMN is_pinned BOOLEAN NOT NULL DEFAULT 0")
 	_, _ = d.db.ExecContext(ctx, "ALTER TABLE conversations ADD COLUMN channel TEXT NOT NULL DEFAULT 'web'")
 	_, _ = d.db.ExecContext(ctx, "CREATE INDEX IF NOT EXISTS idx_conversations_pinned ON conversations(is_pinned, updated_at)")

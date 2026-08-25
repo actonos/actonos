@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -37,6 +38,7 @@ type ApprovalRequest struct {
 	ExpiresAt   time.Time       `json:"expires_at"`
 	DecidedAt   *time.Time      `json:"decided_at,omitempty"`
 	DecidedBy   string          `json:"decided_by,omitempty"`
+	TaskID      string          `json:"task_id,omitempty"`
 
 	// created is true only when Request() actually inserted a brand-new row,
 	// as opposed to returning an already-pending approval for the same exact
@@ -63,6 +65,53 @@ func (e *ApprovalRequiredError) Error() string {
 
 func (e *ApprovalRequiredError) Unwrap() error { return ErrApprovalRequired }
 
+const (
+	// DontAskTask skips later approvals for the same agent+tool while the
+	// originating mission (task_id) is still the active scope.
+	DontAskTask = "task"
+	// DontAskToday skips later approvals for the same agent+tool until the
+	// end of the current UTC day (at least one hour).
+	DontAskToday = "today"
+)
+
+// ApprovalGrant is a temporary operator waiver for a single agent tool.
+type ApprovalGrant struct {
+	ID               string    `json:"id"`
+	AgentID          string    `json:"agent_id"`
+	ToolName         string    `json:"tool_name"`
+	Scope            string    `json:"scope"`
+	TaskID           string    `json:"task_id,omitempty"`
+	ExpiresAt        time.Time `json:"expires_at"`
+	CreatedAt        time.Time `json:"created_at"`
+	CreatedBy        string    `json:"created_by,omitempty"`
+	SourceApprovalID string    `json:"source_approval_id,omitempty"`
+}
+
+// GrantEligibleTool reports whether a tool may receive a don't-ask-again waiver.
+// Administrative mutations always require an exact-action decision.
+func GrantEligibleTool(name string) bool {
+	if name == "" || strings.HasPrefix(name, "admin_") || name == "system_mcp_connect" {
+		return false
+	}
+	return true
+}
+
+func grantExpiry(scope string, now time.Time) (time.Time, error) {
+	now = now.UTC()
+	switch scope {
+	case DontAskToday:
+		end := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.UTC)
+		if end.Sub(now) < time.Hour {
+			end = end.Add(24 * time.Hour)
+		}
+		return end, nil
+	case DontAskTask:
+		return now.Add(7 * 24 * time.Hour), nil
+	default:
+		return time.Time{}, fmt.Errorf("dont_ask_again must be %q or %q", DontAskTask, DontAskToday)
+	}
+}
+
 // ApprovalManager persists and validates exact-action approvals.
 type ApprovalManager struct {
 	db  *sql.DB
@@ -71,7 +120,30 @@ type ApprovalManager struct {
 
 // NewApprovalManager creates an approval store backed by SQLite.
 func NewApprovalManager(db *sql.DB) *ApprovalManager {
-	return &ApprovalManager{db: db, ttl: 30 * time.Minute}
+	m := &ApprovalManager{db: db, ttl: 30 * time.Minute}
+	m.ensureSchema()
+	return m
+}
+
+func (m *ApprovalManager) ensureSchema() {
+	if m == nil || m.db == nil {
+		return
+	}
+	_, _ = m.db.Exec(`ALTER TABLE approvals ADD COLUMN task_id TEXT NOT NULL DEFAULT ''`)
+	_, _ = m.db.Exec(`
+		CREATE TABLE IF NOT EXISTS approval_grants (
+			id TEXT PRIMARY KEY,
+			agent_id TEXT NOT NULL,
+			tool_name TEXT NOT NULL,
+			scope TEXT NOT NULL,
+			task_id TEXT NOT NULL DEFAULT '',
+			expires_at TIMESTAMP NOT NULL,
+			created_at TIMESTAMP NOT NULL,
+			created_by TEXT NOT NULL DEFAULT '',
+			source_approval_id TEXT NOT NULL DEFAULT ''
+		)
+	`)
+	_, _ = m.db.Exec(`CREATE INDEX IF NOT EXISTS idx_approval_grants_lookup ON approval_grants(agent_id, tool_name, scope, expires_at)`)
 }
 
 // canonicalizeInput produces a byte-stable representation of a JSON payload.
@@ -109,18 +181,19 @@ func (m *ApprovalManager) Request(ctx context.Context, traceID, agentID, toolNam
 	if traceID == "" {
 		traceID = newTraceID()
 	}
+	taskID := TaskIDFromContext(ctx)
 	var existing ApprovalRequest
 	var inputText string
 	err := m.db.QueryRowContext(ctx, `
 		SELECT id, trace_id, agent_id, tool_name, risk_level, action_hash, input_json,
-		       status, COALESCE(reason, ''), requested_at, expires_at
+		       status, COALESCE(reason, ''), requested_at, expires_at, COALESCE(task_id, '')
 		FROM approvals
 		WHERE action_hash = ? AND status = 'pending' AND expires_at > ?
 		ORDER BY requested_at DESC LIMIT 1
 	`, hash, time.Now().UTC()).Scan(
 		&existing.ID, &existing.TraceID, &existing.AgentID, &existing.ToolName,
 		&existing.RiskLevel, &existing.ActionHash, &inputText, &existing.Status,
-		&existing.Reason, &existing.RequestedAt, &existing.ExpiresAt,
+		&existing.Reason, &existing.RequestedAt, &existing.ExpiresAt, &existing.TaskID,
 	)
 	if err == nil {
 		existing.Input = json.RawMessage(inputText)
@@ -142,15 +215,16 @@ func (m *ApprovalManager) Request(ctx context.Context, traceID, agentID, toolNam
 		Status:      "pending",
 		RequestedAt: now,
 		ExpiresAt:   now.Add(m.ttl),
+		TaskID:      taskID,
 		created:     true,
 	}
 	_, err = m.db.ExecContext(ctx, `
 		INSERT INTO approvals (
 			id, trace_id, agent_id, tool_name, risk_level, action_hash, input_json,
-			status, requested_at, expires_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			status, requested_at, expires_at, task_id
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, request.ID, request.TraceID, request.AgentID, request.ToolName, request.RiskLevel,
-		request.ActionHash, string(request.Input), request.Status, request.RequestedAt, request.ExpiresAt)
+		request.ActionHash, string(request.Input), request.Status, request.RequestedAt, request.ExpiresAt, request.TaskID)
 	if err != nil {
 		return nil, fmt.Errorf("creating approval request: %w", err)
 	}
@@ -170,7 +244,8 @@ func (m *ApprovalManager) List(ctx context.Context, status string, limit int) ([
 	}
 	query := `
 		SELECT id, trace_id, agent_id, tool_name, risk_level, action_hash, input_json,
-		       status, COALESCE(reason, ''), requested_at, expires_at, decided_at, COALESCE(decided_by, '')
+		       status, COALESCE(reason, ''), requested_at, expires_at, decided_at, COALESCE(decided_by, ''),
+		       COALESCE(task_id, '')
 		FROM approvals`
 	args := []any{}
 	if status != "" && status != "all" {
@@ -194,7 +269,7 @@ func (m *ApprovalManager) List(ctx context.Context, status string, limit int) ([
 		if err := rows.Scan(
 			&item.ID, &item.TraceID, &item.AgentID, &item.ToolName, &item.RiskLevel,
 			&item.ActionHash, &inputText, &item.Status, &item.Reason,
-			&item.RequestedAt, &item.ExpiresAt, &decidedAt, &item.DecidedBy,
+			&item.RequestedAt, &item.ExpiresAt, &decidedAt, &item.DecidedBy, &item.TaskID,
 		); err != nil {
 			return nil, fmt.Errorf("scanning approval: %w", err)
 		}
@@ -272,12 +347,13 @@ func (m *ApprovalManager) Get(ctx context.Context, id string) (*ApprovalRequest,
 	var decidedAt sql.NullTime
 	err := m.db.QueryRowContext(ctx, `
 		SELECT id, trace_id, agent_id, tool_name, risk_level, action_hash, input_json,
-		       status, COALESCE(reason, ''), requested_at, expires_at, decided_at, COALESCE(decided_by, '')
+		       status, COALESCE(reason, ''), requested_at, expires_at, decided_at, COALESCE(decided_by, ''),
+		       COALESCE(task_id, '')
 		FROM approvals WHERE id = ?
 	`, id).Scan(
 		&item.ID, &item.TraceID, &item.AgentID, &item.ToolName, &item.RiskLevel,
 		&item.ActionHash, &inputText, &item.Status, &item.Reason,
-		&item.RequestedAt, &item.ExpiresAt, &decidedAt, &item.DecidedBy,
+		&item.RequestedAt, &item.ExpiresAt, &decidedAt, &item.DecidedBy, &item.TaskID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("loading approval: %w", err)
@@ -308,4 +384,92 @@ func (m *ApprovalManager) ValidateApproved(ctx context.Context, id, agentID, too
 		)
 	}
 	return nil
+}
+
+// CreateGrant records a temporary don't-ask-again waiver from an approved decision.
+func (m *ApprovalManager) CreateGrant(ctx context.Context, approval *ApprovalRequest, scope, actor string) (*ApprovalGrant, error) {
+	if m == nil || m.db == nil {
+		return nil, errors.New("approval store is unavailable")
+	}
+	if approval == nil {
+		return nil, errors.New("approval is required")
+	}
+	if !GrantEligibleTool(approval.ToolName) {
+		return nil, fmt.Errorf("dont-ask-again is not available for %s", approval.ToolName)
+	}
+	expiresAt, err := grantExpiry(scope, time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	taskID := ""
+	if scope == DontAskTask {
+		taskID = strings.TrimSpace(approval.TaskID)
+		if taskID == "" {
+			return nil, errors.New("dont-ask-again for this task requires a mission task id")
+		}
+	}
+	now := time.Now().UTC()
+	grant := &ApprovalGrant{
+		ID:               "grn_" + uuid.NewString(),
+		AgentID:          approval.AgentID,
+		ToolName:         approval.ToolName,
+		Scope:            scope,
+		TaskID:           taskID,
+		ExpiresAt:        expiresAt,
+		CreatedAt:        now,
+		CreatedBy:        actor,
+		SourceApprovalID: approval.ID,
+	}
+	_, err = m.db.ExecContext(ctx, `
+		INSERT INTO approval_grants (
+			id, agent_id, tool_name, scope, task_id, expires_at, created_at, created_by, source_approval_id
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, grant.ID, grant.AgentID, grant.ToolName, grant.Scope, grant.TaskID, grant.ExpiresAt, grant.CreatedAt, grant.CreatedBy, grant.SourceApprovalID)
+	if err != nil {
+		return nil, fmt.Errorf("creating approval grant: %w", err)
+	}
+	return grant, nil
+}
+
+// ActiveGrant returns a still-valid waiver for this agent, tool, and optional task.
+func (m *ApprovalManager) ActiveGrant(ctx context.Context, agentID, toolName, taskID string) (*ApprovalGrant, error) {
+	if m == nil || m.db == nil {
+		return nil, nil
+	}
+	now := time.Now().UTC()
+	_, _ = m.db.ExecContext(ctx, `DELETE FROM approval_grants WHERE expires_at <= ?`, now)
+
+	if taskID != "" {
+		if grant, err := m.lookupGrant(ctx, `
+			SELECT id, agent_id, tool_name, scope, task_id, expires_at, created_at, created_by, source_approval_id
+			FROM approval_grants
+			WHERE agent_id = ? AND tool_name = ? AND scope = ? AND task_id = ? AND expires_at > ?
+			ORDER BY expires_at DESC LIMIT 1
+		`, agentID, toolName, DontAskTask, taskID, now); err != nil {
+			return nil, err
+		} else if grant != nil {
+			return grant, nil
+		}
+	}
+	return m.lookupGrant(ctx, `
+		SELECT id, agent_id, tool_name, scope, task_id, expires_at, created_at, created_by, source_approval_id
+		FROM approval_grants
+		WHERE agent_id = ? AND tool_name = ? AND scope = ? AND expires_at > ?
+		ORDER BY expires_at DESC LIMIT 1
+	`, agentID, toolName, DontAskToday, now)
+}
+
+func (m *ApprovalManager) lookupGrant(ctx context.Context, query string, args ...any) (*ApprovalGrant, error) {
+	var grant ApprovalGrant
+	err := m.db.QueryRowContext(ctx, query, args...).Scan(
+		&grant.ID, &grant.AgentID, &grant.ToolName, &grant.Scope, &grant.TaskID,
+		&grant.ExpiresAt, &grant.CreatedAt, &grant.CreatedBy, &grant.SourceApprovalID,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("looking up approval grant: %w", err)
+	}
+	return &grant, nil
 }
