@@ -505,7 +505,7 @@ func netHTTPRequest(ctx context.Context, m api.Module, reqPtr, reqLen uint32) in
 	reqTimeout := httpRequestTimeout(reqPayload)
 	client := sandboxedHTTPClient(h, reqTimeout)
 
-	reqCtx, reqCancel := context.WithTimeout(ctx, reqTimeout)
+	reqCtx, reqCancel := context.WithTimeout(context.Background(), reqTimeout)
 	defer reqCancel()
 
 	method := reqPayload.Method
@@ -879,7 +879,7 @@ func hostHTTPRequest(ctx context.Context, m api.Module, reqPtr, reqLen uint32) u
 	reqTimeout := httpRequestTimeout(reqPayload)
 	client := sandboxedHTTPClient(h, reqTimeout)
 
-	reqCtx, reqCancel := context.WithTimeout(ctx, reqTimeout)
+	reqCtx, reqCancel := context.WithTimeout(context.Background(), reqTimeout)
 	defer reqCancel()
 
 	method := reqPayload.Method

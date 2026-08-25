@@ -22,7 +22,7 @@ var (
 	ErrModuleInstantiation = errors.New("wasm module instantiation failed")
 )
 
-const pluginToolTimeout = 15 * time.Second
+const pluginToolTimeout = 120 * time.Second
 
 // WasmLoader manages compilation and sandboxed execution of WASM plugins using Wazero.
 type WasmLoader struct {
@@ -240,7 +240,7 @@ func (inst *PluginInstance) SendChannelMessage(ctx context.Context, msgJSON []by
 		return fmt.Errorf("%w: acton_channel_send or acton_channel_send_message", ErrFunctionNotFound)
 	}
 
-	execCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	execCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 
 	execCtx = WithHostContext(execCtx, inst.hostCtx)
