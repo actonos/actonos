@@ -238,25 +238,63 @@ func (e *Engine) ExecuteStep(ctx context.Context, agentID string, userMessage st
 	return e.ExecuteStepWithHistory(ctx, agentID, userMessage, nil)
 }
 
-// ExecuteAutonomousGoal runs a single dependency-ready plan step (or a normal
-// ReAct turn when no planner is attached). Full DAG execution is reserved for
-// Planner.ExecutePlan callers that opt in; heartbeat uses one step per pulse.
+// maxAutonomousPlanStepsPerPulse is how many dependency-ready DAG steps a
+// single heartbeat/chat turn may drain before yielding. Steps are still
+// persisted after each one; approval, failure, or an empty turn stop the drain.
+const maxAutonomousPlanStepsPerPulse = 8
+
+// ExecuteAutonomousGoal drains dependency-ready plan steps until the DAG is
+// done, a step needs approval, a step fails, or the per-pulse cap is hit.
 func (e *Engine) ExecuteAutonomousGoal(ctx context.Context, agentID, goal string, history []llm.Message) (*llm.Response, error) {
 	if e.planner == nil {
 		return e.ExecuteStepWithHistory(ctx, agentID, goal, history)
 	}
 	taskID, _ := ctx.Value("task_id").(string)
-	if taskID != "" && e.taskMgr != nil {
-		task, err := e.taskMgr.GetTask(ctx, taskID)
-		if err == nil && task != nil {
-			resp, plan, stepErr := e.ExecuteNextPlanStep(ctx, agentID, goal, task.Plan, history)
-			if plan != nil {
-				e.writeTaskPlan(ctx, task, plan)
-			}
+	if taskID == "" || e.taskMgr == nil {
+		return e.ExecuteStepWithHistory(ctx, agentID, goal, history)
+	}
+	task, err := e.taskMgr.GetTask(ctx, taskID)
+	if err != nil || task == nil {
+		return e.ExecuteStepWithHistory(ctx, agentID, goal, history)
+	}
+
+	var last *llm.Response
+	plan := task.Plan
+	for i := 0; i < maxAutonomousPlanStepsPerPulse; i++ {
+		if err := ctx.Err(); err != nil {
+			return last, err
+		}
+		resp, nextPlan, stepErr := e.ExecuteNextPlanStep(ctx, agentID, goal, plan, history)
+		if nextPlan != nil {
+			plan = nextPlan
+			e.writeTaskPlan(ctx, task, plan)
+			task.Plan = plan
+		}
+		last = resp
+		if stepErr != nil {
 			return resp, stepErr
 		}
+		if plan != nil && plan.AllStepsCompleted() {
+			return resp, nil
+		}
+		if resp != nil && IsCannedOrEmptyCompletion(resp.Content) {
+			return resp, nil
+		}
+		if e.planner == nil || plan == nil {
+			return resp, nil
+		}
+		ready, readyErr := e.planner.NextReadyStep(plan)
+		if readyErr != nil {
+			return resp, readyErr
+		}
+		if ready == nil {
+			return resp, nil
+		}
+		if resp != nil && strings.TrimSpace(resp.Content) != "" {
+			history = append(history, llm.Message{Role: llm.RoleAssistant, Content: resp.Content})
+		}
 	}
-	return e.ExecuteStepWithHistory(ctx, agentID, goal, history)
+	return last, nil
 }
 
 // ExecuteNextPlanStep decomposes (once) and runs the next dependency-ready step.

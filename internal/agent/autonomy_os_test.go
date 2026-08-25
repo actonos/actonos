@@ -352,21 +352,14 @@ func TestExecuteAutonomousGoalAdvancesStoredPlan(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), "task_id", task.ID)
 	if _, err := engine.ExecuteAutonomousGoal(ctx, DefaultSystemAgentID, task.Description, nil); err != nil {
-		t.Fatalf("first pulse: %v", err)
+		t.Fatalf("drain pulse: %v", err)
 	}
 	got, err := taskManager.GetTask(context.Background(), task.ID)
-	if err != nil || got.Plan == nil || got.Plan.StepStatus("task_1") != "completed" || got.Plan.StepStatus("task_2") != "pending" {
-		t.Fatalf("first pulse did not persist completed step 1: %+v err=%v", got, err)
-	}
-	if _, err := engine.ExecuteAutonomousGoal(ctx, DefaultSystemAgentID, task.Description, nil); err != nil {
-		t.Fatalf("second pulse: %v", err)
-	}
-	got, err = taskManager.GetTask(context.Background(), task.ID)
 	if err != nil || got.Plan == nil || got.Plan.StepStatus("task_1") != "completed" || got.Plan.StepStatus("task_2") != "completed" {
-		t.Fatalf("second pulse did not advance to step 2: %+v err=%v executed=%v", got, err, executed)
+		t.Fatalf("drain pulse did not finish the DAG: %+v err=%v executed=%v", got, err, executed)
 	}
 	if len(executed) != 2 || executed[0] != "task_1" || executed[1] != "task_2" {
-		t.Fatalf("expected task_1 then task_2, got %v", executed)
+		t.Fatalf("expected task_1 then task_2 in one pulse, got %v", executed)
 	}
 }
 
@@ -413,33 +406,14 @@ func TestHeartbeatMissionDoesNotRepeatCompletedPlanStep(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, err := taskManager.GetTask(context.Background(), task.ID)
-	if err != nil || got.Plan == nil || got.Plan.StepStatus("task_1") != "completed" {
-		t.Fatalf("pulse 1 did not persist completed step 1: %+v err=%v executed=%v", got, err, executed)
-	}
-	if got.Plan.StepStatus("task_2") == "completed" {
-		t.Fatalf("pulse 1 should not complete step 2: %+v", got.Plan)
-	}
-
-	if _, err := daemon.TriggerManualPulse(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	got, err = taskManager.GetTask(context.Background(), task.ID)
 	if err != nil || got.Plan == nil {
-		t.Fatalf("pulse 2 lost the plan: %+v err=%v", got, err)
+		t.Fatalf("pulse lost the plan: %+v err=%v", got, err)
 	}
-	if got.Plan.StepStatus("task_1") != "completed" {
-		t.Fatalf("pulse 2 rewound step 1: %+v executed=%v", got.Plan, executed)
+	if got.Plan.StepStatus("task_1") != "completed" || got.Plan.StepStatus("task_2") != "completed" {
+		t.Fatalf("heartbeat did not drain the DAG in one pulse: %+v executed=%v", got.Plan, executed)
 	}
-	if got.Plan.StepStatus("task_2") != "completed" {
-		t.Fatalf("pulse 2 did not advance to step 2: %+v executed=%v", got.Plan, executed)
-	}
-	if len(executed) < 2 || executed[0] != "task_1" || executed[1] != "task_2" {
-		t.Fatalf("heartbeat repeated step 1 instead of advancing: %v", executed)
-	}
-	for i := 1; i < len(executed); i++ {
-		if executed[i] == "task_1" {
-			t.Fatalf("step 1 was re-executed after completion: %v", executed)
-		}
+	if len(executed) != 2 || executed[0] != "task_1" || executed[1] != "task_2" {
+		t.Fatalf("expected task_1 then task_2 once, got %v", executed)
 	}
 	if got.Status != "completed" || got.Progress != 100 || got.CompletedAt == nil {
 		t.Fatalf("finished DAG was not marked completed: %+v", got)

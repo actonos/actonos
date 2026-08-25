@@ -664,11 +664,14 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) (run *Hea
 				}))
 			}
 
-			// If active task was completed and there are more pending tasks waiting in backlog, trigger immediate next cycle
-			if h.taskMgr != nil && activeTask.Status == "completed" {
+			// Keep draining the backlog without waiting for the next scheduled
+			// tick: finished missions yield to pending work, and an unfinished
+			// DAG keeps going after the 15s trigger cooldown.
+			if h.taskMgr != nil && (activeTask.Status == "completed" || activeTask.Status == "in_progress") {
 				pendingTasks, _ := h.taskMgr.ListTasks(ctx, "pending", "")
-				if len(pendingTasks) > 0 {
-					slog.Info("queueing immediate next heartbeat cycle for pending backlog tasks", "pending_count", len(pendingTasks))
+				moreWork := activeTask.Status == "in_progress" || len(pendingTasks) > 0
+				if moreWork {
+					slog.Info("queueing immediate next heartbeat cycle", "task_id", activeTask.ID, "status", activeTask.Status, "pending_count", len(pendingTasks))
 					go func() {
 						time.Sleep(2 * time.Second)
 						h.TriggerWakeup()
