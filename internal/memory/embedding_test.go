@@ -18,10 +18,11 @@ import (
 )
 
 type fakeEmbedder struct {
-	mu       sync.Mutex
-	fail     error
-	passages []string
-	queries  []string
+	mu        sync.Mutex
+	fail      error
+	healthErr error
+	passages  []string
+	queries   []string
 }
 
 func (f *fakeEmbedder) EmbedQuery(_ context.Context, texts []string) ([][]float32, error) {
@@ -44,7 +45,7 @@ func (f *fakeEmbedder) EmbedPassages(_ context.Context, texts []string) ([][]flo
 	return fakeVectors(texts), nil
 }
 
-func (f *fakeEmbedder) Health(context.Context) error { return f.fail }
+func (f *fakeEmbedder) Health(context.Context) error { return f.healthErr }
 
 func fakeVectors(texts []string) [][]float32 {
 	vectors := make([][]float32, len(texts))

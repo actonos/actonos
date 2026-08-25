@@ -132,6 +132,8 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
 
   // Delegation Scope
   const [maxBudget, setMaxBudget] = useState(50);
+  const [concurrentRuns, setConcurrentRuns] = useState(2);
+  const [tokensPerHour, setTokensPerHour] = useState(250000);
   const [approvalLevel, setApprovalLevel] = useState<'Low' | 'Medium' | 'High'>('Medium');
   const [allowedPaths, setAllowedPaths] = useState('*');
   const renderLegacyEditors = false as boolean;
@@ -141,13 +143,13 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
     reasoningEffort, maxTokens, systemInstructions, soul, memoryMD, authorizedTools,
     listenAllChannels, selectedChannels, heartbeatEnabled, heartbeatDirectives, heartbeatInterval,
     heartbeatTargetChannel, heartbeatTargetAccount, heartbeatActiveStart, heartbeatActiveEnd,
-    heartbeatActiveTZ, maxBudget, approvalLevel, allowedPaths,
+    heartbeatActiveTZ, maxBudget, concurrentRuns, tokensPerHour, approvalLevel, allowedPaths,
   }), [
     name, idSlug, description, avatarIcon, status, isSystem, primaryModel, fallbackModel,
     reasoningEffort, maxTokens, systemInstructions, soul, memoryMD, authorizedTools,
     listenAllChannels, selectedChannels, heartbeatEnabled, heartbeatDirectives, heartbeatInterval,
     heartbeatTargetChannel, heartbeatTargetAccount, heartbeatActiveStart, heartbeatActiveEnd,
-    heartbeatActiveTZ, maxBudget, approvalLevel, allowedPaths,
+    heartbeatActiveTZ, maxBudget, concurrentRuns, tokensPerHour, approvalLevel, allowedPaths,
   ]);
   const isDirty = baselineRef.current !== '' && baselineRef.current !== formSignature;
   const validationErrors = useMemo(() => {
@@ -228,6 +230,8 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
 
           if (agent.delegation_scope) {
             setMaxBudget(agent.delegation_scope.max_monthly_budget_usd ?? 50);
+            setConcurrentRuns(agent.delegation_scope.max_concurrent_runs ?? 2);
+            setTokensPerHour(agent.delegation_scope.max_tokens_per_hour ?? 250000);
             setApprovalLevel(agent.delegation_scope.require_human_approval_level || 'Medium');
             setAllowedPaths(agent.delegation_scope.allowed_workspace_paths?.join(', ') || '*');
           }
@@ -326,6 +330,8 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
         },
         delegation_scope: {
           max_monthly_budget_usd: Number(maxBudget),
+          max_concurrent_runs: Number(concurrentRuns),
+          max_tokens_per_hour: Number(tokensPerHour),
           allowed_workspace_paths: allowedPaths.split(',').map((p) => p.trim()).filter(Boolean),
           require_human_approval_level: approvalLevel,
         },
@@ -1326,9 +1332,13 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
             budget={maxBudget}
             approvalLevel={approvalLevel}
             allowedPaths={allowedPaths}
+            concurrentRuns={concurrentRuns}
+            tokensPerHour={tokensPerHour}
             onBudgetChange={setMaxBudget}
             onApprovalLevelChange={setApprovalLevel}
             onAllowedPathsChange={setAllowedPaths}
+            onConcurrentRunsChange={setConcurrentRuns}
+            onTokensPerHourChange={setTokensPerHour}
           />
         )}
 

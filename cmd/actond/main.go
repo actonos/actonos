@@ -157,13 +157,26 @@ func main() {
 	embeddingService := memory.NewEmbeddingService(db.SQLDB(), vectorStore, memory.NewHTTPEmbedder(*embeddingURL))
 	embeddingService.SetWorkspaceStore(userWorkspace)
 	hybridEngine.SetEmbeddingService(embeddingService)
+	embeddingService.SetWriteGuard(func() bool { return system.WritesFrozen(*dataDir) })
 	embeddingService.Start(ctx)
 	defer embeddingService.Stop()
+	if watcher, wErr := memory.NewWorkspaceWatcher(workspaceDir, embeddingService); wErr != nil {
+		slog.Warn("workspace embedding watcher unavailable", "error", wErr)
+	} else if wErr := watcher.Start(ctx); wErr != nil {
+		slog.Warn("workspace embedding watcher failed to start", "error", wErr)
+	}
 
 	// 5. Initialize Event Bus
 	eventBus := bus.NewEventBus()
 	defer eventBus.Close()
 	slog.Info("event bus initialized")
+	inboundQ, inboundErr := channels.NewInboundQueue(db.SQLDB())
+	if inboundErr != nil {
+		slog.Warn("inbound queue unavailable", "error", inboundErr)
+		inboundQ = nil
+	} else {
+		eventBus.SetPersist(inboundQ.PersistEvent)
+	}
 
 	// 6. Initialize LLM Provider Router & Load Configured Keys
 	llmRouter := llm.NewModelCascadeRouter()
@@ -253,7 +266,7 @@ func main() {
 	swarmMgr := agent.NewSwarmManager(agentMgr, eventBus, llmRouter, hybridEngine, 8)
 	engine := agent.NewEngine(agentMgr, eventBus, llmRouter, hybridEngine)
 	engine.SetEmbeddingService(embeddingService)
-	contextMgr := agent.NewContextManager(8192)
+	contextMgr := agent.NewContextManager(128000)
 	contextMgr.SetDB(db.SQLDB())
 	engine.SetContextManager(contextMgr)
 	engine.SetToolRegistry(toolReg)
@@ -261,7 +274,13 @@ func main() {
 	engine.SetWorkspaceDir(workspaceDir)
 	runStore := agent.NewRunStore(db.SQLDB())
 	engine.SetRunStore(runStore)
+	if n, err := engine.ReclaimOrphanRuns(ctx); err != nil {
+		slog.Warn("failed to reclaim orphan agent runs", "error", err)
+	} else if n > 0 {
+		slog.Warn("reclaimed orphan agent runs after restart", "count", n)
+	}
 	engine.SetPlanner(agent.NewPlanner(llmRouter))
+	engine.SetSwarmManager(swarmMgr)
 	swarmMgr.SetEngine(engine)
 	if profileMgr != nil {
 		engine.SetProfileManager(profileMgr)
@@ -303,6 +322,7 @@ func main() {
 		heartbeatDaemon.SetApprovalManager(approvalMgr)
 	}
 	heartbeatDaemon.SetSessionManager(sessionMgr)
+	heartbeatDaemon.SetCronScheduler(cronSched)
 	heartbeatDaemon.Start(ctx)
 	defer heartbeatDaemon.Stop()
 
@@ -388,6 +408,8 @@ func main() {
 
 	// 10. MessageRouter: Coordinates multi-account messaging dispatch & proactive notifications
 	msgRouter := channels.NewMessageRouter(channelMgr, agentMgr, sessionMgr, engine, eventBus)
+	msgRouter.SetPairingManager(pairingMgr)
+	msgRouter.SetInboundQueue(inboundQ)
 	msgRouter.Start(ctx)
 	defer msgRouter.Stop()
 
@@ -409,6 +431,7 @@ func main() {
 	if err := tailscaleMgr.Start(ctx); err != nil {
 		slog.Warn("tailscale initialization warning", "error", err)
 	}
+	defer func() { _ = tailscaleMgr.Close() }()
 	// 13b. Initialize Notification Manager
 	notifMgr, err := system.NewNotificationManager(db.SQLDB(), eventBus)
 	if err != nil {
@@ -475,6 +498,7 @@ func main() {
 		slog.Info("ActonOS Web UI & REST API listening", "address", *listenAddr)
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("http server error", "error", err)
+			os.Exit(1)
 		}
 	}()
 

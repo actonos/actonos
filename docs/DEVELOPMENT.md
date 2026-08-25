@@ -98,7 +98,7 @@ actonos/
 │
 ├── internal/                       # Private application code
 │   ├── agent/                      # AI Agent Engine
-│   │   ├── engine.go               # POMDP & ReAct state machine
+│   │   ├── engine.go               # ReAct state machine
 │   │   ├── manager.go              # Agent CRUD & manifest management
 │   │   ├── swarm.go                # Sub-agent spawning & delegation
 │   │   ├── planner.go              # Task decomposition & planning
@@ -189,7 +189,7 @@ actonos/
 ├── web/                            # Frontend (React 19 + Tailwind v4)
 │   ├── src/
 │   │   ├── pages/
-│   │   │   ├── SetupWizard/        # Onboarding hotspot wizard
+│   │   │   ├── SetupWizard/        # Onboarding setup wizard
 │   │   │   ├── Chat/               # Streaming chat interface
 │   │   │   ├── Agents/             # Agent management & creation
 │   │   │   ├── Workspace/          # Sandbox file manager

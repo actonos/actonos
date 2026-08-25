@@ -98,7 +98,13 @@ func BuildCognitiveSystemPrompt(
 	episodicCount := 0
 	suppressEpisodic, _ := ctx.Value("suppress_episodic_memory").(bool)
 	if mem != nil && !suppressEpisodic && userMessage != "" {
-		memories, err := mem.Search(ctx, agentID, memory.LayerEpisodic, userMessage, nil, 4)
+		var queryVector []float32
+		if embedding != nil {
+			if vec, err := embedding.EmbedQueryVector(ctx, userMessage); err == nil {
+				queryVector = vec
+			}
+		}
+		memories, err := mem.Search(ctx, agentID, memory.LayerEpisodic, userMessage, queryVector, 4)
 		if err != nil {
 			slog.Debug("episodic memory search error", "agent_id", agentID, "error", err)
 		} else if len(memories) > 0 {

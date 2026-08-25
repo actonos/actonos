@@ -195,6 +195,11 @@ type EmbeddingService struct {
 	startOnce      sync.Once
 	stopOnce       sync.Once
 	cancel         context.CancelFunc
+	writeGuard     func() bool
+}
+
+func (s *EmbeddingService) SetWriteGuard(fn func() bool) {
+	s.writeGuard = fn
 }
 
 func NewEmbeddingService(db *sql.DB, vectorStore *VectorStore, embedder Embedder) *EmbeddingService {
@@ -365,6 +370,9 @@ func (s *EmbeddingService) NotifyFileMutation(ctx context.Context, absolutePath,
 }
 
 func (s *EmbeddingService) enqueue(ctx context.Context, job EmbeddingJob) error {
+	if s.writeGuard != nil && s.writeGuard() {
+		return errors.New("embedding writes frozen: disk exhausted")
+	}
 	if s == nil || s.db == nil {
 		return nil
 	}
@@ -452,6 +460,21 @@ func (s *EmbeddingService) run(ctx context.Context) {
 	}
 }
 
+func (s *EmbeddingService) reviveDeadJobs(ctx context.Context) {
+	if s.db == nil || s.embedder == nil {
+		return
+	}
+	if err := s.embedder.Health(ctx); err != nil {
+		return
+	}
+	result, err := s.db.ExecContext(ctx, `UPDATE embedding_jobs SET status = 'pending', due_at = ?, last_error = '', updated_at = ? WHERE status = 'dead'`, s.now(), s.now())
+	if err == nil {
+		if rows, _ := result.RowsAffected(); rows > 0 {
+			slog.Info("revived dead embedding jobs after helper recovery", "count", rows)
+		}
+	}
+}
+
 func (s *EmbeddingService) recoverOrphanedJobs(ctx context.Context) {
 	if s.db == nil {
 		return
@@ -468,6 +491,10 @@ func (s *EmbeddingService) claim(ctx context.Context) (*EmbeddingJob, error) {
 	if s.embedder == nil || s.vectorStore == nil {
 		return nil, nil
 	}
+	if err := s.embedder.Health(ctx); err != nil {
+		return nil, nil
+	}
+	s.reviveDeadJobs(ctx)
 	now := s.now()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -809,6 +836,18 @@ func (s *EmbeddingService) fail(ctx context.Context, job EmbeddingJob, cause err
 	_, _ = s.db.ExecContext(ctx, `UPDATE embedding_jobs SET status = ?, attempts = ?, due_at = ?,
 		lease_until = NULL, last_error = ?, updated_at = ? WHERE id = ? AND generation = ?`,
 		status, attempts, s.now().Add(backoff), truncateError(cause), s.now(), job.ID, job.Generation)
+}
+
+// EmbedQueryVector returns a single E5 query embedding for hybrid retrieval.
+func (s *EmbeddingService) EmbedQueryVector(ctx context.Context, query string) ([]float32, error) {
+	if s == nil || s.embedder == nil || strings.TrimSpace(query) == "" {
+		return nil, nil
+	}
+	vectors, err := s.embedder.EmbedQuery(ctx, []string{strings.TrimSpace(query)})
+	if err != nil || len(vectors) == 0 {
+		return nil, err
+	}
+	return vectors[0], nil
 }
 
 func (s *EmbeddingService) Search(ctx context.Context, query string, scopes []string, limit int) ([]SemanticRecord, error) {

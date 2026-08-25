@@ -39,7 +39,22 @@
       }
     }
   },
-  "health": { "title": "System health" },
+  "health": {
+    "title": "System health",
+    "components": {
+      "llm": "LLM",
+      "heartbeat": "Heartbeat",
+      "embedding": "Embedding",
+      "disk": "Disk"
+    },
+    "status": {
+      "healthy": "Healthy",
+      "degraded": "Degraded",
+      "unhealthy": "Unhealthy",
+      "stopped": "Stopped",
+      "unknown": "Unknown"
+    }
+  },
   "gauges": {
     "cpu": "CPU",
     "memory": "Memory",

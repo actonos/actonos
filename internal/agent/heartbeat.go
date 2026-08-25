@@ -61,11 +61,13 @@ type HeartbeatDaemon struct {
 	activeStart   string
 	activeEnd     string
 	activeTZ      string
-	stopCh        chan struct{}
-	triggerCh     chan struct{}
-	lastRun       time.Time
-	running       bool
-	stallTracker  map[string]taskStallState
+	stopCh         chan struct{}
+	triggerCh      chan struct{}
+	lastRun        time.Time
+	running        bool
+	stallTracker   map[string]taskStallState
+	lastAgentPulse map[string]time.Time
+	cronSched *CronScheduler
 }
 
 // taskStallState tracks in-memory (non-persisted) consecutive-cycle progress
@@ -105,9 +107,17 @@ func NewHeartbeatDaemon(
 		targetAccount: "all",
 		ackMaxChars:   defaultAckMaxChars,
 		stopCh:        make(chan struct{}),
-		triggerCh:     make(chan struct{}, 1),
-		stallTracker:  make(map[string]taskStallState),
+		triggerCh:      make(chan struct{}, 1),
+		stallTracker:   make(map[string]taskStallState),
+		lastAgentPulse: make(map[string]time.Time),
 	}
+}
+
+// SetCronScheduler attaches cron quota inspection so pulses may create jobs within a cap.
+func (h *HeartbeatDaemon) SetCronScheduler(cs *CronScheduler) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.cronSched = cs
 }
 
 // SetTaskManager injects the task backlog coordinator.
@@ -129,6 +139,20 @@ func (h *HeartbeatDaemon) SetApprovalManager(am ApprovalListProvider) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.approvalMgr = am
+}
+
+// LastRunAt returns the timestamp of the last attempted (non-skip-return) cycle.
+func (h *HeartbeatDaemon) LastRunAt() time.Time {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.lastRun
+}
+
+// Interval returns the configured pulse interval.
+func (h *HeartbeatDaemon) Interval() time.Duration {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.interval
 }
 
 // TriggerWakeup schedules an immediate heartbeat evaluation without blocking.
@@ -195,6 +219,8 @@ func (h *HeartbeatDaemon) Start(ctx context.Context) {
 		}
 	}
 	h.mu.Unlock()
+
+	h.syncTriggerRules(ctx)
 
 	slog.Info("autonomous heartbeat daemon started", "interval", h.interval.String(), "enabled", h.enabled)
 	go h.loop(ctx)
@@ -277,9 +303,24 @@ const minTriggerGap = 15 * time.Second
 // checkCycle runs the autonomous cognitive heartbeat iteration. manual is
 // true only for operator-initiated pulses (TriggerManualPulse); it bypasses
 // the trigger cooldown and active-hours window.
-func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) *HeartbeatRun {
+func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) (run *HeartbeatRun) {
 	h.executionMu.Lock()
 	defer h.executionMu.Unlock()
+	defer func() {
+		if rec := recover(); rec != nil {
+			run = &HeartbeatRun{
+				AgentID:    "agent_system_core",
+				ExecutedAt: time.Now().UTC(),
+				Status:     "error",
+				Summary:    fmt.Sprintf("heartbeat panic recovered: %v", rec),
+			}
+			b := make([]byte, 8)
+			_, _ = rand.Read(b)
+			run.ID = "hb_" + hex.EncodeToString(b)
+			h.recordRun(*run)
+			slog.Error("heartbeat cycle panic recovered", "recover", rec)
+		}
+	}()
 
 	now := time.Now().UTC()
 	h.mu.Lock()
@@ -287,16 +328,19 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) *Heartbea
 		if !h.lastRun.IsZero() && now.Sub(h.lastRun) < minTriggerGap {
 			h.mu.Unlock()
 			slog.Debug("heartbeat cycle skipped: trigger cooldown active", "since_last_run", now.Sub(h.lastRun).String())
-			return nil
+			return h.recordSkip("agent_system_core", "cooldown")
 		}
 		if !h.withinActiveHoursLocked(now) {
 			h.mu.Unlock()
 			slog.Debug("heartbeat cycle skipped: outside configured active hours")
-			return nil
+			return h.recordSkip("agent_system_core", "active_hours")
 		}
 	}
 	h.lastRun = now
 	h.mu.Unlock()
+	ctx, cancelTurn := resolveTurnTimeout(ctx, HeartbeatTurnTimeout)
+	defer cancelTurn()
+	ctx = WithExecutionSource(ctx, "heartbeat")
 
 	primaryAgentID := "agent_system_core"
 
@@ -391,7 +435,7 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) *Heartbea
 		}
 	}
 
-	run := &HeartbeatRun{
+	run = &HeartbeatRun{
 		AgentID:    primaryAgentID,
 		ExecutedAt: time.Now().UTC(),
 	}
@@ -481,9 +525,12 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) *Heartbea
 		// Suppress episodic memory for heartbeat task execution to prevent stale
 		// memories from deleted tasks from contaminating the current task context.
 		taskCtx := context.WithValue(ctx, "task_id", activeTask.ID)
-		taskCtx = context.WithValue(taskCtx, "suppress_episodic_memory", true)
+		taskCtx = context.WithValue(taskCtx, "suppress_episodic_memory", false)
 		taskCtx = context.WithValue(taskCtx, "heartbeat_headless_mode", true)
-		taskCtx = tools.WithDeniedTools(taskCtx, "native_cron_schedule")
+		taskCtx = WithExecutionSource(taskCtx, "heartbeat")
+		if h.cronSched != nil && h.cronSched.CountJobsForAgent(assignedAgent) >= DefaultCronJobsPerAgent {
+			taskCtx = tools.WithDeniedTools(taskCtx, "native_cron_schedule")
+		}
 		resp, execErr := h.engine.ExecuteAutonomousGoal(taskCtx, assignedAgent, prompt, history)
 		if execErr != nil {
 			var approvalErr *tools.ApprovalRequiredError
@@ -500,6 +547,17 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) *Heartbea
 			run.Status = "error"
 			run.Summary = fmt.Sprintf("Failed executing task '%s': %v", activeTask.Title, execErr)
 			slog.Error("heartbeat task execution error", "task_id", activeTask.ID, "error", execErr)
+			activeTask.FailCount++
+			activeTask.ExecutionLog = run.Summary
+			if activeTask.FailCount >= maxFailCyclesBeforeBlock {
+				activeTask.Status = "blocked"
+				run.Summary += " [blocked after repeated execution errors]"
+			}
+			if h.taskMgr != nil {
+				_ = h.taskMgr.UpdateTask(ctx, *activeTask)
+			}
+			h.recordRun(*run)
+			return run
 		} else if resp != nil {
 			run.TokensUsed = resp.Usage.TotalTokens
 			content := strings.TrimSpace(resp.Content)
@@ -512,10 +570,21 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) *Heartbea
 			fullCleaned := cleanFullContent(content)
 			shortLog := shortSummary(content, 250)
 
-			// Parse Task status transitions
-			if strings.Contains(content, "[TASK_COMPLETED]") && h.engine.verifier.VerifyTaskCompletion(activeTask.Description, content, resp.ToolCalls) {
+			// Parse Task status transitions. Empty/canned replies never complete a mission.
+			if IsCannedOrEmptyCompletion(content) {
+				activeTask.Status = "in_progress"
+				activeTask.FailCount++
+				activeTask.ExecutionLog = "Empty or canned success ignored; mission remains in progress."
+				run.Status = "action_taken"
+				run.Summary = fmt.Sprintf("Mission '%s' produced no actionable output.", activeTask.Title)
+				if activeTask.FailCount >= maxFailCyclesBeforeBlock {
+					activeTask.Status = "blocked"
+					run.Summary += " [blocked after empty completions]"
+				}
+			} else if strings.Contains(content, "[TASK_COMPLETED]") && h.engine.verifier.VerifyTaskCompletion(activeTask.Description, content, resp.ToolCalls) {
 				activeTask.Status = "completed"
 				activeTask.Progress = 100
+				activeTask.FailCount = 0
 				activeTask.ExecutionLog = shortLog
 				run.Status = "action_taken"
 				run.Summary = fmt.Sprintf("Completed mission: '%s'. %s", activeTask.Title, shortLog)
@@ -531,15 +600,12 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) *Heartbea
 				run.Summary = fmt.Sprintf("Mission '%s' blocked. %s", activeTask.Title, shortLog)
 			} else {
 				activeTask.Status = "in_progress"
-				// Extract progress percentage if present
 				reProg := regexp.MustCompile(`\[PROGRESS:\s*(\d+)%?\]`)
 				match := reProg.FindStringSubmatch(content)
 				if len(match) > 1 {
 					if pVal, err := strconv.Atoi(match[1]); err == nil && pVal > activeTask.Progress {
 						activeTask.Progress = pVal
 					}
-				} else if activeTask.Progress < 50 {
-					activeTask.Progress = 50
 				}
 				activeTask.ExecutionLog = shortLog
 				run.Status = "action_taken"
@@ -554,11 +620,13 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) *Heartbea
 			// so the operator can intervene instead of the daemon spending a
 			// full model turn every cycle to make zero progress.
 			stalled, stallCycles := h.trackTaskStall(activeTask.ID, activeTask.Status, activeTask.Progress)
+			activeTask.StalledCycles = stallCycles
 			if stalled && activeTask.Status == "in_progress" {
 				stallNote := fmt.Sprintf(" [STALL WARNING: no progress advancement across %d consecutive heartbeat cycles — operator review recommended]", stallCycles)
 				activeTask.ExecutionLog += stallNote
+				activeTask.Status = "blocked"
 				run.Summary += stallNote
-				slog.Warn("mission task stalled: no progress across multiple heartbeat cycles", "task_id", activeTask.ID, "stalled_cycles", stallCycles, "progress", activeTask.Progress)
+				slog.Warn("mission task stalled: blocking after unchanged progress", "task_id", activeTask.ID, "stalled_cycles", stallCycles, "progress", activeTask.Progress)
 			}
 
 			if h.taskMgr != nil {
@@ -608,9 +676,12 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) *Heartbea
 	}
 
 	// CASE B: Routine System Health & Zero-Noise Evaluation
-	routineCtx := context.WithValue(ctx, "suppress_episodic_memory", true)
+	routineCtx := context.WithValue(ctx, "suppress_episodic_memory", false)
 	routineCtx = context.WithValue(routineCtx, "heartbeat_headless_mode", true)
-	routineCtx = tools.WithDeniedTools(routineCtx, "native_cron_schedule")
+	routineCtx = WithExecutionSource(routineCtx, "heartbeat")
+	if h.cronSched != nil && h.cronSched.CountJobsForAgent(primaryAgentID) >= DefaultCronJobsPerAgent {
+		routineCtx = tools.WithDeniedTools(routineCtx, "native_cron_schedule")
+	}
 	backlogSummary := "All previous backlog missions are COMPLETED. There are ZERO pending or in-progress tasks."
 	if h.taskMgr != nil {
 		completedList, _ := h.taskMgr.ListTasks(ctx, "completed", "")
@@ -728,6 +799,18 @@ func (h *HeartbeatDaemon) checkCustomAgentPulses(ctx context.Context, now time.T
 
 		cfg := a.HeartbeatConfig
 		if !manual && !withinAgentActiveHours(cfg, now) {
+			h.recordSkip(a.AgentID, "active_hours")
+			continue
+		}
+		intervalMin := cfg.IntervalMinutes
+		if intervalMin < 5 {
+			intervalMin = 5
+		}
+		h.mu.Lock()
+		lastPulse := h.lastAgentPulse[a.AgentID]
+		h.mu.Unlock()
+		if !manual && !lastPulse.IsZero() && now.Sub(lastPulse) < time.Duration(intervalMin)*time.Minute {
+			h.recordSkip(a.AgentID, "interval")
 			continue
 		}
 
@@ -736,9 +819,12 @@ func (h *HeartbeatDaemon) checkCustomAgentPulses(ctx context.Context, now time.T
 			continue
 		}
 
-		routineCtx := context.WithValue(ctx, "suppress_episodic_memory", true)
+		routineCtx := context.WithValue(ctx, "suppress_episodic_memory", false)
 		routineCtx = context.WithValue(routineCtx, "heartbeat_headless_mode", true)
-		routineCtx = tools.WithDeniedTools(routineCtx, "native_cron_schedule")
+		routineCtx = WithExecutionSource(routineCtx, "heartbeat")
+		if h.cronSched != nil && h.cronSched.CountJobsForAgent(a.AgentID) >= DefaultCronJobsPerAgent {
+			routineCtx = tools.WithDeniedTools(routineCtx, "native_cron_schedule")
+		}
 
 		prompt := BuildHeartbeatPulsePrompt(directives, fmt.Sprintf("Autonomous pulse for agent: %s (%s)", a.Name, a.AgentID))
 
@@ -810,6 +896,9 @@ func (h *HeartbeatDaemon) checkCustomAgentPulses(ctx context.Context, now time.T
 		}
 
 		h.recordRun(*run)
+		h.mu.Lock()
+		h.lastAgentPulse[a.AgentID] = now
+		h.mu.Unlock()
 	}
 }
 
@@ -1125,6 +1214,49 @@ func hasActionableHeartbeatDirectives(content string) bool {
 		return true
 	}
 	return false
+}
+
+func (h *HeartbeatDaemon) syncTriggerRules(ctx context.Context) {
+	if h.agentMgr == nil || h.cronSched == nil {
+		return
+	}
+	agents, err := h.agentMgr.List(ctx)
+	if err != nil {
+		return
+	}
+	for _, a := range agents {
+		if a.Status != StatusActive {
+			continue
+		}
+		for i, rule := range a.TriggerRules {
+			if rule.Type != "cron_schedule" || strings.TrimSpace(rule.Expression) == "" {
+				continue
+			}
+			jobID := fmt.Sprintf("trigger_%s_%d", a.AgentID, i)
+			_ = h.cronSched.RegisterJob(CronJob{
+				ID:      jobID,
+				AgentID: a.AgentID,
+				Name:    "trigger:" + a.Name,
+				CronExpr: rule.Expression,
+				Prompt:  strings.TrimSpace(rule.Filter),
+				Enabled: true,
+			})
+		}
+	}
+}
+
+func (h *HeartbeatDaemon) recordSkip(agentID, reason string) *HeartbeatRun {
+	run := &HeartbeatRun{
+		AgentID:    agentID,
+		ExecutedAt: time.Now().UTC(),
+		Status:     "skipped",
+		Summary:    reason,
+	}
+	b := make([]byte, 8)
+	_, _ = rand.Read(b)
+	run.ID = "hb_" + hex.EncodeToString(b)
+	h.recordRun(*run)
+	return run
 }
 
 func (h *HeartbeatDaemon) recordRun(run HeartbeatRun) {

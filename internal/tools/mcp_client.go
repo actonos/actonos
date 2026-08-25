@@ -479,6 +479,7 @@ type MCPHostEngine struct {
 	mu         sync.RWMutex
 	registry   *ToolRegistry
 	clients    map[string]*MCPClient
+	configs    map[string]MCPServerConfig
 	db         *sql.DB
 	secrets    MCPSecretStore
 	eventBus   *bus.EventBus
@@ -527,6 +528,7 @@ func NewMCPHostEngine(registry *ToolRegistry) *MCPHostEngine {
 	return &MCPHostEngine{
 		registry:   registry,
 		clients:    make(map[string]*MCPClient),
+		configs:    make(map[string]MCPServerConfig),
 		lastErrors: make(map[string]mcpRuntimeError),
 	}
 }
@@ -796,16 +798,14 @@ func (h *MCPHostEngine) ConnectServer(ctx context.Context, cfg MCPServerConfig) 
 		slog.Info("registered mcp tool", "server", cfg.ID, "tool", adapter.Name())
 	}
 	h.clients[cfg.ID] = client
+	if h.configs == nil {
+		h.configs = make(map[string]MCPServerConfig)
+	}
+	h.configs[cfg.ID] = cfg
 	h.recordMCPRecoveredLocked(cfg.ID, cfg.ID)
 	serverID := cfg.ID
 	client.SetOnClose(func(closeErr error) {
-		h.mu.Lock()
-		if h.clients[serverID] == client {
-			delete(h.clients, serverID)
-		}
-		h.recordMCPErrorLocked(serverID, serverID, closeErr)
-		h.mu.Unlock()
-		slog.Warn("mcp server disconnected unexpectedly", "server", serverID, "error", closeErr)
+		h.onUnexpectedClose(serverID, client, closeErr)
 	})
 	if h.db != nil {
 		persisted := cfg
@@ -826,6 +826,35 @@ func (h *MCPHostEngine) ConnectServer(ctx context.Context, cfg MCPServerConfig) 
 	return nil
 }
 
+func (h *MCPHostEngine) onUnexpectedClose(serverID string, client *MCPClient, closeErr error) {
+	h.mu.Lock()
+	if h.clients[serverID] == client {
+		delete(h.clients, serverID)
+	}
+	h.recordMCPErrorLocked(serverID, serverID, closeErr)
+	reconnectCfg, ok := h.configs[serverID]
+	h.mu.Unlock()
+	slog.Warn("mcp server disconnected unexpectedly", "server", serverID, "error", closeErr)
+	if ok {
+		h.scheduleReconnect(reconnectCfg)
+	}
+}
+
+func (h *MCPHostEngine) scheduleReconnect(cfg MCPServerConfig) {
+	go func() {
+		timer := time.NewTimer(2 * time.Second)
+		defer timer.Stop()
+		<-timer.C
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		if err := h.ConnectServer(ctx, cfg); err != nil {
+			slog.Warn("mcp reconnect failed", "server", cfg.ID, "error", err)
+		} else {
+			slog.Info("mcp server reconnected", "server", cfg.ID)
+		}
+	}()
+}
+
 // DisconnectServer stops and unregisters an MCP server.
 func (h *MCPHostEngine) DisconnectServer(serverID string) error {
 	h.mu.Lock()
@@ -838,6 +867,7 @@ func (h *MCPHostEngine) DisconnectServer(serverID string) error {
 
 	_ = client.Close()
 	delete(h.clients, serverID)
+	delete(h.configs, serverID)
 	delete(h.lastErrors, serverID)
 	if h.db != nil {
 		_, _ = h.db.Exec("UPDATE mcp_servers SET enabled = 0, updated_at = ? WHERE id = ?", time.Now().UTC(), serverID)

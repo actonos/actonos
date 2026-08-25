@@ -10,8 +10,23 @@ export interface ModelConfig {
 
 export interface DelegationScope {
   max_monthly_budget_usd: number;
+  max_concurrent_runs?: number;
+  max_tokens_per_hour?: number;
   allowed_workspace_paths: string[];
   require_human_approval_level: ApprovalLevel;
+}
+
+export interface HealthReport {
+  status: string;
+  version?: string;
+  git_commit?: string;
+  build_time?: string;
+  uptime_seconds?: number;
+  runtime_mode?: string;
+  agents_active?: number;
+  tailscale_connected?: boolean;
+  tailscale_ip?: string;
+  components?: Record<string, string>;
 }
 
 export interface TriggerRule {
@@ -312,6 +327,8 @@ export interface AutonomousTask {
   created_at: string;
   updated_at: string;
   completed_at?: string;
+  stalled_cycles?: number;
+  fail_count?: number;
 }
 
 export interface HeartbeatConfigData {
@@ -320,8 +337,8 @@ export interface HeartbeatConfigData {
   directives: string;
   target_channel: string;
   target_account_id: string;
-  auto_delegate: boolean;
-  zero_noise: boolean;
+  auto_delegate?: boolean;
+  zero_noise?: boolean;
   /** Max characters allowed to accompany HEARTBEAT_OK before a reply is treated as a real alert (default 300). */
   ack_max_chars?: number;
   /** Daily HH:MM window (e.g. "09:00") restricting routine (non-manual) pulses. Leave both empty to run 24/7. */
@@ -335,7 +352,7 @@ export interface HeartbeatRun {
   id: string;
   agent_id: string;
   executed_at: string;
-  status: 'ok' | 'action_taken' | 'error';
+  status: 'ok' | 'action_taken' | 'error' | 'skipped';
   summary: string;
   tokens_used: number;
 }

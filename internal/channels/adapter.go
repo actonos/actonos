@@ -16,8 +16,9 @@ type ChannelAccount struct {
 	Enabled       bool              `json:"enabled"`
 	BoundAgentIDs []string          `json:"bound_agent_ids"` // ["*"] for all, or ["agent_support", "agent_devops"]
 	DefaultChatID string            `json:"default_chat_id,omitempty"`
-	RoutingMode   string            `json:"routing_mode,omitempty"` // "exclusive", "mention", "fallback"
-	Metadata      map[string]string `json:"metadata,omitempty"`
+	RoutingMode     string            `json:"routing_mode,omitempty"` // "exclusive", "mention", "fallback"
+	RequiresPairing bool              `json:"requires_pairing,omitempty"`
+	Metadata        map[string]string `json:"metadata,omitempty"`
 }
 
 // InboundMessage represents an incoming message received from a channel.

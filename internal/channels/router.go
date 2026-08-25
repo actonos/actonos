@@ -6,11 +6,11 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/actonos/actonos/internal/agent"
 	"github.com/actonos/actonos/internal/bus"
 	"github.com/actonos/actonos/internal/llm"
-	"github.com/actonos/actonos/internal/tools"
 )
 
 // AgentProvider abstracts agent manifest lookups for the message router.
@@ -32,6 +32,8 @@ type MessageRouter struct {
 	sessionMgr *ChannelSessionManager
 	engine     EngineExecutor
 	eventBus   *bus.EventBus
+	pairing    *PairingManager
+	inbound    *InboundQueue
 	ctx        context.Context
 	cancel     context.CancelFunc
 	wg         sync.WaitGroup
@@ -57,6 +59,20 @@ func NewMessageRouter(
 	}
 }
 
+// SetPairingManager enables inbound pairing enforcement.
+func (r *MessageRouter) SetPairingManager(pm *PairingManager) {
+	r.pairing = pm
+}
+
+// SetInboundQueue persists inbound events before EventBus fan-out so a full
+// in-memory buffer cannot drop a wake.
+func (r *MessageRouter) SetInboundQueue(q *InboundQueue) {
+	r.inbound = q
+	if r.eventBus != nil && q != nil {
+		r.eventBus.SetPersist(q.PersistEvent)
+	}
+}
+
 // Start launches background subscribers for inbound messages and proactive notifications.
 func (r *MessageRouter) Start(ctx context.Context) {
 	if r.eventBus == nil {
@@ -69,29 +85,38 @@ func (r *MessageRouter) Start(ctx context.Context) {
 
 	channelSub := r.eventBus.Subscribe(bus.EventChannelMessage)
 	doneSub := r.eventBus.Subscribe(bus.EventAgentActionDone)
+	r.drainInboundQueue()
 
 	r.wg.Add(1)
 	go func() {
 		defer r.wg.Done()
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
 		for {
 			select {
 			case <-r.ctx.Done():
 				return
+			case <-ticker.C:
+				r.drainInboundQueue()
 			case ev, ok := <-channelSub:
 				if !ok {
 					return
 				}
 				if inMsg, ok := ev.Payload.(InboundMessage); ok {
-					go func(msg InboundMessage) {
-						if err := r.Route(r.ctx, msg); err != nil {
-							slog.Error("failed to route inbound channel message",
-								"channel", msg.ChannelID,
-								"account", msg.AccountID,
-								"sender", msg.SenderID,
-								"error", err,
-							)
-						}
-					}(inMsg)
+					if r.inbound != nil {
+						r.drainInboundQueue()
+					} else {
+						go func(msg InboundMessage) {
+							if err := r.Route(r.ctx, msg); err != nil {
+								slog.Error("failed to route inbound channel message",
+									"channel", msg.ChannelID,
+									"account", msg.AccountID,
+									"sender", msg.SenderID,
+									"error", err,
+								)
+							}
+						}(inMsg)
+					}
 				}
 			case ev, ok := <-doneSub:
 				if !ok {
@@ -232,6 +257,35 @@ func AgentListensTo(manifest agent.AgentManifest, channelID, accountID string) b
 	return false
 }
 
+func (r *MessageRouter) enforcePairing(msg InboundMessage) error {
+	if r.pairing == nil {
+		return nil
+	}
+	required := false
+	if r.channelMgr != nil && msg.AccountID != "" {
+		if acc, ok := r.channelMgr.GetAccountByID(msg.AccountID); ok {
+			required = acc.RequiresPairing
+		}
+	}
+	if !required {
+		return nil
+	}
+	if r.pairing.IsAuthorized(msg.ChannelID, msg.SenderID) {
+		r.pairing.TouchUser(msg.ChannelID, msg.SenderID)
+		return nil
+	}
+	if pin := ExtractPairingPIN(msg.Content); pin != "" {
+		ok, err := r.pairing.ValidateAndPair(msg.ChannelID, pin, msg.SenderID, msg.SenderName)
+		if err != nil {
+			return fmt.Errorf("pairing failed: %w", err)
+		}
+		if ok {
+			return nil
+		}
+	}
+	return fmt.Errorf("unpaired sender %s on channel %s", msg.SenderID, msg.ChannelID)
+}
+
 func containsWildcard(list []string) bool {
 	for _, s := range list {
 		if s == "*" || s == "all" {
@@ -241,8 +295,33 @@ func containsWildcard(list []string) bool {
 	return false
 }
 
+func (r *MessageRouter) drainInboundQueue() {
+	if r.inbound == nil {
+		return
+	}
+	claimed, err := r.inbound.Claim(32)
+	if err != nil {
+		slog.Warn("inbound queue claim failed", "error", err)
+		return
+	}
+	for _, item := range claimed {
+		msg := item.Message
+		if err := r.Route(r.ctx, msg); err != nil {
+			slog.Error("failed to route inbound channel message",
+				"channel", msg.ChannelID,
+				"account", msg.AccountID,
+				"sender", msg.SenderID,
+				"error", err,
+			)
+		}
+	}
+}
+
 // Route executes the full end-to-end routing flow for an inbound message.
 func (r *MessageRouter) Route(ctx context.Context, msg InboundMessage) error {
+	if err := r.enforcePairing(msg); err != nil {
+		return err
+	}
 	targetAgent := r.ResolveAgent(ctx, msg)
 
 	senderID := msg.SenderID
@@ -292,7 +371,7 @@ func (r *MessageRouter) Route(ctx context.Context, msg InboundMessage) error {
 		return fmt.Errorf("engine not initialized")
 	}
 
-	channelCtx := agent.WithConversationContext(tools.WithBypassApproval(ctx), convID)
+	channelCtx := agent.WithConversationContext(agent.WithExecutionSource(ctx, "channel"), convID)
 	resp, execErr := r.engine.ExecuteStepWithHistory(channelCtx, targetAgent, promptWithMeta, history)
 	if execErr != nil {
 		slog.Error("failed to process channel message", "channel", msg.ChannelID, "error", execErr)

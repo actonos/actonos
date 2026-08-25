@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -366,6 +367,27 @@ func TestMCPHostRemovesDeadClientAndPublishesErrorOnUnexpectedDisconnect(t *test
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatal("expected dead client to be removed from host.clients after unexpected disconnect")
+}
+
+func TestMCPUnexpectedCloseSchedulesReconnect(t *testing.T) {
+	host := NewMCPHostEngine(NewToolRegistry(nil))
+	client := &MCPClient{config: MCPServerConfig{ID: "rejoin", Transport: "http", URL: "http://127.0.0.1:1"}, pending: make(map[int64]chan mcpResponse)}
+	host.mu.Lock()
+	host.clients["rejoin"] = client
+	host.configs["rejoin"] = client.config
+	host.mu.Unlock()
+	host.onUnexpectedClose("rejoin", client, errors.New("stdout closed"))
+	deadline := time.Now().Add(4 * time.Second)
+	for time.Now().Before(deadline) {
+		host.mu.RLock()
+		_, hasErr := host.lastErrors["rejoin"]
+		host.mu.RUnlock()
+		if hasErr {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("expected reconnect attempt to record an MCP error after unexpected close")
 }
 
 func TestMCPHostRejectsInvalidConfiguration(t *testing.T) {

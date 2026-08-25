@@ -2,6 +2,7 @@ import type {
   AgentManifest,
   CatalogResponse,
   ChannelAccount,
+  HealthReport,
   LLMProviderInfo,
   ToolInfo,
   SystemMetrics,
@@ -59,12 +60,7 @@ export interface UserIdentityProfile {
   updated_at?: string;
 }
 
-export interface HealthData {
-  status: string;
-  runtime_mode?: string;
-  version?: string;
-  [key: string]: unknown;
-}
+export type HealthData = HealthReport;
 
 export type IntegrationIdentity = Record<string, unknown> | null;
 
@@ -202,6 +198,7 @@ export const api = {
 
   // Health & Dashboard
   getHealth: () => fetchJSON<HealthData>('/health'),
+  getReady: () => fetchJSON<HealthData>('/ready'),
   getDashboardSummary: () => fetchJSON<DashboardSummaryData>('/dashboard/summary'),
 
   // Agents, Soul & Cron

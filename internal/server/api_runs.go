@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/actonos/actonos/internal/agent"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -13,12 +14,33 @@ func (s *Server) handleListAgentRuns(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	runs, err := s.runStore.List(r.Context(), limit)
+	filter := agent.RunListFilter{
+		AgentID: r.URL.Query().Get("agent_id"),
+		Source:  r.URL.Query().Get("source"),
+		Limit:   limit,
+	}
+	if status := r.URL.Query().Get("status"); status != "" {
+		filter.Status = agent.RunStatus(status)
+	}
+	runs, err := s.runStore.ListFiltered(r.Context(), filter)
 	if err != nil {
 		s.respondError(w, http.StatusInternalServerError, "RUN_LIST_FAILED", err.Error())
 		return
 	}
 	s.respondJSON(w, http.StatusOK, map[string]any{"runs": runs})
+}
+
+func (s *Server) handleCancelAgentRun(w http.ResponseWriter, r *http.Request) {
+	if s.engine == nil {
+		s.respondError(w, http.StatusNotImplemented, "ENGINE_NOT_ENABLED", "agent engine is not configured")
+		return
+	}
+	runID := chi.URLParam(r, "id")
+	if err := s.engine.CancelRun(r.Context(), runID); err != nil {
+		s.respondError(w, http.StatusBadRequest, "RUN_CANCEL_FAILED", err.Error())
+		return
+	}
+	s.respondJSON(w, http.StatusOK, map[string]any{"status": "cancelled", "id": runID})
 }
 
 func (s *Server) handleListRunEvents(w http.ResponseWriter, r *http.Request) {

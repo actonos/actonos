@@ -65,7 +65,9 @@
     "startedAt": "Bắt đầu lúc",
     "updatedAt": "Cập nhật lúc",
     "completedAt": "Hoàn thành lúc",
-    "close": "Đóng"
+    "close": "Đóng",
+    "cancelRun": "Hủy lần chạy",
+    "cancelFailed": "Không thể hủy lần chạy"
   },
   "priorities": {
     "p0": "P0 - Nguy cấp (Xung tức thời)",
@@ -135,7 +137,8 @@
   },
   "task": {
     "agent": "Agent:",
-    "channel": "Kênh:"
+    "channel": "Kênh:",
+    "stalled": "Bị kẹt"
   },
   "empty": {
     "title": "Không tìm thấy nhiệm vụ nào",
@@ -169,6 +172,7 @@
       "summary": "Tóm tắt & Dấu vết hành động"
     },
     "zeroNoise": "Không có tiếng ồn",
+    "skipped": "Đã bỏ qua",
     "empty": "Chưa có xung chạy nào được ghi lại. Nhấp vào \"Kích hoạt ngay\" để thực hiện một chu kỳ ngay lập tức."
   },
   "delete": {

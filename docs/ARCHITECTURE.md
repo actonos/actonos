@@ -32,7 +32,7 @@ ActonOS is a **single-purpose appliance operating system** engineered as a custo
 | **Universal Agent Engine** | Unlimited agent creation. Users define persona, system prompt, tool bindings, delegation scopes, and LLM model per agent via Dashboard or REST API. |
 | **Multi-Agent Swarm** | Agent-to-Agent delegation via Goroutines. A primary orchestration agent spawns specialized sub-agents for parallel long-running task chains. |
 | **Dual-Runtime Model** | Hardware Abstraction Layer (HAL) auto-detects bare-metal (Wi-Fi, D-Bus, bwrap) vs. Docker (container metrics, jailed exec). |
-| **Immutable OS** | Read-only system partition. All user data and agent configs reside in `/data`. Atomic OTA updates with watchdog auto-rollback prevent bricking. |
+| **Immutable OS** | User data and agent configs reside in `/data`. Atomic OTA symlink swap persists `{active, previous}` so an operator or `OTAEngine.Rollback()` can restore the prior binary; systemd `Restart=always` restarts a crashed daemon. |
 | **International Standards** | Deep integration with Model Context Protocol (MCP), OAuth 2.1 PKCE (S256), WebAssembly (WASM), and embedded Tailscale (`tsnet`). |
 
 ---
@@ -88,18 +88,9 @@ Where:
 - `CosSim(...)` — Cosine similarity between query and memory embeddings
 - `α, β` — Normalized weights satisfying `α + β = 1`
 
-### C. Uncertainty-Gated Decision Branching (POMDP)
+### C. ReAct Execution Loop
 
-Agents operate as adaptive POMDP systems based on decision entropy:
-
-```mermaid
-flowchart LR
-    INPUT["Input Query"] --> ENTROPY{"Entropy H(p)"}
-    ENTROPY -->|"H < θ (High confidence)"| GREEDY["Greedy ReAct\n1-Step Execution\n(Ultra-low latency)"]
-    ENTROPY -->|"H ≥ θ (Complex/Ambiguous)"| LATS["Tree-of-Thoughts /\nLATS Search\n(Reward-optimized)"]
-    GREEDY --> OUTPUT["Output"]
-    LATS --> OUTPUT
-```
+Agents run a bounded ReAct loop (tool use + observation) with cascade failover, circuit-breaking, and durable run records. High-level goals are decomposed into a persisted DAG; the heartbeat executes **one dependency-ready step per pulse**.
 
 ### D. Calibrated Hybrid Retrieval (Sigmoid-Normalized Fusion)
 
@@ -121,7 +112,7 @@ graph TB
     subgraph "L1 — Connectivity & Ingress"
         TSNET["Tailscale tsnet\nE2E Mesh VPN"]
         WEBUI["Web UI SPA\nReact 19 + Tailwind v4\nvia go:embed"]
-        EVENTBUS["WASM Channel Adapters\nTelegram · Discord\nSlack · WhatsApp · Webhooks"]
+        EVENTBUS["WASM Channel Adapters\nDiscord · Zalo · plugin SDK"]
         CAPTIVE["Zero-Config Portal\nCaptive DNS Hijack\n192.168.4.1 / acton.local"]
     end
 
@@ -148,11 +139,11 @@ graph TB
         REACT_ENGINE["ReAct Orchestrator\nPlan-and-Solve Loop\nToken Pruner"]
         MODEL_CASCADE["Model Cascade Router\nPrimary → Fallback (429)\n→ Local Ollama"]
         HYBRID_MEM["Hybrid Memory Engine\nFTS5 + Chromem-go\nEbbinghaus Decay + RRF"]
-        VAULT["Hardware-bound Vault\nAES-256-GCM\nArgon2id + DMI UUID"]
+        VAULT["Encrypted Vault\nAES-256-GCM + Argon2id"]
     end
 
     subgraph "L6 — Hardware Abstraction Layer"
-        BAREMETAL["Bare-metal Mode\nNetworkManager D-Bus\nBubblewrap + Cgroups v2\nHW Stats · OTA Watchdog"]
+        BAREMETAL["Bare-metal Mode\nNetworkManager D-Bus\nBubblewrap + Cgroups v2\nHW Stats · OTA state + systemd restart"]
         DOCKERMODE["Docker Mode\nHost/Bridge Network\nWASM/Jailed Sandbox\nContainer Metrics API"]
     end
 
@@ -206,7 +197,7 @@ graph TB
 | Auth | OAuth 2.1 (PKCE S256) | Industry-standard SaaS authentication |
 | Sandbox | Bubblewrap + Cgroups v2 | Namespace isolation, resource limits |
 | Storage | modernc.org/sqlite + chromem-go | Embedded relational (FTS5) + vector search |
-| Vault | AES-256-GCM + Argon2id | Hardware-bound encryption (DMI UUID + CPU serial) |
+| Vault | AES-256-GCM + Argon2id | Encrypted secret storage for provider keys and tokens |
 | Base OS | Debian 12 / Alpine Linux | Driver support (bare-metal) / minimal image (container) |
 
 ---
@@ -436,7 +427,7 @@ Further context:
   observations, approval pauses, token totals, and termination reasons.
 - **Bounded Self-Healing**: Tool failures are returned as structured observations.
   The ReAct loop can repair and retry, but stops after repeated identical observations,
-  three consecutive tool failures, eight iterations, cancellation, budget exhaustion,
+  five consecutive tool failures, twenty iterations, cancellation, budget exhaustion,
   or deterministic verification failure.
 - **Verified Completion**: Heartbeat completion markers are advisory. The verifier
   rejects completion claims containing failed/blocked observations or action-oriented
@@ -504,7 +495,7 @@ graph TD
 
 #### Core Capabilities & Bridges:
 1. **Tool Plugin (`WasmToolBridge`)**: Defines one or more agent tools with strict JSON schemas, executing directly through the `ToolRegistry` single execution boundary.
-2. **Channel Plugin (`WasmChannelBridge`)**: Implements external chat protocols (Telegram, Discord, Slack, WhatsApp, Zalo), receiving outbound messages via `acton_channel_send` and streaming inbound messages via `acton_channel_poll` or real-time WebSocket (`acton_ws`).
+2. **Channel Plugin (`WasmChannelBridge`)**: Implements external chat protocols as WASM packages. First-party in-tree plugins currently include Discord and Zalo; additional adapters (Telegram, Slack, WhatsApp) are installed from the plugin registry/SDK rather than being hardcoded in the daemon.
 3. **Connector Plugin (`WasmConnectorBridge`)**: Exposes SaaS authorization schemas, webhook receivers (`acton_connector_handle_webhook`), and bridged tools for third-party services (GitHub, Notion, Linear).
 
 #### Host Syscall Contracts:
@@ -772,31 +763,16 @@ flowchart TD
 
 ---
 
-## 9. Self-Healing OTA Update System
+## 9. OTA Update System
 
-```mermaid
-sequenceDiagram
-    participant OTA as OTA Engine
-    participant FS as Filesystem
-    participant Service as systemd
-    participant WD as Watchdog
-
-    OTA->>FS: Download new build to /data/releases/vX.Y.Z/
-    OTA->>OTA: Verify SHA256 checksum + GPG signature
-    OTA->>FS: Atomic symlink swap: /data/bin/actond → new build
-    OTA->>Service: systemctl restart actond
-    Service->>WD: Start health monitoring
-
-    loop Every 5s for 30s
-        WD->>Service: GET http://127.0.0.1:8080/api/health
-        alt 200 OK
-            WD->>FS: Mark new version as stable ✓
-        else Crash/Hang (>3 failures)
-            WD->>FS: Revert symlink to previous build
-            WD->>Service: systemctl restart actond
-        end
-    end
-```
+`OTAEngine` downloads a release, verifies an optional SHA-256 checksum, atomically
+swaps `/data/bin/actond`, and persists `{active, previous}` in
+`/data/releases/state.json` so rollback survives process restart. systemd
+`ExecStart` prefers `/data/bin/actond` (or `/var/lib/acton/bin/actond`) over
+`/usr/local/bin/actond`. `/api/health` reports `degraded`/`unhealthy` when there
+is no real LLM, disk is exhausted, or heartbeat lag exceeds ~2× interval;
+systemd `Restart=always` restarts a crashed daemon. There is no
+in-process GPG-signed health-poll watchdog.
 
 ---
 

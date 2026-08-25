@@ -90,9 +90,9 @@ Sensitive data (API keys, OAuth tokens) is encrypted at rest using:
 |:---|:---|
 | **Encryption** | AES-256-GCM |
 | **Key Derivation** | Argon2id (memory-hard) |
-| **Key Material** | DMI product UUID + CPU serial + random salt |
+| **Key Material** | Argon2id-derived key from the configured vault secret plus a random salt |
 
-This hardware-binding ensures that vault data cannot be decrypted if the storage is moved to a different machine.
+Vault ciphertext is encrypted at rest. Hardware DMI/CPU binding is not applied in the production constructor.
 
 ### Risk-Based Approval System
 
@@ -197,7 +197,7 @@ headers for embedded UI responses.
 1. **Set a strong admin PIN** during onboarding
 2. **Use Tailscale** for remote access instead of exposing port 8080
 3. **Review audit logs** regularly at `/data/logs/audit.jsonl`
-4. **Keep ActonOS updated** — enable automatic OTA updates
+4. **Keep ActonOS updated** — apply signed-checksum OTA releases and confirm `/api/health` after restart
 5. **Restrict agent permissions** — use minimal delegation scopes
 6. **Back up `/data`** regularly (see [DEPLOYMENT.md](DEPLOYMENT.md#backup--restore))
 7. **Monitor the health endpoint** (`/api/health`) for anomalies

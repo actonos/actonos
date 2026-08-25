@@ -40,7 +40,20 @@
     }
   },
   "health": {
-    "title": "Sức khỏe hệ thống"
+    "title": "Sức khỏe hệ thống",
+    "components": {
+      "llm": "LLM",
+      "heartbeat": "Heartbeat",
+      "embedding": "Embedding",
+      "disk": "Đĩa"
+    },
+    "status": {
+      "healthy": "Ổn định",
+      "degraded": "Suy giảm",
+      "unhealthy": "Không khỏe",
+      "stopped": "Đã dừng",
+      "unknown": "Không rõ"
+    }
   },
   "gauges": {
     "cpu": "CPU",

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -47,16 +48,21 @@ func NewOTAEngine(dataDir string) *OTAEngine {
 
 	binSymlink := filepath.Join(binDir, "actond")
 
-	return &OTAEngine{
+	eng := &OTAEngine{
 		dataDir:     dataDir,
 		releasesDir: releasesDir,
 		binSymlink:  binSymlink,
 		httpClient:  &http.Client{Timeout: 300 * time.Second},
 	}
+	_ = eng.LoadState()
+	return eng
 }
 
 // ApplyUpdate downloads, verifies, and performs atomic symlink swap.
 func (o *OTAEngine) ApplyUpdate(ctx context.Context, release UpdateRelease) error {
+	if WritesFrozen(o.dataDir) {
+		return errors.New("ota download frozen: disk exhausted")
+	}
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
@@ -116,9 +122,53 @@ func (o *OTAEngine) ApplyUpdate(ctx context.Context, release UpdateRelease) erro
 	}
 
 	o.activeBuild = targetBinary
+	_ = o.persistState()
 	slog.Info("atomic ota symlink swapped", "version", release.Version, "path", targetBinary)
 
 	return nil
+}
+
+type otaState struct {
+	Active   string `json:"active"`
+	Previous string `json:"previous"`
+	Stable   string `json:"stable"`
+}
+
+func (o *OTAEngine) statePath() string {
+	return filepath.Join(o.releasesDir, "state.json")
+}
+
+func (o *OTAEngine) persistState() error {
+	state := otaState{Active: o.activeBuild, Previous: o.previousBuild, Stable: o.previousBuild}
+	data, err := json.Marshal(state)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(o.statePath(), data, 0644)
+}
+
+// LoadState restores previous/active paths so rollback survives process restart.
+func (o *OTAEngine) LoadState() error {
+	data, err := os.ReadFile(o.statePath())
+	if err != nil {
+		return err
+	}
+	var state otaState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return err
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.activeBuild = state.Active
+	o.previousBuild = state.Previous
+	return nil
+}
+
+// State returns persisted OTA pointers.
+func (o *OTAEngine) State() (active, previous string) {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	return o.activeBuild, o.previousBuild
 }
 
 // Rollback restores the previous stable build if health check fails.
@@ -130,15 +180,13 @@ func (o *OTAEngine) Rollback() error {
 		return errors.New("no previous build available for rollback")
 	}
 
+	o.activeBuild = o.previousBuild
+	_ = o.persistState()
 	tempSymlink := o.binSymlink + ".tmp"
 	_ = os.Remove(tempSymlink)
-	if err := os.Symlink(o.previousBuild, tempSymlink); err != nil {
-		return err
+	if err := os.Symlink(o.previousBuild, tempSymlink); err == nil {
+		_ = os.Rename(tempSymlink, o.binSymlink)
 	}
-	if err := os.Rename(tempSymlink, o.binSymlink); err != nil {
-		return err
-	}
-
 	slog.Warn("watchdog auto-rollback performed", "restored_build", o.previousBuild)
 	return nil
 }

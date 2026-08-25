@@ -31,6 +31,9 @@ type AutonomousTask struct {
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 	CompletedAt     *time.Time `json:"completed_at,omitempty"`
+	Plan            *TaskPlan  `json:"plan,omitempty"`
+	StalledCycles   int        `json:"stalled_cycles,omitempty"`
+	FailCount       int        `json:"fail_count,omitempty"`
 }
 
 // HeartbeatConfig defines standing rules and pulse parameters for the autonomous daemon.
@@ -40,8 +43,6 @@ type HeartbeatConfig struct {
 	Directives      string `json:"directives"`
 	TargetChannel   string `json:"target_channel"`
 	TargetAccountID string `json:"target_account_id"`
-	AutoDelegate    bool   `json:"auto_delegate"`
-	ZeroNoise       bool   `json:"zero_noise"`
 
 	// AckMaxChars bounds how much extra commentary may accompany HEARTBEAT_OK
 	// before a reply is treated as a real alert rather than a silent
@@ -128,15 +129,9 @@ func (tm *TaskManager) initDB() error {
 	if _, err := tm.db.Exec(schema); err != nil {
 		return err
 	}
-
-	// Auto-heal/unblock system health tasks with refined instructions
-	_, _ = tm.db.Exec(`
-		UPDATE autonomous_tasks
-		SET status = 'pending',
-		    description = 'Run native_sysinfo to inspect memory allocation, CPU load, SQLite database & WAL status, and vector memory index health. If nominal, report healthy metrics and complete the mission.'
-		WHERE status = 'blocked' AND title LIKE '%System Health%'
-	`)
-
+	_, _ = tm.db.Exec(`ALTER TABLE autonomous_tasks ADD COLUMN plan_json TEXT NOT NULL DEFAULT ''`)
+	_, _ = tm.db.Exec(`ALTER TABLE autonomous_tasks ADD COLUMN stalled_cycles INTEGER NOT NULL DEFAULT 0`)
+	_, _ = tm.db.Exec(`ALTER TABLE autonomous_tasks ADD COLUMN fail_count INTEGER NOT NULL DEFAULT 0`)
 	return nil
 }
 
@@ -173,17 +168,21 @@ func (tm *TaskManager) CreateTask(ctx context.Context, t AutonomousTask) (*Auton
 	t.UpdatedAt = now
 
 	if tm.db != nil {
+		planJSON, _ := json.Marshal(t.Plan)
+		if t.Plan == nil {
+			planJSON = []byte("")
+		}
 		query := `
 		INSERT INTO autonomous_tasks (
 			id, title, description, status, priority, assigned_agent_id,
 			target_channel, target_account_id, progress, execution_log,
-			session_id, created_by, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			session_id, created_by, created_at, updated_at, plan_json, stalled_cycles, fail_count
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`
 		_, err := tm.db.ExecContext(ctx, query,
 			t.ID, t.Title, t.Description, t.Status, t.Priority, t.AssignedAgentID,
 			t.TargetChannel, t.TargetAccountID, t.Progress, t.ExecutionLog,
-			t.SessionID, t.CreatedBy, t.CreatedAt, t.UpdatedAt,
+			t.SessionID, t.CreatedBy, t.CreatedAt, t.UpdatedAt, string(planJSON), t.StalledCycles, t.FailCount,
 		)
 		if err != nil {
 			return nil, err
@@ -206,7 +205,8 @@ func (tm *TaskManager) GetTask(ctx context.Context, id string) (*AutonomousTask,
 	query := `
 	SELECT id, title, description, status, priority, assigned_agent_id,
 	       target_channel, target_account_id, progress, execution_log,
-	       session_id, created_by, created_at, updated_at, completed_at
+	       session_id, created_by, created_at, updated_at, completed_at,
+	       COALESCE(plan_json, ''), COALESCE(stalled_cycles, 0), COALESCE(fail_count, 0)
 	FROM autonomous_tasks
 	WHERE id = ?
 	`
@@ -214,16 +214,24 @@ func (tm *TaskManager) GetTask(ctx context.Context, id string) (*AutonomousTask,
 
 	var t AutonomousTask
 	var compAt sql.NullTime
+	var planJSON string
 	err := row.Scan(
 		&t.ID, &t.Title, &t.Description, &t.Status, &t.Priority, &t.AssignedAgentID,
 		&t.TargetChannel, &t.TargetAccountID, &t.Progress, &t.ExecutionLog,
 		&t.SessionID, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt, &compAt,
+		&planJSON, &t.StalledCycles, &t.FailCount,
 	)
 	if err != nil {
 		return nil, err
 	}
 	if compAt.Valid {
 		t.CompletedAt = &compAt.Time
+	}
+	if strings.TrimSpace(planJSON) != "" {
+		var plan TaskPlan
+		if json.Unmarshal([]byte(planJSON), &plan) == nil {
+			t.Plan = &plan
+		}
 	}
 	return &t, nil
 }
@@ -244,17 +252,21 @@ func (tm *TaskManager) UpdateTask(ctx context.Context, t AutonomousTask) error {
 		t.Progress = 100
 	}
 
+	planJSON, _ := json.Marshal(t.Plan)
+	if t.Plan == nil {
+		planJSON = []byte("")
+	}
 	query := `
 	UPDATE autonomous_tasks SET
 		title = ?, description = ?, status = ?, priority = ?, assigned_agent_id = ?,
 		target_channel = ?, target_account_id = ?, progress = ?, execution_log = ?,
-		updated_at = ?, completed_at = ?
+		updated_at = ?, completed_at = ?, plan_json = ?, stalled_cycles = ?, fail_count = ?
 	WHERE id = ?
 	`
 	_, err := tm.db.ExecContext(ctx, query,
 		t.Title, t.Description, t.Status, t.Priority, t.AssignedAgentID,
 		t.TargetChannel, t.TargetAccountID, t.Progress, t.ExecutionLog,
-		t.UpdatedAt, t.CompletedAt, t.ID,
+		t.UpdatedAt, t.CompletedAt, string(planJSON), t.StalledCycles, t.FailCount, t.ID,
 	)
 	if err != nil {
 		return err
@@ -310,7 +322,8 @@ func (tm *TaskManager) ListTasks(ctx context.Context, status, priority string) (
 	query := `
 	SELECT id, title, description, status, priority, assigned_agent_id,
 	       target_channel, target_account_id, progress, execution_log,
-	       session_id, created_by, created_at, updated_at, completed_at
+	       session_id, created_by, created_at, updated_at, completed_at,
+	       COALESCE(plan_json, ''), COALESCE(stalled_cycles, 0), COALESCE(fail_count, 0)
 	FROM autonomous_tasks
 	WHERE 1=1
 	`
@@ -347,13 +360,21 @@ func (tm *TaskManager) ListTasks(ctx context.Context, status, priority string) (
 	for rows.Next() {
 		var t AutonomousTask
 		var compAt sql.NullTime
+		var planJSON string
 		if err := rows.Scan(
 			&t.ID, &t.Title, &t.Description, &t.Status, &t.Priority, &t.AssignedAgentID,
 			&t.TargetChannel, &t.TargetAccountID, &t.Progress, &t.ExecutionLog,
 			&t.SessionID, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt, &compAt,
+			&planJSON, &t.StalledCycles, &t.FailCount,
 		); err == nil {
 			if compAt.Valid {
 				t.CompletedAt = &compAt.Time
+			}
+			if strings.TrimSpace(planJSON) != "" {
+				var plan TaskPlan
+				if json.Unmarshal([]byte(planJSON), &plan) == nil {
+					t.Plan = &plan
+				}
 			}
 			list = append(list, t)
 		}
@@ -447,8 +468,6 @@ func (tm *TaskManager) GetHeartbeatConfig(ctx context.Context) (*HeartbeatConfig
 		Directives:      "",
 		TargetChannel:   "all",
 		TargetAccountID: "all",
-		AutoDelegate:    true,
-		ZeroNoise:       true,
 		AckMaxChars:     300,
 	}
 

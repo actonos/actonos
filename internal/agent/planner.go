@@ -171,3 +171,47 @@ func (p *Planner) ExecutePlan(ctx context.Context, plan *TaskPlan, stepExecutor 
 
 	return nil
 }
+
+// NextReadyStep returns the first pending step whose dependencies are completed.
+func (p *Planner) NextReadyStep(plan *TaskPlan) (*PlanStep, error) {
+	if plan == nil || len(plan.Steps) == 0 {
+		return nil, nil
+	}
+	completed := make(map[string]bool)
+	for _, step := range plan.Steps {
+		if step.Status == "completed" {
+			completed[step.ID] = true
+		}
+	}
+	for i := range plan.Steps {
+		step := &plan.Steps[i]
+		if step.Status != "pending" && step.Status != "" {
+			continue
+		}
+		ready := true
+		for _, depID := range step.Dependencies {
+			if !completed[depID] {
+				ready = false
+				break
+			}
+		}
+		if ready {
+			return step, nil
+		}
+	}
+	return nil, nil
+}
+
+// MarkStep records a step outcome on the in-memory plan.
+func (p *TaskPlan) MarkStep(id, status, result string) {
+	if p == nil {
+		return
+	}
+	for i := range p.Steps {
+		if p.Steps[i].ID == id {
+			p.Steps[i].Status = status
+			p.Steps[i].Result = result
+			return
+		}
+	}
+}

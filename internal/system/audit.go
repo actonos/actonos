@@ -104,6 +104,21 @@ func (l *AuditLogger) Log(entry AuditLogEntry) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	if WritesFrozen(filepath.Dir(filepath.Dir(l.logPath))) {
+		return nil
+	}
+	if l.file != nil {
+		if stat, statErr := l.file.Stat(); statErr == nil && stat.Size() > 32<<20 {
+			_ = l.file.Close()
+			rotated := l.logPath + "." + time.Now().UTC().Format("20060102T150405")
+			_ = os.Rename(l.logPath, rotated)
+			f, openErr := os.OpenFile(l.logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+			if openErr == nil {
+				l.file = f
+			}
+		}
+	}
+
 	if entry.Timestamp == "" {
 		entry.Timestamp = time.Now().UTC().Format(time.RFC3339)
 	}

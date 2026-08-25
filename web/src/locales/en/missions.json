@@ -65,7 +65,9 @@
     "startedAt": "Started At",
     "updatedAt": "Last Updated",
     "completedAt": "Completed At",
-    "close": "Close"
+    "close": "Close",
+    "cancelRun": "Cancel run",
+    "cancelFailed": "Could not cancel run"
   },
   "priorities": {
     "p0": "P0 - Critical (Immediate Pulse)",
@@ -135,7 +137,8 @@
   },
   "task": {
     "agent": "Agent:",
-    "channel": "Channel:"
+    "channel": "Channel:",
+    "stalled": "Stalled"
   },
   "empty": {
     "title": "No Tasks Found",
@@ -169,6 +172,7 @@
       "summary": "Summary & Action Trace"
     },
     "zeroNoise": "Zero Noise",
+    "skipped": "Skipped",
     "empty": "No pulse runs recorded yet. Click \"Trigger Pulse Now\" to execute an immediate cycle."
   },
   "delete": {

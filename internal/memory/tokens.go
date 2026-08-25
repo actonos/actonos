@@ -314,6 +314,22 @@ func (t *TokenTracker) GetSummary(ctx context.Context) (*TokenUsageSummary, erro
 	return summary, nil
 }
 
+// GetAgentHourlyTokens returns tokens consumed by an agent in the last hour.
+func (t *TokenTracker) GetAgentHourlyTokens(ctx context.Context, agentID string) (int64, error) {
+	if t.db == nil {
+		return 0, nil
+	}
+	since := time.Now().UTC().Add(-time.Hour)
+	row := t.db.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(total_tokens), 0)
+		FROM token_usage
+		WHERE agent_id = ? AND timestamp >= ?
+	`, agentID, since)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
 // GetAgentMonthlyCost returns the total cost incurred by a specific agent during the current month.
 func (t *TokenTracker) GetAgentMonthlyCost(ctx context.Context, agentID string) (float64, error) {
 	if t.db == nil {

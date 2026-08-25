@@ -105,12 +105,8 @@ func (r *ReflectionEngine) ReflectOnConversation(ctx context.Context, agentID, u
 		asstResp = asstResp[:12000]
 	}
 
-	// Skip automated heartbeat, cron, or directive runs
-	if strings.Contains(userMsg, "[AUTONOMOUS") ||
-		strings.Contains(userMsg, "[Heartbeat") ||
-		strings.Contains(userMsg, "Standing Directives") ||
-		strings.Contains(asstResp, "HEARTBEAT_OK") ||
-		strings.HasPrefix(asstResp, "⏰ [") {
+	// Skip silent acknowledgements; mission transcripts are reflected after redaction.
+	if strings.Contains(asstResp, "HEARTBEAT_OK") || strings.HasPrefix(asstResp, "⏰ [") {
 		return
 	}
 

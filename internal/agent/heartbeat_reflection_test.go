@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -21,7 +22,7 @@ func configureHeartbeatDirective(t *testing.T, db *memory.DB, daemon *HeartbeatD
 	}
 	if err := taskManager.SaveHeartbeatConfig(context.Background(), HeartbeatConfig{
 		Enabled: true, IntervalMinutes: 60, Directives: directive,
-		TargetChannel: "all", TargetAccountID: "all", AutoDelegate: true, ZeroNoise: true,
+		TargetChannel: "all", TargetAccountID: "all",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +133,7 @@ func TestHeartbeatSkipsLegacySystemTasks(t *testing.T) {
 	}
 }
 
-func TestHeartbeatExcludesCronFromRoutineTools(t *testing.T) {
+func TestHeartbeatExcludesCronFromRoutineToolsWhenQuotaFull(t *testing.T) {
 	db, eventBus := setupTestDB(t)
 	manager, err := NewAgentManager(db, eventBus)
 	if err != nil {
@@ -143,7 +144,7 @@ func TestHeartbeatExcludesCronFromRoutineTools(t *testing.T) {
 	provider.CompleteFunc = func(_ context.Context, _ []llm.Message, opts llm.CompletionOptions) (*llm.Response, error) {
 		for _, tool := range opts.Tools {
 			if tool.Function.Name == "native_cron_schedule" {
-				t.Fatal("routine heartbeat exposed cron scheduling to the model")
+				t.Fatal("routine heartbeat exposed cron scheduling while quota is full")
 			}
 		}
 		return &llm.Response{Model: "openai/gpt-4o", Content: "HEARTBEAT_OK"}, nil
@@ -155,7 +156,18 @@ func TestHeartbeatExcludesCronFromRoutineTools(t *testing.T) {
 	tools.RegisterNativeTools(registry, workspace)
 	engine.SetToolRegistry(registry)
 
+	cronSched := NewCronScheduler(engine, eventBus, db.SQLDB())
+	for i := 0; i < DefaultCronJobsPerAgent; i++ {
+		if err := cronSched.RegisterJob(CronJob{
+			ID: fmt.Sprintf("job-%d", i), AgentID: DefaultSystemAgentID, Name: "n",
+			CronExpr: "0 9 * * *", Prompt: "x", Enabled: false,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	daemon := NewHeartbeatDaemon(manager, engine, eventBus, db.SQLDB(), workspace, time.Hour)
+	daemon.SetCronScheduler(cronSched)
 	configureHeartbeatDirective(t, db, daemon, "Check the deployment health endpoint.")
 	run, err := daemon.TriggerManualPulse(context.Background())
 	if err != nil || run.Status != "ok" || provider.CompleteCalls != 1 {
@@ -244,7 +256,7 @@ func TestHeartbeatCooldownSuppressesRapidNonManualPulses(t *testing.T) {
 		t.Fatalf("expected first non-manual cycle to run: %+v calls=%d", first, provider.CompleteCalls)
 	}
 	second := daemon.checkCycle(context.Background(), false)
-	if second != nil {
+	if second == nil || second.Status != "skipped" {
 		t.Fatalf("expected rapid follow-up non-manual cycle to be suppressed by cooldown, got %+v", second)
 	}
 	if provider.CompleteCalls != 1 {
@@ -280,7 +292,7 @@ func TestHeartbeatActiveHoursSkipsOutsideWindow(t *testing.T) {
 	daemon.SyncConfig(HeartbeatConfig{Enabled: true, ActiveHoursStart: "08:00", ActiveHoursEnd: "08:00", ActiveHoursTimezone: "UTC"})
 
 	run := daemon.checkCycle(context.Background(), false)
-	if run != nil || provider.CompleteCalls != 0 {
+	if run == nil || run.Status != "skipped" || provider.CompleteCalls != 0 {
 		t.Fatalf("expected non-manual cycle outside active hours to be skipped: %+v calls=%d", run, provider.CompleteCalls)
 	}
 
@@ -477,6 +489,9 @@ func TestHeartbeatEscalatesStalledTaskAfterRepeatedNoProgress(t *testing.T) {
 	updated, err := taskManager.GetTask(context.Background(), target.ID)
 	if err != nil || !strings.Contains(updated.ExecutionLog, "STALL WARNING") {
 		t.Fatalf("expected stall warning persisted in execution log: %+v err=%v", updated, err)
+	}
+	if updated.Status != "blocked" {
+		t.Fatalf("expected stalled mission to move to blocked, got %s", updated.Status)
 	}
 }
 

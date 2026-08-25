@@ -85,7 +85,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
         api.getHeartbeatConfig().catch(() => null),
         api.listHeartbeatRuns().catch(() => []),
         api.listApprovals('pending').catch(() => ({ approvals: [] })),
-        api.listAgentRuns(30).catch(() => ({ runs: [] })),
+        api.listAgentRuns({ limit: 30 }).catch(() => ({ runs: [] })),
       ]);
 
       if (tasksRes && tasksRes.tasks) setTasks(tasksRes.tasks);
@@ -445,6 +445,11 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                           <span>{t('task.channel')} <strong className="text-deep-ink">{tItem.target_channel || 'all'}</strong></span>
                         </div>
                         <span className="font-semibold text-deep-ink">{tItem.progress}%</span>
+                        {(tItem.stalled_cycles ?? 0) >= 3 && (
+                          <span className="ml-2 rounded-full bg-status-warning-soft px-2 py-0.5 text-[10px] font-semibold uppercase text-status-warning">
+                            {t('task.stalled')}
+                          </span>
+                        )}
                       </div>
                       <div className="w-full bg-onyx/10 h-1.5 rounded-full overflow-hidden">
                         <div
@@ -533,9 +538,11 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                               ? 'bg-emerald-500/10 text-emerald-700'
                               : r.status === 'action_taken'
                                 ? 'bg-hi-yellow/20 text-deep-ink'
-                                : 'bg-red-500/10 text-red-700'
+                                : r.status === 'skipped'
+                                  ? 'bg-slate-200 text-slate-700'
+                                  : 'bg-red-500/10 text-red-700'
                               }`}>
-                              {r.status === 'ok' ? t('audit.zeroNoise') : r.status}
+                              {r.status === 'ok' ? t('audit.zeroNoise') : r.status === 'skipped' ? t('audit.skipped') : r.status}
                             </span>
                           </td>
                           <td className="py-2.5 px-3 text-slate">
@@ -598,9 +605,26 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                   <div className="flex items-center justify-between gap-3">
                     <span className="font-mono text-[11px] text-deep-ink font-semibold truncate">{run.id}</span>
                     <div className="flex items-center gap-2 shrink-0">
-                      <Badge variant={run.status === 'completed' ? 'active' : run.status === 'failed' ? 'stopped' : 'neutral'}>
+                      <Badge variant={run.status === 'completed' ? 'active' : run.status === 'failed' || run.status === 'blocked' ? 'stopped' : run.status === 'cancelled' ? 'warning' : 'neutral'}>
                         {run.status}
                       </Badge>
+                      {run.status === 'running' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              await api.cancelAgentRun(run.id);
+                              await loadData(true);
+                            } catch (cause) {
+                              error(t('governance.cancelFailed'), cause instanceof Error ? cause.message : String(cause));
+                            }
+                          }}
+                          className="text-[11px] px-2 py-0.5 h-6.5"
+                        >
+                          {t('governance.cancelRun')}
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"

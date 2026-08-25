@@ -14,6 +14,7 @@ type EventBus struct {
 	subscribers map[string][]chan Event
 	closed      bool
 	dropped     atomic.Uint64
+	persist     func(*Event) error
 }
 
 // NewEventBus instantiates a new EventBus.
@@ -23,9 +24,29 @@ func NewEventBus() *EventBus {
 	}
 }
 
+// SetPersist registers a hook invoked before fan-out so durable queues can
+// retain an event even when every subscriber buffer is full.
+func (b *EventBus) SetPersist(fn func(*Event) error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.persist = fn
+}
+
 // Publish broadcasts an event to all subscribers registered for the event's type or wildcard "*".
 // If a subscriber's channel is full, the event is dropped for that subscriber to avoid blocking the publisher.
 func (b *EventBus) Publish(event Event) {
+	b.mu.RLock()
+	persist := b.persist
+	closed := b.closed
+	b.mu.RUnlock()
+
+	if closed {
+		return
+	}
+	if persist != nil {
+		_ = persist(&event)
+	}
+
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 

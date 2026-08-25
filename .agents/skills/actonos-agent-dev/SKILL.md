@@ -142,7 +142,7 @@ Manages cron expressions (e.g. `0 9 * * *`), dispatches autonomous prompt trigge
 - Autonomous prompts receive planner decomposition on their first step.
 - `ContextManager` budgets messages before every LLM attempt.
 - All tools MUST execute through `ToolRegistry.Execute`.
-- The engine stops after 8 iterations, 3 consecutive tool failures, repeated
+- The engine stops after 20 iterations, 5 consecutive tool failures, repeated
   equivalent observations, cancellation, budget exhaustion, or verification failure.
 - `[TASK_COMPLETED]` is advisory until `Verifier.VerifyTaskCompletion` accepts it.
 - Aggregate token usage covers every LLM attempt in the ReAct loop.

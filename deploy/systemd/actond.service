@@ -9,12 +9,7 @@ Type=simple
 User=acton
 Group=acton
 WorkingDirectory=/var/lib/acton
-ExecStart=/usr/local/bin/actond \
-    -data-dir /var/lib/acton \
-    -listen-addr :8080 \
-	-embedding-url http://127.0.0.1:8091 \
-    -log-level info \
-    -log-format text
+ExecStart=/bin/sh -c 'BIN=/usr/local/bin/actond; if [ -x /var/lib/acton/bin/actond ]; then BIN=/var/lib/acton/bin/actond; fi; exec "$BIN" -data-dir /var/lib/acton -listen-addr :8080 -embedding-url http://127.0.0.1:8091 -log-level info -log-format text'
 Restart=always
 RestartSec=5s
 LimitNOFILE=65536
@@ -27,7 +22,6 @@ ProtectHome=true
 ReadWritePaths=/var/lib/acton
 PrivateTmp=true
 ProtectKernelTunables=true
-ProtectControlGroups=true
 RestrictRealtime=true
 
 [Install]

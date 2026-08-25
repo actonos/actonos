@@ -23,7 +23,7 @@
 | Mode | Target | Detection | Key Differences |
 |:---|:---|:---|:---|
 | **Docker** | Cloud, NAS, any Linux host | `RUNTIME_MODE=docker` env var or container detection | Host/bridge networking, WASM/jailed sandbox, container metrics |
-| **Bare-metal** | MiniPC (Intel N100/N95, AMD Ryzen) | Absence of container markers | D-Bus NetworkManager, Wi-Fi hotspot, Bubblewrap + Cgroups v2, OTA watchdog |
+| **Bare-metal** | MiniPC (Intel N100/N95, AMD Ryzen) | Absence of container markers | D-Bus NetworkManager, Bubblewrap + Cgroups v2, OTA state + systemd restart |
 
 The `actond` binary auto-detects its runtime environment via the Hardware Abstraction Layer (HAL).
 
@@ -128,7 +128,7 @@ make docker-multiarch
      - User Data: remaining space (Ext4, read-write)
 
 4. **First-time Setup**
-   - Connect to Wi-Fi hotspot: `ActonOS-XXXX` (password displayed on screen)
+   - Open the Web UI on the LAN and complete the setup wizard
    - Open captive portal or navigate to `http://192.168.4.1`
    - Complete the Setup Wizard:
      - Select your home Wi-Fi network
@@ -218,15 +218,14 @@ The ISO build process:
 
 ### Automatic Updates
 
-ActonOS checks for updates periodically and applies them atomically:
+Operator-triggered OTA applies an update atomically:
 
 1. Download new binary to `/data/releases/vX.Y.Z/`
-2. Verify SHA256 checksum and GPG signature
+2. Verify SHA256 checksum when provided
 3. Atomic symlink swap: `/data/bin/actond` → new version
-4. Restart service via `systemctl restart actond`
-5. Watchdog monitors `/api/health` for 30 seconds
-6. **Success**: mark as stable
-7. **Failure** (3+ crashes): auto-rollback to previous version
+4. Persist `{active, previous}` in `/data/releases/state.json`
+5. Restart via systemd (`Restart=always`); `ExecStart` prefers `/data/bin/actond`
+6. **Rollback**: `OTAEngine.Rollback()` restores the persisted previous binary
 
 ### Manual Update
 

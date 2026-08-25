@@ -80,7 +80,7 @@ func TestTaskManagerHeartbeatAndNilDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg, err := manager.GetHeartbeatConfig(ctx)
-	if err != nil || cfg.Directives != "" || !cfg.Enabled || !cfg.AutoDelegate {
+	if err != nil || cfg.Directives != "" || !cfg.Enabled {
 		t.Fatalf("unexpected heartbeat config: cfg=%+v err=%v", cfg, err)
 	}
 }

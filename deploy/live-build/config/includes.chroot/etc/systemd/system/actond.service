@@ -15,7 +15,7 @@ ExecStartPre=+/bin/mkdir -p /data
 ExecStartPre=+/bin/chown -R acton:acton /data
 ExecStartPre=+/bin/chmod 755 /data
 
-ExecStart=/usr/local/bin/actond --data-dir=/data --listen-addr=:8080 --embedding-url=http://127.0.0.1:8091
+ExecStart=/bin/sh -c 'BIN=/usr/local/bin/actond; if [ -x /data/bin/actond ]; then BIN=/data/bin/actond; fi; exec "$BIN" --data-dir=/data --listen-addr=:8080 --embedding-url=http://127.0.0.1:8091'
 Restart=always
 RestartSec=3s
 LimitNOFILE=65536

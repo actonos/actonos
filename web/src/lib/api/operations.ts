@@ -42,8 +42,16 @@ export const operationsApi = {
       method: 'POST',
       body: JSON.stringify({ reason }),
     }),
-  listAgentRuns: (limit = 100) =>
-    fetchJSON<{ runs: AgentRun[] }>(`/runs?limit=${limit}`),
+  listAgentRuns: (filter?: { limit?: number; status?: string; agent_id?: string; source?: string }) => {
+    const query = new URLSearchParams();
+    query.set('limit', String(filter?.limit ?? 100));
+    if (filter?.status) query.set('status', filter.status);
+    if (filter?.agent_id) query.set('agent_id', filter.agent_id);
+    if (filter?.source) query.set('source', filter.source);
+    return fetchJSON<{ runs: AgentRun[] }>(`/runs?${query.toString()}`);
+  },
+  cancelAgentRun: (runID: string) =>
+    fetchJSON<{ status: string; id: string }>(`/runs/${runID}/cancel`, { method: 'POST' }),
   listRunEvents: (runID: string) =>
     fetchJSON<{ events: RunEvent[] }>(`/runs/${runID}/events`),
   getTokenUsage: () => fetchJSON<TokenUsageSummary>('/system/token-usage'),

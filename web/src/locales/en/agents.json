@@ -298,6 +298,10 @@
       "low": "Low (Autonomous Auto-Execute)",
       "medium": "Medium (Workspace Writes Allowed)",
       "high": "High (Confirm on Sensitive Actions)",
+      "concurrentRuns": "Max concurrent runs",
+      "concurrentRunsHelp": "How many in-flight ReAct turns this agent may hold at once.",
+      "tokensPerHour": "Hourly token cap",
+      "tokensPerHourHelp": "Autonomous pulses degrade when this many tokens are used in one hour.",
       "paths": "Allowed Workspace Paths",
       "pathsPlaceholder": "e.g., *, /data/workspace/project/*",
       "pathsHelp": "Comma-separated file paths or wildcards (*) that this agent is permitted to access."

@@ -13,7 +13,6 @@ import (
 	"github.com/actonos/actonos/internal/agent"
 	"github.com/actonos/actonos/internal/channels"
 	"github.com/actonos/actonos/internal/llm"
-	"github.com/actonos/actonos/internal/tools"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
@@ -158,6 +157,9 @@ func (s *Server) handleStopAgent(w http.ResponseWriter, r *http.Request) {
 		s.respondError(w, http.StatusBadRequest, "STOP_AGENT_FAILED", err.Error())
 		return
 	}
+	if s.engine != nil {
+		s.engine.CancelAgentWork(agentID)
+	}
 	s.respondJSON(w, http.StatusOK, map[string]any{"status": "stopped", "agent_id": agentID})
 }
 
@@ -288,7 +290,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 		eventChan := make(chan agent.AgentStreamEvent, 64)
 		go func() {
-			chatCtx := agent.WithConversationContext(tools.WithBypassApproval(r.Context()), convID)
+			chatCtx := agent.WithConversationContext(r.Context(), convID)
 			_, _ = s.engine.ExecuteStepStreamWithHistory(chatCtx, agentID, req.Message, history, eventChan)
 		}()
 
@@ -427,7 +429,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Non-streaming completion
-	chatCtx := agent.WithConversationContext(tools.WithBypassApproval(r.Context()), convID)
+	chatCtx := agent.WithConversationContext(r.Context(), convID)
 	resp, err := s.engine.ExecuteStepWithHistory(chatCtx, agentID, req.Message, history)
 	if err != nil {
 		s.respondError(w, http.StatusInternalServerError, "CHAT_FAILED", err.Error())
@@ -796,7 +798,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 	resultCh := make(chan streamResult, 1)
 	go func() {
-		chatCtx := agent.WithConversationContext(tools.WithBypassApproval(r.Context()), convID)
+		chatCtx := agent.WithConversationContext(r.Context(), convID)
 		response, err := s.engine.ExecuteStepStreamWithHistory(chatCtx, agentID, req.Message, history, events)
 		resultCh <- streamResult{response: response, err: err}
 	}()

@@ -42,6 +42,29 @@
     "ready": "Terminal ActonOS đã kết nối. Terminal này chỉ đọc để đảm bảo an toàn.",
     "noRun": "chưa chọn lượt chạy"
   },
+  "health": {
+    "components": {
+      "llm": "LLM",
+      "heartbeat": "Heartbeat",
+      "embedding": "Embedding",
+      "disk": "Đĩa"
+    },
+    "status": {
+      "healthy": "Ổn định",
+      "degraded": "Suy giảm",
+      "unhealthy": "Không khỏe",
+      "stopped": "Đã dừng",
+      "unknown": "Không rõ"
+    }
+  },
+  "process": {
+    "title": "Bảng tiến trình agent",
+    "subtitle": "Các lần thực thi đang chạy và gần đây. Hủy sẽ ngắt công việc đang bay.",
+    "empty": "Chưa có lần thực thi bền vững nào.",
+    "cancel": "Hủy lần chạy",
+    "cancelled": "Đã hủy lần chạy",
+    "cancelFailed": "Không thể hủy lần chạy"
+  },
   "queue": {
     "title": "Hàng đợi tác vụ nền",
     "subtitle": "Tạm dừng, tiếp tục, chạy lại hoặc hủy công việc tự hành.",
@@ -50,7 +73,8 @@
     "pause": "Tạm dừng tác vụ",
     "resume": "Tiếp tục tác vụ",
     "retry": "Chạy lại tác vụ",
-    "cancel": "Hủy tác vụ"
+    "cancel": "Hủy tác vụ",
+    "stalled": "Bị kẹt"
   },
   "cost": {
     "title": "Theo dõi token & chi phí",

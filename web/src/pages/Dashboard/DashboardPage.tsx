@@ -28,7 +28,7 @@ import {
   HeartPulse,
 } from 'lucide-react';
 import { api, type DashboardSummaryData } from '@/lib/api';
-import type { TokenUsageSummary, HeartbeatRun } from '@/lib/types';
+import type { TokenUsageSummary, HeartbeatRun, HealthReport } from '@/lib/types';
 import type { NavTab } from '@/components/layout/Sidebar';
 import { TokenLedgerModal } from '@/components/modals/TokenLedgerModal';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -47,6 +47,7 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
   const [data, setData] = useState<DashboardSummaryData | null>(null);
   const [tokenStats, setTokenStats] = useState<TokenUsageSummary | null>(null);
   const [heartbeatRuns, setHeartbeatRuns] = useState<HeartbeatRun[]>([]);
+  const [health, setHealth] = useState<HealthReport | null>(null);
   const [isTokenLedgerOpen, setIsTokenLedgerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -67,10 +68,11 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
   const loadSummary = async () => {
     try {
       setLoading(true);
-      const [summary, tokens, hb] = await Promise.allSettled([
+      const [summary, tokens, hb, supervisor] = await Promise.allSettled([
         api.getDashboardSummary(),
         api.getTokenUsage(),
         api.getHeartbeatHistory(),
+        api.getHealth(),
       ]);
 
       if (summary.status === 'fulfilled') {
@@ -89,6 +91,9 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
       }
       if (hb.status === 'fulfilled') {
         setHeartbeatRuns(hb.value);
+      }
+      if (supervisor.status === 'fulfilled') {
+        setHealth(supervisor.value);
       }
     } catch (err) {
       error('Failed to load dashboard summary', getErrorMessage(err));
@@ -166,7 +171,7 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
           />
         )}
 
-        <SystemHealthStrip data={data} />
+        <SystemHealthStrip data={data} health={health} />
 
         {/* 4 Live Hardware Gauges */}
         <div className="hidden grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8" aria-hidden="true">

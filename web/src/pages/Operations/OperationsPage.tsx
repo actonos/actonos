@@ -11,7 +11,8 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { api } from '@/lib/api';
-import type { AutonomousTask, RunEvent } from '@/lib/types';
+import type { AutonomousTask, HealthReport, RunEvent } from '@/lib/types';
+import { SUPERVISOR_COMPONENTS, componentStatus, supervisorTone } from '@/lib/health';
 import { useRealtime } from '@/components/providers/RealtimeProvider';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { IconButton } from '@/components/ui/IconButton';
@@ -33,10 +34,12 @@ export function OperationsPage() {
   const [events, setEvents] = useState<RunEvent[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [selectedRun, setSelectedRun] = useState<string>('');
-  const [view, setView] = useState<'overview' | 'feed' | 'cost'>(() => {
+  const [view, setView] = useState<'overview' | 'feed' | 'runtime' | 'cost'>(() => {
     const value = readHashParams().get('view');
-    return value === 'feed' || value === 'cost' ? value : 'overview';
+    return value === 'feed' || value === 'runtime' || value === 'cost' ? value : 'overview';
   });
+  const [health, setHealth] = useState<HealthReport | null>(null);
+  const [cancellingRun, setCancellingRun] = useState<string | null>(null);
   const refreshTasks = useCallback(async () => {
     const result = await api.listTasks().catch(() => ({ tasks: [], count: 0 }));
     setTasks(result.tasks);
@@ -44,6 +47,13 @@ export function OperationsPage() {
 
   useEffect(() => {
     refreshTasks();
+    const loadHealth = async () => {
+      const report = await api.getHealth().catch(() => null);
+      setHealth(report);
+    };
+    loadHealth();
+    const interval = window.setInterval(loadHealth, 15000);
+    return () => window.clearInterval(interval);
   }, [refreshTasks]);
 
   useEffect(() => {
@@ -67,6 +77,18 @@ export function OperationsPage() {
       window.clearInterval(interval);
     };
   }, [selectedRun]);
+
+  const handleCancelRun = async (runID: string) => {
+    try {
+      setCancellingRun(runID);
+      await api.cancelAgentRun(runID);
+      success(t('process.cancelled'), runID);
+    } catch (cause) {
+      error(t('process.cancelFailed'), cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setCancellingRun(null);
+    }
+  };
 
   const handleTaskStatus = async (task: AutonomousTask, status: AutonomousTask['status']) => {
     try {
@@ -112,10 +134,28 @@ export function OperationsPage() {
         options={[
           { value: 'overview', label: t('views.overview') },
           { value: 'feed', label: t('views.feed') },
+          { value: 'runtime', label: t('views.runtime') },
           { value: 'cost', label: t('views.cost') },
         ]}
         className="mb-6"
       />
+
+      {health && (
+        <div className="mb-6 flex flex-wrap items-center gap-2 rounded-[24px] border border-onyx/10 bg-soft-meadow p-3">
+          <Badge variant={supervisorTone(health.status) === 'success' ? 'success' : supervisorTone(health.status) === 'warning' ? 'warning' : 'danger'}>
+            {t(`health.status.${health.status}`, health.status)}
+          </Badge>
+          {SUPERVISOR_COMPONENTS.map((key) => {
+            const status = componentStatus(health, key);
+            const tone = supervisorTone(status);
+            return (
+              <Badge key={key} variant={tone === 'success' ? 'success' : tone === 'warning' ? 'warning' : tone === 'danger' ? 'danger' : 'neutral'}>
+                {t(`health.components.${key}`)}: {t(`health.status.${status}`, status)}
+              </Badge>
+            );
+          })}
+        </div>
+      )}
 
       <div className={`${view === 'overview' ? 'grid' : 'hidden'} grid-cols-2 gap-3 xl:grid-cols-4 mb-6`}>
         {gaugeCards.map((gauge) => {
@@ -145,9 +185,22 @@ export function OperationsPage() {
                 {selected?.goal || t('feed.empty')}
               </p>
             </div>
-            <select value={selectedRun} onChange={(event) => setSelectedRun(event.target.value)} className="shrink-0 rounded-full bg-canvas border border-onyx/10 px-3 py-2 text-caption max-w-[240px]">
-              {runs.map((run) => <option key={run.id} value={run.id}>{run.agent_id} · {run.status}</option>)}
-            </select>
+            <div className="flex shrink-0 items-center gap-2">
+              <select value={selectedRun} onChange={(event) => setSelectedRun(event.target.value)} className="rounded-full bg-canvas border border-onyx/10 px-3 py-2 text-caption max-w-[240px]">
+                {runs.map((run) => <option key={run.id} value={run.id}>{run.agent_id} · {run.status}</option>)}
+              </select>
+              {selected?.status === 'running' && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<XCircle className="w-3.5 h-3.5" />}
+                  onClick={() => handleCancelRun(selected.id)}
+                  disabled={cancellingRun === selected.id}
+                >
+                  {t('process.cancel')}
+                </Button>
+              )}
+            </div>
           </div>
           <div className="space-y-2 max-h-[420px] overflow-y-auto">
             {events.map((event) => {
@@ -167,6 +220,39 @@ export function OperationsPage() {
           </div>
         </Card>
 
+        <Card className={`${view === 'runtime' ? 'block' : 'hidden'} xl:col-span-12 p-5 border border-onyx/10`}>
+          <div className="mb-4">
+            <h2 className="font-serif text-heading-sm font-bold">{t('process.title')}</h2>
+            <p className="text-caption text-slate">{t('process.subtitle')}</p>
+          </div>
+          <div className="space-y-2">
+            {runs.length === 0 ? (
+              <p className="p-6 text-center text-caption text-slate">{t('process.empty')}</p>
+            ) : runs.map((run) => (
+              <div key={run.id} className="flex flex-col gap-2 rounded-[18px] bg-soft-meadow p-3 sm:flex-row sm:items-center">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-mono text-caption font-semibold text-deep-ink">{run.id}</p>
+                  <p className="truncate text-caption text-slate">{run.agent_id} · {run.source} · {run.goal}</p>
+                </div>
+                <Badge variant={run.status === 'running' ? 'info' : run.status === 'failed' || run.status === 'blocked' ? 'danger' : run.status === 'cancelled' ? 'warning' : 'neutral'}>
+                  {run.status}
+                </Badge>
+                {run.status === 'running' && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon={<XCircle className="w-3.5 h-3.5" />}
+                    onClick={() => handleCancelRun(run.id)}
+                    disabled={cancellingRun === run.id}
+                  >
+                    {t('process.cancel')}
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+
         <Card className={`${view === 'overview' ? 'block' : 'hidden'} xl:col-span-7 p-5 border border-onyx/10`}>
           <div className="flex items-center justify-between mb-4">
             <div><h2 className="font-serif text-heading-sm font-bold">{t('queue.title')}</h2><p className="text-caption text-slate">{t('queue.subtitle')}</p></div>
@@ -176,7 +262,13 @@ export function OperationsPage() {
             {tasks.slice(0, 8).map((task) => (
               <div key={task.id} className="p-3 rounded-[18px] bg-soft-meadow flex flex-col sm:flex-row sm:items-center gap-3">
                 <Bot className="w-4 h-4 shrink-0" />
-                <div className="min-w-0 flex-1"><p className="font-semibold truncate">{task.title}</p><p className="text-[11px] text-slate">{task.status} · {task.progress}%</p></div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold truncate">{task.title}</p>
+                  <p className="text-[11px] text-slate">{task.status} · {task.progress}%</p>
+                  {(task.stalled_cycles ?? 0) >= 3 && (
+                    <Badge variant="warning">{t('queue.stalled')}</Badge>
+                  )}
+                </div>
                 <div className="flex gap-1">
                   <IconButton
                     size="sm"

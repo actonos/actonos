@@ -265,3 +265,120 @@ func (s *RunStore) Events(ctx context.Context, runID string) ([]RunEvent, error)
 	}
 	return events, rows.Err()
 }
+
+// RunListFilter selects durable runs for the process table.
+type RunListFilter struct {
+	AgentID string
+	Status  RunStatus
+	Source  string
+	Limit   int
+}
+
+// ListFiltered returns runs matching optional agent/status/source filters.
+func (s *RunStore) ListFiltered(ctx context.Context, filter RunListFilter) ([]AgentRun, error) {
+	if filter.Limit <= 0 || filter.Limit > 200 {
+		filter.Limit = 100
+	}
+	query := `
+		SELECT id, trace_id, agent_id, goal, source, status, termination_reason,
+		       iterations, prompt_tokens, completion_tokens, total_tokens,
+		       started_at, updated_at, completed_at
+		FROM agent_runs WHERE 1=1`
+	var args []any
+	if filter.AgentID != "" {
+		query += " AND agent_id = ?"
+		args = append(args, filter.AgentID)
+	}
+	if filter.Status != "" {
+		query += " AND status = ?"
+		args = append(args, filter.Status)
+	}
+	if filter.Source != "" {
+		query += " AND source = ?"
+		args = append(args, filter.Source)
+	}
+	query += " ORDER BY started_at DESC LIMIT ?"
+	args = append(args, filter.Limit)
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("listing filtered agent runs: %w", err)
+	}
+	defer rows.Close()
+	var runs []AgentRun
+	for rows.Next() {
+		var run AgentRun
+		var completed sql.NullTime
+		if err := rows.Scan(
+			&run.ID, &run.TraceID, &run.AgentID, &run.Goal, &run.Source, &run.Status,
+			&run.TerminationReason, &run.Iterations, &run.PromptTokens,
+			&run.CompletionTokens, &run.TotalTokens, &run.StartedAt, &run.UpdatedAt, &completed,
+		); err != nil {
+			return nil, fmt.Errorf("scanning agent run: %w", err)
+		}
+		if completed.Valid {
+			run.CompletedAt = &completed.Time
+		}
+		runs = append(runs, run)
+	}
+	if runs == nil {
+		runs = []AgentRun{}
+	}
+	return runs, rows.Err()
+}
+
+// Get loads a single durable run.
+func (s *RunStore) Get(ctx context.Context, runID string) (*AgentRun, error) {
+	var run AgentRun
+	var completed sql.NullTime
+	err := s.db.QueryRowContext(ctx, `
+		SELECT id, trace_id, agent_id, goal, source, status, termination_reason,
+		       iterations, prompt_tokens, completion_tokens, total_tokens,
+		       started_at, updated_at, completed_at
+		FROM agent_runs WHERE id = ?
+	`, runID).Scan(
+		&run.ID, &run.TraceID, &run.AgentID, &run.Goal, &run.Source, &run.Status,
+		&run.TerminationReason, &run.Iterations, &run.PromptTokens,
+		&run.CompletionTokens, &run.TotalTokens, &run.StartedAt, &run.UpdatedAt, &completed,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if completed.Valid {
+		run.CompletedAt = &completed.Time
+	}
+	return &run, nil
+}
+
+// Cancel marks a run cancelled. In-flight cancellation is handled by Engine.CancelRun.
+func (s *RunStore) Cancel(ctx context.Context, runID, reason string) error {
+	now := time.Now().UTC()
+	if reason == "" {
+		reason = "operator_signal"
+	}
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE agent_runs SET status = ?, termination_reason = ?, updated_at = ?, completed_at = ?
+		WHERE id = ? AND status IN (?, ?)
+	`, RunCancelled, reason, now, now, runID, RunRunning, RunApprovalPending)
+	if err != nil {
+		return fmt.Errorf("cancelling agent run: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("run %s is not cancellable", runID)
+	}
+	return nil
+}
+
+// ReclaimOrphans marks leftover running rows after a process restart.
+func (s *RunStore) ReclaimOrphans(ctx context.Context) (int, error) {
+	now := time.Now().UTC()
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE agent_runs SET status = ?, termination_reason = ?, updated_at = ?, completed_at = ?
+		WHERE status = ?
+	`, RunBlocked, "process_restart_reclaim", now, now, RunRunning)
+	if err != nil {
+		return 0, fmt.Errorf("reclaiming orphan agent runs: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
+}

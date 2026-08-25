@@ -16,6 +16,7 @@ import (
 	"github.com/actonos/actonos/internal/agent"
 	"github.com/actonos/actonos/internal/llm"
 	"github.com/actonos/actonos/internal/memory"
+	"github.com/actonos/actonos/internal/system"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -612,7 +613,7 @@ func RegisterAllStoredProvidersWithVault(
 
 // RegisterProviderInRouter registers a specific provider and all its supported model aliases into llmRouter.
 func RegisterProviderInRouter(router *llm.ModelCascadeRouter, rec LLMProviderRecord) {
-	if router == nil || !rec.Enabled || (rec.APIKey == "" && rec.ID != "custom_openai") {
+	if router == nil || !rec.Enabled || (rec.APIKey == "" && rec.ID != "custom_openai" && rec.ID != "ollama") {
 		return
 	}
 
@@ -862,8 +863,8 @@ func (s *Server) handleGetStorageInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCheckOTA(w http.ResponseWriter, r *http.Request) {
-	// No update channel is wired yet, so the running build is also the latest
-	// known build. Both fields track the daemon version rather than a literal.
+	eng := system.NewOTAEngine(s.dataDir)
+	active, previous := eng.State()
 	s.respondJSON(w, http.StatusOK, map[string]any{
 		"current_version":  s.version,
 		"update_available": false,
@@ -871,6 +872,8 @@ func (s *Server) handleCheckOTA(w http.ResponseWriter, r *http.Request) {
 		"git_commit":       s.gitCommit,
 		"build_time":       s.buildTime,
 		"last_checked":     time.Now().UTC().Format(time.RFC3339),
+		"active_binary":    active,
+		"previous_binary":  previous,
 	})
 }
 

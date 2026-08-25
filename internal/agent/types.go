@@ -27,6 +27,8 @@ const (
 // DelegationScope restricts sub-agents and tool execution.
 type DelegationScope struct {
 	MaxMonthlyBudgetUSD   float64       `json:"max_monthly_budget_usd"`
+	MaxConcurrentRuns     int           `json:"max_concurrent_runs,omitempty"`
+	MaxTokensPerHour      int           `json:"max_tokens_per_hour,omitempty"`
 	AllowedWorkspacePaths []string      `json:"allowed_workspace_paths"`
 	RequireHumanApproval  ApprovalLevel `json:"require_human_approval_level"`
 }
@@ -109,7 +111,6 @@ type AgentState struct {
 	AgentID        string          `json:"agent_id"`
 	WorkingMemory  map[string]any  `json:"working_memory"`
 	ActiveSubTasks map[string]bool `json:"active_subtasks"`
-	Entropy        float64         `json:"entropy"`
 	LastActiveAt   time.Time       `json:"last_active_at"`
 }
 

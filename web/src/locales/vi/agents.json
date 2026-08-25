@@ -298,6 +298,10 @@
       "low": "Thấp (Tự động thực thi tự động)",
       "medium": "Trung bình (Cho phép ghi vào không gian làm việc)",
       "high": "Cao (Xác nhận các hành động nhạy cảm)",
+      "concurrentRuns": "Số lần chạy đồng thời tối đa",
+      "concurrentRunsHelp": "Số vòng ReAct đang bay mà agent này được giữ cùng lúc.",
+      "tokensPerHour": "Trần token mỗi giờ",
+      "tokensPerHourHelp": "Xung tự hành sẽ giảm tải khi vượt số token này trong một giờ.",
       "paths": "Đường dẫn không gian làm việc được phép",
       "pathsPlaceholder": "ví dụ: *, /data/workspace/project/*",
       "pathsHelp": "Đường dẫn tệp hoặc ký tự đại diện được phân tách bằng dấu phẩy (*) mà tác nhân này được phép truy cập."

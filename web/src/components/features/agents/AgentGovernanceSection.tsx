@@ -8,16 +8,24 @@ export function AgentGovernanceSection({
   budget,
   approvalLevel,
   allowedPaths,
+  concurrentRuns,
+  tokensPerHour,
   onBudgetChange,
   onApprovalLevelChange,
   onAllowedPathsChange,
+  onConcurrentRunsChange,
+  onTokensPerHourChange,
 }: {
   budget: number;
   approvalLevel: ApprovalLevel;
   allowedPaths: string;
+  concurrentRuns: number;
+  tokensPerHour: number;
   onBudgetChange: (value: number) => void;
   onApprovalLevelChange: (value: ApprovalLevel) => void;
   onAllowedPathsChange: (value: string) => void;
+  onConcurrentRunsChange: (value: number) => void;
+  onTokensPerHourChange: (value: number) => void;
 }) {
   const { t } = useTranslation('agents');
   return (
@@ -31,6 +39,16 @@ export function AgentGovernanceSection({
           <span className="mb-1 block">{t('studio.governance.budget')}</span>
           <Input type="number" min={0} value={budget} onChange={(event) => onBudgetChange(Number(event.target.value) || 0)} />
           <span className="mt-1 block text-[11px] font-normal text-slate">{t('studio.governance.budgetHelp')}</span>
+        </label>
+        <label className="text-caption font-semibold text-deep-ink">
+          <span className="mb-1 block">{t('studio.governance.concurrentRuns')}</span>
+          <Input type="number" min={1} value={concurrentRuns} onChange={(event) => onConcurrentRunsChange(Number(event.target.value) || 0)} />
+          <span className="mt-1 block text-[11px] font-normal text-slate">{t('studio.governance.concurrentRunsHelp')}</span>
+        </label>
+        <label className="text-caption font-semibold text-deep-ink">
+          <span className="mb-1 block">{t('studio.governance.tokensPerHour')}</span>
+          <Input type="number" min={0} value={tokensPerHour} onChange={(event) => onTokensPerHourChange(Number(event.target.value) || 0)} />
+          <span className="mt-1 block text-[11px] font-normal text-slate">{t('studio.governance.tokensPerHourHelp')}</span>
         </label>
         <label className="text-caption font-semibold text-deep-ink">
           <span className="mb-1 block">{t('studio.governance.approval')}</span>

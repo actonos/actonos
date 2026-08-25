@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,20 +42,6 @@ func TestEngine_ExecuteStep(t *testing.T) {
 
 	if resp.Content != "Hello, I am ready to help you." {
 		t.Fatalf("unexpected response content: %s", resp.Content)
-	}
-}
-
-func TestCalculateEntropy(t *testing.T) {
-	// Deterministic probability distribution [1.0] -> Entropy = 0
-	h1 := CalculateEntropy([]float64{1.0})
-	if math.Abs(h1-0.0) > 0.001 {
-		t.Fatalf("expected entropy 0 for deterministic outcome, got %f", h1)
-	}
-
-	// Uniform distribution over 2 outcomes [0.5, 0.5] -> Entropy = 1.0 bit
-	h2 := CalculateEntropy([]float64{0.5, 0.5})
-	if math.Abs(h2-1.0) > 0.001 {
-		t.Fatalf("expected entropy 1.0 for uniform binary outcome, got %f", h2)
 	}
 }
 

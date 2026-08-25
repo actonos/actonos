@@ -31,7 +31,7 @@ A single-purpose appliance OS designed as a **customizable, self-governing agent
 | **Dual-Runtime HAL** | Automatic environment detection: bare-metal (D-Bus, Wi-Fi Hotspot, Bubblewrap sandbox) or Docker (container metrics, jailed exec). |
 | **Hybrid Memory (RAG)** | SQLite FTS5 + Chromem-go vectors generated locally by pinned multilingual-e5-small ONNX, with a durable one-minute debounce queue. |
 | **Enterprise Auth** | OAuth 2.1 PKCE (S256), Dynamic Client Registration, background token refresh daemon. |
-| **Immutable OS Design** | Read-only system partition, all user data under `/data`. Atomic OTA updates with watchdog auto-rollback. |
+| **Immutable OS Design** | User data under `/data`. Atomic OTA symlink swap with persisted previous/active state and systemd restart. |
 | **Zero-Config Onboarding** | Captive portal Wi-Fi setup, API key entry, Tailscale mesh VPN. |
 | **Embedded Tailscale** | Native `tsnet` integration for end-to-end encrypted remote access without port forwarding. |
 
@@ -42,7 +42,7 @@ graph TB
     subgraph "Layer 1 — Connectivity & Ingress"
         TSNET["Tailscale tsnet<br/>E2E Mesh VPN"]
         WEBUI["Web UI SPA<br/>React 19 + Tailwind v4"]
-        CHANNELS["WASM Channel Adapters<br/>Telegram · Discord · WhatsApp · Slack"]
+        CHANNELS["WASM Channel Adapters<br/>Discord · Zalo · plugin SDK"]
         PORTAL["Zero-Config Portal<br/>Captive DNS @ 192.168.4.1"]
     end
 
@@ -69,7 +69,7 @@ graph TB
         REACT_LOOP["ReAct Orchestrator"]
         CASCADE["Model Cascade Router"]
         MEMORY["Hybrid Memory Engine<br/>FTS5 + Vector + Ebbinghaus"]
-        VAULT["Hardware-bound Vault<br/>AES-256-GCM"]
+        VAULT["Encrypted Vault<br/>AES-256-GCM"]
     end
 
     subgraph "Layer 6 — HAL"
@@ -129,7 +129,7 @@ Open `http://localhost:8080` to access the dashboard.
 1. Download the latest `ActonOS-vX.Y.Z.iso` from [Releases](https://github.com/actonos/actonos/releases)
 2. Flash to USB: `dd if=ActonOS-v1.0.0.iso of=/dev/sdX bs=4M status=progress`
 3. Boot the MiniPC from USB — installation is fully automated
-4. Connect to the `ActonOS-XXXX` Wi-Fi hotspot and follow the setup wizard
+4. Open the Web UI on the LAN (or Tailscale) and complete the setup wizard
 
 ## Development
 
@@ -205,7 +205,7 @@ actonos/
 | Auth | OAuth 2.1 (PKCE S256) | Industry-standard SaaS authentication |
 | Sandbox | Bubblewrap + Cgroups v2 | Namespace isolation, resource limits (512 MB RAM, 50% CPU, 30 PIDs) |
 | Storage | modernc.org/sqlite + chromem-go | Embedded relational DB (FTS5) + vector search, zero external deps |
-| Vault | AES-256-GCM + Argon2id | Hardware-bound encryption using DMI UUID + CPU serial |
+| Vault | AES-256-GCM + Argon2id | Encrypted secret storage for provider keys and tokens |
 | Base OS | Debian 12 Minimal / Alpine Linux | Bare-metal driver support / minimal container image |
 
 ## Contributing

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/actonos/actonos/internal/bus"
-	"github.com/actonos/actonos/internal/tools"
 	"github.com/robfig/cron/v3"
 )
 
@@ -40,6 +39,7 @@ type CronScheduler struct {
 	db                     *sql.DB
 	jobs                   map[string]*CronJob
 	defaultRecipientGetter func(channel string) string
+	runningJobs            map[string]struct{}
 }
 
 // NewCronScheduler creates a CronScheduler instance with optional SQLite persistence.
@@ -48,7 +48,8 @@ func NewCronScheduler(engine *Engine, eventBus *bus.EventBus, db ...*sql.DB) *Cr
 		cron:     cron.New(cron.WithParser(cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor))),
 		engine:   engine,
 		eventBus: eventBus,
-		jobs:     make(map[string]*CronJob),
+		jobs:        make(map[string]*CronJob),
+		runningJobs: make(map[string]struct{}),
 	}
 	if len(db) > 0 && db[0] != nil {
 		cs.db = db[0]
@@ -183,6 +184,19 @@ func (cs *CronScheduler) Stop() {
 func (cs *CronScheduler) RegisterJob(job CronJob) error {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
+	if job.AgentID != "" {
+		if _, exists := cs.jobs[job.ID]; !exists {
+			n := 0
+			for _, existing := range cs.jobs {
+				if existing.AgentID == job.AgentID {
+					n++
+				}
+			}
+			if n >= DefaultCronJobsPerAgent {
+				return fmt.Errorf("cron quota exceeded for agent %s (max %d)", job.AgentID, DefaultCronJobsPerAgent)
+			}
+		}
+	}
 
 	// If job already exists, remove previous cron entry
 	if existing, exists := cs.jobs[job.ID]; exists && existing.entryID != 0 {
@@ -451,14 +465,45 @@ func (cs *CronScheduler) ListAllExecutionHistory(limit int) ([]CronExecutionReco
 	return records, nil
 }
 
+func (cs *CronScheduler) CountJobsForAgent(agentID string) int {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+	n := 0
+	for _, job := range cs.jobs {
+		if job.AgentID == agentID {
+			n++
+		}
+	}
+	return n
+}
+
 func (cs *CronScheduler) executeJob(job *CronJob) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			slog.Error("cron job panic recovered", "job_id", job.ID, "recover", rec)
+		}
+		cs.mu.Lock()
+		delete(cs.runningJobs, job.ID)
+		cs.mu.Unlock()
+	}()
+
+	cs.mu.Lock()
+	if cs.runningJobs == nil {
+		cs.runningJobs = make(map[string]struct{})
+	}
+	if _, busy := cs.runningJobs[job.ID]; busy {
+		cs.mu.Unlock()
+		slog.Warn("skipping overlapping cron job", "job_id", job.ID)
+		return
+	}
+	cs.runningJobs[job.ID] = struct{}{}
+	cs.mu.Unlock()
+
 	slog.Info("executing proactive cron job", "job_id", job.ID, "agent_id", job.AgentID)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-
-	// Bypass interactive human approvals for autonomous scheduled cron jobs
-	ctx = tools.WithBypassApproval(ctx)
+	ctx = WithExecutionSource(ctx, "cron")
 
 	startTime := time.Now()
 

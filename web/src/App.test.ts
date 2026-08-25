@@ -20,4 +20,9 @@ describe('hash routing', () => {
     window.location.hash = '#/agents/agent_system_core';
     expect(tabFromLocation()).toBe('agent-studio');
   });
+
+  it('keeps operations as the primary route when a view query is present', () => {
+    window.location.hash = '#/operations?view=runtime';
+    expect(tabFromLocation()).toBe('operations');
+  });
 });

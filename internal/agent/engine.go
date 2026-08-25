@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"regexp"
 	"strings"
 	"time"
@@ -18,10 +17,7 @@ import (
 	"github.com/actonos/actonos/internal/tools"
 )
 
-// DefaultEntropyThreshold is θ for uncertainty-gated branching.
-const DefaultEntropyThreshold = 0.65
-
-// Engine orchestrates the POMDP & ReAct cognitive loop for agents.
+// Engine orchestrates the ReAct cognitive loop for agents.
 type Engine struct {
 	agentMgr         *AgentManager
 	bus              *bus.EventBus
@@ -38,9 +34,10 @@ type Engine struct {
 	planner          *Planner
 	taskMgr          *TaskManager
 	sessionMgr       SessionHistoryProvider
+	swarm            *SwarmManager
 	dataDir          string
 	workspaceDir     string
-	theta            float64 // Entropy threshold
+	inFlight         *inFlightRegistry
 }
 
 // NewEngine creates an Engine instance.
@@ -57,8 +54,43 @@ func NewEngine(
 		memory:         mem,
 		verifier:       NewVerifier(),
 		contextManager: NewContextManager(128000),
-		theta:          DefaultEntropyThreshold,
+		inFlight:       newInFlightRegistry(),
 	}
+}
+
+// SetSwarmManager attaches multi-agent dispatch for plan roles.
+func (e *Engine) SetSwarmManager(swarm *SwarmManager) {
+	e.swarm = swarm
+}
+
+// CancelRun interrupts an in-flight turn and marks the durable run cancelled.
+func (e *Engine) CancelRun(ctx context.Context, runID string) error {
+	if runID == "" {
+		return fmt.Errorf("run id is required")
+	}
+	interrupted := e.inFlight.cancelRun(runID)
+	if e.runStore != nil {
+		if err := e.runStore.Cancel(ctx, runID, "operator_signal"); err != nil && !interrupted {
+			return err
+		}
+	}
+	if !interrupted && e.runStore == nil {
+		return fmt.Errorf("run %s is not in flight", runID)
+	}
+	return nil
+}
+
+// CancelAgentWork interrupts every in-flight turn for an agent (used by Stop).
+func (e *Engine) CancelAgentWork(agentID string) int {
+	return e.inFlight.cancelAgent(agentID)
+}
+
+// ReclaimOrphanRuns marks process-crash leftovers so heartbeat does not replay them as live.
+func (e *Engine) ReclaimOrphanRuns(ctx context.Context) (int, error) {
+	if e.runStore == nil {
+		return 0, nil
+	}
+	return e.runStore.ReclaimOrphans(ctx)
 }
 
 // SetRunStore attaches durable run and event persistence.
@@ -150,76 +182,115 @@ func (e *Engine) buildCognitivePrompt(ctx context.Context, agentID string, agent
 	return BuildCognitiveSystemPrompt(ctx, agentID, agent, e.dataDir, e.workspaceDir, e.profileMgr, e.memory, e.embedding, userMessage)
 }
 
-// CalculateEntropy calculates Shannon Entropy H(p) = -sum(p * log2(p)).
-func CalculateEntropy(probabilities []float64) float64 {
-	if len(probabilities) == 0 {
-		return 0
-	}
-	var entropy float64
-	for _, p := range probabilities {
-		if p > 0 {
-			entropy -= p * math.Log2(p)
-		}
-	}
-	return entropy
-}
-
 // ExecuteStep runs a single cognitive iteration of the ReAct state machine.
 func (e *Engine) ExecuteStep(ctx context.Context, agentID string, userMessage string) (*llm.Response, error) {
 	return e.ExecuteStepWithHistory(ctx, agentID, userMessage, nil)
 }
 
-// ExecuteAutonomousGoal decomposes and executes a dependency-aware plan before returning.
+// ExecuteAutonomousGoal runs a single dependency-ready plan step (or a normal
+// ReAct turn when no planner is attached). Full DAG execution is reserved for
+// Planner.ExecutePlan callers that opt in; heartbeat uses one step per pulse.
 func (e *Engine) ExecuteAutonomousGoal(ctx context.Context, agentID, goal string, history []llm.Message) (*llm.Response, error) {
-	if e.planner == nil || len(history) > 0 {
+	if e.planner == nil {
 		return e.ExecuteStepWithHistory(ctx, agentID, goal, history)
 	}
-	agents, err := e.agentMgr.List(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("listing agents for planning: %w", err)
-	}
-	var modelCascade []string
-	if agent, err := e.agentMgr.Get(ctx, agentID); err == nil && agent != nil {
-		if agent.ModelConfig.PrimaryModel != "" {
-			modelCascade = append(modelCascade, agent.ModelConfig.PrimaryModel)
+	taskID, _ := ctx.Value("task_id").(string)
+	if taskID != "" && e.taskMgr != nil {
+		task, err := e.taskMgr.GetTask(ctx, taskID)
+		if err == nil && task != nil {
+			resp, plan, stepErr := e.ExecuteNextPlanStep(ctx, agentID, goal, task.Plan, history)
+			if stepErr != nil {
+				return resp, stepErr
+			}
+			if plan != nil {
+				task.Plan = plan
+				_ = e.taskMgr.UpdateTask(ctx, *task)
+			}
+			return resp, nil
 		}
-		if agent.ModelConfig.FallbackModel != "" {
-			modelCascade = append(modelCascade, agent.ModelConfig.FallbackModel)
+	}
+	return e.ExecuteStepWithHistory(ctx, agentID, goal, history)
+}
+
+// ExecuteNextPlanStep decomposes (once) and runs the next dependency-ready step.
+func (e *Engine) ExecuteNextPlanStep(ctx context.Context, agentID, goal string, plan *TaskPlan, history []llm.Message) (*llm.Response, *TaskPlan, error) {
+	if e.planner == nil {
+		resp, err := e.ExecuteStepWithHistory(ctx, agentID, goal, history)
+		return resp, plan, err
+	}
+	if plan == nil || len(plan.Steps) == 0 {
+		agents, err := e.agentMgr.List(ctx)
+		if err != nil {
+			return nil, plan, fmt.Errorf("listing agents for planning: %w", err)
+		}
+		var modelCascade []string
+		if agent, getErr := e.agentMgr.Get(ctx, agentID); getErr == nil && agent != nil {
+			if agent.ModelConfig.PrimaryModel != "" {
+				modelCascade = append(modelCascade, agent.ModelConfig.PrimaryModel)
+			}
+			if agent.ModelConfig.FallbackModel != "" {
+				modelCascade = append(modelCascade, agent.ModelConfig.FallbackModel)
+			}
+		}
+		built, err := e.planner.DecomposeGoal(ctx, goal, agents, modelCascade...)
+		if err != nil {
+			return nil, plan, fmt.Errorf("decomposing autonomous goal: %w", err)
+		}
+		plan = built
+	}
+	step, err := e.planner.NextReadyStep(plan)
+	if err != nil {
+		return nil, plan, err
+	}
+	if step == nil {
+		resp, execErr := e.ExecuteStepWithHistory(ctx, agentID, goal, history)
+		return resp, plan, execErr
+	}
+	execAgentID := agentID
+	if step.AgentRole != "" && step.AgentRole != "general" && e.agentMgr != nil {
+		if _, lookupErr := e.agentMgr.Get(ctx, step.AgentRole); lookupErr == nil {
+			execAgentID = step.AgentRole
+		} else if e.swarm != nil {
+			resultCh, spawnErr := e.swarm.SpawnSubAgent(ctx, agentID, SubTask{
+				Title:           step.ID,
+				Prompt:          step.Description,
+				AssignedAgentID: step.AgentRole,
+			})
+			if spawnErr == nil {
+				select {
+				case <-ctx.Done():
+					return nil, plan, ctx.Err()
+				case result := <-resultCh:
+					plan.MarkStep(step.ID, "completed", result.Output)
+					return &llm.Response{Content: result.Output, Usage: llm.Usage{TotalTokens: result.TokensUsed}}, plan, nil
+				}
+			}
 		}
 	}
-	plan, err := e.planner.DecomposeGoal(ctx, goal, agents, modelCascade...)
-	if err != nil {
-		return nil, fmt.Errorf("decomposing autonomous goal: %w", err)
+	prompt := BuildPlanStepPrompt(step.ID, goal, step.Description, step.AgentRole, "")
+	resp, execErr := e.ExecuteStepWithHistory(ctx, execAgentID, prompt, history)
+	if execErr != nil {
+		plan.MarkStep(step.ID, "failed", execErr.Error())
+		return resp, plan, execErr
 	}
-	var total llm.Usage
-	var last *llm.Response
-	var accumulated []llm.Message
-	err = e.planner.ExecutePlan(ctx, plan, func(stepCtx context.Context, step PlanStep) (string, error) {
-		prompt := BuildPlanStepPrompt(step.ID, goal, step.Description, step.AgentRole, "")
-		response, stepErr := e.ExecuteStepWithHistory(stepCtx, agentID, prompt, append(history, accumulated...))
-		if stepErr != nil {
-			return "", stepErr
-		}
-		last = response
-		total = addUsage(total, response.Usage)
-		accumulated = append(accumulated,
-			llm.Message{Role: llm.RoleUser, Content: prompt},
-			llm.Message{Role: llm.RoleAssistant, Content: response.Content, ToolCalls: response.ToolCalls, ProviderItems: response.ProviderItems},
-		)
-		return response.Content, nil
-	})
-	if err != nil {
-		return nil, err
+	content := ""
+	if resp != nil {
+		content = resp.Content
 	}
-	if last == nil {
-		return nil, errors.New("autonomous plan produced no response")
-	}
-	last.Usage = total
-	return last, nil
+	plan.MarkStep(step.ID, "completed", content)
+	return resp, plan, nil
 }
 
 // ExecuteStepWithHistory runs a cognitive iteration of the ReAct state machine with short-term dialogue history.
-func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, userMessage string, history []llm.Message) (*llm.Response, error) {
+func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, userMessage string, history []llm.Message) (finalResp *llm.Response, err error) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			err = recoverAsError(agentID, rec)
+		}
+	}()
+	ctx, cancelTurn := resolveTurnTimeout(ctx, DefaultTurnTimeout)
+	defer cancelTurn()
+
 	agent, err := e.agentMgr.Get(ctx, agentID)
 	if err != nil {
 		return nil, fmt.Errorf("getting agent %s: %w", agentID, err)
@@ -231,17 +302,29 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 	if agent.Status != StatusActive {
 		return nil, fmt.Errorf("agent %s is not active (status=%s)", agentID, agent.Status)
 	}
-	if err := e.checkBudget(ctx, agent); err != nil {
+	source := sourceFromContextOrMessage(ctx, userMessage, "chat")
+	if err := e.checkBudget(ctx, agent, source); err != nil {
 		return nil, err
+	}
+	maxConc := agent.DelegationScope.MaxConcurrentRuns
+	if maxConc <= 0 {
+		maxConc = DefaultMaxConcurrentRuns
+	}
+	if e.inFlight != nil && e.inFlight.count(agentID) >= maxConc {
+		return nil, fmt.Errorf("%w: agent %s already has %d running turns", ErrConcurrentRunQuota, agentID, maxConc)
 	}
 
 	traceID := generateTraceID()
 	ctx = tools.WithTraceID(ctx, traceID)
-	source := sourceFromMessage(userMessage, "chat")
-	if source == "cron" || source == "channel" {
-		ctx = tools.WithBypassApproval(ctx)
-	}
 	run := e.startRun(ctx, traceID, agentID, userMessage, source)
+	runID := traceID
+	if run != nil {
+		runID = run.ID
+	}
+	if e.inFlight != nil {
+		_ = e.inFlight.track(agentID, runID, cancelTurn)
+		defer e.inFlight.untrack(agentID, runID)
+	}
 
 	if e.bus != nil {
 		e.bus.Publish(bus.NewEvent(bus.EventAgentActionStarted, agentID, map[string]string{
@@ -290,7 +373,6 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 		opts.Tools = e.tools.ToLLMToolDefinitions(authorizedTools, tools.DeniedTools(ctx)...)
 	}
 	startTime := time.Now()
-	var finalResp *llm.Response
 	var allExecutedToolCalls []llm.ToolCall
 	totalUsage := llm.Usage{}
 	maxIterations := 20
@@ -301,6 +383,10 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 	iterationsCompleted := 0
 
 	for iter := 0; iter < maxIterations; iter++ {
+		if err := ctx.Err(); err != nil {
+			e.finishRun(ctx, run, RunCancelled, "context_cancelled", iterationsCompleted, totalUsage)
+			return nil, fmt.Errorf("%w: %v", ErrRunCancelled, err)
+		}
 		iterationsCompleted = iter + 1
 		targetModel := agent.ModelConfig.PrimaryModel
 		if targetModel == "" {
@@ -373,7 +459,11 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 		var toolMessages []llm.Message
 
 		for _, tc := range resp.ToolCalls {
-			toolResult, execErr := e.tools.Execute(ctx, agentID, tc.Function.Name, tc.Function.Arguments)
+			if err := ctx.Err(); err != nil {
+				e.finishRun(ctx, run, RunCancelled, "context_cancelled", iter+1, totalUsage)
+				return nil, fmt.Errorf("%w: %v", ErrRunCancelled, err)
+			}
+			toolResult, execErr := e.verifyAndExecuteTool(ctx, agentID, tc.Function.Name, tc.Function.Arguments)
 			resultStr := ""
 			if execErr != nil {
 				resultStr = fmt.Sprintf("Error executing tool %s: %v", tc.Function.Name, execErr)
@@ -460,13 +550,11 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 	}
 	if finalResp == nil {
 		finalResp = &llm.Response{
-			Content: "Completed requested operations successfully.",
+			Content: "",
 			Model:   agent.ModelConfig.PrimaryModel,
 		}
-	} else if strings.TrimSpace(finalResp.Content) == "" {
-		finalResp.Content = "Completed requested operations successfully."
 	}
-	if !e.verifier.VerifySemanticConsistency(ctx, userMessage, finalResp.Content) {
+	if !e.verifier.VerifySemanticConsistency(ctx, userMessage, finalResp.Content) && strings.TrimSpace(finalResp.Content) != "" {
 		finalResp.Content = "I have processed your request and completed the authorized actions."
 	}
 	finalResp.Usage = totalUsage
@@ -544,17 +632,14 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 		}
 		return nil, err
 	}
-	if err := e.checkBudget(ctx, agent); err != nil {
+	source := sourceFromContextOrMessage(ctx, userMessage, "stream")
+	if err := e.checkBudget(ctx, agent, source); err != nil {
 		eventChan <- AgentStreamEvent{Type: EventStreamError, Error: err.Error()}
 		return nil, err
 	}
 
 	traceID := generateTraceID()
 	ctx = tools.WithTraceID(ctx, traceID)
-	source := sourceFromMessage(userMessage, "stream")
-	if source == "cron" || source == "channel" {
-		ctx = tools.WithBypassApproval(ctx)
-	}
 	run := e.startRun(ctx, traceID, agentID, userMessage, source)
 
 	eventChan <- AgentStreamEvent{
@@ -901,13 +986,11 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 	}
 	if finalResp == nil {
 		finalResp = &llm.Response{
-			Content: "Completed requested operations successfully.",
+			Content: "",
 			Model:   agent.ModelConfig.PrimaryModel,
 		}
-	} else if strings.TrimSpace(finalResp.Content) == "" {
-		finalResp.Content = "Completed requested operations successfully."
 	}
-	if !e.verifier.VerifySemanticConsistency(ctx, userMessage, finalResp.Content) {
+	if !e.verifier.VerifySemanticConsistency(ctx, userMessage, finalResp.Content) && strings.TrimSpace(finalResp.Content) != "" {
 		finalResp.Content = "I have processed your request and completed the authorized actions."
 	}
 	finalResp.Usage = totalUsage
@@ -1078,7 +1161,7 @@ func (e *Engine) ResumeApproved(ctx context.Context, approval tools.ApprovalRequ
 	lastObservation := ""
 	repeatedObservations := 0
 
-	// Resume with a FRESH iteration budget (8 iterations) so the LLM has
+	// Resume with a FRESH iteration budget (10 iterations) so the LLM has
 	// enough room to process the approved tool result and converge. The
 	// previous approach of continuing from checkpoint.Iteration left too few
 	// iterations and almost always exhausted the budget.
@@ -1138,7 +1221,7 @@ func (e *Engine) ResumeApproved(ctx context.Context, approval tools.ApprovalRequ
 				if task, err := e.taskMgr.GetTask(execCtx, targetTaskID); err == nil && task != nil {
 					content := strings.TrimSpace(response.Content)
 					shortLog := shortSummary(content, 250)
-					if strings.Contains(content, "[TASK_COMPLETED]") || (e.verifier != nil && e.verifier.VerifyTaskCompletion(task.Description, content, response.ToolCalls)) {
+					if strings.Contains(content, "[TASK_COMPLETED]") && (e.verifier == nil || e.verifier.VerifyTaskCompletion(task.Description, content, response.ToolCalls)) {
 						task.Status = "completed"
 						task.Progress = 100
 						now := time.Now().UTC()
@@ -1148,10 +1231,7 @@ func (e *Engine) ResumeApproved(ctx context.Context, approval tools.ApprovalRequ
 						task.Status = "blocked"
 						task.ExecutionLog = shortLog
 					} else {
-						task.Status = "completed"
-						task.Progress = 100
-						now := time.Now().UTC()
-						task.CompletedAt = &now
+						task.Status = "in_progress"
 						task.ExecutionLog = shortLog
 					}
 					_ = e.taskMgr.UpdateTask(execCtx, *task)
@@ -1304,19 +1384,37 @@ func truncateRunData(value string, limit int) string {
 	return value[:limit] + "...[truncated]"
 }
 
-func (e *Engine) checkBudget(ctx context.Context, manifest *AgentManifest) error {
-	if e.tokenTracker == nil || manifest == nil || manifest.DelegationScope.MaxMonthlyBudgetUSD <= 0 {
+func (e *Engine) checkBudget(ctx context.Context, manifest *AgentManifest, source string) error {
+	if manifest == nil {
+		return nil
+	}
+	if e.tokenTracker != nil {
+		hourlyCap := manifest.DelegationScope.MaxTokensPerHour
+		if hourlyCap <= 0 {
+			hourlyCap = DefaultMaxTokensPerHour
+		}
+		if used, err := e.tokenTracker.GetAgentHourlyTokens(ctx, manifest.AgentID); err == nil && hourlyCap > 0 && used >= int64(hourlyCap) {
+			if source == "heartbeat" || source == "cron" {
+				return fmt.Errorf("%w: agent %s used %d tokens in the last hour (cap %d); degrading autonomous pulses", ErrHourlyTokenQuota, manifest.AgentID, used, hourlyCap)
+			}
+		}
+	}
+	if e.tokenTracker == nil || manifest.DelegationScope.MaxMonthlyBudgetUSD <= 0 {
 		return nil
 	}
 	cost, err := e.tokenTracker.GetAgentMonthlyCost(ctx, manifest.AgentID)
 	if err != nil {
 		return fmt.Errorf("checking monthly agent budget: %w", err)
 	}
-	if cost >= manifest.DelegationScope.MaxMonthlyBudgetUSD {
+	budget := manifest.DelegationScope.MaxMonthlyBudgetUSD
+	if cost >= budget && (source == "heartbeat" || source == "cron") {
 		return fmt.Errorf(
-			"agent %s monthly budget exhausted: spent %.4f USD of %.4f USD",
-			manifest.AgentID, cost, manifest.DelegationScope.MaxMonthlyBudgetUSD,
+			"agent %s monthly budget exhausted for autonomous work: spent %.4f USD of %.4f USD (interactive chat still allowed on fallback)",
+			manifest.AgentID, cost, budget,
 		)
+	}
+	if cost >= budget*0.8 && manifest.ModelConfig.FallbackModel != "" {
+		manifest.ModelConfig.PrimaryModel = manifest.ModelConfig.FallbackModel
 	}
 	return nil
 }
@@ -1344,11 +1442,18 @@ func (e *Engine) attachAutonomousPlan(ctx context.Context, messages []llm.Messag
 	return append(messages[:len(messages)-1], planMessage, messages[len(messages)-1])
 }
 
+func sourceFromContextOrMessage(ctx context.Context, message, fallback string) string {
+	if src := ExecutionSource(ctx); src != "" {
+		return src
+	}
+	return sourceFromMessage(message, fallback)
+}
+
 func sourceFromMessage(message, fallback string) string {
 	switch {
-	case strings.Contains(message, "[AUTONOMOUS MISSION"):
+	case strings.Contains(message, "[AUTONOMOUS MISSION"), strings.Contains(message, "<autonomous_mission_cycle"):
 		return "heartbeat"
-	case strings.Contains(message, "[AUTONOMOUS HEARTBEAT"):
+	case strings.Contains(message, "[AUTONOMOUS HEARTBEAT"), strings.Contains(message, "<autonomous_heartbeat"):
 		return "heartbeat"
 	case strings.Contains(message, "[AUTONOMOUS PROACTIVE"):
 		return "cron"
@@ -1357,6 +1462,18 @@ func sourceFromMessage(message, fallback string) string {
 	default:
 		return fallback
 	}
+}
+
+func (e *Engine) verifyAndExecuteTool(ctx context.Context, agentID, name string, args json.RawMessage) (*tools.ToolResult, error) {
+	if e.verifier != nil && name == "native_exec" {
+		if err := e.verifier.VerifyToolCommand(args); err != nil {
+			return nil, err
+		}
+	}
+	if e.tools == nil {
+		return nil, fmt.Errorf("tool registry is not configured")
+	}
+	return e.tools.Execute(ctx, agentID, name, args)
 }
 
 func (e *Engine) completeStreamIteration(

@@ -231,4 +231,4 @@ The bare-metal OTA system uses the same SemVer scheme:
 └── v0.2.0/actond    ← current (symlinked from /data/bin/actond)
 ```
 
-The watchdog auto-rollback mechanism compares version numbers to determine the fallback target.
+`OTAEngine.Rollback()` restores the persisted previous binary from `/data/releases/state.json`.

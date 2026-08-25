@@ -248,6 +248,7 @@ func (s *Server) setupRoutes() {
 	r.Route("/api", func(r chi.Router) {
 		// Public Endpoints
 		r.Get("/health", s.handleHealth)
+		r.Get("/ready", s.handleReady)
 		r.Get("/models", s.handleGetModelsCatalog)
 		r.Get("/notifications/push/vapid-key", s.handleGetVAPIDPublicKey)
 
@@ -366,6 +367,7 @@ func (s *Server) setupRoutes() {
 			r.Route("/runs", func(r chi.Router) {
 				r.Get("/", s.handleListAgentRuns)
 				r.Get("/{id}/events", s.handleListRunEvents)
+				r.Post("/{id}/cancel", s.handleCancelAgentRun)
 			})
 
 			// Onboarding & Setup
@@ -500,41 +502,4 @@ func (s *Server) decodeJSON(r *http.Request, v any) error {
 	return json.NewDecoder(r.Body).Decode(v)
 }
 
-func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	runtimeMode := "docker"
-	if s.hal != nil {
-		runtimeMode = s.hal.RuntimeMode()
-	}
 
-	activeAgents := 0
-	if s.agentMgr != nil {
-		agents, _ := s.agentMgr.List(r.Context())
-		for _, a := range agents {
-			if a.Status == agent.StatusActive {
-				activeAgents++
-			}
-		}
-	}
-
-	tailscaleConnected := false
-	tailscaleIP := ""
-	if s.tailscale != nil {
-		st, _ := s.tailscale.GetStatus(r.Context())
-		if st != nil {
-			tailscaleConnected = st.Connected
-			tailscaleIP = st.IP
-		}
-	}
-
-	s.respondJSON(w, http.StatusOK, map[string]any{
-		"status":              "healthy",
-		"version":             s.version,
-		"git_commit":          s.gitCommit,
-		"build_time":          s.buildTime,
-		"uptime_seconds":      uint64(time.Since(s.startTime).Seconds()),
-		"runtime_mode":        runtimeMode,
-		"agents_active":       activeAgents,
-		"tailscale_connected": tailscaleConnected,
-		"tailscale_ip":        tailscaleIP,
-	})
-}

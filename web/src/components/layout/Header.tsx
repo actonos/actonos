@@ -1,9 +1,14 @@
+import { useEffect, useState } from 'react';
 import { Menu, Search, Sun, Moon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { NavTab } from '@/components/layout/Sidebar';
 import { useRealtime } from '@/components/providers/RealtimeProvider';
 import { useTheme } from '@/components/providers/ThemeProvider';
 import { NotificationBell } from '@/components/features/notifications/NotificationBell';
+import { api } from '@/lib/api';
+import type { HealthReport } from '@/lib/types';
+import { isSupervisorHealthy, supervisorTone } from '@/lib/health';
+import { Badge } from '@/components/ui/Badge';
 
 export interface HeaderProps {
   activeTab: NavTab;
@@ -19,6 +24,21 @@ export function Header({ activeTab, onOpenMobileSidebar, onLogout, onOpenSearch,
   const { snapshot } = useRealtime();
   const { resolvedTheme, toggleTheme } = useTheme();
   const metrics = snapshot?.metrics;
+  const [health, setHealth] = useState<HealthReport | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const report = await api.getHealth().catch(() => null);
+      if (!cancelled) setHealth(report);
+    };
+    load();
+    const interval = window.setInterval(load, 15000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, []);
 
   const tabTitles: Record<NavTab, { title: string; category: string }> = {
     dashboard: { title: t('nav:links.dashboard'), category: t('nav:categories.overview') },
@@ -80,6 +100,14 @@ export function Header({ activeTab, onOpenMobileSidebar, onLogout, onOpenSearch,
           <span>{t('nav:search.trigger')}</span>
           <kbd className="rounded-full border border-onyx/10 bg-canvas px-1.5 py-0.5 font-mono text-[10px]">{t('nav:search.shortcut')}</kbd>
         </button>
+        {health && !isSupervisorHealthy(health) && (
+          <Badge
+            variant={supervisorTone(health.status) === 'warning' ? 'warning' : 'danger'}
+            className="hidden sm:inline-flex"
+          >
+            {t('nav:telemetry.supervisor', { status: health.status })}
+          </Badge>
+        )}
         {metrics && (
           <div className="hidden md:flex items-center gap-3 px-3 py-2 bg-soft-meadow rounded-full border border-onyx/10 text-caption font-mono text-slate">
             <span>{t('nav:telemetry.cpu', { value: metrics.cpu?.usage_percent?.toFixed(0) || 0 })}</span>

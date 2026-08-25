@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"time"
 )
 
 var (
@@ -16,15 +17,19 @@ var (
 
 // ModelCascadeRouter routes completion and embedding requests through an ordered cascade of providers.
 type ModelCascadeRouter struct {
-	mu        sync.RWMutex
-	providers map[string]LLMProvider
-	defaultID string
+	mu          sync.RWMutex
+	providers   map[string]LLMProvider
+	defaultID   string
+	failures    map[string]int
+	trippedUntil map[string]time.Time
 }
 
 // NewModelCascadeRouter creates a new router instance.
 func NewModelCascadeRouter() *ModelCascadeRouter {
 	return &ModelCascadeRouter{
-		providers: make(map[string]LLMProvider),
+		providers:    make(map[string]LLMProvider),
+		failures:     make(map[string]int),
+		trippedUntil: make(map[string]time.Time),
 	}
 }
 
@@ -69,7 +74,7 @@ func (r *ModelCascadeRouter) GetProvider(id string) (LLMProvider, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	// 1. Direct key match
+	// 1. Direct key match (explicit local-stub lookups are allowed for tests)
 	if p, ok := r.providers[id]; ok {
 		return p, nil
 	}
@@ -106,19 +111,72 @@ func (r *ModelCascadeRouter) GetProvider(id string) (LLMProvider, error) {
 		}
 	}
 
-	// 5. Fallback to mock provider only if no other provider exists
-	if p, ok := r.providers["local-stub"]; ok {
-		return p, nil
-	}
-
-	for _, p := range r.providers {
+	for k, p := range r.providers {
+		if k == "local-stub" || strings.HasPrefix(k, "local-stub/") {
+			continue
+		}
 		return p, nil
 	}
 
 	return nil, fmt.Errorf("%w: %s (provider not configured in Settings)", ErrProviderNotFound, id)
 }
 
-// CompleteWithCascade attempts execution with primary provider, falling back on error.
+const (
+	cascadeRetriesPerProvider = 2
+	circuitBreakerThreshold   = 3
+	circuitBreakerHold        = 60 * time.Second
+)
+
+func (r *ModelCascadeRouter) providerTripped(id string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	until, ok := r.trippedUntil[id]
+	return ok && time.Now().Before(until)
+}
+
+func (r *ModelCascadeRouter) recordProviderResult(id string, failed bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.failures == nil {
+		r.failures = make(map[string]int)
+	}
+	if r.trippedUntil == nil {
+		r.trippedUntil = make(map[string]time.Time)
+	}
+	if !failed {
+		r.failures[id] = 0
+		delete(r.trippedUntil, id)
+		return
+	}
+	r.failures[id]++
+	if r.failures[id] >= circuitBreakerThreshold {
+		r.trippedUntil[id] = time.Now().Add(circuitBreakerHold)
+		slog.Warn("llm circuit breaker tripped", "provider", id, "hold", circuitBreakerHold.String())
+	}
+}
+
+func (r *ModelCascadeRouter) lastResortIDs(cascadeOrder []string) []string {
+	seen := make(map[string]bool)
+	for _, id := range cascadeOrder {
+		seen[id] = true
+		if idx := strings.Index(id, "/"); idx != -1 {
+			seen[id[:idx]] = true
+		}
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var extra []string
+	for _, candidate := range []string{"ollama"} {
+		if !seen[candidate] {
+			if _, ok := r.providers[candidate]; ok {
+				extra = append(extra, candidate)
+			}
+		}
+	}
+	return extra
+}
+
+// CompleteWithCascade attempts execution with primary provider, retries, circuit-breaker, then last-resort.
 func (r *ModelCascadeRouter) CompleteWithCascade(
 	ctx context.Context,
 	cascadeOrder []string,
@@ -129,14 +187,24 @@ func (r *ModelCascadeRouter) CompleteWithCascade(
 	messages = SanitizeMessages(messages)
 	if len(cascadeOrder) == 0 {
 		r.mu.RLock()
-		if r.defaultID != "" {
+		if r.defaultID != "" && r.defaultID != "local-stub" {
 			cascadeOrder = []string{r.defaultID}
 		}
 		r.mu.RUnlock()
 	}
 
+	targets := append([]string{}, cascadeOrder...)
+	targets = append(targets, r.lastResortIDs(cascadeOrder)...)
+
 	var lastErr error
-	for _, target := range cascadeOrder {
+	for i, target := range targets {
+		if target == "local-stub" {
+			continue
+		}
+		if r.providerTripped(target) {
+			lastErr = fmt.Errorf("provider %s circuit-open", target)
+			continue
+		}
 		provider, err := r.GetProvider(target)
 		if err != nil {
 			slog.Warn("provider not found in router cascade", "target", target, "error", err)
@@ -144,25 +212,42 @@ func (r *ModelCascadeRouter) CompleteWithCascade(
 			continue
 		}
 
-		// Dynamically assign target model if specified in the target string
 		callOpts := opts
 		if callOpts.Model == "" && strings.Contains(target, "/") {
 			callOpts.Model = target[strings.Index(target, "/")+1:]
 		}
 
-		resp, err := provider.Complete(ctx, messages, callOpts)
-		if err == nil {
-			if target != "" {
-				resp.Model = target
-			}
-			return resp, nil
+		attempts := 1
+		if i == len(targets)-1 {
+			attempts = cascadeRetriesPerProvider
 		}
-
+		var resp *Response
+		for attempt := 0; attempt < attempts; attempt++ {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			resp, err = provider.Complete(ctx, messages, callOpts)
+			if err == nil {
+				r.recordProviderResult(target, false)
+				if target != "" {
+					resp.Model = target
+				}
+				return resp, nil
+			}
+			lastErr = err
+			if attempt+1 < cascadeRetriesPerProvider {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case <-time.After(time.Duration(attempt+1) * 200 * time.Millisecond):
+				}
+			}
+		}
+		r.recordProviderResult(target, true)
 		slog.Warn("provider failed in cascade, attempting fallback",
 			"target", target,
-			"error", err,
+			"error", lastErr,
 		)
-		lastErr = err
 	}
 
 	return nil, fmt.Errorf("%w: last error: %v", ErrAllProvidersFailed, lastErr)
@@ -179,7 +264,7 @@ func (r *ModelCascadeRouter) StreamCompleteWithCascade(
 	messages = SanitizeMessages(messages)
 	if len(cascadeOrder) == 0 {
 		r.mu.RLock()
-		if r.defaultID != "" {
+		if r.defaultID != "" && r.defaultID != "local-stub" {
 			cascadeOrder = []string{r.defaultID}
 		}
 		r.mu.RUnlock()
@@ -187,6 +272,9 @@ func (r *ModelCascadeRouter) StreamCompleteWithCascade(
 
 	var lastErr error
 	for _, target := range cascadeOrder {
+		if target == "local-stub" {
+			continue
+		}
 		provider, err := r.GetProvider(target)
 		if err != nil {
 			lastErr = err
