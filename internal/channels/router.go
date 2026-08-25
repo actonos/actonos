@@ -329,12 +329,12 @@ func (r *MessageRouter) enforcePairing(ctx context.Context, msg InboundMessage) 
 			return fmt.Errorf("pairing failed: %w", err)
 		}
 		if ok {
-			r.replyPairing(ctx, msg, "Paired. You can chat with the agent now.\nĐã ghép. Bạn có thể trò chuyện với agent.")
+			r.replyPairing(ctx, msg, "Paired. You can chat with the agent now.")
 			return nil
 		}
 	}
 	r.pairing.NoteUnpaired(msg.ChannelID, msg.SenderID, msg.SenderName, msg.Content)
-	r.replyPairing(ctx, msg, "This chat is not paired yet. Ask the ActonOS operator for a pairing code, then send:\n/pair ABCD2345\n\nKênh này chưa ghép. Nhờ người quản trị lấy mã, rồi gửi:\n/pair ABCD2345")
+	r.replyPairing(ctx, msg, "This chat is not paired yet. Ask the ActonOS operator for a pairing code, then send:\n/pair ABCD2345")
 	return &UnpairedSenderError{ChannelID: msg.ChannelID, SenderID: msg.SenderID, SenderName: msg.SenderName}
 }
 
