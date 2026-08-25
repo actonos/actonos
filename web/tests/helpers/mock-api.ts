@@ -69,6 +69,12 @@ function response(pathname: string) {
   if (pathname === '/api/workspace') return { files: [], current_dir: '' };
   if (pathname === '/api/runs') return { runs: [] };
   if (pathname === '/api/approvals') return { approvals: [], count: 0 };
+  if (pathname === '/api/plugins') return { plugins: [], count: 0 };
+  if (pathname === '/api/integrations/channels/accounts') return { accounts: [], count: 0 };
+  if (pathname === '/api/integrations/authorizations') return { users: [], count: 0 };
+  if (pathname === '/api/integrations/pairing/codes') return { codes: [], count: 0 };
+  if (pathname === '/api/integrations/pairing/pending') return { pending: [], count: 0 };
+  if (pathname === '/api/integrations/pairing/policy') return { policies: {} };
   return {};
 }
 

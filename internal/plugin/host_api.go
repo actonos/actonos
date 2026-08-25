@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -83,21 +82,98 @@ func (h *HostContext) CloseAllWS() {
 	h.wsConns = make(map[int32]*HostWSConn)
 }
 
+const (
+	maxPluginLogLines = 500
+	maxPluginLogLine  = 4096
+)
+
 func (h *HostContext) AppendLog(line string) {
+	if h == nil {
+		return
+	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	h.appendLogLocked(line)
+}
+
+func (h *HostContext) appendLogLocked(line string) {
+	if len(line) > maxPluginLogLine {
+		line = line[:maxPluginLogLine] + "…[truncated]"
+	}
 	h.LogBuffer = append(h.LogBuffer, line)
-	if len(h.LogBuffer) > 500 {
-		h.LogBuffer = h.LogBuffer[len(h.LogBuffer)-500:]
+	if len(h.LogBuffer) > maxPluginLogLines {
+		h.LogBuffer = h.LogBuffer[len(h.LogBuffer)-maxPluginLogLines:]
 	}
 }
 
 func (h *HostContext) GetLogs() []string {
+	if h == nil {
+		return nil
+	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	copied := make([]string, len(h.LogBuffer))
 	copy(copied, h.LogBuffer)
 	return copied
+}
+
+func (h *HostContext) SeedLogs(lines []string) {
+	if h == nil || len(lines) == 0 {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.LogBuffer = append([]string{}, lines...)
+	if len(h.LogBuffer) > maxPluginLogLines {
+		h.LogBuffer = h.LogBuffer[len(h.LogBuffer)-maxPluginLogLines:]
+	}
+}
+
+// Record writes a host-side plugin event into the plugin-only log buffer.
+// These lines never go to actond's slog output.
+func (h *HostContext) Record(level, msg string) {
+	if h == nil {
+		return
+	}
+	if level == "" {
+		level = "INFO"
+	}
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	h.AppendLog(fmt.Sprintf("[%s] [%s] %s", timestamp, strings.ToUpper(level), msg))
+}
+
+// pluginStdioWriter captures WASI stdout/stderr from a plugin instance so
+// println/fmt output stays in the plugin log modal instead of actond's stdout.
+type pluginStdioWriter struct {
+	host  *HostContext
+	level string
+	mu    sync.Mutex
+	buf   []byte
+}
+
+func (w *pluginStdioWriter) Write(p []byte) (int, error) {
+	if w == nil || w.host == nil {
+		return len(p), nil
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.buf = append(w.buf, p...)
+	for {
+		idx := bytes.IndexByte(w.buf, '\n')
+		if idx < 0 {
+			if len(w.buf) > maxPluginLogLine {
+				w.host.Record(w.level, string(w.buf[:maxPluginLogLine]))
+				w.buf = w.buf[:0]
+			}
+			break
+		}
+		line := strings.TrimRight(string(w.buf[:idx]), "\r")
+		if strings.TrimSpace(line) != "" {
+			w.host.Record(w.level, line)
+		}
+		w.buf = w.buf[idx+1:]
+	}
+	return len(p), nil
 }
 
 // HTTPRequestPayload is the JSON wire format for host_http_request.
@@ -306,7 +382,7 @@ func netHTTPRequest(ctx context.Context, m api.Module, reqPtr, reqLen uint32) in
 
 	reqBytes, err := readBufferFromMemory(m.Memory(), reqPtr, reqLen)
 	if err != nil {
-		slog.Error("plugin net.http_request: read memory failed", "error", err)
+		h.Record("ERROR", fmt.Sprintf("http_request: read memory failed: %v", err))
 		return -1
 	}
 
@@ -374,7 +450,7 @@ func netHTTPRequest(ctx context.Context, m api.Module, reqPtr, reqLen uint32) in
 	defer resp.Body.Close()
 
 	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
-	slog.Debug("plugin net http response", "plugin_id", h.PluginID, "url", reqPayload.URL, "status", resp.StatusCode, "body", string(respBody))
+	h.Record("DEBUG", fmt.Sprintf("HTTP %s %s -> %d (%d bytes)", method, reqPayload.URL, resp.StatusCode, len(respBody)))
 	headers := make(map[string]string)
 	for k, v := range resp.Header {
 		if len(v) > 0 {
@@ -409,7 +485,7 @@ func wsConnect(ctx context.Context, m api.Module, urlPtr, urlLen, headersPtr, he
 	wsURL := string(urlBytes)
 
 	if err := h.Gate.CheckOutboundURL(wsURL); err != nil {
-		slog.Warn("plugin unauthorized websocket dial attempt", "plugin_id", h.PluginID, "url", wsURL, "error", err)
+		h.Record("WARN", fmt.Sprintf("websocket blocked: %s (%v)", wsURL, err))
 		return -1
 	}
 
@@ -436,7 +512,7 @@ func wsConnect(ctx context.Context, m api.Module, urlPtr, urlLen, headersPtr, he
 	})
 	if err != nil {
 		connCancel()
-		slog.Warn("plugin websocket dial failed", "plugin_id", h.PluginID, "url", wsURL, "error", err)
+		h.Record("WARN", fmt.Sprintf("websocket dial failed: %s (%v)", wsURL, err))
 		return -2
 	}
 
@@ -578,7 +654,7 @@ func vaultGetSecret(ctx context.Context, m api.Module, namePtr, nameLen uint32) 
 	secretKey := string(keyBytes)
 
 	if err := h.Gate.CheckSecretAccess(secretKey); err != nil {
-		slog.Warn("plugin unauthorized secret access attempt", "plugin_id", h.PluginID, "secret", secretKey, "error", err)
+		h.Record("WARN", fmt.Sprintf("secret access denied: %s", secretKey))
 		return 0
 	}
 
@@ -675,7 +751,7 @@ func hostHTTPRequest(ctx context.Context, m api.Module, reqPtr, reqLen uint32) u
 
 	reqBytes, err := readBufferFromMemory(m.Memory(), reqPtr, reqLen)
 	if err != nil {
-		slog.Error("plugin host_http_request: read memory failed", "error", err)
+		h.Record("ERROR", fmt.Sprintf("host_http_request: read memory failed: %v", err))
 		return 0
 	}
 
@@ -765,7 +841,7 @@ func hostGetSecret(ctx context.Context, m api.Module, keyPtr, keyLen uint32) uin
 	secretKey := string(keyBytes)
 
 	if err := h.Gate.CheckSecretAccess(secretKey); err != nil {
-		slog.Warn("plugin unauthorized secret access attempt", "plugin_id", h.PluginID, "secret", secretKey, "error", err)
+		h.Record("WARN", fmt.Sprintf("secret access denied: %s", secretKey))
 		return 0
 	}
 
@@ -862,7 +938,7 @@ func hostEmitEvent(ctx context.Context, m api.Module, topicPtr, topicLen, payloa
 	topic := string(topicBytes)
 
 	if err := h.Gate.CheckBusEvent(topic); err != nil {
-		slog.Warn("plugin unauthorized bus event emission", "plugin_id", h.PluginID, "topic", topic, "error", err)
+		h.Record("WARN", fmt.Sprintf("bus emit denied: %s", topic))
 		return -1
 	}
 
@@ -882,39 +958,27 @@ func hostEmitEvent(ctx context.Context, m api.Module, topicPtr, topicLen, payloa
 
 func hostLog(ctx context.Context, m api.Module, level int32, msgPtr, msgLen uint32) {
 	h := HostContextFrom(ctx)
-	pluginID := "wasm_plugin"
-	if h != nil && h.PluginID != "" {
-		pluginID = h.PluginID
+	if h == nil {
+		return
 	}
 
 	msgBytes, err := readBufferFromMemory(m.Memory(), msgPtr, msgLen)
 	if err != nil {
 		return
 	}
-	msg := string(msgBytes)
 
 	levelStr := "INFO"
 	switch level {
 	case 0:
 		levelStr = "DEBUG"
-		slog.Debug(msg, "plugin", pluginID)
 	case 1:
 		levelStr = "INFO"
-		slog.Info(msg, "plugin", pluginID)
 	case 2:
 		levelStr = "WARN"
-		slog.Warn(msg, "plugin", pluginID)
 	case 3:
 		levelStr = "ERROR"
-		slog.Error(msg, "plugin", pluginID)
-	default:
-		slog.Info(msg, "plugin", pluginID)
 	}
-
-	if h != nil {
-		timestamp := time.Now().Format("2006-01-02 15:04:05")
-		h.AppendLog(fmt.Sprintf("[%s] [%s] %s", timestamp, levelStr, msg))
-	}
+	h.Record(levelStr, string(msgBytes))
 }
 
 func hostTimeNowMS() int64 {

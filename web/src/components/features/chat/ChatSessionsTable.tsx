@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Pin,
@@ -11,9 +11,7 @@ import {
   Trash2,
   Edit3,
   Globe,
-  Send,
   MessageSquare,
-  Gamepad2,
   Target,
   Zap,
   Sparkles,
@@ -24,6 +22,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import type { AgentManifest, ConversationItem } from '@/lib/types';
+import { useInstalledChannels } from '@/lib/installed-channels';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -66,6 +65,7 @@ export function ChatSessionsTable({
   onNewSession,
 }: ChatSessionsTableProps) {
   const { t, i18n } = useTranslation('chat');
+  const { channels: pluginChannels } = useInstalledChannels();
   const [copiedID, setCopiedID] = useState<string | null>(null);
 
   const handleCopyID = (id: string, e: React.MouseEvent) => {
@@ -75,6 +75,29 @@ export function ChatSessionsTable({
     setTimeout(() => setCopiedID(null), 2000);
   };
 
+  const channelLabel = (id: string) => {
+    const plugin = pluginChannels.find((channel) => channel.id === id);
+    if (plugin) return plugin.label;
+    const key = `channels.${id}`;
+    const labeled = t(key);
+    return labeled === key ? id : labeled;
+  };
+
+  const channelFilterOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const options: { id: string; label: string }[] = [];
+    const add = (id: string, label: string) => {
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      options.push({ id, label });
+    };
+    add('web', t('channels.web'));
+    pluginChannels.forEach((channel) => add(channel.id, channel.label));
+    add('mission', t('channels.mission'));
+    add('webhook', t('channels.webhook'));
+    return options;
+  }, [pluginChannels, t]);
+
   // Helper to get channel icon & localized name
   const renderChannelBadge = (channel?: string) => {
     const norm = (channel || 'web').toLowerCase();
@@ -82,19 +105,7 @@ export function ChatSessionsTable({
     let label = t('channels.web');
     let colorClass = 'bg-canvas text-deep-ink border border-onyx/10';
 
-    if (norm === 'telegram') {
-      icon = <Send className="w-3 h-3 text-sky-600" />;
-      label = t('channels.telegram');
-      colorClass = 'bg-sky-50 text-sky-800 border border-sky-200';
-    } else if (norm === 'whatsapp') {
-      icon = <MessageSquare className="w-3 h-3 text-emerald-600" />;
-      label = t('channels.whatsapp');
-      colorClass = 'bg-emerald-50 text-emerald-800 border border-emerald-200';
-    } else if (norm === 'discord') {
-      icon = <Gamepad2 className="w-3 h-3 text-indigo-600" />;
-      label = t('channels.discord');
-      colorClass = 'bg-indigo-50 text-indigo-800 border border-indigo-200';
-    } else if (norm === 'mission') {
+    if (norm === 'mission') {
       icon = <Target className="w-3 h-3 text-amber-600" />;
       label = t('channels.mission');
       colorClass = 'bg-amber-50 text-amber-800 border border-amber-200';
@@ -102,6 +113,10 @@ export function ChatSessionsTable({
       icon = <Zap className="w-3 h-3 text-purple-600" />;
       label = norm === 'webhook' ? t('channels.webhook') : t('channels.system');
       colorClass = 'bg-purple-50 text-purple-800 border border-purple-200';
+    } else if (norm !== 'web') {
+      icon = <MessageSquare className="w-3 h-3 text-sky-600" />;
+      label = channelLabel(norm);
+      colorClass = 'bg-sky-50 text-sky-800 border border-sky-200';
     }
 
     return (
@@ -242,12 +257,9 @@ export function ChatSessionsTable({
                 className="bg-transparent border-0 text-deep-ink font-medium focus:outline-none cursor-pointer pr-1 text-caption"
               >
                 <option value="all">{t('filters.allChannels')}</option>
-                <option value="web">{t('channels.web')}</option>
-                <option value="telegram">{t('channels.telegram')}</option>
-                <option value="whatsapp">{t('channels.whatsapp')}</option>
-                <option value="discord">{t('channels.discord')}</option>
-                <option value="mission">{t('channels.mission')}</option>
-                <option value="webhook">{t('channels.webhook')}</option>
+                {channelFilterOptions.map((item) => (
+                  <option key={item.id} value={item.id}>{item.label}</option>
+                ))}
               </select>
             </div>
 

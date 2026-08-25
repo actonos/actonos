@@ -15,7 +15,7 @@ export function QuickStartPanel({ completedSteps, onToggleStep, onDismiss, onNav
   const { t } = useTranslation('dashboard');
   const steps = [
     { id: 'keys', icon: Key, tab: 'settings' as const },
-    { id: 'channel', icon: Radio, tab: 'plugins' as const },
+    { id: 'channel', icon: Radio, tab: 'channels' as const },
     { id: 'agent', icon: Bot, tab: 'agents' as const },
     { id: 'chat', icon: MessageSquare, tab: 'chat' as const },
     { id: 'skills', icon: Sparkles, tab: 'skills' as const },

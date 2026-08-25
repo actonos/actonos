@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import type { AutonomousTask, TaskPriority, TaskStatus, AgentManifest, ChannelAccount } from '@/lib/types';
 import { api } from '@/lib/api';
+import { useInstalledChannels } from '@/lib/installed-channels';
 
 interface TaskModalProps {
   isOpen: boolean;
@@ -32,6 +33,7 @@ export function TaskModal({ isOpen, onClose, onSave, task }: TaskModalProps) {
   const [availableAgents, setAvailableAgents] = useState<AgentManifest[]>([]);
   const [channelAccounts, setChannelAccounts] = useState<ChannelAccount[]>([]);
   const [saving, setSaving] = useState(false);
+  const { channels: pluginChannels } = useInstalledChannels();
 
   const prevOpenRef = useRef(false);
   const prevTaskIdRef = useRef<string | undefined>(undefined);
@@ -229,10 +231,10 @@ export function TaskModal({ isOpen, onClose, onSave, task }: TaskModalProps) {
               className="w-full bg-soft-meadow text-deep-ink text-body-sm font-sans p-2.5 rounded-full border border-onyx/10 focus:outline-none"
             >
               <option value="all">{t('channels.allBroadcast')}</option>
-              <option value="telegram">{t('channels.telegram')}</option>
-              <option value="whatsapp">{t('channels.whatsapp')}</option>
-              <option value="discord">{t('channels.discord')}</option>
               <option value="none">{t('channels.noneSilent')}</option>
+              {pluginChannels.map((item) => (
+                <option key={item.id} value={item.id}>{item.label}</option>
+              ))}
             </select>
           </div>
 

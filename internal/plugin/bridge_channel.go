@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"sync"
 	"time"
 
@@ -60,7 +59,9 @@ func (b *WasmChannelBridge) Start(ctx context.Context) error {
 	defer b.mu.Unlock()
 
 	b.ctx, b.cancel = context.WithCancel(ctx)
-	slog.Info("started wasm channel adapter", "plugin_id", b.pluginID, "channel", b.channelName, "interval", b.pollInterval)
+	if b.inst != nil && b.inst.hostCtx != nil {
+		b.inst.hostCtx.Record("INFO", fmt.Sprintf("channel adapter started (%s, poll %s)", b.channelName, b.pollInterval))
+	}
 
 	// Start background polling loop
 	go b.pollLoop(b.ctx)
@@ -93,7 +94,9 @@ func (b *WasmChannelBridge) pollOnce(ctx context.Context) {
 
 	msgBytes, err := inst.PollChannel(ctx)
 	if err != nil {
-		slog.Debug("wasm channel poll error", "plugin_id", b.pluginID, "error", err)
+		if inst.hostCtx != nil {
+			inst.hostCtx.Record("WARN", fmt.Sprintf("channel poll failed: %v", err))
+		}
 		return
 	}
 
@@ -135,8 +138,10 @@ func (b *WasmChannelBridge) Stop() error {
 		b.cancel()
 		b.cancel = nil
 	}
+	if b.inst != nil && b.inst.hostCtx != nil {
+		b.inst.hostCtx.Record("INFO", fmt.Sprintf("channel adapter stopped (%s)", b.channelName))
+	}
 	b.inst = nil
-	slog.Info("stopped wasm channel adapter", "plugin_id", b.pluginID, "channel", b.channelName)
 	return nil
 }
 

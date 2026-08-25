@@ -71,7 +71,7 @@ export interface ChannelAccount {
   id: string;
   name?: string;
   label?: string;
-  channel?: string; // 'telegram' | 'whatsapp' | 'discord' | 'webhook'
+  channel?: string; // plugin channel id, e.g. 'telegram' | 'zalo' | 'webhook'
   token?: string;
   phone_id?: string;
   webhook_secret?: string;
@@ -79,13 +79,14 @@ export interface ChannelAccount {
   bound_agent_ids?: string[]; // e.g. ['*'] or ['agent_support', 'agent_devops']
   default_chat_id?: string;
   routing_mode?: 'exclusive' | 'mention' | 'fallback';
+  requires_pairing?: boolean;
 }
 
 export interface ConversationItem {
   id: string;
   agent_id: string;
   title: string;
-  channel?: 'web' | 'telegram' | 'whatsapp' | 'discord' | 'mission' | 'system' | 'webhook' | string;
+  channel?: string; // 'web' | 'mission' | 'system' | 'webhook' | installed plugin channel id
   is_pinned?: boolean;
   message_count?: number;
   last_message?: string;

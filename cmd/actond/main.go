@@ -183,11 +183,6 @@ func main() {
 	configDir := filepath.Join(*dataDir, "config")
 	_ = os.MkdirAll(configDir, 0755)
 
-	readKey := func(file string) string {
-		data, _ := os.ReadFile(filepath.Join(configDir, file))
-		return strings.TrimSpace(string(data))
-	}
-
 	server.RegisterAllStoredProvidersWithVault(ctx, llmRouter, configDir, vault)
 
 	// Fallback mock only if no real providers are configured
@@ -354,43 +349,23 @@ func main() {
 		defer pluginMgr.Close(ctx)
 	}
 
-	// Load initial channel accounts from disk
-	loadAccountsFromDisk := func(ch string) []channels.ChannelAccount {
-		data, err := os.ReadFile(filepath.Join(configDir, ch+"_accounts.json"))
-		if err != nil {
-			return nil
-		}
-		var accs []channels.ChannelAccount
-		_ = json.Unmarshal(data, &accs)
-		return accs
-	}
-
+	// Load initial channel accounts from every *_accounts.json (plugin channel ids).
 	var initialAccounts []channels.ChannelAccount
-	tgAccs := loadAccountsFromDisk("telegram")
-	if len(tgAccs) > 0 {
-		initialAccounts = append(initialAccounts, tgAccs...)
-	} else if tgToken := readKey("telegram.token"); tgToken != "" {
-		initialAccounts = append(initialAccounts, channels.ChannelAccount{
-			ID: "tg_default", Name: "Primary Telegram Bot", Channel: "telegram", Token: tgToken, Enabled: true, BoundAgentIDs: []string{"*"},
-		})
+	if matches, err := filepath.Glob(filepath.Join(configDir, "*_accounts.json")); err == nil {
+		for _, path := range matches {
+			data, readErr := os.ReadFile(path)
+			if readErr != nil {
+				continue
+			}
+			var accs []channels.ChannelAccount
+			if json.Unmarshal(data, &accs) != nil {
+				continue
+			}
+			initialAccounts = append(initialAccounts, accs...)
+		}
 	}
-
-	waAccs := loadAccountsFromDisk("whatsapp")
-	if len(waAccs) > 0 {
-		initialAccounts = append(initialAccounts, waAccs...)
-	} else if waToken := readKey("whatsapp.token"); waToken != "" {
-		initialAccounts = append(initialAccounts, channels.ChannelAccount{
-			ID: "wa_default", Name: "Primary WhatsApp Number", Channel: "whatsapp", Token: waToken, PhoneID: readKey("whatsapp.phone_id"), Enabled: true, BoundAgentIDs: []string{"*"},
-		})
-	}
-
-	dcAccs := loadAccountsFromDisk("discord")
-	if len(dcAccs) > 0 {
-		initialAccounts = append(initialAccounts, dcAccs...)
-	} else if dcToken := readKey("discord.token"); dcToken != "" {
-		initialAccounts = append(initialAccounts, channels.ChannelAccount{
-			ID: "dc_default", Name: "Primary Discord Bot", Channel: "discord", Token: dcToken, Enabled: true, BoundAgentIDs: []string{"*"},
-		})
+	if pluginMgr != nil {
+		initialAccounts = plugin.MergeChannelAccounts(plugin.AccountsFromPlugins(pluginMgr.ListPlugins()), initialAccounts)
 	}
 
 	_ = channelMgr.SyncAccounts(ctx, initialAccounts)

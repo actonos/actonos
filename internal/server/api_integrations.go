@@ -6,9 +6,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/actonos/actonos/internal/channels"
+	"github.com/actonos/actonos/internal/plugin"
 )
 
 // GET /api/integrations/channels
@@ -32,15 +35,18 @@ func (s *Server) handleGetChannels(w http.ResponseWriter, r *http.Request) {
 // GET /api/integrations/channels/accounts
 func (s *Server) handleListAllChannelAccounts(w http.ResponseWriter, r *http.Request) {
 	configDir := filepath.Join(s.dataDir, "config")
-	var all []channels.ChannelAccount
-
-	tg := loadChannelAccounts(configDir, "telegram")
-	dc := loadChannelAccounts(configDir, "discord")
-	wa := loadChannelAccounts(configDir, "whatsapp")
-
-	all = append(all, tg...)
-	all = append(all, dc...)
-	all = append(all, wa...)
+	all := loadAllChannelAccounts(configDir)
+	if s.pluginMgr != nil {
+		all = plugin.MergeChannelAccounts(plugin.AccountsFromPlugins(s.pluginMgr.ListPlugins()), all)
+	}
+	if s.pairingMgr != nil {
+		policies := s.pairingMgr.ListPolicies()
+		for i := range all {
+			if required, ok := policies[strings.ToLower(all[i].Channel)]; ok {
+				all[i].RequiresPairing = required
+			}
+		}
+	}
 
 	var statuses map[string]channels.AccountStatus
 	if s.channelMgr != nil {
@@ -117,102 +123,74 @@ func loadRawChannelAccounts(configDir, channelType string) []channels.ChannelAcc
 	return accounts
 }
 
+func listStoredChannelTypes(configDir string) []string {
+	matches, err := filepath.Glob(filepath.Join(configDir, "*_accounts.json"))
+	if err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(matches))
+	for _, match := range matches {
+		base := filepath.Base(match)
+		ch := strings.TrimSuffix(base, "_accounts.json")
+		if ch == "" || ch == base {
+			continue
+		}
+		out = append(out, ch)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func loadAllChannelAccounts(configDir string) []channels.ChannelAccount {
+	var all []channels.ChannelAccount
+	for _, ch := range listStoredChannelTypes(configDir) {
+		all = append(all, loadChannelAccounts(configDir, ch)...)
+	}
+	return all
+}
+
 // POST /api/integrations/channels
 func (s *Server) handleSaveChannels(w http.ResponseWriter, r *http.Request) {
 	configDir := filepath.Join(s.dataDir, "config")
 	_ = os.MkdirAll(configDir, 0755)
 
-	var req struct {
-		TelegramToken    string                    `json:"telegram_token,omitempty"`
-		DiscordToken     string                    `json:"discord_token,omitempty"`
-		WhatsAppToken    string                    `json:"whatsapp_token,omitempty"`
-		WhatsAppPhone    string                    `json:"whatsapp_phone_id,omitempty"`
-		WebhookSecret    string                    `json:"webhook_secret,omitempty"`
-		TelegramAccounts []channels.ChannelAccount `json:"telegram_accounts,omitempty"`
-		DiscordAccounts  []channels.ChannelAccount `json:"discord_accounts,omitempty"`
-		WhatsAppAccounts []channels.ChannelAccount `json:"whatsapp_accounts,omitempty"`
-	}
-
-	if err := s.decodeJSON(r, &req); err != nil {
+	var raw map[string]json.RawMessage
+	if err := s.decodeJSON(r, &raw); err != nil {
 		s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
 
+	saved := map[string]bool{}
 	var allAccounts []channels.ChannelAccount
 
-	if req.TelegramAccounts != nil {
-		_ = saveChannelAccounts(configDir, "telegram", req.TelegramAccounts)
-		rawTg := loadRawChannelAccounts(configDir, "telegram")
-		allAccounts = append(allAccounts, rawTg...)
-		foundActive := false
-		for _, acc := range rawTg {
-			if acc.Enabled && acc.Token != "" {
-				_ = os.WriteFile(filepath.Join(configDir, "telegram.token"), []byte(strings.TrimSpace(acc.Token)), 0600)
-				foundActive = true
-				break
+	for key, val := range raw {
+		if key == "webhook_secret" {
+			var secret string
+			if err := json.Unmarshal(val, &secret); err == nil && strings.TrimSpace(secret) != "" {
+				_ = os.WriteFile(filepath.Join(configDir, "webhook.secret"), []byte(strings.TrimSpace(secret)), 0600)
 			}
+			continue
 		}
-		if !foundActive {
-			_ = os.Remove(filepath.Join(configDir, "telegram.token"))
+		channelType, ok := strings.CutSuffix(key, "_accounts")
+		if !ok || channelType == "" {
+			continue
 		}
-	} else {
-		allAccounts = append(allAccounts, loadRawChannelAccounts(configDir, "telegram")...)
+		var accounts []channels.ChannelAccount
+		if err := json.Unmarshal(val, &accounts); err != nil {
+			s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+			return
+		}
+		_ = saveChannelAccounts(configDir, channelType, accounts)
+		loaded := loadRawChannelAccounts(configDir, channelType)
+		allAccounts = append(allAccounts, loaded...)
+		saved[channelType] = true
 	}
 
-	if req.DiscordAccounts != nil {
-		_ = saveChannelAccounts(configDir, "discord", req.DiscordAccounts)
-		rawDc := loadRawChannelAccounts(configDir, "discord")
-		allAccounts = append(allAccounts, rawDc...)
-		foundActive := false
-		for _, acc := range rawDc {
-			if acc.Enabled && acc.Token != "" {
-				_ = os.WriteFile(filepath.Join(configDir, "discord.token"), []byte(strings.TrimSpace(acc.Token)), 0600)
-				foundActive = true
-				break
-			}
+	for _, ch := range listStoredChannelTypes(configDir) {
+		if saved[ch] {
+			continue
 		}
-		if !foundActive {
-			_ = os.Remove(filepath.Join(configDir, "discord.token"))
-		}
-	} else {
-		allAccounts = append(allAccounts, loadRawChannelAccounts(configDir, "discord")...)
-	}
-
-	if req.WhatsAppAccounts != nil {
-		_ = saveChannelAccounts(configDir, "whatsapp", req.WhatsAppAccounts)
-		rawWa := loadRawChannelAccounts(configDir, "whatsapp")
-		allAccounts = append(allAccounts, rawWa...)
-		foundActive := false
-		for _, acc := range rawWa {
-			if acc.Enabled && acc.Token != "" {
-				_ = os.WriteFile(filepath.Join(configDir, "whatsapp.token"), []byte(strings.TrimSpace(acc.Token)), 0600)
-				_ = os.WriteFile(filepath.Join(configDir, "whatsapp.phone_id"), []byte(strings.TrimSpace(acc.PhoneID)), 0600)
-				foundActive = true
-				break
-			}
-		}
-		if !foundActive {
-			_ = os.Remove(filepath.Join(configDir, "whatsapp.token"))
-			_ = os.Remove(filepath.Join(configDir, "whatsapp.phone_id"))
-		}
-	} else {
-		allAccounts = append(allAccounts, loadRawChannelAccounts(configDir, "whatsapp")...)
-	}
-
-	if req.TelegramToken != "" {
-		_ = os.WriteFile(filepath.Join(configDir, "telegram.token"), []byte(strings.TrimSpace(req.TelegramToken)), 0600)
-	}
-	if req.DiscordToken != "" {
-		_ = os.WriteFile(filepath.Join(configDir, "discord.token"), []byte(strings.TrimSpace(req.DiscordToken)), 0600)
-	}
-	if req.WhatsAppToken != "" {
-		_ = os.WriteFile(filepath.Join(configDir, "whatsapp.token"), []byte(strings.TrimSpace(req.WhatsAppToken)), 0600)
-	}
-	if req.WhatsAppPhone != "" {
-		_ = os.WriteFile(filepath.Join(configDir, "whatsapp.phone_id"), []byte(strings.TrimSpace(req.WhatsAppPhone)), 0600)
-	}
-	if req.WebhookSecret != "" {
-		_ = os.WriteFile(filepath.Join(configDir, "webhook.secret"), []byte(strings.TrimSpace(req.WebhookSecret)), 0600)
+		allAccounts = append(allAccounts, loadRawChannelAccounts(configDir, ch)...)
 	}
 
 	if s.channelMgr != nil {
@@ -232,8 +210,14 @@ func (s *Server) handleGeneratePairingCode(w http.ResponseWriter, r *http.Reques
 	var req struct {
 		ChannelID string `json:"channel_id"`
 	}
-	if err := s.decodeJSON(r, &req); err != nil || req.ChannelID == "" {
-		req.ChannelID = "telegram"
+	if err := s.decodeJSON(r, &req); err != nil {
+		s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
+	req.ChannelID = strings.ToLower(strings.TrimSpace(req.ChannelID))
+	if req.ChannelID == "" {
+		s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", "channel_id is required")
+		return
 	}
 
 	code, err := s.pairingMgr.GeneratePairingCode(req.ChannelID)
@@ -246,7 +230,79 @@ func (s *Server) handleGeneratePairingCode(w http.ResponseWriter, r *http.Reques
 		"code":       code,
 		"channel_id": req.ChannelID,
 		"expires_in": 600, // 10 minutes
+		"expires_at": time.Now().UTC().Add(10 * time.Minute),
 	})
+}
+
+func (s *Server) handleListPairingCodes(w http.ResponseWriter, r *http.Request) {
+	if s.pairingMgr == nil {
+		s.respondJSON(w, http.StatusOK, map[string]any{"codes": []any{}, "count": 0})
+		return
+	}
+	codes := s.pairingMgr.ListActiveCodes()
+	s.respondJSON(w, http.StatusOK, map[string]any{"codes": codes, "count": len(codes)})
+}
+
+func (s *Server) handleListPendingPairing(w http.ResponseWriter, r *http.Request) {
+	if s.pairingMgr == nil {
+		s.respondJSON(w, http.StatusOK, map[string]any{"pending": []any{}, "count": 0})
+		return
+	}
+	pending := s.pairingMgr.ListPending()
+	s.respondJSON(w, http.StatusOK, map[string]any{"pending": pending, "count": len(pending)})
+}
+
+func (s *Server) handleGetPairingPolicies(w http.ResponseWriter, r *http.Request) {
+	if s.pairingMgr == nil {
+		s.respondJSON(w, http.StatusOK, map[string]any{"policies": map[string]bool{}})
+		return
+	}
+	s.respondJSON(w, http.StatusOK, map[string]any{"policies": s.pairingMgr.ListPolicies()})
+}
+
+func (s *Server) handleSetPairingPolicy(w http.ResponseWriter, r *http.Request) {
+	if s.pairingMgr == nil {
+		s.respondError(w, http.StatusNotImplemented, "PAIRING_NOT_AVAILABLE", "pairing manager not configured")
+		return
+	}
+	var req struct {
+		ChannelID string `json:"channel_id"`
+		Required  bool   `json:"required"`
+	}
+	if err := s.decodeJSON(r, &req); err != nil || strings.TrimSpace(req.ChannelID) == "" {
+		s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", "channel_id is required")
+		return
+	}
+	if err := s.pairingMgr.SetChannelRequiresPairing(req.ChannelID, req.Required); err != nil {
+		s.respondError(w, http.StatusInternalServerError, "POLICY_FAILED", err.Error())
+		return
+	}
+	s.respondJSON(w, http.StatusOK, map[string]any{
+		"status":     "saved",
+		"channel_id": req.ChannelID,
+		"required":   req.Required,
+	})
+}
+
+func (s *Server) handleAllowPairingSender(w http.ResponseWriter, r *http.Request) {
+	if s.pairingMgr == nil {
+		s.respondError(w, http.StatusNotImplemented, "PAIRING_NOT_AVAILABLE", "pairing manager not configured")
+		return
+	}
+	var req struct {
+		ChannelID  string `json:"channel_id"`
+		SenderID   string `json:"sender_id"`
+		SenderName string `json:"sender_name"`
+	}
+	if err := s.decodeJSON(r, &req); err != nil {
+		s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
+	if err := s.pairingMgr.AuthorizeSender(req.ChannelID, req.SenderID, req.SenderName); err != nil {
+		s.respondError(w, http.StatusBadRequest, "ALLOW_FAILED", err.Error())
+		return
+	}
+	s.respondJSON(w, http.StatusOK, map[string]any{"status": "paired", "sender": req.SenderID})
 }
 
 func (s *Server) handleVerifyPairingCode(w http.ResponseWriter, r *http.Request) {

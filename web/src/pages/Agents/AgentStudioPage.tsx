@@ -21,9 +21,6 @@ import {
   AlertTriangle,
   RotateCcw,
   Radio,
-  Send,
-  Phone,
-  Sliders,
   Check,
   Sparkles,
   Brain,
@@ -68,13 +65,6 @@ const ACTON_STANDARD_PROMPT = `You are a specialized autonomous AI agent operati
 - Conversational Standard: Communicate naturally and contextually. Avoid robotic platitudes and dive straight into high-value solutions.
 - Safety Invariants: Safeguard credentials and confine file modifications strictly to authorized workspace paths.`;
 
-const AVAILABLE_CHANNELS = [
-  { id: 'telegram', label: 'Telegram', icon: Send, desc: 'Listen to Telegram bot chats and mentions' },
-  { id: 'discord', label: 'Discord', icon: Bot, desc: 'Listen to Discord server messages and threads' },
-  { id: 'whatsapp', label: 'WhatsApp', icon: Phone, desc: 'Listen to WhatsApp Cloud API messages' },
-  { id: 'webhook', label: 'Inbound Webhook', icon: Sliders, desc: 'Trigger agent from HTTP Webhooks' },
-];
-
 export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPageProps) {
   const { t } = useTranslation('agents');
   const { success, error, info } = useToast();
@@ -118,7 +108,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
 
   // Chat Channels Listener Configuration
   const [listenAllChannels, setListenAllChannels] = useState(true);
-  const [selectedChannels, setSelectedChannels] = useState<string[]>(['telegram', 'discord', 'whatsapp', 'webhook']);
+  const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
 
   // Heartbeat Configuration
   const [heartbeatEnabled, setHeartbeatEnabled] = useState(false);
@@ -211,7 +201,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
           const channels = agent.listen_channels || ['*'];
           if (channels.includes('*') || channels.length === 0) {
             setListenAllChannels(true);
-            setSelectedChannels(['telegram', 'discord', 'whatsapp', 'webhook']);
+            setSelectedChannels([]);
           } else {
             setListenAllChannels(false);
             setSelectedChannels(channels);
@@ -1269,37 +1259,27 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                   {t('studio.channels.select')}
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {AVAILABLE_CHANNELS.map((ch) => {
-                    const Icon = ch.icon;
-                    const isChecked = selectedChannels.includes(ch.id);
-
-                    return (
+                  {selectedChannels.map((id) => (
                       <div
-                        key={ch.id}
-                        onClick={() => handleToggleChannel(ch.id)}
-                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${isChecked
-                          ? 'bg-soft-meadow border-onyx/20 shadow-xs'
-                          : 'bg-canvas border-onyx/10 opacity-60'
-                          }`}
+                        key={id}
+                        onClick={() => handleToggleChannel(id)}
+                        className="p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between bg-soft-meadow border-onyx/20 shadow-xs"
                       >
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-deep-ink text-hi-yellow flex items-center justify-center shrink-0">
-                            <Icon className="w-4 h-4" />
+                            <Radio className="w-4 h-4" />
                           </div>
                           <div>
                             <span className="font-semibold text-body-sm text-deep-ink block">
-                              {ch.label}
+                              {id}
                             </span>
-                            <span className="text-[11px] text-slate">{ch.desc}</span>
                           </div>
                         </div>
-
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${isChecked ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-onyx/20'}`}>
-                          {isChecked && <Check className="w-3 h-3" />}
+                        <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 bg-emerald-500 border-emerald-500 text-white">
+                          <Check className="w-3 h-3" />
                         </div>
                       </div>
-                    );
-                  })}
+                  ))}
                 </div>
               </div>
             )}

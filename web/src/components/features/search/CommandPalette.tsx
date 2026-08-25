@@ -13,6 +13,7 @@ import {
   Target,
   Wrench,
   Bell,
+  Radio,
   type LucideIcon,
 } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -90,6 +91,7 @@ export function CommandPalette({
       ['agents', Bot],
       ['chat', MessageSquare],
       ['automations', Calendar],
+      ['channels', Radio],
       ['workspace', Folder],
       ['tools', Wrench],
       ['notifications', Bell],

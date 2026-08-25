@@ -13,6 +13,7 @@
     "workspace": "Tệp",
     "terminal": "Terminal",
     "plugins": "Plugin",
+    "channels": "Kênh chat",
     "notifications": "Thông báo",
     "audit-logs": "Nhật ký kiểm toán",
     "settings": "Cài đặt"

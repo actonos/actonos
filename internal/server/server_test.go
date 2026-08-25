@@ -1072,6 +1072,54 @@ func TestServer_IntegrationsChannelsPairingAndWebhookValidation(t *testing.T) {
 	}
 }
 
+func TestServer_ChannelAccountsFollowStoredFilesNotHardcodedBrands(t *testing.T) {
+	srv := newTestServer(t)
+
+	save := httptest.NewRequest(http.MethodPost, "/api/integrations/channels", strings.NewReader(
+		`{"zalo_accounts":[{"id":"zalo_bot","name":"Zalo","channel":"zalo","token":"zalo-token","enabled":true,"bound_agent_ids":["*"]}]}`,
+	))
+	save.Header.Set("Content-Type", "application/json")
+	saveResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(saveResult, save)
+	if saveResult.Code != http.StatusOK {
+		t.Fatalf("zalo account save failed: %d %s", saveResult.Code, saveResult.Body.String())
+	}
+
+	accounts := httptest.NewRequest(http.MethodGet, "/api/integrations/channels/accounts", nil)
+	accountsResult := httptest.NewRecorder()
+	srv.Router().ServeHTTP(accountsResult, accounts)
+	body := accountsResult.Body.String()
+	if accountsResult.Code != http.StatusOK || !strings.Contains(body, "zalo_bot") || strings.Contains(body, "zalo-token") {
+		t.Fatalf("zalo accounts were not listed safely: %d %s", accountsResult.Code, body)
+	}
+	if strings.Contains(body, `"channel":"telegram"`) && strings.Contains(body, "tg_default") {
+		t.Fatalf("list invented a telegram account: %s", body)
+	}
+
+	for _, tc := range []struct {
+		name string
+		body string
+		want int
+	}{
+		{name: "missing", body: `{}`, want: http.StatusBadRequest},
+		{name: "empty", body: `{"channel_id":""}`, want: http.StatusBadRequest},
+		{name: "zalo", body: `{"channel_id":"zalo"}`, want: http.StatusOK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/api/integrations/pairing/code", strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			srv.Router().ServeHTTP(w, req)
+			if w.Code != tc.want {
+				t.Fatalf("pairing code %s: got %d %s, want %d", tc.name, w.Code, w.Body.String(), tc.want)
+			}
+			if tc.want == http.StatusOK && strings.Contains(w.Body.String(), `"channel_id":"telegram"`) {
+				t.Fatalf("pairing code defaulted to telegram: %s", w.Body.String())
+			}
+		})
+	}
+}
+
 func TestServer_AuthAndProtection(t *testing.T) {
 	tempDir := t.TempDir()
 	db, err := memory.Open(filepath.Join(tempDir, "test.db"))

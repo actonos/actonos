@@ -8,6 +8,7 @@ import { Plus } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useToast } from '@/components/ui/Toast';
 import type { AgentManifest } from '@/lib/types';
+import { useInstalledChannels } from '@/lib/installed-channels';
 
 interface CronJobModalProps {
   isOpen: boolean;
@@ -23,7 +24,8 @@ export function CronJobModal({ isOpen, onClose, onJobCreated, agents }: CronJobM
   const [agentId, setAgentId] = useState(agents[0]?.agent_id || 'default');
   const [cronExpr, setCronExpr] = useState('0 8 * * *');
   const [prompt, setPrompt] = useState('');
-  const [channel, setChannel] = useState('telegram');
+  const [channel, setChannel] = useState('none');
+  const { channels: pluginChannels } = useInstalledChannels();
   const [recipient, setRecipient] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -38,9 +40,9 @@ export function CronJobModal({ isOpen, onClose, onJobCreated, agents }: CronJobM
         agent_id: agentId,
         cron_expr: cronExpr.trim(),
         prompt: prompt.trim(),
-        target_channel: channel || 'telegram',
+        target_channel: channel || 'none',
         target_recipient: recipient.trim() || undefined,
-        channel: channel || 'telegram',
+        channel: channel || 'none',
         recipient: recipient.trim() || undefined,
         enabled: true,
       });
@@ -124,10 +126,10 @@ export function CronJobModal({ isOpen, onClose, onJobCreated, agents }: CronJobM
               onChange={(e) => setChannel(e.target.value)}
               className="w-full bg-soft-meadow text-deep-ink text-body-sm p-2.5 rounded-[12px] border border-onyx/10 focus:outline-none focus:ring-2 focus:ring-deep-ink"
             >
-              <option value="telegram">{t('cron.channels.telegram')}</option>
-              <option value="whatsapp">{t('cron.channels.whatsapp')}</option>
-              <option value="discord">{t('cron.channels.discord')}</option>
-              <option value="webhook">{t('cron.channels.webhook')}</option>
+              <option value="none">{t('cron.channels.none')}</option>
+              {pluginChannels.map((item) => (
+                <option key={item.id} value={item.id}>{item.label}</option>
+              ))}
             </select>
           </div>
 

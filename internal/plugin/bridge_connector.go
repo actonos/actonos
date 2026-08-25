@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 )
 
 // WasmConnectorBridge coordinates SaaS connector hooks and sync routines for a WASM plugin.
@@ -43,7 +42,9 @@ func (c *WasmConnectorBridge) HandleWebhook(ctx context.Context, payload []byte)
 
 	execFn := c.inst.mod.ExportedFunction("acton_connector_handle_webhook")
 	if execFn == nil {
-		slog.Debug("plugin does not implement acton_connector_handle_webhook", "plugin_id", c.pluginID)
+		if c.inst.hostCtx != nil {
+			c.inst.hostCtx.Record("DEBUG", "connector webhook export is not implemented")
+		}
 		return nil, nil
 	}
 

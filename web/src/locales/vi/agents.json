@@ -40,10 +40,7 @@
     "promptPlaceholder": "VD: Tổng hợp thời tiết hôm nay và những việc cần làm trong ngày.",
     "channel": "Kênh thông báo đẩy",
     "channels": {
-      "telegram": "Telegram Bot",
-      "whatsapp": "WhatsApp Cloud API",
-      "discord": "Discord Gateway",
-      "webhook": "Webhook vào/ra"
+      "none": "Không gửi"
     },
     "recipient": "ID trò chuyện / Điện thoại của người nhận",
     "recipientPlaceholder": "ví dụ. 123456789 hoặc +84912345678",
@@ -244,7 +241,7 @@
       "title": "Kênh trò chuyện",
       "description": "Chỉ định kênh nhắn tin nào sẽ kích hoạt tác nhân này khi nhận được tin nhắn hoặc lượt đề cập.",
       "all": "Tất cả các kênh (Mặc định)",
-      "allDescription": "Agent lắng nghe tin nhắn đến trên Telegram, Discord, WhatsApp và Webhook.",
+      "allDescription": "Agent lắng nghe tin nhắn đến trên mọi plugin kênh đã cài và webhook.",
       "specific": "Chỉ các kênh cụ thể",
       "specificDescription": "Hạn chế tổng đài viên này chỉ phản hồi các kênh cụ thể được chọn bên dưới.",
       "select": "Chọn kênh để nghe",
@@ -282,6 +279,8 @@
       "intervalHelp": "Tần suất daemon đánh thức Agent để thực thi đánh giá nhận thức.",
       "channelLabel": "Kênh đích nhận cảnh báo",
       "channelHelp": "Nơi gửi thông báo tóm tắt hoặc báo cáo khi phát hiện vấn đề cần can thiệp.",
+      "channelAll": "Mọi kênh đã kết nối",
+      "channelNone": "Im lặng (không gửi chat)",
       "activeHoursTitle": "Khung giờ hoạt động & Giới hạn tài khoản (Tùy chọn)",
       "startHour": "Bắt đầu (HH:MM)",
       "endHour": "Kết thúc (HH:MM)",

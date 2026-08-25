@@ -25,6 +25,7 @@ const MissionsPage = lazy(() => import('@/pages/Missions/MissionsPage').then((m)
 const OperationsPage = lazy(() => import('@/pages/Operations/OperationsPage').then((m) => ({ default: m.OperationsPage })));
 const AutomationsPage = lazy(() => import('@/pages/Automations/AutomationsPage').then((m) => ({ default: m.AutomationsPage })));
 const PluginsPage = lazy(() => import('@/pages/Plugins/PluginsPage').then((m) => ({ default: m.PluginsPage })));
+const ChannelsPage = lazy(() => import('@/pages/Channels/ChannelsPage').then((m) => ({ default: m.ChannelsPage })));
 const ToolHubPage = lazy(() => import('@/pages/ToolHub/ToolHubPage').then((m) => ({ default: m.ToolHubPage })));
 const SkillsPage = lazy(() => import('@/pages/Skills/SkillsPage').then((m) => ({ default: m.SkillsPage })));
 const WorkspacePage = lazy(() => import('@/pages/Workspace/WorkspacePage').then((m) => ({ default: m.WorkspacePage })));
@@ -35,7 +36,7 @@ const NotificationsPage = lazy(() => import('@/pages/Notifications/Notifications
 
 export const navTabs: NavTab[] = [
   'dashboard', 'agents', 'agent-studio', 'chat', 'missions', 'operations',
-  'automations', 'plugins', 'tools', 'skills', 'workspace', 'terminal', 'notifications', 'audit-logs', 'settings',
+  'automations', 'plugins', 'channels', 'tools', 'skills', 'workspace', 'terminal', 'notifications', 'audit-logs', 'settings',
 ];
 
 export function tabFromLocation(): NavTab {
@@ -259,6 +260,7 @@ export function App() {
                           {activeTab === 'operations' && <OperationsPage />}
                           {activeTab === 'automations' && <AutomationsPage />}
                           {activeTab === 'plugins' && <PluginsPage />}
+                          {activeTab === 'channels' && <ChannelsPage onNavigateTab={navigateTab} />}
                           {activeTab === 'tools' && <ToolHubPage />}
                           {activeTab === 'skills' && <SkillsPage />}
                           {activeTab === 'workspace' && <WorkspacePage />}

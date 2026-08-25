@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { useInstalledChannels } from '@/lib/installed-channels';
 
 export interface AgentHeartbeatSectionProps {
   enabled: boolean;
@@ -35,14 +36,7 @@ const INTERVAL_OPTIONS = [
   { value: 1440, label: '24 hours (Daily)' },
 ];
 
-const TARGET_CHANNELS = [
-  { id: 'all', label: 'All Connected Channels' },
-  { id: 'telegram', label: 'Telegram' },
-  { id: 'discord', label: 'Discord' },
-  { id: 'whatsapp', label: 'WhatsApp' },
-  { id: 'webhook', label: 'Inbound Webhook' },
-  { id: 'none', label: 'Silent (Audit Log Only)' },
-];
+
 
 export function AgentHeartbeatSection({
   enabled,
@@ -63,6 +57,12 @@ export function AgentHeartbeatSection({
   onActiveHoursTimezoneChange,
 }: AgentHeartbeatSectionProps) {
   const { t } = useTranslation('agents');
+  const { channels: pluginChannels } = useInstalledChannels();
+  const targetOptions = [
+    { id: 'all', label: t('studio.heartbeat.channelAll') },
+    ...pluginChannels.map((channel) => ({ id: channel.id, label: channel.label })),
+    { id: 'none', label: t('studio.heartbeat.channelNone') },
+  ];
 
   return (
     <Card className="space-y-6 border border-onyx/15 bg-soft-meadow p-6 shadow-xs">
@@ -149,7 +149,7 @@ export function AgentHeartbeatSection({
                 onChange={(e) => onTargetChannelChange(e.target.value)}
                 className="w-full rounded-xl border border-onyx/15 bg-canvas px-3 py-2 text-body-sm text-deep-ink focus:border-deep-ink focus:outline-none"
               >
-                {TARGET_CHANNELS.map((ch) => (
+                {targetOptions.map((ch) => (
                   <option key={ch.id} value={ch.id}>
                     {ch.label}
                   </option>

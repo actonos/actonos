@@ -26,11 +26,13 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { api, type CronJobItem } from '@/lib/api';
+import { useInstalledChannels } from '@/lib/installed-channels';
 import type { AgentManifest, CronExecutionRecord } from '@/lib/types';
 
 export function AutomationsPage() {
   const { t } = useTranslation('automations');
   const { success, error } = useToast();
+  const { channels: pluginChannels } = useInstalledChannels();
   const [jobs, setJobs] = useState<CronJobItem[]>([]);
   const [historyRecords, setHistoryRecords] = useState<CronExecutionRecord[]>([]);
   const [agents, setAgents] = useState<AgentManifest[]>([]);
@@ -50,7 +52,7 @@ export function AutomationsPage() {
   const [agentID, setAgentID] = useState('agent_system_core');
   const [cronExpr, setCronExpr] = useState('0 8 * * *');
   const [prompt, setPrompt] = useState('');
-  const [targetChannel, setTargetChannel] = useState('telegram');
+  const [targetChannel, setTargetChannel] = useState('none');
   const [targetAccountID, setTargetAccountID] = useState('all');
   const [targetRecipient, setTargetRecipient] = useState('');
   const [saving, setSaving] = useState(false);
@@ -87,7 +89,7 @@ export function AutomationsPage() {
     setAgentID(agents[0]?.agent_id || 'agent_system_core');
     setCronExpr('0 8 * * *');
     setPrompt('');
-    setTargetChannel('telegram');
+    setTargetChannel('none');
     setTargetAccountID('all');
     setTargetRecipient('');
     setIsModalOpen(true);
@@ -99,7 +101,7 @@ export function AutomationsPage() {
     setAgentID(job.agent_id);
     setCronExpr(job.cron_expr);
     setPrompt(job.prompt);
-    setTargetChannel(job.target_channel || job.channel || 'telegram');
+    setTargetChannel(job.target_channel || job.channel || 'none');
     setTargetAccountID(job.target_account_id || job.account_id || 'all');
     setTargetRecipient(job.target_recipient || job.recipient || '');
     setIsModalOpen(true);
@@ -119,10 +121,10 @@ export function AutomationsPage() {
         agent_id: agentID,
         cron_expr: cronExpr.trim(),
         prompt: prompt.trim(),
-        target_channel: targetChannel || 'telegram',
+        target_channel: targetChannel || 'none',
         target_account_id: targetAccountID || 'all',
         target_recipient: targetRecipient.trim() || undefined,
-        channel: targetChannel || 'telegram',
+        channel: targetChannel || 'none',
         account_id: targetAccountID || 'all',
         recipient: targetRecipient.trim() || undefined,
         enabled: true,
@@ -342,7 +344,7 @@ export function AutomationsPage() {
                       {jobs.map((job) => {
                         const matchedAgent = agents.find((a) => a.agent_id === job.agent_id);
                         const isRunning = runningJobId === job.id;
-                        const channelName = job.target_channel || job.channel || 'telegram';
+                        const channelName = job.target_channel || job.channel || 'none';
                         const recipient = job.target_recipient || job.recipient || '';
 
                         return (
@@ -547,11 +549,11 @@ export function AutomationsPage() {
                     onChange={(e) => setTargetChannel(e.target.value)}
                     className="w-full bg-soft-meadow text-deep-ink p-2 rounded-full border border-onyx/10 text-[13px] font-sans focus:outline-none"
                   >
-                    <option value="telegram">{t('modal.channelTelegram', 'Telegram Bot')}</option>
-                    <option value="whatsapp">{t('modal.channelWhatsApp', 'WhatsApp Cloud API')}</option>
-                    <option value="discord">{t('modal.channelDiscord')}</option>
                     <option value="all">{t('modal.channelAll')}</option>
                     <option value="none">{t('modal.channelNone', 'None (Internal Execution Only)')}</option>
+                    {pluginChannels.map((item) => (
+                      <option key={item.id} value={item.id}>{item.label}</option>
+                    ))}
                   </select>
                 </div>
 

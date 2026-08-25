@@ -32,6 +32,7 @@ type loadedPluginState struct {
 	channelBridge   *WasmChannelBridge
 	connectorBridge *WasmConnectorBridge
 	dir             string
+	runtimeLogs     []string
 }
 
 // Manager orchestrates lifecycle, registration, and discovery of WASM plugins.
@@ -185,7 +186,9 @@ func (m *Manager) activatePlugin(ctx context.Context, manifest PluginManifest, w
 	defer m.mu.Unlock()
 
 	id := manifest.ID
+	var preservedLogs []string
 	if old, exists := m.plugins[id]; exists {
+		preservedLogs = snapshotPluginLogs(old)
 		m.deactivatePluginLocked(ctx, old)
 	}
 
@@ -206,6 +209,7 @@ func (m *Manager) activatePlugin(ctx context.Context, manifest PluginManifest, w
 	if !enabled {
 		info.Status = StatusDisabled
 		state.info = info
+		state.runtimeLogs = preservedLogs
 		m.plugins[id] = state
 		return nil
 	}
@@ -216,6 +220,7 @@ func (m *Manager) activatePlugin(ctx context.Context, manifest PluginManifest, w
 		info.Status = StatusError
 		info.Error = fmt.Sprintf("compilation failed: %v", err)
 		state.info = info
+		state.runtimeLogs = preservedLogs
 		m.plugins[id] = state
 		return err
 	}
@@ -229,12 +234,14 @@ func (m *Manager) activatePlugin(ctx context.Context, manifest PluginManifest, w
 		Secrets:  m.secrets,
 		EventBus: m.eventBus,
 	}
+	hostCtx.SeedLogs(preservedLogs)
 
 	inst, err := m.loader.Instantiate(ctx, id, manifest, hostCtx)
 	if err != nil {
 		info.Status = StatusError
 		info.Error = fmt.Sprintf("instantiation failed: %v", err)
 		state.info = info
+		state.runtimeLogs = preservedLogs
 		m.plugins[id] = state
 		return err
 	}
@@ -274,7 +281,25 @@ func (m *Manager) activatePlugin(ctx context.Context, manifest PluginManifest, w
 	return nil
 }
 
+func snapshotPluginLogs(state *loadedPluginState) []string {
+	if state == nil {
+		return nil
+	}
+	if state.hostCtx != nil {
+		return state.hostCtx.GetLogs()
+	}
+	if len(state.runtimeLogs) == 0 {
+		return nil
+	}
+	copied := make([]string, len(state.runtimeLogs))
+	copy(copied, state.runtimeLogs)
+	return copied
+}
+
 func (m *Manager) deactivatePluginLocked(ctx context.Context, state *loadedPluginState) {
+	if state != nil {
+		state.runtimeLogs = snapshotPluginLogs(state)
+	}
 	if m.toolReg != nil {
 		for _, tb := range state.toolBridges {
 			m.toolReg.Unregister(tb.Name())
@@ -401,10 +426,13 @@ func (m *Manager) GetPluginLogs(id string) []string {
 	defer m.mu.RUnlock()
 
 	p, exists := m.plugins[id]
-	if !exists || p.hostCtx == nil {
+	if !exists {
 		return []string{}
 	}
-	return p.hostCtx.GetLogs()
+	if logs := snapshotPluginLogs(p); logs != nil {
+		return logs
+	}
+	return []string{}
 }
 
 // Close gracefully closes all active plugin instances and runtime.

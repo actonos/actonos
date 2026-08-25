@@ -1,10 +1,12 @@
 package plugin
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -457,4 +459,53 @@ func TestHostWebSocketGateway(t *testing.T) {
 		t.Errorf("expected wsConn to be marked closed")
 	}
 	_ = execCtx
+}
+
+func TestPluginGuestLogsStayOffHostSlog(t *testing.T) {
+	var captured bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&captured, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	h := &HostContext{PluginID: "channel-discord"}
+	h.Record("INFO", "polling discord gateway")
+	h.Record("WARN", "secret access denied: discord_bot_token")
+
+	w := &pluginStdioWriter{host: h, level: "INFO"}
+	if _, err := w.Write([]byte("println from wasm\npartial")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write([]byte(" line\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	if captured.Len() != 0 {
+		t.Fatalf("plugin logs leaked into actond slog: %s", captured.String())
+	}
+	logs := h.GetLogs()
+	if len(logs) != 4 {
+		t.Fatalf("expected 4 plugin-only log lines, got %d: %v", len(logs), logs)
+	}
+	joined := strings.Join(logs, "\n")
+	for _, needle := range []string{"polling discord gateway", "secret access denied", "println from wasm", "partial line"} {
+		if !strings.Contains(joined, needle) {
+			t.Fatalf("missing %q in plugin logs: %v", needle, logs)
+		}
+	}
+}
+
+func TestSnapshotPluginLogsSurvivesHostContextLoss(t *testing.T) {
+	h := &HostContext{PluginID: "tool-x"}
+	h.Record("INFO", "ready")
+	state := &loadedPluginState{hostCtx: h}
+	got := snapshotPluginLogs(state)
+	if len(got) != 1 || !strings.Contains(got[0], "ready") {
+		t.Fatalf("snapshot from hostCtx: %v", got)
+	}
+	state.hostCtx = nil
+	state.runtimeLogs = got
+	got = snapshotPluginLogs(state)
+	if len(got) != 1 || !strings.Contains(got[0], "ready") {
+		t.Fatalf("snapshot from runtimeLogs: %v", got)
+	}
 }

@@ -1,0 +1,76 @@
+{
+  "eyebrow": "Kết nối",
+  "title": "Kênh chat",
+  "subtitle": "Kết nối ứng dụng nhắn tin và chọn ai được nói chuyện với agent.",
+  "views": {
+    "accounts": "Tài khoản",
+    "pairing": "Pairing"
+  },
+  "actions": {
+    "refresh": "Làm mới",
+    "createCode": "Tạo mã",
+    "copy": "Sao chép",
+    "copied": "Đã sao chép",
+    "allow": "Cho phép",
+    "revoke": "Thu hồi",
+    "enablePairing": "Bắt buộc ghép",
+    "disablePairing": "Chat tự do"
+  },
+  "accounts": {
+    "title": "Tài khoản đã kết nối",
+    "emptyTitle": "Chưa có tài khoản chat",
+    "emptyDescription": "Cài plugin chat, rồi thêm token bot trong phần Thiết lập plugin. Mã ghép nằm ở tab Pairing.",
+    "noPluginsTitle": "Chưa cài plugin chat",
+    "noPluginsDescription": "Hãy cài plugin chat trước. Danh sách kênh và pairing lấy từ những plugin đó.",
+    "openPlugins": "Mở plugin",
+    "pairingOn": "Bắt buộc ghép",
+    "pairingOff": "Mở",
+    "enabled": "Bật",
+    "disabled": "Tắt",
+    "boundAll": "Mọi agent"
+  },
+  "pairing": {
+    "title": "Ghép kênh",
+    "description": "Tạo mã 6 số, gửi cho người dùng trên chat, họ gõ /pair 123456. Người lạ bị chặn đến khi được ghép hoặc cho phép.",
+    "channelLabel": "Kênh",
+    "requireLabel": "Bắt buộc mã ghép trước khi agent trả lời",
+    "activeCodes": "Mã đang hiệu lực",
+    "noCodes": "Chưa có mã",
+    "noCodesHint": "Tạo một mã rồi gửi trên ứng dụng chat.",
+    "expiresIn": "Hết hạn sau {{time}}",
+    "expired": "Hết hạn",
+    "pendingTitle": "Đang chờ ghép",
+    "pendingEmpty": "Không ai đang chờ",
+    "pendingEmptyHint": "Khi ai đó nhắn bot được bảo vệ, họ hiện ở đây.",
+    "usersTitle": "Người đã ghép",
+    "usersEmpty": "Chưa ghép ai",
+    "howTo": "Trong chat, gửi /pair rồi đến mã 6 số.",
+    "createdFor": "Cho {{channel}}"
+  },
+  "catalog": {
+    "telegram": "Telegram",
+    "discord": "Discord",
+    "whatsapp": "WhatsApp",
+    "slack": "Slack",
+    "webhook": "Webhook"
+  },
+  "errors": {
+    "loadFailed": "Không tải được kênh",
+    "codeFailed": "Không tạo được mã ghép",
+    "allowFailed": "Không cho phép người gửi này",
+    "revokeFailed": "Không thu hồi được",
+    "policyFailed": "Không đổi được ghép kênh",
+    "copyFailed": "Không sao chép được"
+  },
+  "toasts": {
+    "codeCreated": "Gửi mã này trên chat",
+    "allowed": "{{name}} có thể nhắn agent.",
+    "revoked": "Đã gỡ quyền.",
+    "policyOn": "{{channel}} bắt buộc ghép.",
+    "policyOff": "{{channel}} không bắt buộc ghép."
+  },
+  "confirm": {
+    "revokeTitle": "Thu hồi {{name}}?",
+    "revokeDescription": "Họ cần mã ghép mới trước khi agent trả lời lại."
+  }
+}

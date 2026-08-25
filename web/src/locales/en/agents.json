@@ -40,10 +40,7 @@
     "promptPlaceholder": "e.g. Generate a concise weather forecast, summarize pending GitHub PRs, and list high-priority items.",
     "channel": "Push Notification Channel",
     "channels": {
-      "telegram": "Telegram Bot",
-      "whatsapp": "WhatsApp Cloud API",
-      "discord": "Discord Gateway",
-      "webhook": "Inbound/Outbound Webhook"
+      "none": "None"
     },
     "recipient": "Recipient Chat ID / Phone",
     "recipientPlaceholder": "e.g. 123456789 or +84912345678",
@@ -244,7 +241,7 @@
       "title": "Chat Channels Inbound Listeners",
       "description": "Specify which messaging channels trigger this agent when messages or mentions are received.",
       "all": "All Chat Channels (Default)",
-      "allDescription": "Agent listens to incoming messages across Telegram, Discord, WhatsApp, and Webhook.",
+      "allDescription": "Agent listens to incoming messages on every installed chat plugin and webhook.",
       "specific": "Specific Channels Only",
       "specificDescription": "Restrict this agent to only respond to specific channels chosen below.",
       "select": "Select Channels to Listen",
@@ -282,6 +279,8 @@
       "intervalHelp": "How frequently the daemon wakes this agent for a cognitive evaluation.",
       "channelLabel": "Alert Destination Channel",
       "channelHelp": "Where non-silent alert summaries and task completion notifications will be sent.",
+      "channelAll": "All connected channels",
+      "channelNone": "Silent (no outbound chat)",
       "activeHoursTitle": "Active Hours & Account Scoping (Optional)",
       "startHour": "Active Start (HH:MM)",
       "endHour": "Active End (HH:MM)",

@@ -60,6 +60,43 @@ func TestPairingManager(t *testing.T) {
 	}
 }
 
+func TestPairingPolicyAndOperatorAllow(t *testing.T) {
+	pm, err := NewPairingManager(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pm.ChannelRequiresPairing("discord") {
+		t.Fatal("pairing should be off until enabled")
+	}
+	if err := pm.SetChannelRequiresPairing("discord", true); err != nil {
+		t.Fatal(err)
+	}
+	if !pm.ChannelRequiresPairing("discord") {
+		t.Fatal("expected pairing required after policy save")
+	}
+	code, err := pm.GeneratePairingCode("discord")
+	if err != nil {
+		t.Fatal(err)
+	}
+	codes := pm.ListActiveCodes()
+	if len(codes) != 1 || codes[0].Code != code {
+		t.Fatalf("expected active code %s, got %+v", code, codes)
+	}
+	pm.NoteUnpaired("discord", "u-9", "Ada", "hello")
+	if len(pm.ListPending()) != 1 {
+		t.Fatalf("expected one pending sender")
+	}
+	if err := pm.AuthorizeSender("discord", "u-9", "Ada"); err != nil {
+		t.Fatal(err)
+	}
+	if !pm.IsAuthorized("discord", "u-9") {
+		t.Fatal("operator allow must authorize sender")
+	}
+	if len(pm.ListPending()) != 0 {
+		t.Fatal("pending sender should clear after allow")
+	}
+}
+
 func TestWebhookAdapter(t *testing.T) {
 	received := false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

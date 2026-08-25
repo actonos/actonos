@@ -1,14 +1,9 @@
-import { Bot, Check, Phone, Radio, Send, Sliders } from 'lucide-react';
+import { Check, Radio } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
-
-const channels = [
-  { id: 'telegram', icon: Send },
-  { id: 'discord', icon: Bot },
-  { id: 'whatsapp', icon: Phone },
-  { id: 'webhook', icon: Sliders },
-] as const;
+import { EmptyState } from '@/components/ui/EmptyState';
+import { useInstalledChannels } from '@/lib/installed-channels';
 
 export function AgentChannelsSection({
   listenAll,
@@ -21,7 +16,8 @@ export function AgentChannelsSection({
   onListenModeChange: (listenAll: boolean) => void;
   onToggleChannel: (channelID: string) => void;
 }) {
-  const { t } = useTranslation('agents');
+  const { t } = useTranslation(['agents', 'channels']);
+  const { channels } = useInstalledChannels();
   return (
     <Card className="space-y-6 border border-onyx/15 bg-soft-meadow p-6 shadow-xs">
       <div className="border-b border-onyx/5 pb-3">
@@ -41,15 +37,23 @@ export function AgentChannelsSection({
       {!listenAll && (
         <div>
           <p className="mb-3 text-caption font-semibold uppercase tracking-wide text-deep-ink">{t('studio.channels.select')}</p>
+          {channels.length === 0 ? (
+            <EmptyState
+              compact
+              icon={<Radio className="h-6 w-6" />}
+              title={t('channels:accounts.noPluginsTitle')}
+              description={t('channels:accounts.noPluginsDescription')}
+            />
+          ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {channels.map(({ id, icon: Icon }) => {
-              const selected = selectedChannels.includes(id);
+            {channels.map((channel) => {
+              const selected = selectedChannels.includes(channel.id);
               return (
                 <button
-                  key={id}
+                  key={channel.id}
                   type="button"
                   aria-pressed={selected}
-                  onClick={() => onToggleChannel(id)}
+                  onClick={() => onToggleChannel(channel.id)}
                   className={`flex items-center justify-between rounded-[20px] p-3.5 text-left transition-all cursor-pointer ${
                     selected
                       ? 'border-2 border-deep-ink bg-canvas shadow-xs ring-1 ring-deep-ink/10'
@@ -57,10 +61,10 @@ export function AgentChannelsSection({
                   }`}
                 >
                   <span className="flex min-w-0 items-center gap-3">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-deep-ink text-hi-yellow"><Icon className="h-4 w-4" /></span>
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-deep-ink text-hi-yellow"><Radio className="h-4 w-4" /></span>
                     <span className="min-w-0">
-                      <span className="block text-body-sm font-semibold text-deep-ink">{t(`studio.channels.catalog.${id}.name`)}</span>
-                      <span className="block text-[11px] text-slate">{t(`studio.channels.catalog.${id}.description`)}</span>
+                      <span className="block text-body-sm font-semibold text-deep-ink">{channel.label}</span>
+                      <span className="block text-[11px] font-mono text-slate">{channel.id}</span>
                     </span>
                   </span>
                   <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-all ${selected ? 'border-deep-ink bg-deep-ink text-hi-yellow' : 'border-onyx/25'}`}>
@@ -70,6 +74,7 @@ export function AgentChannelsSection({
               );
             })}
           </div>
+          )}
         </div>
       )}
     </Card>

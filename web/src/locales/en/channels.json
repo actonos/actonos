@@ -1,0 +1,76 @@
+{
+  "eyebrow": "Connections",
+  "title": "Chat channels",
+  "subtitle": "Connect messaging apps and decide who may talk to your agents.",
+  "views": {
+    "accounts": "Accounts",
+    "pairing": "Pairing"
+  },
+  "actions": {
+    "refresh": "Refresh",
+    "createCode": "Create code",
+    "copy": "Copy",
+    "copied": "Copied",
+    "allow": "Allow",
+    "revoke": "Revoke",
+    "enablePairing": "Require pairing",
+    "disablePairing": "Open chat"
+  },
+  "accounts": {
+    "title": "Connected accounts",
+    "emptyTitle": "No chat accounts yet",
+    "emptyDescription": "Install a chat plugin, then add a bot token in Plugin settings. Pairing codes live on the Pairing tab.",
+    "noPluginsTitle": "No chat plugins installed",
+    "noPluginsDescription": "Install a chat plugin first. Pairing and account lists come from those plugins.",
+    "openPlugins": "Open plugins",
+    "pairingOn": "Pairing on",
+    "pairingOff": "Open",
+    "enabled": "On",
+    "disabled": "Off",
+    "boundAll": "All agents"
+  },
+  "pairing": {
+    "title": "Pairing",
+    "description": "Create a 6-digit code, send it to the person in chat, and they type /pair 123456. Unknown senders stay blocked until paired or allowed.",
+    "channelLabel": "Channel",
+    "requireLabel": "Require a pairing code before agents reply",
+    "activeCodes": "Active codes",
+    "noCodes": "No active codes",
+    "noCodesHint": "Create a code, then share it in the chat app.",
+    "expiresIn": "Expires in {{time}}",
+    "expired": "Expired",
+    "pendingTitle": "Waiting to pair",
+    "pendingEmpty": "No one is waiting",
+    "pendingEmptyHint": "When someone messages a protected bot, they appear here.",
+    "usersTitle": "Paired people",
+    "usersEmpty": "Nobody paired yet",
+    "howTo": "In chat, send /pair followed by the 6-digit code.",
+    "createdFor": "For {{channel}}"
+  },
+  "catalog": {
+    "telegram": "Telegram",
+    "discord": "Discord",
+    "whatsapp": "WhatsApp",
+    "slack": "Slack",
+    "webhook": "Webhook"
+  },
+  "errors": {
+    "loadFailed": "Could not load channels",
+    "codeFailed": "Could not create a pairing code",
+    "allowFailed": "Could not allow this sender",
+    "revokeFailed": "Could not revoke access",
+    "policyFailed": "Could not update pairing",
+    "copyFailed": "Could not copy"
+  },
+  "toasts": {
+    "codeCreated": "Share this code in chat",
+    "allowed": "{{name}} can message the agent now.",
+    "revoked": "Access removed.",
+    "policyOn": "Pairing is required on {{channel}}.",
+    "policyOff": "Pairing is off on {{channel}}."
+  },
+  "confirm": {
+    "revokeTitle": "Revoke {{name}}?",
+    "revokeDescription": "They will need a new pairing code before the agent replies again."
+  }
+}

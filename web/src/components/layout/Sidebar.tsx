@@ -25,6 +25,7 @@ import {
   Bell,
   Terminal,
   Boxes,
+  Radio,
 } from 'lucide-react';
 import { useTheme } from '../providers/ThemeProvider';
 
@@ -39,6 +40,7 @@ export type NavTab =
   | 'tools'
   | 'skills'
   | 'plugins'
+  | 'channels'
   | 'workspace'
   | 'terminal'
   | 'notifications'
@@ -105,6 +107,7 @@ export function Sidebar({
       label: t('sections.extensions', 'Extensions'),
       items: [
         { id: 'plugins', label: t('links.plugins', 'Plugins'), icon: Boxes },
+        { id: 'channels', label: t('links.channels', 'Channels'), icon: Radio },
         { id: 'skills', label: t('links.skills', 'Skills'), icon: Sparkles },
         { id: 'tools', label: t('links.tools', 'Native Tools'), icon: Wrench },
       ],

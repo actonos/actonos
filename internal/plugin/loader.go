@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -105,7 +106,10 @@ func (l *WasmLoader) Instantiate(ctx context.Context, pluginID string, manifest 
 	}
 
 	modConfig := wazero.NewModuleConfig().
-		WithName("") // anonymous instance to allow concurrent instances
+		WithName(""). // anonymous instance to allow concurrent instances
+		WithStdin(bytes.NewReader(nil)).
+		WithStdout(&pluginStdioWriter{host: hostCtx, level: "INFO"}).
+		WithStderr(&pluginStdioWriter{host: hostCtx, level: "ERROR"})
 
 	mod, err := l.runtime.InstantiateModule(ctx, cm, modConfig)
 	if err != nil {

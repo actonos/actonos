@@ -163,6 +163,22 @@ export interface ChannelAuthorizationItem {
   status: string;
 }
 
+export interface PairingCodeItem {
+  code: string;
+  channel_id: string;
+  created_at: string;
+  expires_at: string;
+}
+
+export interface PendingPairingSender {
+  channel_id: string;
+  sender_id: string;
+  sender_name: string;
+  last_content?: string;
+  first_seen: string;
+  last_seen: string;
+}
+
 export const api = {
   ...operationsApi,
   // Authentication & Initial Setup
@@ -483,22 +499,15 @@ export const api = {
   listAllChannelAccounts: () =>
     fetchJSON<{ accounts: ChannelAccount[]; count: number }>('/integrations/channels/accounts'),
   saveChannels: (cfg: {
-    telegram_token?: string;
-    discord_token?: string;
-    whatsapp_token?: string;
-    whatsapp_phone_id?: string;
     webhook_secret?: string;
-    telegram_accounts?: ChannelAccount[];
-    discord_accounts?: ChannelAccount[];
-    whatsapp_accounts?: ChannelAccount[];
-    slack_accounts?: ChannelAccount[];
+    [key: string]: ChannelAccount[] | string | undefined;
   }) =>
     fetchJSON<{ status: string }>('/integrations/channels', {
       method: 'POST',
       body: JSON.stringify(cfg),
     }),
-  generatePairingCode: (channel_id: string = 'telegram') =>
-    fetchJSON<{ code: string; channel_id: string; expires_in: number }>('/integrations/pairing/code', {
+  generatePairingCode: (channel_id: string) =>
+    fetchJSON<{ code: string; channel_id: string; expires_in: number; expires_at?: string }>('/integrations/pairing/code', {
       method: 'POST',
       body: JSON.stringify({ channel_id }),
     }),
@@ -507,9 +516,24 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  listPairingCodes: () =>
+    fetchJSON<{ codes: PairingCodeItem[]; count: number }>('/integrations/pairing/codes'),
+  listPendingPairing: () =>
+    fetchJSON<{ pending: PendingPairingSender[]; count: number }>('/integrations/pairing/pending'),
+  getPairingPolicies: () => fetchJSON<{ policies: Record<string, boolean> }>('/integrations/pairing/policy'),
+  setPairingPolicy: (channel_id: string, required: boolean) =>
+    fetchJSON<{ status: string; channel_id: string; required: boolean }>('/integrations/pairing/policy', {
+      method: 'POST',
+      body: JSON.stringify({ channel_id, required }),
+    }),
+  allowPairingSender: (data: { channel_id: string; sender_id: string; sender_name?: string }) =>
+    fetchJSON<{ status: string; sender: string }>('/integrations/pairing/allow', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
   listAuthorizations: (channel_id?: string) =>
     fetchJSON<{ users: ChannelAuthorizationItem[]; count: number }>(
-      `/integrations/authorizations${channel_id ? `?channel_id=${channel_id}` : ''}`
+      `/integrations/authorizations${channel_id ? `?channel_id=${encodeURIComponent(channel_id)}` : ''}`
     ),
   revokeAuthorization: (data: { channel_id: string; sender_id: string }) =>
     fetchJSON<{ status: string }>('/integrations/authorizations', {

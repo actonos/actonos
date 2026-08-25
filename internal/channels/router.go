@@ -2,6 +2,7 @@ package channels
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -257,17 +258,40 @@ func AgentListensTo(manifest agent.AgentManifest, channelID, accountID string) b
 	return false
 }
 
-func (r *MessageRouter) enforcePairing(msg InboundMessage) error {
-	if r.pairing == nil {
-		return nil
+func (r *MessageRouter) pairingRequired(msg InboundMessage) bool {
+	if r.pairing != nil && r.pairing.ChannelRequiresPairing(msg.ChannelID) {
+		return true
 	}
-	required := false
-	if r.channelMgr != nil && msg.AccountID != "" {
-		if acc, ok := r.channelMgr.GetAccountByID(msg.AccountID); ok {
-			required = acc.RequiresPairing
+	if r.channelMgr == nil {
+		return false
+	}
+	if msg.AccountID != "" {
+		if acc, ok := r.channelMgr.GetAccountByID(msg.AccountID); ok && acc.RequiresPairing {
+			return true
 		}
 	}
-	if !required {
+	for _, acc := range r.channelMgr.GetAccounts() {
+		if strings.EqualFold(acc.Channel, msg.ChannelID) && acc.RequiresPairing {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *MessageRouter) replyPairing(ctx context.Context, msg InboundMessage, content string) {
+	if r.channelMgr == nil || strings.TrimSpace(content) == "" {
+		return
+	}
+	_ = r.channelMgr.SendMessage(ctx, OutboundMessage{
+		ChannelID: msg.ChannelID,
+		AccountID: msg.AccountID,
+		Recipient: msg.SenderID,
+		Content:   content,
+	})
+}
+
+func (r *MessageRouter) enforcePairing(ctx context.Context, msg InboundMessage) error {
+	if r.pairing == nil || !r.pairingRequired(msg) {
 		return nil
 	}
 	if r.pairing.IsAuthorized(msg.ChannelID, msg.SenderID) {
@@ -280,10 +304,13 @@ func (r *MessageRouter) enforcePairing(msg InboundMessage) error {
 			return fmt.Errorf("pairing failed: %w", err)
 		}
 		if ok {
+			r.replyPairing(ctx, msg, "Paired. You can chat with the agent now.\nĐã ghép. Bạn có thể trò chuyện với agent.")
 			return nil
 		}
 	}
-	return fmt.Errorf("unpaired sender %s on channel %s", msg.SenderID, msg.ChannelID)
+	r.pairing.NoteUnpaired(msg.ChannelID, msg.SenderID, msg.SenderName, msg.Content)
+	r.replyPairing(ctx, msg, "This chat is not paired yet. Ask the ActonOS operator for a 6-digit code, then send:\n/pair 123456\n\nKênh này chưa ghép. Nhờ người quản trị lấy mã 6 số, rồi gửi:\n/pair 123456")
+	return &UnpairedSenderError{ChannelID: msg.ChannelID, SenderID: msg.SenderID, SenderName: msg.SenderName}
 }
 
 func containsWildcard(list []string) bool {
@@ -307,19 +334,27 @@ func (r *MessageRouter) drainInboundQueue() {
 	for _, item := range claimed {
 		msg := item.Message
 		if err := r.Route(r.ctx, msg); err != nil {
-			slog.Error("failed to route inbound channel message",
-				"channel", msg.ChannelID,
-				"account", msg.AccountID,
-				"sender", msg.SenderID,
-				"error", err,
-			)
+			if errors.Is(err, ErrUnpairedSender) {
+				slog.Info("inbound held for pairing",
+					"channel", msg.ChannelID,
+					"account", msg.AccountID,
+					"sender", msg.SenderID,
+				)
+			} else {
+				slog.Error("failed to route inbound channel message",
+					"channel", msg.ChannelID,
+					"account", msg.AccountID,
+					"sender", msg.SenderID,
+					"error", err,
+				)
+			}
 		}
 	}
 }
 
 // Route executes the full end-to-end routing flow for an inbound message.
 func (r *MessageRouter) Route(ctx context.Context, msg InboundMessage) error {
-	if err := r.enforcePairing(msg); err != nil {
+	if err := r.enforcePairing(ctx, msg); err != nil {
 		return err
 	}
 	targetAgent := r.ResolveAgent(ctx, msg)

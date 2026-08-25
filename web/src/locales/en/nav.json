@@ -13,6 +13,7 @@
     "workspace": "Workspace",
     "terminal": "Terminal",
     "plugins": "Plugins",
+    "channels": "Channels",
     "notifications": "Notifications",
     "audit-logs": "Audit Logs",
     "settings": "Settings"
