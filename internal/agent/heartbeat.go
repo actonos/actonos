@@ -532,15 +532,14 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) (run *Hea
 			taskCtx = tools.WithDeniedTools(taskCtx, "native_cron_schedule")
 		}
 		resp, execErr := h.engine.ExecuteAutonomousGoal(taskCtx, assignedAgent, prompt, history)
+		h.adoptPersistedPlan(ctx, activeTask)
 		if execErr != nil {
 			var approvalErr *tools.ApprovalRequiredError
 			if errors.As(execErr, &approvalErr) {
 				run.Status = "approval_required"
 				run.Summary = fmt.Sprintf("Mission '%s' paused: operator approval required for '%s'.", activeTask.Title, approvalErr.Approval.ToolName)
 				activeTask.ExecutionLog = fmt.Sprintf("Paused: operator approval required for tool '%s'.", approvalErr.Approval.ToolName)
-				if h.taskMgr != nil {
-					_ = h.taskMgr.UpdateTask(ctx, *activeTask)
-				}
+				h.persistMissionTask(ctx, activeTask)
 				h.recordRun(*run)
 				return run
 			}
@@ -553,9 +552,7 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) (run *Hea
 				activeTask.Status = "blocked"
 				run.Summary += " [blocked after repeated execution errors]"
 			}
-			if h.taskMgr != nil {
-				_ = h.taskMgr.UpdateTask(ctx, *activeTask)
-			}
+			h.persistMissionTask(ctx, activeTask)
 			h.recordRun(*run)
 			return run
 		} else if resp != nil {
@@ -629,9 +626,7 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) (run *Hea
 				slog.Warn("mission task stalled: blocking after unchanged progress", "task_id", activeTask.ID, "stalled_cycles", stallCycles, "progress", activeTask.Progress)
 			}
 
-			if h.taskMgr != nil {
-				_ = h.taskMgr.UpdateTask(ctx, *activeTask)
-			}
+			h.persistMissionTask(ctx, activeTask)
 
 			// Check if tool already notified user directly to prevent double dispatch
 			alreadyNotified := false
@@ -1109,6 +1104,32 @@ func parseHHMM(v string) (int, bool) {
 // progress. A terminal status (anything other than in_progress) clears the
 // tracked state entirely, since a completed/blocked/failed outcome is an
 // explicit result, not a stall. Only escalates once per stall streak.
+// adoptPersistedPlan copies the engine-owned DAG and plan-derived progress onto
+// the in-memory heartbeat task so a later UpdateTask cannot rewind completed steps.
+func (h *HeartbeatDaemon) adoptPersistedPlan(ctx context.Context, task *AutonomousTask) {
+	if h.taskMgr == nil || task == nil {
+		return
+	}
+	latest, err := h.taskMgr.GetTask(ctx, task.ID)
+	if err != nil || latest == nil {
+		return
+	}
+	if latest.Plan != nil {
+		task.Plan = latest.Plan
+	}
+	if latest.Progress > task.Progress {
+		task.Progress = latest.Progress
+	}
+}
+
+func (h *HeartbeatDaemon) persistMissionTask(ctx context.Context, task *AutonomousTask) {
+	if h.taskMgr == nil || task == nil {
+		return
+	}
+	h.adoptPersistedPlan(ctx, task)
+	_ = h.taskMgr.UpdateTask(ctx, *task)
+}
+
 func (h *HeartbeatDaemon) trackTaskStall(taskID, status string, progress int) (escalate bool, cycles int) {
 	h.mu.Lock()
 	defer h.mu.Unlock()

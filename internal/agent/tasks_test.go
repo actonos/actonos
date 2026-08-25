@@ -59,6 +59,21 @@ func TestTaskManagerCRUDFilteringAndSQLitePersistence(t *testing.T) {
 	if err != nil || len(completed) != 1 {
 		t.Fatalf("filtering failed: tasks=%+v err=%v", completed, err)
 	}
+
+	got.Plan = &TaskPlan{Goal: "g", Steps: []PlanStep{{ID: "a", Status: "completed"}}}
+	if err := manager.UpdateTask(ctx, *got); err != nil {
+		t.Fatal(err)
+	}
+	got.Plan = nil
+	got.ExecutionLog = "status only"
+	if err := manager.UpdateTask(ctx, *got); err != nil {
+		t.Fatal(err)
+	}
+	got, err = manager.GetTask(ctx, task.ID)
+	if err != nil || got.Plan == nil || got.Plan.StepStatus("a") != "completed" {
+		t.Fatalf("nil Plan must not erase plan_json: %+v err=%v", got, err)
+	}
+
 	if err := manager.DeleteTask(ctx, task.ID); err != nil {
 		t.Fatal(err)
 	}

@@ -252,9 +252,16 @@ func (tm *TaskManager) UpdateTask(ctx context.Context, t AutonomousTask) error {
 		t.Progress = 100
 	}
 
-	planJSON, _ := json.Marshal(t.Plan)
-	if t.Plan == nil {
-		planJSON = []byte("")
+	planJSON := ""
+	if t.Plan != nil {
+		if encoded, marshalErr := json.Marshal(t.Plan); marshalErr == nil {
+			planJSON = string(encoded)
+		}
+	} else {
+		// A nil Plan means "leave the durable DAG alone", not "erase it".
+		// Heartbeat status/progress writes used to clobber plan_json with ""
+		// and force the next pulse to re-decompose and re-run step 1.
+		_ = tm.db.QueryRowContext(ctx, `SELECT COALESCE(plan_json, '') FROM autonomous_tasks WHERE id = ?`, t.ID).Scan(&planJSON)
 	}
 	query := `
 	UPDATE autonomous_tasks SET
@@ -266,7 +273,7 @@ func (tm *TaskManager) UpdateTask(ctx context.Context, t AutonomousTask) error {
 	_, err := tm.db.ExecContext(ctx, query,
 		t.Title, t.Description, t.Status, t.Priority, t.AssignedAgentID,
 		t.TargetChannel, t.TargetAccountID, t.Progress, t.ExecutionLog,
-		t.UpdatedAt, t.CompletedAt, string(planJSON), t.StalledCycles, t.FailCount, t.ID,
+		t.UpdatedAt, t.CompletedAt, planJSON, t.StalledCycles, t.FailCount, t.ID,
 	)
 	if err != nil {
 		return err

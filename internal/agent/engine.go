@@ -199,14 +199,10 @@ func (e *Engine) ExecuteAutonomousGoal(ctx context.Context, agentID, goal string
 		task, err := e.taskMgr.GetTask(ctx, taskID)
 		if err == nil && task != nil {
 			resp, plan, stepErr := e.ExecuteNextPlanStep(ctx, agentID, goal, task.Plan, history)
-			if stepErr != nil {
-				return resp, stepErr
-			}
 			if plan != nil {
-				task.Plan = plan
-				_ = e.taskMgr.UpdateTask(ctx, *task)
+				e.writeTaskPlan(ctx, task, plan)
 			}
-			return resp, nil
+			return resp, stepErr
 		}
 	}
 	return e.ExecuteStepWithHistory(ctx, agentID, goal, history)
@@ -237,6 +233,7 @@ func (e *Engine) ExecuteNextPlanStep(ctx context.Context, agentID, goal string, 
 			return nil, plan, fmt.Errorf("decomposing autonomous goal: %w", err)
 		}
 		plan = built
+		e.persistTaskPlan(ctx, plan)
 	}
 	step, err := e.planner.NextReadyStep(plan)
 	if err != nil {
@@ -262,6 +259,7 @@ func (e *Engine) ExecuteNextPlanStep(ctx context.Context, agentID, goal string, 
 					return nil, plan, ctx.Err()
 				case result := <-resultCh:
 					plan.MarkStep(step.ID, "completed", result.Output)
+					e.persistTaskPlan(ctx, plan)
 					return &llm.Response{Content: result.Output, Usage: llm.Usage{TotalTokens: result.TokensUsed}}, plan, nil
 				}
 			}
@@ -271,14 +269,49 @@ func (e *Engine) ExecuteNextPlanStep(ctx context.Context, agentID, goal string, 
 	resp, execErr := e.ExecuteStepWithHistory(ctx, execAgentID, prompt, history)
 	if execErr != nil {
 		plan.MarkStep(step.ID, "failed", execErr.Error())
+		e.persistTaskPlan(ctx, plan)
 		return resp, plan, execErr
 	}
 	content := ""
 	if resp != nil {
 		content = resp.Content
 	}
+	if IsCannedOrEmptyCompletion(content) {
+		// Leave the step pending so the next pulse retries it instead of
+		// advancing the DAG on an empty/canned turn.
+		e.persistTaskPlan(ctx, plan)
+		return resp, plan, nil
+	}
 	plan.MarkStep(step.ID, "completed", content)
+	e.persistTaskPlan(ctx, plan)
 	return resp, plan, nil
+}
+
+// persistTaskPlan writes the durable DAG onto the mission identified by ctx task_id.
+func (e *Engine) persistTaskPlan(ctx context.Context, plan *TaskPlan) {
+	if e.taskMgr == nil || plan == nil {
+		return
+	}
+	taskID, _ := ctx.Value("task_id").(string)
+	if taskID == "" {
+		return
+	}
+	task, err := e.taskMgr.GetTask(ctx, taskID)
+	if err != nil || task == nil {
+		return
+	}
+	e.writeTaskPlan(ctx, task, plan)
+}
+
+func (e *Engine) writeTaskPlan(ctx context.Context, task *AutonomousTask, plan *TaskPlan) {
+	if e.taskMgr == nil || task == nil || plan == nil {
+		return
+	}
+	task.Plan = plan
+	if pct := plan.ProgressPercent(); pct > task.Progress {
+		task.Progress = pct
+	}
+	_ = e.taskMgr.UpdateTask(ctx, *task)
 }
 
 // ExecuteStepWithHistory runs a cognitive iteration of the ReAct state machine with short-term dialogue history.

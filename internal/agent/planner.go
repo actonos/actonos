@@ -215,3 +215,30 @@ func (p *TaskPlan) MarkStep(id, status, result string) {
 		}
 	}
 }
+
+// ProgressPercent is completed steps / total steps as an integer 0–100.
+func (p *TaskPlan) ProgressPercent() int {
+	if p == nil || len(p.Steps) == 0 {
+		return 0
+	}
+	done := 0
+	for _, step := range p.Steps {
+		if step.Status == "completed" {
+			done++
+		}
+	}
+	return (done * 100) / len(p.Steps)
+}
+
+// StepStatus returns the recorded status for a step ID, or empty if missing.
+func (p *TaskPlan) StepStatus(id string) string {
+	if p == nil {
+		return ""
+	}
+	for _, step := range p.Steps {
+		if step.ID == id {
+			return step.Status
+		}
+	}
+	return ""
+}

@@ -271,9 +271,171 @@ func TestStoredPlanAdvancesOneReadyStep(t *testing.T) {
 		t.Fatalf("expected step a, got %+v err=%v", step, err)
 	}
 	plan.MarkStep("a", "completed", "ok")
+	if plan.ProgressPercent() != 50 || plan.StepStatus("a") != "completed" {
+		t.Fatalf("expected 50%% after step a, got %d status=%q", plan.ProgressPercent(), plan.StepStatus("a"))
+	}
 	step, err = p.NextReadyStep(plan)
 	if err != nil || step == nil || step.ID != "b" {
 		t.Fatalf("expected step b after a completed, got %+v err=%v", step, err)
+	}
+}
+
+func lastUserContent(messages []llm.Message) string {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == llm.RoleUser {
+			return messages[i].Content
+		}
+	}
+	if len(messages) == 0 {
+		return ""
+	}
+	return messages[len(messages)-1].Content
+}
+
+func plannerTwoStepJSON() string {
+	return `[
+  {"id":"task_1","description":"Gather requirements","agent_role":"general","dependencies":[]},
+  {"id":"task_2","description":"Write the report","agent_role":"general","dependencies":["task_1"]}
+]`
+}
+
+func planStepFromPrompt(content string) string {
+	switch {
+	case strings.Contains(content, "<step_id>task_1</step_id>"):
+		return "task_1"
+	case strings.Contains(content, "<step_id>task_2</step_id>"):
+		return "task_2"
+	default:
+		return ""
+	}
+}
+
+func TestExecuteAutonomousGoalAdvancesStoredPlan(t *testing.T) {
+	db, eventBus := setupTestDB(t)
+	manager, err := NewAgentManager(db, eventBus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	taskManager, err := NewTaskManager(db.SQLDB(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := taskManager.CreateTask(context.Background(), AutonomousTask{
+		Title: "Write a report", Description: "Produce a two-step report", CreatedBy: "user", TargetChannel: "none",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var executed []string
+	provider := llm.NewMockProvider("openai/gpt-4o", "")
+	provider.CompleteFunc = func(_ context.Context, messages []llm.Message, _ llm.CompletionOptions) (*llm.Response, error) {
+		content := lastUserContent(messages)
+		if strings.Contains(content, "<goal_decomposition_task>") {
+			return &llm.Response{Model: "openai/gpt-4o", Content: plannerTwoStepJSON(), Usage: llm.Usage{TotalTokens: 6}}, nil
+		}
+		stepID := planStepFromPrompt(content)
+		if stepID != "" {
+			executed = append(executed, stepID)
+		}
+		return &llm.Response{Model: "openai/gpt-4o", Content: "Completed " + stepID + " with verified evidence.", Usage: llm.Usage{TotalTokens: 4}}, nil
+	}
+	router := llm.NewModelCascadeRouter()
+	router.RegisterProvider("openai/gpt-4o", provider)
+	engine := NewEngine(manager, eventBus, router, nil)
+	engine.SetPlanner(NewPlanner(router))
+	engine.SetTaskManager(taskManager)
+
+	ctx := context.WithValue(context.Background(), "task_id", task.ID)
+	if _, err := engine.ExecuteAutonomousGoal(ctx, DefaultSystemAgentID, task.Description, nil); err != nil {
+		t.Fatalf("first pulse: %v", err)
+	}
+	got, err := taskManager.GetTask(context.Background(), task.ID)
+	if err != nil || got.Plan == nil || got.Plan.StepStatus("task_1") != "completed" || got.Plan.StepStatus("task_2") != "pending" {
+		t.Fatalf("first pulse did not persist completed step 1: %+v err=%v", got, err)
+	}
+	if _, err := engine.ExecuteAutonomousGoal(ctx, DefaultSystemAgentID, task.Description, nil); err != nil {
+		t.Fatalf("second pulse: %v", err)
+	}
+	got, err = taskManager.GetTask(context.Background(), task.ID)
+	if err != nil || got.Plan == nil || got.Plan.StepStatus("task_1") != "completed" || got.Plan.StepStatus("task_2") != "completed" {
+		t.Fatalf("second pulse did not advance to step 2: %+v err=%v executed=%v", got, err, executed)
+	}
+	if len(executed) != 2 || executed[0] != "task_1" || executed[1] != "task_2" {
+		t.Fatalf("expected task_1 then task_2, got %v", executed)
+	}
+}
+
+func TestHeartbeatMissionDoesNotRepeatCompletedPlanStep(t *testing.T) {
+	db, eventBus := setupTestDB(t)
+	manager, err := NewAgentManager(db, eventBus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	taskManager, err := NewTaskManager(db.SQLDB(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := taskManager.CreateTask(context.Background(), AutonomousTask{
+		Title: "Ship the report", Description: "Research then write the report.", CreatedBy: "user", TargetChannel: "none",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var executed []string
+	provider := llm.NewMockProvider("openai/gpt-4o", "")
+	provider.CompleteFunc = func(_ context.Context, messages []llm.Message, _ llm.CompletionOptions) (*llm.Response, error) {
+		content := lastUserContent(messages)
+		if strings.Contains(content, "<goal_decomposition_task>") {
+			return &llm.Response{Model: "openai/gpt-4o", Content: plannerTwoStepJSON(), Usage: llm.Usage{TotalTokens: 6}}, nil
+		}
+		stepID := planStepFromPrompt(content)
+		if stepID != "" {
+			executed = append(executed, stepID)
+		}
+		return &llm.Response{Model: "openai/gpt-4o", Content: "Completed " + stepID + " with verified evidence.", Usage: llm.Usage{TotalTokens: 4}}, nil
+	}
+	router := llm.NewModelCascadeRouter()
+	router.RegisterProvider("openai/gpt-4o", provider)
+	engine := NewEngine(manager, eventBus, router, nil)
+	engine.SetPlanner(NewPlanner(router))
+	engine.SetTaskManager(taskManager)
+	daemon := NewHeartbeatDaemon(manager, engine, eventBus, db.SQLDB(), t.TempDir(), time.Minute)
+	daemon.SetTaskManager(taskManager)
+	daemon.SetSessionManager(nil)
+
+	if _, err := daemon.TriggerManualPulse(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	got, err := taskManager.GetTask(context.Background(), task.ID)
+	if err != nil || got.Plan == nil || got.Plan.StepStatus("task_1") != "completed" {
+		t.Fatalf("pulse 1 did not persist completed step 1: %+v err=%v executed=%v", got, err, executed)
+	}
+	if got.Plan.StepStatus("task_2") == "completed" {
+		t.Fatalf("pulse 1 should not complete step 2: %+v", got.Plan)
+	}
+
+	if _, err := daemon.TriggerManualPulse(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	got, err = taskManager.GetTask(context.Background(), task.ID)
+	if err != nil || got.Plan == nil {
+		t.Fatalf("pulse 2 lost the plan: %+v err=%v", got, err)
+	}
+	if got.Plan.StepStatus("task_1") != "completed" {
+		t.Fatalf("pulse 2 rewound step 1: %+v executed=%v", got.Plan, executed)
+	}
+	if got.Plan.StepStatus("task_2") != "completed" {
+		t.Fatalf("pulse 2 did not advance to step 2: %+v executed=%v", got.Plan, executed)
+	}
+	if len(executed) < 2 || executed[0] != "task_1" || executed[1] != "task_2" {
+		t.Fatalf("heartbeat repeated step 1 instead of advancing: %v", executed)
+	}
+	for i := 1; i < len(executed); i++ {
+		if executed[i] == "task_1" {
+			t.Fatalf("step 1 was re-executed after completion: %v", executed)
+		}
 	}
 }
 
