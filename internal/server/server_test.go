@@ -4,8 +4,6 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
-	"crypto/ed25519"
-	"crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -1568,14 +1566,6 @@ func TestServer_AvailablePlugins(t *testing.T) {
 	wasm := []byte("\x00asm\x01\x00\x00\x00")
 	wf, _ := zw.Create("plugin.wasm")
 	_, _ = wf.Write(wasm)
-	pub, priv, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatalf("generating plugin signing key: %v", err)
-	}
-	plugin.SetPluginVerifyKeys([]ed25519.PublicKey{pub})
-	t.Cleanup(func() { plugin.SetPluginVerifyKeys(nil) })
-	sf, _ := zw.Create("signature.sig")
-	_, _ = sf.Write(ed25519.Sign(priv, wasm))
 	_ = zw.Close()
 
 	assetServer := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {

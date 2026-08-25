@@ -56,20 +56,6 @@ func createTestActonPkg(t *testing.T, id, name, version string) []byte {
 		t.Fatalf("writing plugin.wasm: %v", err)
 	}
 
-	pub, priv, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatalf("generating test signing key: %v", err)
-	}
-	SetPluginVerifyKeys([]ed25519.PublicKey{pub})
-	t.Cleanup(func() { SetPluginVerifyKeys(nil) })
-	sf, err := zw.Create("signature.sig")
-	if err != nil {
-		t.Fatalf("creating signature.sig in zip: %v", err)
-	}
-	if _, err := sf.Write(ed25519.Sign(priv, wasm)); err != nil {
-		t.Fatalf("writing signature.sig: %v", err)
-	}
-
 	if err := zw.Close(); err != nil {
 		t.Fatalf("closing zip writer: %v", err)
 	}
@@ -223,5 +209,56 @@ func TestPluginRegistryManager_InstallPlugin(t *testing.T) {
 				t.Errorf("expected sample-plugin to be marked Installed: true")
 			}
 		}
+	}
+}
+
+func TestPluginRegistryManager_InstallSignedAndRejectInvalid(t *testing.T) {
+	manifest := []byte(`{"id":"signed-plugin","name":"Signed","version":"1.0.0","capabilities":["tool"]}`)
+	wasm := []byte("\x00asm\x01\x00\x00\x00")
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { SetPluginVerifyKeys(nil) })
+	SetPluginVerifyKeys([]ed25519.PublicKey{pub})
+
+	pack := func(sig []byte) []byte {
+		buf := new(bytes.Buffer)
+		zw := zip.NewWriter(buf)
+		mf, _ := zw.Create("manifest.json")
+		_, _ = mf.Write(manifest)
+		wf, _ := zw.Create("plugin.wasm")
+		_, _ = wf.Write(wasm)
+		if len(sig) > 0 {
+			sf, _ := zw.Create("signature.sig")
+			_, _ = sf.Write(sig)
+		}
+		_ = zw.Close()
+		return buf.Bytes()
+	}
+
+	good := pack(ed25519.Sign(priv, PluginSignatureMessage(manifest, wasm)))
+	bad := pack(ed25519.Sign(priv, wasm))
+
+	goodServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(good)
+	}))
+	defer goodServer.Close()
+	badServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(bad)
+	}))
+	defer badServer.Close()
+
+	ctx := context.Background()
+	goodDir := t.TempDir()
+	prm := NewPluginRegistryManagerWithURLs(goodDir, nil, nil, goodServer.URL, goodServer.URL)
+	if _, err := prm.InstallPlugin(ctx, "signed-plugin", goodServer.URL+"/signed.actonpkg"); err != nil {
+		t.Fatalf("valid SDK signature rejected: %v", err)
+	}
+
+	badDir := t.TempDir()
+	badPrm := NewPluginRegistryManagerWithURLs(badDir, nil, nil, badServer.URL, badServer.URL)
+	if _, err := badPrm.InstallPlugin(ctx, "signed-plugin", badServer.URL+"/signed.actonpkg"); err == nil {
+		t.Fatal("expected invalid signature to be rejected")
 	}
 }

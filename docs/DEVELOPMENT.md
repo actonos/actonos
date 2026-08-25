@@ -664,7 +664,7 @@ ActonOS supports building plugins in any language compiling to WebAssembly (`was
 A production plugin package contains:
 - `manifest.json`: Metadata, declared capabilities (`tool`, `channel`, `connector`), permissions, config schemas, and tool definitions.
 - `plugin.wasm`: Compiled WebAssembly bytecode.
-- `signature.sig`: Ed25519 signature over `plugin.wasm`. Required for remote registry installs; verified when present on operator upload.
+- `signature.sig`: Optional Ed25519 signature over SHA-256(`manifest.json` || `plugin.wasm`), produced by `acton-plugin sign`. Verified when present. Required only if `ACTONOS_REQUIRE_SIGNED_PLUGINS=1`.
 - `README.md`: (Optional) Plugin user guide and documentation.
 
 #### Guest Exports (WASM to Host)

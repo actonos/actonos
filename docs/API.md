@@ -604,7 +604,7 @@ Download, unpack, verify, and hot-reload an official WASM plugin package (.acton
 ```
 
 ### `POST /api/plugins/upload`
-Upload an `.actonpkg` package bundle (or compiled `.wasm` binary) via multipart form data (`file`). The server unpacks `manifest.json`, `plugin.wasm`, and `signature.sig` when present. A present signature is always verified; remote registry installs fail closed without a valid Ed25519 signature. If administrative approval is configured, returns `202 Accepted` with a pending approval request.
+Upload an `.actonpkg` package bundle (or compiled `.wasm` binary) via multipart form data (`file`). The server unpacks `manifest.json`, `plugin.wasm`, and `signature.sig` when present. A present signature is always verified as Ed25519 over SHA-256(`manifest.json` || `plugin.wasm`). Unsigned SDK packages (no `signature.sig`) install unless `ACTONOS_REQUIRE_SIGNED_PLUGINS=1`. If administrative approval is configured, returns `202 Accepted` with a pending approval request.
 
 ### `POST /api/plugins/{id}/enable` | `POST /api/plugins/{id}/disable`
 Enable or disable a specific WASM plugin at runtime without restarting the daemon.

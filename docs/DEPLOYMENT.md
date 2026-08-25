@@ -153,6 +153,9 @@ make docker-multiarch
 | `DATA_DIR` | `/data` | Path to persistent data directory |
 | `DISABLE_TAILSCALE` | `false` | Skip Tailscale initialization |
 | `ACTONOS_ALLOW_INSECURE_EXEC` | unset | Dev-only unsandboxed command exec; never set in production |
+| `ACTONOS_PLUGIN_PUBKEYS` | unset | Comma-separated Ed25519 public keys (hex) used to verify `signature.sig` when present |
+| `ACTONOS_REQUIRE_SIGNED_PLUGINS` | unset | Set to `1` to reject unsigned `.actonpkg` installs (`acton-plugin pack` omits signatures by default) |
+| `ACTONOS_ALLOW_UNSIGNED_PLUGINS` | unset | Set to `1` to allow unsigned installs even when signed plugins are required |
 | `TAILSCALE_AUTH_KEY` | — | Tailscale auth key for headless setup |
 | `TZ` | `UTC` | Timezone for cron schedules and logs |
 

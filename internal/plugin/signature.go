@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -17,10 +18,12 @@ var (
 )
 
 var (
-	verifyKeysMu    sync.RWMutex
-	extraVerifyKeys []ed25519.PublicKey
-	allowUnsignedMu sync.RWMutex
-	allowUnsigned   *bool
+	verifyKeysMu     sync.RWMutex
+	extraVerifyKeys  []ed25519.PublicKey
+	allowUnsignedMu  sync.RWMutex
+	allowUnsigned    *bool
+	requireSignedMu  sync.RWMutex
+	requireSigned    *bool
 )
 
 // SetPluginVerifyKeys replaces process-local extra keys (tests). Official keys
@@ -53,6 +56,41 @@ func unsignedPluginsAllowed() bool {
 		return *override
 	}
 	return os.Getenv("ACTONOS_ALLOW_UNSIGNED_PLUGINS") == "1"
+}
+
+// SetRequireSignedPlugins overrides ACTONOS_REQUIRE_SIGNED_PLUGINS for tests.
+func SetRequireSignedPlugins(require bool) {
+	requireSignedMu.Lock()
+	defer requireSignedMu.Unlock()
+	v := require
+	requireSigned = &v
+}
+
+func clearRequireSignedPlugins() {
+	requireSignedMu.Lock()
+	defer requireSignedMu.Unlock()
+	requireSigned = nil
+}
+
+func signedPluginsRequired() bool {
+	if unsignedPluginsAllowed() {
+		return false
+	}
+	requireSignedMu.RLock()
+	override := requireSigned
+	requireSignedMu.RUnlock()
+	if override != nil {
+		return *override
+	}
+	return os.Getenv("ACTONOS_REQUIRE_SIGNED_PLUGINS") == "1"
+}
+
+// PluginSignatureMessage is SHA-256(manifest.json || plugin.wasm), matching acton-plugin sign.
+func PluginSignatureMessage(manifest, wasm []byte) []byte {
+	h := sha256.New()
+	h.Write(manifest)
+	h.Write(wasm)
+	return h.Sum(nil)
 }
 
 func pluginVerifyKeys() []ed25519.PublicKey {
@@ -93,8 +131,8 @@ func decodePluginSignature(sig []byte) ([]byte, error) {
 	return nil, ErrInvalidSignature
 }
 
-// VerifyPluginSignature checks Ed25519(sig, wasm) against configured public keys.
-func VerifyPluginSignature(wasm, sig []byte) error {
+// VerifyPluginSignature checks Ed25519(sig, SHA-256(manifest||wasm)) against configured public keys.
+func VerifyPluginSignature(manifest, wasm, sig []byte) error {
 	if len(wasm) == 0 {
 		return fmt.Errorf("%w: empty wasm module", ErrInvalidSignature)
 	}
@@ -109,27 +147,33 @@ func VerifyPluginSignature(wasm, sig []byte) error {
 	if len(keys) == 0 {
 		return ErrNoPluginVerifyKeys
 	}
+	msg := PluginSignatureMessage(manifest, wasm)
 	for _, key := range keys {
-		if ed25519.Verify(key, wasm, rawSig) {
+		if ed25519.Verify(key, msg, rawSig) {
 			return nil
 		}
 	}
 	return ErrInvalidSignature
 }
 
-// VerifyRemotePluginPackage fail-closes unsigned or invalid remote installs.
-func VerifyRemotePluginPackage(wasm, sig []byte) error {
-	if len(sig) == 0 && unsignedPluginsAllowed() {
+// VerifyRemotePluginPackage verifies a signature when one is present.
+// Unsigned packages match acton-plugin pack (signature.sig is optional) unless
+// ACTONOS_REQUIRE_SIGNED_PLUGINS=1. A present signature is always verified.
+func VerifyRemotePluginPackage(manifest, wasm, sig []byte) error {
+	if len(sig) == 0 {
+		if signedPluginsRequired() {
+			return ErrMissingSignature
+		}
 		return nil
 	}
-	return VerifyPluginSignature(wasm, sig)
+	return VerifyPluginSignature(manifest, wasm, sig)
 }
 
 // VerifyOptionalPluginSignature verifies a signature when one is present.
 // Missing signatures are allowed for operator-uploaded packages.
-func VerifyOptionalPluginSignature(wasm, sig []byte) error {
+func VerifyOptionalPluginSignature(manifest, wasm, sig []byte) error {
 	if len(sig) == 0 {
 		return nil
 	}
-	return VerifyPluginSignature(wasm, sig)
+	return VerifyPluginSignature(manifest, wasm, sig)
 }

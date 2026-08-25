@@ -182,7 +182,7 @@ func (s *Server) handleUploadPlugin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := plugin.VerifyOptionalPluginSignature(wasmBytes, sigBytes); err != nil {
+	if err := plugin.VerifyOptionalPluginSignature(manifestBytes, wasmBytes, sigBytes); err != nil {
 		s.respondError(w, http.StatusBadRequest, "INVALID_PLUGIN_SIGNATURE", err.Error())
 		return
 	}

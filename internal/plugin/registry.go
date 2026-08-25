@@ -450,7 +450,7 @@ func (prm *PluginRegistryManager) InstallPlugin(ctx context.Context, pluginID, d
 		cleanID = parsedManifest.ID
 	}
 
-	if err := VerifyRemotePluginPackage(wasmBytes, sigBytes); err != nil {
+	if err := VerifyRemotePluginPackage(manifestBytes, wasmBytes, sigBytes); err != nil {
 		return nil, fmt.Errorf("verifying plugin signature: %w", err)
 	}
 
