@@ -147,31 +147,19 @@ var deliverableWriteTools = map[string]bool{
 	"native_workspace_write": true,
 }
 
-// MissionDeliverableSatisfied reports that the mission asked for a saved
-// artifact and a write tool already produced one — repeating the same research
-// is not further progress.
-func MissionDeliverableSatisfied(goal string, calls []llm.ToolCall) bool {
-	if len(calls) == 0 {
-		return false
-	}
-	wrote := false
+// HasDeliverableWrite reports that a native write/edit tool ran in this turn.
+func HasDeliverableWrite(calls []llm.ToolCall) bool {
 	for _, call := range calls {
 		if deliverableWriteTools[tools.NormalizeToolName(call.Function.Name)] {
-			wrote = true
-			break
-		}
-	}
-	if !wrote {
-		return false
-	}
-	lower := strings.ToLower(goal)
-	for _, hint := range []string{
-		"file", "workspace", "lưu", "save", "write", "viết",
-		"report", "nghiên cứu", "research", "tài liệu", "document", "bài",
-	} {
-		if strings.Contains(lower, hint) {
 			return true
 		}
 	}
 	return false
+}
+
+// MissionDeliverableSatisfied reports that a write tool produced an artifact
+// this turn. Goal wording is ignored — remaining DAG steps, not language,
+// decide whether the mission is finished.
+func MissionDeliverableSatisfied(_ string, calls []llm.ToolCall) bool {
+	return HasDeliverableWrite(calls)
 }

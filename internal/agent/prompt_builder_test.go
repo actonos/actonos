@@ -113,6 +113,8 @@ func TestBuildPlannerPrompt(t *testing.T) {
 	for _, needle := range []string{
 		`"title"`,
 		`"acceptance"`,
+		`"kind"`,
+		`"atomic"`,
 		"one deliverable",
 		"Forbidden steps",
 		"task_1",
@@ -125,8 +127,8 @@ func TestBuildPlannerPrompt(t *testing.T) {
 
 func TestNormalizePlanSteps(t *testing.T) {
 	got := normalizePlanSteps([]PlanStep{
-		{ID: "task_1", Title: "  Gather  facts ", Description: "", AgentRole: "", Dependencies: []string{"", "task_1", "ghost"}},
-		{ID: "task_1", Description: "Write the report", Acceptance: "report.md exists", Dependencies: []string{"task_1"}},
+		{ID: "task_1", Title: "  Gather  facts ", Description: "", AgentRole: "", Kind: "RESEARCH", Dependencies: []string{"", "task_1", "ghost"}},
+		{ID: "task_1", Description: "Write the report", Acceptance: "report.md exists", Kind: "produce", Atomic: true, Dependencies: []string{"task_1"}},
 		{Description: "   "},
 		{ID: "task_3", Description: "Verify the report", Dependencies: []string{"task_1"}},
 		{ID: "task_4", Description: "extra 1"},
@@ -136,8 +138,11 @@ func TestNormalizePlanSteps(t *testing.T) {
 	if len(got) != 5 {
 		t.Fatalf("expected cap of 5 usable steps, got %d: %+v", len(got), got)
 	}
-	if got[0].ID != "task_1" || got[0].Description != "Gather facts" || got[0].AgentRole != "agent_code" {
+	if got[0].ID != "task_1" || got[0].Description != "Gather facts" || got[0].AgentRole != "agent_code" || got[0].Kind != StepKindResearch {
 		t.Fatalf("first step not normalized: %+v", got[0])
+	}
+	if got[1].Kind != StepKindProduce || !got[1].Atomic {
+		t.Fatalf("kind and atomic must be preserved: %+v", got[1])
 	}
 	if len(got[0].Dependencies) != 0 {
 		t.Fatalf("self and unknown deps must be dropped: %+v", got[0].Dependencies)

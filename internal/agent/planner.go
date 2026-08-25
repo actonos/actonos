@@ -11,6 +11,15 @@ import (
 	"github.com/actonos/actonos/internal/llm"
 )
 
+const (
+	// StepKindProduce requires a tool-created artifact before the step can close.
+	StepKindProduce = "produce"
+	// StepKindResearch gathers facts; prose is enough to close the step.
+	StepKindResearch = "research"
+	// StepKindVerify checks prior artifacts; prose is enough to close the step.
+	StepKindVerify = "verify"
+)
+
 // PlanStep represents a single decomposed step in a complex goal.
 type PlanStep struct {
 	ID           string   `json:"id"`
@@ -18,6 +27,8 @@ type PlanStep struct {
 	Description  string   `json:"description"`
 	Acceptance   string   `json:"acceptance,omitempty"`
 	AgentRole    string   `json:"agent_role"` // "code", "data", "report", "general" or specific agent_id
+	Kind         string   `json:"kind,omitempty"`   // produce | research | verify
+	Atomic       bool     `json:"atomic,omitempty"` // whole goal is this single step
 	Dependencies []string `json:"dependencies"`
 	Status       string   `json:"status"` // "pending", "in_progress", "completed", "failed"
 	Result       string   `json:"result,omitempty"`
@@ -100,6 +111,12 @@ func (p *Planner) DecomposeGoal(ctx context.Context, goal string, availableAgent
 	if len(plan.Steps) == 0 {
 		plan.Steps = defaultPlanSteps(goal, availableAgents)
 	}
+	// A 1-step plan is only legal when the planner marked it atomic. Otherwise
+	// expand so a wrap-up after the first artifact cannot close the mission.
+	// The planner LLM reads the user goal in any language; the kernel does not.
+	if len(plan.Steps) == 1 && !plan.Steps[0].Atomic {
+		plan.Steps = defaultPlanSteps(goal, availableAgents)
+	}
 	return plan, nil
 }
 
@@ -120,6 +137,7 @@ func defaultPlanSteps(goal string, agents []AgentManifest) []PlanStep {
 			Description: "Collect the facts, files, and constraints required to execute: " + trimmed,
 			Acceptance:  "Named sources or files are identified and the execution constraints are explicit.",
 			AgentRole:   role,
+			Kind:        StepKindResearch,
 			Status:      "pending",
 		},
 		{
@@ -128,6 +146,7 @@ func defaultPlanSteps(goal string, agents []AgentManifest) []PlanStep {
 			Description:  "Create the requested deliverable and verify it against the original goal: " + trimmed,
 			Acceptance:   "The deliverable exists with tool evidence and matches the goal.",
 			AgentRole:    role,
+			Kind:         StepKindProduce,
 			Dependencies: []string{"task_1"},
 			Status:       "pending",
 		},
@@ -182,6 +201,8 @@ func normalizePlanSteps(steps []PlanStep, fallbackRole string) []PlanStep {
 			Description:  desc,
 			Acceptance:   collapseSpace(step.Acceptance),
 			AgentRole:    role,
+			Kind:         normalizeStepKind(step.Kind),
+			Atomic:       step.Atomic,
 			Dependencies: deps,
 			Status:       "pending",
 			Result:       step.Result,
@@ -205,6 +226,19 @@ func normalizePlanSteps(steps []PlanStep, fallbackRole string) []PlanStep {
 
 func collapseSpace(s string) string {
 	return strings.Join(strings.Fields(strings.TrimSpace(s)), " ")
+}
+
+func normalizeStepKind(kind string) string {
+	switch strings.ToLower(collapseSpace(kind)) {
+	case StepKindProduce, StepKindResearch, StepKindVerify:
+		return strings.ToLower(collapseSpace(kind))
+	default:
+		return ""
+	}
+}
+
+func (s *PlanStep) requiresArtifact() bool {
+	return s != nil && s.Kind == StepKindProduce
 }
 
 // ExecutePlan runs each step in topological order, respecting dependencies.

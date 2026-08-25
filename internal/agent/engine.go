@@ -243,6 +243,8 @@ func (e *Engine) ExecuteStep(ctx context.Context, agentID string, userMessage st
 // persisted after each one; approval, failure, or an empty turn stop the drain.
 const maxAutonomousPlanStepsPerPulse = 8
 
+const planStepNoHandoffNudge = "No operator is waiting. Do not ask permission and do not offer the next step. Execute the current plan step now with tools and produce its deliverable."
+
 // ExecuteAutonomousGoal drains dependency-ready plan steps until the DAG is
 // done, a step needs approval, a step fails, or the per-pulse cap is hit.
 func (e *Engine) ExecuteAutonomousGoal(ctx context.Context, agentID, goal string, history []llm.Message) (*llm.Response, error) {
@@ -260,9 +262,16 @@ func (e *Engine) ExecuteAutonomousGoal(ctx context.Context, agentID, goal string
 
 	var last *llm.Response
 	plan := task.Plan
+	sameStepRetries := 0
 	for i := 0; i < maxAutonomousPlanStepsPerPulse; i++ {
 		if err := ctx.Err(); err != nil {
 			return last, err
+		}
+		var readyID string
+		if plan != nil {
+			if ready, _ := e.planner.NextReadyStep(plan); ready != nil {
+				readyID = ready.ID
+			}
 		}
 		resp, nextPlan, stepErr := e.ExecuteNextPlanStep(ctx, agentID, goal, plan, history)
 		if nextPlan != nil {
@@ -273,13 +282,6 @@ func (e *Engine) ExecuteAutonomousGoal(ctx context.Context, agentID, goal string
 		last = resp
 		if stepErr != nil {
 			return resp, stepErr
-		}
-		if resp != nil && MissionDeliverableSatisfied(goal, resp.ToolCalls) {
-			if plan != nil {
-				plan.markRemainingComplete("Deliverable already produced.")
-				e.writeTaskPlan(ctx, task, plan)
-			}
-			return resp, nil
 		}
 		if plan != nil && plan.AllStepsCompleted() {
 			return resp, nil
@@ -300,6 +302,15 @@ func (e *Engine) ExecuteAutonomousGoal(ctx context.Context, agentID, goal string
 		if resp != nil && strings.TrimSpace(resp.Content) != "" {
 			history = append(history, llm.Message{Role: llm.RoleAssistant, Content: resp.Content})
 		}
+		if readyID != "" && ready.ID == readyID {
+			sameStepRetries++
+			if sameStepRetries > 1 {
+				return resp, nil
+			}
+			history = append(history, llm.Message{Role: llm.RoleUser, Content: planStepNoHandoffNudge})
+			continue
+		}
+		sameStepRetries = 0
 	}
 	return last, nil
 }
@@ -388,15 +399,30 @@ func (e *Engine) ExecuteNextPlanStep(ctx context.Context, agentID, goal string, 
 	if resp != nil {
 		content = resp.Content
 	}
-	if IsCannedOrEmptyCompletion(content) {
-		// Leave the step pending so the next pulse retries it instead of
-		// advancing the DAG on an empty/canned turn.
+	if !planStepShouldComplete(step, content, resp) {
+		// Leave the step pending so drain/next pulse retries it instead of
+		// rubber-stamping a "if you want I can continue" wrap-up.
 		e.persistTaskPlan(ctx, plan)
 		return resp, plan, nil
 	}
 	plan.MarkStep(step.ID, "completed", content)
 	e.persistTaskPlan(ctx, plan)
 	return resp, plan, nil
+}
+
+func planStepShouldComplete(step *PlanStep, content string, resp *llm.Response) bool {
+	if IsCannedOrEmptyCompletion(content) {
+		return false
+	}
+	var calls []llm.ToolCall
+	if resp != nil {
+		calls = resp.ToolCalls
+	}
+	wrote := HasDeliverableWrite(calls)
+	if step != nil && step.requiresArtifact() && !wrote && len(calls) == 0 {
+		return false
+	}
+	return strings.TrimSpace(content) != "" || wrote
 }
 
 // persistTaskPlan writes the durable DAG onto the mission identified by ctx task_id.
@@ -425,8 +451,14 @@ func (e *Engine) writeTaskPlan(ctx context.Context, task *AutonomousTask, plan *
 			task.Status = "completed"
 			task.Progress = 100
 		}
-	} else if pct := plan.ProgressPercent(); pct > task.Progress {
-		task.Progress = pct
+	} else {
+		if task.Status == "completed" {
+			task.Status = "in_progress"
+			task.CompletedAt = nil
+		}
+		if pct := plan.ProgressPercent(); pct > task.Progress {
+			task.Progress = pct
+		}
 	}
 	_ = e.taskMgr.UpdateTask(ctx, *task)
 }

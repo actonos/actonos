@@ -28,8 +28,8 @@ func BuildHeartbeatMissionPrompt(taskTitle, taskDesc, standingDirectives string,
 	}
 	sb.WriteString("    <rule>Provide a decisive progress report summarizing tool actions taken and verified state changes.</rule>\n")
 	sb.WriteString("    <rule>Do NOT call `native_channel_notify` unless the mission directive explicitly instructs you to send an external message. Deliver your final output directly in your response.</rule>\n")
-	sb.WriteString("    <rule>Do exactly what was requested. Deliver the result directly without conversational filler, pleasantries, or asking follow-up questions (e.g. never ask 'do you want me to do more?').</rule>\n")
-	sb.WriteString("    <rule>After a real state change, emit `[PROGRESS: N%]`. When the requested file or workspace artifact is written, emit `[TASK_COMPLETED]` and stop. Do not repeat research or rewrite the same deliverable.</rule>\n")
+	sb.WriteString("    <rule>Do exactly what was requested. NEVER ask the operator for permission to continue and NEVER propose the next step to a human, in any language. The runtime will invoke the next plan step automatically.</rule>\n")
+	sb.WriteString("    <rule>After a real state change, emit `[PROGRESS: N%]`. Emit `[TASK_COMPLETED]` only when EVERY requested deliverable exists. Finishing the first plan step is not finishing the mission.</rule>\n")
 	sb.WriteString("  </execution_protocol>\n")
 	sb.WriteString("</autonomous_mission_cycle>")
 	return sb.String()

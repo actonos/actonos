@@ -669,3 +669,138 @@ func TestIsCannedOrEmptyCompletion(t *testing.T) {
 		t.Fatal("real content must not be treated as canned")
 	}
 }
+
+func TestExecuteAutonomousGoalContinuesPastFirstStepHandoff(t *testing.T) {
+	db, eventBus := setupTestDB(t)
+	manager, err := NewAgentManager(db, eventBus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	taskManager, err := NewTaskManager(db.SQLDB(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	goal := "Erstelle eine Lektionsserie über ABC, jeder Teil eine PDF-Datei"
+	task, err := taskManager.CreateTask(context.Background(), AutonomousTask{
+		Title: "Lesson series ABC", Description: goal, CreatedBy: "user", TargetChannel: "none",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var executed []string
+	provider := llm.NewMockProvider("openai/gpt-4o", "")
+	provider.CompleteFunc = func(_ context.Context, messages []llm.Message, _ llm.CompletionOptions) (*llm.Response, error) {
+		content := lastUserContent(messages)
+		if strings.Contains(content, "<goal_decomposition_task>") {
+			return &llm.Response{Model: "openai/gpt-4o", Content: plannerTwoStepJSON(), Usage: llm.Usage{TotalTokens: 6}}, nil
+		}
+		stepID := planStepFromPrompt(content)
+		if stepID != "" {
+			executed = append(executed, stepID)
+		}
+		if stepID == "task_1" {
+			return &llm.Response{
+				Model: "openai/gpt-4o",
+				Content: "Schritt 1 ist fertig. Soll ich mit den PDFs weitermachen?",
+				ToolCalls: []llm.ToolCall{{
+					ID: "w1", Type: "function",
+					Function: llm.FunctionCall{Name: "native_file_write", Arguments: json.RawMessage(`{"path":"outline.md","content":"khung"}`)},
+				}},
+				Usage: llm.Usage{TotalTokens: 8},
+			}, nil
+		}
+		return &llm.Response{
+			Model: "openai/gpt-4o",
+			Content: "Wrote part PDF with verified evidence.",
+			ToolCalls: []llm.ToolCall{{
+				ID: "w2", Type: "function",
+				Function: llm.FunctionCall{Name: "native_file_write", Arguments: json.RawMessage(`{"path":"part-1.pdf","content":"%PDF"}`)},
+			}},
+			Usage: llm.Usage{TotalTokens: 8},
+		}, nil
+	}
+	router := llm.NewModelCascadeRouter()
+	router.RegisterProvider("openai/gpt-4o", provider)
+	engine := NewEngine(manager, eventBus, router, nil)
+	engine.SetPlanner(NewPlanner(router))
+	engine.SetTaskManager(taskManager)
+
+	ctx := context.WithValue(context.Background(), "task_id", task.ID)
+	if _, err := engine.ExecuteAutonomousGoal(ctx, DefaultSystemAgentID, goal, nil); err != nil {
+		t.Fatalf("drain pulse: %v", err)
+	}
+	if len(executed) < 2 || executed[0] != "task_1" || executed[1] != "task_2" {
+		t.Fatalf("expected drain to continue to task_2 after step-1 handoff, got %v", executed)
+	}
+	got, err := taskManager.GetTask(context.Background(), task.ID)
+	if err != nil || got.Plan == nil || got.Plan.StepStatus("task_2") != "completed" {
+		t.Fatalf("task_2 was not executed after the handoff: %+v err=%v executed=%v", got, err, executed)
+	}
+}
+
+func TestHeartbeatOpenPlanDoesNotCompleteAfterFirstStep(t *testing.T) {
+	db, eventBus := setupTestDB(t)
+	manager, err := NewAgentManager(db, eventBus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	taskManager, err := NewTaskManager(db.SQLDB(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	goal := "シリーズ教材を作り、各パートをPDFにする"
+	task, err := taskManager.CreateTask(context.Background(), AutonomousTask{
+		Title: "Lesson series", Description: goal, CreatedBy: "user", TargetChannel: "none",
+		Plan: &TaskPlan{Goal: goal, Steps: []PlanStep{
+			{ID: "task_1", Description: "Name the parts", Status: "pending", Kind: StepKindResearch},
+			{ID: "task_2", Description: "Write remaining PDFs", Status: "pending", Kind: StepKindProduce, Dependencies: []string{"task_1"}},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	provider := llm.NewMockProvider("openai/gpt-4o", "")
+	provider.CompleteFunc = func(_ context.Context, messages []llm.Message, _ llm.CompletionOptions) (*llm.Response, error) {
+		content := lastUserContent(messages)
+		if strings.Contains(content, "<step_id>task_2</step_id>") {
+			return &llm.Response{Model: "openai/gpt-4o", Content: cannedSuccessPhrase, Usage: llm.Usage{TotalTokens: 2}}, nil
+		}
+		return &llm.Response{
+			Model:   "openai/gpt-4o",
+			Content: "ステップ1が終わりました。続きが必要なら言ってください。",
+			ToolCalls: []llm.ToolCall{{
+				ID: "w1", Type: "function",
+				Function: llm.FunctionCall{Name: "native_file_write", Arguments: json.RawMessage(`{"path":"outline.md","content":"khung"}`)},
+			}},
+			Usage: llm.Usage{TotalTokens: 8},
+		}, nil
+	}
+	router := llm.NewModelCascadeRouter()
+	router.RegisterProvider("openai/gpt-4o", provider)
+	engine := NewEngine(manager, eventBus, router, nil)
+	engine.SetPlanner(NewPlanner(router))
+	engine.SetTaskManager(taskManager)
+	daemon := NewHeartbeatDaemon(manager, engine, eventBus, db.SQLDB(), t.TempDir(), time.Minute)
+	daemon.SetTaskManager(taskManager)
+	daemon.SetSessionManager(nil)
+
+	run, err := daemon.TriggerManualPulse(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := taskManager.GetTask(context.Background(), task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status == "completed" {
+		t.Fatalf("open DAG must not complete after step 1: run=%+v task=%+v", run, got)
+	}
+	if got.Plan == nil || got.Plan.StepStatus("task_1") != "completed" || got.Plan.StepStatus("task_2") == "completed" {
+		t.Fatalf("expected only task_1 completed: %+v run=%+v", got.Plan, run)
+	}
+	if got.Status != "in_progress" {
+		t.Fatalf("expected in_progress while task_2 remains, got %+v run=%+v", got, run)
+	}
+}

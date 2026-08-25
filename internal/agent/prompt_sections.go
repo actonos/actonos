@@ -321,6 +321,7 @@ func (s *HeadlessSection) Render() string {
 	sb.WriteString("<autonomous_headless_mode>\n")
 	sb.WriteString("  <directive>This is an unattended background automation cycle. NO human is reading this in real time.</directive>\n")
 	sb.WriteString("  <directive>NEVER reply with a greeting, self-introduction, or a question like 'how can I help?'.</directive>\n")
+	sb.WriteString("  <directive>NEVER ask permission to continue, in any language. Do not hand work back to the operator. Finish the current step; the runtime will start the next one.</directive>\n")
 	sb.WriteString("  <directive>Do NOT invoke `native_channel_notify` unless the current task or standing directive explicitly asks to notify an external channel. The runtime automatically captures and delivers your final response.</directive>\n")
 	sb.WriteString("  <directive>You MUST execute the standing directive using authorized tools and report the concrete result directly, OR reply with EXACTLY `HEARTBEAT_OK` if there is nothing actionable.</directive>\n")
 	sb.WriteString("</autonomous_headless_mode>")

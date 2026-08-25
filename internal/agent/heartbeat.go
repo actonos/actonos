@@ -517,12 +517,15 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) (run *Hea
 			fullCleaned := cleanFullContent(content)
 			shortLog := shortSummary(content, 250)
 			planDone := activeTask.Plan != nil && activeTask.Plan.AllStepsCompleted()
+			planOpen := activeTask.Plan != nil && len(activeTask.Plan.Steps) > 0 && !planDone
 			if activeTask.Plan != nil {
 				if pct := activeTask.Plan.ProgressPercent(); pct > activeTask.Progress {
 					activeTask.Progress = pct
 				}
 			}
-			deliverableDone := MissionDeliverableSatisfied(workGoal, resp.ToolCalls)
+			// A write only finishes the mission when the DAG has no remaining
+			// steps. Prose in any language is never a completion signal.
+			deliverableDone := !planOpen && HasDeliverableWrite(resp.ToolCalls)
 
 			// Parse Task status transitions. Empty/canned replies never complete a
 			// mission unless the durable DAG is already fully done — progress 100%
@@ -537,7 +540,21 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) (run *Hea
 					activeTask.Status = "blocked"
 					run.Summary += " [blocked after empty completions]"
 				}
-			} else if planDone || deliverableDone || activeTask.Status == "completed" || (strings.Contains(content, "[TASK_COMPLETED]") && h.engine.verifier.VerifyTaskCompletion(activeTask.Description, content, resp.ToolCalls)) {
+			} else if planOpen {
+				activeTask.Status = "in_progress"
+				activeTask.ExecutionLog = shortLog
+				run.Status = "action_taken"
+				run.Summary = fmt.Sprintf("Advanced mission '%s' to %d%%. %s", activeTask.Title, activeTask.Progress, shortLog)
+			} else if planDone || activeTask.Status == "completed" {
+				activeTask.Status = "completed"
+				activeTask.Progress = 100
+				activeTask.FailCount = 0
+				if strings.TrimSpace(shortLog) != "" {
+					activeTask.ExecutionLog = shortLog
+				}
+				run.Status = "action_taken"
+				run.Summary = fmt.Sprintf("Completed mission: '%s'. %s", activeTask.Title, shortLog)
+			} else if deliverableDone || (strings.Contains(content, "[TASK_COMPLETED]") && h.engine.verifier.VerifyTaskCompletion(activeTask.Description, content, resp.ToolCalls)) {
 				activeTask.Status = "completed"
 				activeTask.Progress = 100
 				activeTask.FailCount = 0
@@ -602,8 +619,11 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) (run *Hea
 				strings.HasPrefix(content, "Successfully dispatched proactive notification") ||
 				strings.HasPrefix(content, "Notification sent")
 
+			// Do not ping the operator between DAG steps; the runtime continues itself.
+			skipInterim := activeTask.Status == "in_progress" && activeTask.Plan != nil && activeTask.Plan.HasReadyStep()
+
 			// Proactively notify user with FULL UNTRUNCATED content through event bus if target channel configured
-			if h.eventBus != nil && !alreadyNotified && !isRedundantToolReport && activeTask.TargetChannel != "none" && activeTask.TargetChannel != "" {
+			if h.eventBus != nil && !alreadyNotified && !isRedundantToolReport && !skipInterim && activeTask.TargetChannel != "none" && activeTask.TargetChannel != "" {
 				h.eventBus.Publish(bus.NewEvent(bus.EventAgentActionDone, assignedAgent, map[string]any{
 					"type":              "proactive_cron_notification",
 					"job_name":          fmt.Sprintf("Mission: %s", activeTask.Title),
@@ -1063,9 +1083,9 @@ func parseHHMM(v string) (int, bool) {
 	return hh*60 + mm, true
 }
 
-// adoptPersistedPlan copies the engine-owned DAG, plan-derived progress, and
-// terminal completion onto the in-memory heartbeat task so a later UpdateTask
-// cannot rewind completed steps or leave a 100% DAG marked in_progress.
+// adoptPersistedPlan copies the engine-owned DAG and plan-derived progress onto
+// the in-memory heartbeat task so a later UpdateTask cannot rewind completed
+// steps. Status is left to the heartbeat completion policy.
 func (h *HeartbeatDaemon) adoptPersistedPlan(ctx context.Context, task *AutonomousTask) {
 	if h.taskMgr == nil || task == nil {
 		return
@@ -1079,13 +1099,6 @@ func (h *HeartbeatDaemon) adoptPersistedPlan(ctx context.Context, task *Autonomo
 	}
 	if latest.Progress > task.Progress {
 		task.Progress = latest.Progress
-	}
-	if latest.Status == "completed" {
-		task.Status = "completed"
-		task.Progress = 100
-		if latest.CompletedAt != nil {
-			task.CompletedAt = latest.CompletedAt
-		}
 	}
 }
 

@@ -22,11 +22,38 @@ func TestPlanner_DecomposeGoal(t *testing.T) {
 		t.Fatalf("DecomposeGoal failed: %v", err)
 	}
 
-	if len(plan.Steps) != 1 {
-		t.Fatalf("expected 1 step, got %d", len(plan.Steps))
+	if len(plan.Steps) != 2 {
+		t.Fatalf("non-atomic 1-step JSON must expand to the default DAG, got %d: %+v", len(plan.Steps), plan.Steps)
 	}
-	if plan.Steps[0].ID != "task_1" {
-		t.Fatalf("unexpected task id: %s", plan.Steps[0].ID)
+}
+
+func TestPlannerKeepsAtomicSingleStep(t *testing.T) {
+	router := llm.NewModelCascadeRouter()
+	mock := llm.NewMockProvider("anthropic/claude-sonnet-4.5", `[{"id":"task_1","description":"Ping health","agent_role":"general","kind":"research","atomic":true,"dependencies":[]}]`)
+	router.RegisterProvider("anthropic/claude-sonnet-4.5", mock)
+
+	planner := NewPlanner(router)
+	plan, err := planner.DecomposeGoal(context.Background(), "Ping the health endpoint", nil)
+	if err != nil {
+		t.Fatalf("DecomposeGoal failed: %v", err)
+	}
+	if len(plan.Steps) != 1 || plan.Steps[0].ID != "task_1" || !plan.Steps[0].Atomic || plan.Steps[0].Kind != StepKindResearch {
+		t.Fatalf("atomic 1-step plan was rewritten: %+v", plan.Steps)
+	}
+}
+
+func TestPlannerExpandsNonAtomicSingleStepRegardlessOfGoalLanguage(t *testing.T) {
+	router := llm.NewModelCascadeRouter()
+	mock := llm.NewMockProvider("anthropic/claude-sonnet-4.5", `[{"id":"task_1","description":"Create the outline","agent_role":"general","dependencies":[]}]`)
+	router.RegisterProvider("anthropic/claude-sonnet-4.5", mock)
+
+	planner := NewPlanner(router)
+	plan, err := planner.DecomposeGoal(context.Background(), "Erstelle eine Lektionsserie über ABC, jeder Teil eine PDF-Datei", nil)
+	if err != nil {
+		t.Fatalf("DecomposeGoal failed: %v", err)
+	}
+	if len(plan.Steps) < 2 {
+		t.Fatalf("non-atomic 1-step plan must expand even when the goal is not English/Vietnamese: %+v", plan.Steps)
 	}
 }
 
@@ -236,18 +263,18 @@ func TestVerifierJSONSemanticAndCompletion(t *testing.T) {
 	if err := v.VerifyToolCommand(json.RawMessage(`{"command":"echo safe"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if !MissionDeliverableSatisfied("Nghiên cứu đề tài và lưu file workspace", []llm.ToolCall{{
+	if !HasDeliverableWrite([]llm.ToolCall{{
 		Function: llm.FunctionCall{Name: "native_workspace_write"},
 	}}) {
-		t.Fatal("workspace write should satisfy a save-to-workspace research mission")
+		t.Fatal("workspace write should count as a deliverable")
 	}
-	if MissionDeliverableSatisfied("Nghiên cứu đề tài và lưu file workspace", nil) {
-		t.Fatal("research mission satisfied without a write tool")
+	if HasDeliverableWrite(nil) {
+		t.Fatal("no tool calls must not count as a deliverable")
 	}
-	if MissionDeliverableSatisfied("summarize verbally", []llm.ToolCall{{
-		Function: llm.FunctionCall{Name: "native_workspace_write"},
+	if HasDeliverableWrite([]llm.ToolCall{{
+		Function: llm.FunctionCall{Name: "native_web_search"},
 	}}) {
-		t.Fatal("unrelated write should not complete a verbal-only goal")
+		t.Fatal("non-write tools must not count as a deliverable")
 	}
 	if err := v.VerifyToolCommand(json.RawMessage(`{}`)); err == nil {
 		t.Fatal("empty command accepted")
