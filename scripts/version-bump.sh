@@ -133,13 +133,15 @@ update_version_file() {
   log_success "Updated VERSION file: ${new_version}"
   # Keep web/package.json in sync so Vite's __APP_VERSION__ fallback matches
   if command -v node >/dev/null 2>&1; then
-    node -e "
+    (
+      cd "${ROOT_DIR}/web"
+      node -e "
 const fs = require('fs');
-const p = '${ROOT_DIR}/web/package.json';
-const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
+const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 pkg.version = '${new_version}';
-fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n');
-" && log_success "Updated web/package.json to ${new_version}"
+fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+"
+    ) && log_success "Updated web/package.json to ${new_version}"
   else
     log_warn "node not found — web/package.json version not updated"
   fi

@@ -1,5 +1,5 @@
  [1;33m
-  ActonOS Appliance v0.1.0 — System Ready [0m
+  ActonOS Appliance v1.0.0 — System Ready [0m
   * Web Interface:   [1;32mhttp://localhost:8080 [0m (or http://<appliance-ip>:8080)
   * Data Directory:  /data
   * Service Status:  systemctl status actond
