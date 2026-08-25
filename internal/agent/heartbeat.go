@@ -571,9 +571,12 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) (run *Hea
 
 			fullCleaned := cleanFullContent(content)
 			shortLog := shortSummary(content, 250)
+			planDone := activeTask.Plan != nil && activeTask.Plan.AllStepsCompleted()
 
-			// Parse Task status transitions. Empty/canned replies never complete a mission.
-			if IsCannedOrEmptyCompletion(content) {
+			// Parse Task status transitions. Empty/canned replies never complete a
+			// mission unless the durable DAG is already fully done — progress 100%
+			// from completed plan steps is the completion signal, not a stall.
+			if IsCannedOrEmptyCompletion(content) && !planDone && activeTask.Status != "completed" {
 				activeTask.Status = "in_progress"
 				activeTask.FailCount++
 				activeTask.ExecutionLog = "Empty or canned success ignored; mission remains in progress."
@@ -583,11 +586,13 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) (run *Hea
 					activeTask.Status = "blocked"
 					run.Summary += " [blocked after empty completions]"
 				}
-			} else if strings.Contains(content, "[TASK_COMPLETED]") && h.engine.verifier.VerifyTaskCompletion(activeTask.Description, content, resp.ToolCalls) {
+			} else if planDone || activeTask.Status == "completed" || (strings.Contains(content, "[TASK_COMPLETED]") && h.engine.verifier.VerifyTaskCompletion(activeTask.Description, content, resp.ToolCalls)) {
 				activeTask.Status = "completed"
 				activeTask.Progress = 100
 				activeTask.FailCount = 0
-				activeTask.ExecutionLog = shortLog
+				if strings.TrimSpace(shortLog) != "" {
+					activeTask.ExecutionLog = shortLog
+				}
 				run.Status = "action_taken"
 				run.Summary = fmt.Sprintf("Completed mission: '%s'. %s", activeTask.Title, shortLog)
 			} else if strings.Contains(content, "[TASK_COMPLETED]") {
@@ -1103,14 +1108,9 @@ func parseHHMM(v string) (int, bool) {
 	return hh*60 + mm, true
 }
 
-// trackTaskStall updates the in-memory (non-persisted, resets on restart)
-// per-task progress tracker and reports whether this task has now reached
-// maxStalledCyclesBeforeEscalation consecutive cycles with unchanged
-// progress. A terminal status (anything other than in_progress) clears the
-// tracked state entirely, since a completed/blocked/failed outcome is an
-// explicit result, not a stall. Only escalates once per stall streak.
-// adoptPersistedPlan copies the engine-owned DAG and plan-derived progress onto
-// the in-memory heartbeat task so a later UpdateTask cannot rewind completed steps.
+// adoptPersistedPlan copies the engine-owned DAG, plan-derived progress, and
+// terminal completion onto the in-memory heartbeat task so a later UpdateTask
+// cannot rewind completed steps or leave a 100% DAG marked in_progress.
 func (h *HeartbeatDaemon) adoptPersistedPlan(ctx context.Context, task *AutonomousTask) {
 	if h.taskMgr == nil || task == nil {
 		return
@@ -1125,7 +1125,21 @@ func (h *HeartbeatDaemon) adoptPersistedPlan(ctx context.Context, task *Autonomo
 	if latest.Progress > task.Progress {
 		task.Progress = latest.Progress
 	}
+	if latest.Status == "completed" {
+		task.Status = "completed"
+		task.Progress = 100
+		if latest.CompletedAt != nil {
+			task.CompletedAt = latest.CompletedAt
+		}
+	}
 }
+
+// trackTaskStall updates the in-memory (non-persisted, resets on restart)
+// per-task progress tracker and reports whether this task has now reached
+// maxStalledCyclesBeforeEscalation consecutive cycles with unchanged
+// progress. A terminal status (anything other than in_progress) clears the
+// tracked state entirely, since a completed/blocked/failed outcome is an
+// explicit result, not a stall. Only escalates once per stall streak.
 
 func (h *HeartbeatDaemon) persistMissionTask(ctx context.Context, task *AutonomousTask) {
 	if h.taskMgr == nil || task == nil {

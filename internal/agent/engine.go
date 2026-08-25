@@ -292,6 +292,9 @@ func (e *Engine) ExecuteNextPlanStep(ctx context.Context, agentID, goal string, 
 		return nil, plan, err
 	}
 	if step == nil {
+		if plan.AllStepsCompleted() {
+			return &llm.Response{Content: plan.CompletionSummary()}, plan, nil
+		}
 		resp, execErr := e.ExecuteStepWithHistory(ctx, agentID, goal, history)
 		return resp, plan, execErr
 	}
@@ -360,7 +363,12 @@ func (e *Engine) writeTaskPlan(ctx context.Context, task *AutonomousTask, plan *
 		return
 	}
 	task.Plan = plan
-	if pct := plan.ProgressPercent(); pct > task.Progress {
+	if plan.AllStepsCompleted() {
+		if task.Status != "cancelled" && task.Status != "blocked" {
+			task.Status = "completed"
+			task.Progress = 100
+		}
+	} else if pct := plan.ProgressPercent(); pct > task.Progress {
 		task.Progress = pct
 	}
 	_ = e.taskMgr.UpdateTask(ctx, *task)

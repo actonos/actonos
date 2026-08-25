@@ -230,6 +230,40 @@ func (p *TaskPlan) ProgressPercent() int {
 	return (done * 100) / len(p.Steps)
 }
 
+// AllStepsCompleted reports whether every DAG step finished successfully.
+func (p *TaskPlan) AllStepsCompleted() bool {
+	if p == nil || len(p.Steps) == 0 {
+		return false
+	}
+	for _, step := range p.Steps {
+		if step.Status != "completed" {
+			return false
+		}
+	}
+	return true
+}
+
+// CompletionSummary is a durable log line used when the DAG itself is the
+// completion signal (no extra LLM turn, no [TASK_COMPLETED] token required).
+func (p *TaskPlan) CompletionSummary() string {
+	if p == nil {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("All plan steps completed.")
+	for _, step := range p.Steps {
+		result := strings.TrimSpace(step.Result)
+		if result == "" {
+			result = step.Status
+		}
+		if len(result) > 180 {
+			result = result[:180] + "..."
+		}
+		fmt.Fprintf(&b, "\n- %s: %s", step.ID, result)
+	}
+	return b.String()
+}
+
 // StepStatus returns the recorded status for a step ID, or empty if missing.
 func (p *TaskPlan) StepStatus(id string) string {
 	if p == nil {

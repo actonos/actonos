@@ -271,12 +271,16 @@ func TestStoredPlanAdvancesOneReadyStep(t *testing.T) {
 		t.Fatalf("expected step a, got %+v err=%v", step, err)
 	}
 	plan.MarkStep("a", "completed", "ok")
-	if plan.ProgressPercent() != 50 || plan.StepStatus("a") != "completed" {
-		t.Fatalf("expected 50%% after step a, got %d status=%q", plan.ProgressPercent(), plan.StepStatus("a"))
+	if plan.ProgressPercent() != 50 || plan.StepStatus("a") != "completed" || plan.AllStepsCompleted() {
+		t.Fatalf("expected 50%% after step a, got %d status=%q done=%v", plan.ProgressPercent(), plan.StepStatus("a"), plan.AllStepsCompleted())
 	}
 	step, err = p.NextReadyStep(plan)
 	if err != nil || step == nil || step.ID != "b" {
 		t.Fatalf("expected step b after a completed, got %+v err=%v", step, err)
+	}
+	plan.MarkStep("b", "completed", "ok")
+	if !plan.AllStepsCompleted() || plan.ProgressPercent() != 100 {
+		t.Fatalf("expected full completion, got done=%v pct=%d", plan.AllStepsCompleted(), plan.ProgressPercent())
 	}
 }
 
@@ -436,6 +440,57 @@ func TestHeartbeatMissionDoesNotRepeatCompletedPlanStep(t *testing.T) {
 		if executed[i] == "task_1" {
 			t.Fatalf("step 1 was re-executed after completion: %v", executed)
 		}
+	}
+	if got.Status != "completed" || got.Progress != 100 || got.CompletedAt == nil {
+		t.Fatalf("finished DAG was not marked completed: %+v", got)
+	}
+}
+
+func TestHeartbeatCompletesMissionWhenPlanAlreadyDone(t *testing.T) {
+	db, eventBus := setupTestDB(t)
+	manager, err := NewAgentManager(db, eventBus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	taskManager, err := NewTaskManager(db.SQLDB(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := taskManager.CreateTask(context.Background(), AutonomousTask{
+		Title: "Write campaign", Description: "Create the marketing email.", CreatedBy: "user", TargetChannel: "none",
+		Status: "in_progress", Progress: 100,
+		Plan: &TaskPlan{Goal: "Create the marketing email.", Steps: []PlanStep{
+			{ID: "task_1", Description: "Draft", Status: "completed", Result: "Drafted the email."},
+			{ID: "task_2", Description: "Polish", Status: "completed", Result: "Polished the email."},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	provider := llm.NewMockProvider("openai/gpt-4o", "should not be called")
+	router := llm.NewModelCascadeRouter()
+	router.RegisterProvider("openai/gpt-4o", provider)
+	engine := NewEngine(manager, eventBus, router, nil)
+	engine.SetPlanner(NewPlanner(router))
+	engine.SetTaskManager(taskManager)
+	daemon := NewHeartbeatDaemon(manager, engine, eventBus, db.SQLDB(), t.TempDir(), time.Minute)
+	daemon.SetTaskManager(taskManager)
+	daemon.SetSessionManager(nil)
+
+	run, err := daemon.TriggerManualPulse(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := taskManager.GetTask(context.Background(), task.ID)
+	if err != nil || got.Status != "completed" || got.Progress != 100 || got.CompletedAt == nil {
+		t.Fatalf("100%% DAG mission was not marked completed: run=%+v task=%+v err=%v", run, got, err)
+	}
+	if provider.CompleteCalls != 0 {
+		t.Fatalf("finished plan should not spend another model turn, calls=%d", provider.CompleteCalls)
+	}
+	if !strings.Contains(run.Summary, "Completed mission") {
+		t.Fatalf("expected completion summary, got %q", run.Summary)
 	}
 }
 
