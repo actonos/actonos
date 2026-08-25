@@ -942,9 +942,6 @@ export function SettingsPage() {
                 <Badge variant="active" className="font-mono text-caption">
                   v{daemonVersion}
                 </Badge>
-                <Badge variant="neutral" className="font-mono text-caption">
-                  CGO_ENABLED=0
-                </Badge>
               </div>
             </Card>
 
