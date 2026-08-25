@@ -63,7 +63,7 @@
     "temp": "Nhiệt độ",
     "active": "Hoạt động",
     "cores": "Lõi {{count}}",
-    "temperature": "Nhiệt độ: {{value}}°C",
+    "temperature": "Nhiệt độ: {{value}} °C",
     "ofMegabytes": "/ {{value}} MB",
     "daemonMemory": "Daemon: {{value}} MB",
     "usedPercent": "{{value}}% đã sử dụng",

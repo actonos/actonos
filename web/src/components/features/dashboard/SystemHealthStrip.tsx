@@ -62,7 +62,7 @@ export function SystemHealthStrip({
           tone={ramPercent > 85 ? 'warning' : 'success'}
         />
         <MetricCard
-          label={t('gauges.temperature')}
+          label={t('gauges.temp')}
           value={`${(cpu?.temperature_celsius ?? 0).toFixed(1)}°C`}
           detail={t('gauges.cores', { count: cpu?.cores ?? 0 })}
           icon={Thermometer}

@@ -63,7 +63,7 @@
     "temp": "Core Temp",
     "active": "Active",
     "cores": "{{count}} Cores",
-    "temperature": "Temp: {{value}}?C",
+    "temperature": "Temp: {{value}} °C",
     "ofMegabytes": "/ {{value}} MB",
     "daemonMemory": "Daemon: {{value}} MB",
     "usedPercent": "{{value}}% used",
