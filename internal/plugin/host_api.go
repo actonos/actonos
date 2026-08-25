@@ -242,13 +242,16 @@ func decodeHTTPRequestBody(p HTTPRequestPayload) ([]byte, error) {
 }
 
 func httpRequestTimeout(p HTTPRequestPayload) time.Duration {
-	if p.Timeout > 0 && p.Timeout <= 60 {
+	if p.Timeout > 0 {
+		if p.Timeout > 300 {
+			return 300 * time.Second
+		}
 		return time.Duration(p.Timeout) * time.Second
 	}
 	if p.BodyBase64 != "" {
-		return 60 * time.Second
+		return 120 * time.Second
 	}
-	return 15 * time.Second
+	return 60 * time.Second
 }
 
 // RegisterHostModule creates and instantiates host modules in Wazero runtime.
@@ -481,7 +484,8 @@ func netHTTPRequest(ctx context.Context, m api.Module, reqPtr, reqLen uint32) in
 
 	var reqPayload HTTPRequestPayload
 	if err := json.Unmarshal(reqBytes, &reqPayload); err != nil {
-		resBytes, _ := json.Marshal(HTTPResponsePayload{Status: 400, Error: fmt.Sprintf("invalid json payload: %v", err)})
+		errBody, _ := json.Marshal(map[string]string{"error": fmt.Sprintf("invalid json payload: %v", err)})
+		resBytes, _ := json.Marshal(HTTPResponsePayload{Status: 400, Error: fmt.Sprintf("invalid json payload: %v", err), Body: string(errBody)})
 		h.mu.Lock()
 		h.LastResponse = resBytes
 		h.mu.Unlock()
@@ -489,7 +493,9 @@ func netHTTPRequest(ctx context.Context, m api.Module, reqPtr, reqLen uint32) in
 	}
 
 	if err := h.Gate.CheckOutboundURLContext(ctx, reqPayload.URL); err != nil {
-		resBytes, _ := json.Marshal(HTTPResponsePayload{Status: 403, Error: err.Error()})
+		h.Record("WARN", fmt.Sprintf("http_request blocked by gate: %s (%v)", reqPayload.URL, err))
+		errBody, _ := json.Marshal(map[string]string{"error": err.Error()})
+		resBytes, _ := json.Marshal(HTTPResponsePayload{Status: 403, Error: err.Error(), Body: string(errBody)})
 		h.mu.Lock()
 		h.LastResponse = resBytes
 		h.mu.Unlock()
@@ -509,7 +515,8 @@ func netHTTPRequest(ctx context.Context, m api.Module, reqPtr, reqLen uint32) in
 
 	bodyBytes, err := decodeHTTPRequestBody(reqPayload)
 	if err != nil {
-		resBytes, _ := json.Marshal(HTTPResponsePayload{Status: 400, Error: err.Error()})
+		errBody, _ := json.Marshal(map[string]string{"error": err.Error()})
+		resBytes, _ := json.Marshal(HTTPResponsePayload{Status: 400, Error: err.Error(), Body: string(errBody)})
 		h.mu.Lock()
 		h.LastResponse = resBytes
 		h.mu.Unlock()
@@ -522,7 +529,8 @@ func netHTTPRequest(ctx context.Context, m api.Module, reqPtr, reqLen uint32) in
 
 	httpReq, err := http.NewRequestWithContext(reqCtx, method, reqPayload.URL, bodyReader)
 	if err != nil {
-		resBytes, _ := json.Marshal(HTTPResponsePayload{Status: 500, Error: err.Error()})
+		errBody, _ := json.Marshal(map[string]string{"error": err.Error()})
+		resBytes, _ := json.Marshal(HTTPResponsePayload{Status: 500, Error: err.Error(), Body: string(errBody)})
 		h.mu.Lock()
 		h.LastResponse = resBytes
 		h.mu.Unlock()
@@ -535,7 +543,9 @@ func netHTTPRequest(ctx context.Context, m api.Module, reqPtr, reqLen uint32) in
 
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		resBytes, _ := json.Marshal(HTTPResponsePayload{Status: 502, Error: err.Error()})
+		h.Record("WARN", fmt.Sprintf("HTTP %s %s failed: %v", method, reqPayload.URL, err))
+		errBody, _ := json.Marshal(map[string]string{"error": err.Error()})
+		resBytes, _ := json.Marshal(HTTPResponsePayload{Status: 502, Error: err.Error(), Body: string(errBody)})
 		h.mu.Lock()
 		h.LastResponse = resBytes
 		h.mu.Unlock()
@@ -852,13 +862,16 @@ func hostHTTPRequest(ctx context.Context, m api.Module, reqPtr, reqLen uint32) u
 
 	var reqPayload HTTPRequestPayload
 	if err := json.Unmarshal(reqBytes, &reqPayload); err != nil {
-		resBytes, _ := json.Marshal(HTTPResponsePayload{Status: 400, Error: fmt.Sprintf("invalid json payload: %v", err)})
+		errBody, _ := json.Marshal(map[string]string{"error": fmt.Sprintf("invalid json payload: %v", err)})
+		resBytes, _ := json.Marshal(HTTPResponsePayload{Status: 400, Error: fmt.Sprintf("invalid json payload: %v", err), Body: string(errBody)})
 		res, _ := writeBufferToGuest(ctx, h, resBytes)
 		return res
 	}
 
 	if err := h.Gate.CheckOutboundURLContext(ctx, reqPayload.URL); err != nil {
-		resBytes, _ := json.Marshal(HTTPResponsePayload{Status: 403, Error: err.Error()})
+		h.Record("WARN", fmt.Sprintf("host_http_request blocked by gate: %s (%v)", reqPayload.URL, err))
+		errBody, _ := json.Marshal(map[string]string{"error": err.Error()})
+		resBytes, _ := json.Marshal(HTTPResponsePayload{Status: 403, Error: err.Error(), Body: string(errBody)})
 		res, _ := writeBufferToGuest(ctx, h, resBytes)
 		return res
 	}
@@ -876,7 +889,8 @@ func hostHTTPRequest(ctx context.Context, m api.Module, reqPtr, reqLen uint32) u
 
 	bodyBytes, err := decodeHTTPRequestBody(reqPayload)
 	if err != nil {
-		resBytes, _ := json.Marshal(HTTPResponsePayload{Status: 400, Error: err.Error()})
+		errBody, _ := json.Marshal(map[string]string{"error": err.Error()})
+		resBytes, _ := json.Marshal(HTTPResponsePayload{Status: 400, Error: err.Error(), Body: string(errBody)})
 		res, _ := writeBufferToGuest(ctx, h, resBytes)
 		return res
 	}
@@ -887,7 +901,8 @@ func hostHTTPRequest(ctx context.Context, m api.Module, reqPtr, reqLen uint32) u
 
 	httpReq, err := http.NewRequestWithContext(reqCtx, method, reqPayload.URL, bodyReader)
 	if err != nil {
-		resBytes, _ := json.Marshal(HTTPResponsePayload{Status: 500, Error: err.Error()})
+		errBody, _ := json.Marshal(map[string]string{"error": err.Error()})
+		resBytes, _ := json.Marshal(HTTPResponsePayload{Status: 500, Error: err.Error(), Body: string(errBody)})
 		res, _ := writeBufferToGuest(ctx, h, resBytes)
 		return res
 	}
@@ -898,7 +913,9 @@ func hostHTTPRequest(ctx context.Context, m api.Module, reqPtr, reqLen uint32) u
 
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		resBytes, _ := json.Marshal(HTTPResponsePayload{Status: 502, Error: err.Error()})
+		h.Record("WARN", fmt.Sprintf("host_http_request %s %s failed: %v", method, reqPayload.URL, err))
+		errBody, _ := json.Marshal(map[string]string{"error": err.Error()})
+		resBytes, _ := json.Marshal(HTTPResponsePayload{Status: 502, Error: err.Error(), Body: string(errBody)})
 		res, _ := writeBufferToGuest(ctx, h, resBytes)
 		return res
 	}
