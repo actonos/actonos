@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [1.0.0] - 2026-08-25
+
 ### Security
 - Plugin egress now reuses SSRF validation (no loopback/private/metadata, no `*`/`*.com`, redirect re-check). Plugin `signature.sig` is optional (matches `acton-plugin pack`); when present it is verified as Ed25519 over SHA-256(manifest||wasm). Pairing codes are 8-character `/pair`-only with lockout. Admin passwords use Argon2id (min 8) with login lockout; query-string tokens are ignored. Webhook recipient URLs are validated. Plugin logs redact vault secrets. Chat markdown strips `javascript:` links.
 
@@ -219,4 +222,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Apache 2.0 license
 
 <!-- Release links -->
-[Unreleased]: https://github.com/actonos/actonos/commits/main
+[Unreleased]: https://github.com/actonos/actonos/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/actonos/actonos/releases/tag/v1.0.0
