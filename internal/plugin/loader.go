@@ -22,7 +22,7 @@ var (
 	ErrModuleInstantiation = errors.New("wasm module instantiation failed")
 )
 
-const pluginToolTimeout = 120 * time.Second
+const pluginToolTimeout = 300 * time.Second
 
 // WasmLoader manages compilation and sandboxed execution of WASM plugins using Wazero.
 type WasmLoader struct {

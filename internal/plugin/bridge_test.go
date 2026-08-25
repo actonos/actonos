@@ -99,7 +99,7 @@ func TestPluginRedirectCheckRejectsLoopback(t *testing.T) {
 }
 
 func TestPluginExecuteTimeoutMatchesDocs(t *testing.T) {
-	if pluginToolTimeout != 120*time.Second {
-		t.Fatalf("tool timeout %s, want 120s", pluginToolTimeout)
+	if pluginToolTimeout != 300*time.Second {
+		t.Fatalf("tool timeout %s, want 300s", pluginToolTimeout)
 	}
 }

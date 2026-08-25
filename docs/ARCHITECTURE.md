@@ -510,7 +510,7 @@ graph TD
 - **Egress Firewall**: Outbound HTTP/WS calls must match `net_outbound` and pass SSRF checks (no loopback/private/metadata; redirects re-validated). Direct raw TCP/UDP is impossible.
 - **Vault brokering**: Plugins receive scoped secrets without host file or table access. Values are redacted from plugin logs. Encryption at rest is AES-256-GCM + Argon2id; there is no DMI/CPU binding.
 - **Signatures**: `signature.sig` is optional (SDK `pack` omits it). When present, Ed25519 over SHA-256(`manifest.json` || `plugin.wasm`) is verified. Fail-closed unsigned installs require `ACTONOS_REQUIRE_SIGNED_PLUGINS=1`.
-- **Resource & Timeout Quota**: 64 MB memory cap and 120s tool/poll deadline; guest panics never crash `actond`.
+- **Resource & Timeout Quota**: 64 MB memory cap and 300s tool/poll deadline; guest panics never crash `actond`.
 - **Channels UI**: `/#/channels` is pairing and account routing for installed WASM chat plugins, not native Telegram/Discord/WhatsApp adapters.
 
 

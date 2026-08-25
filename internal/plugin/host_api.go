@@ -243,15 +243,15 @@ func decodeHTTPRequestBody(p HTTPRequestPayload) ([]byte, error) {
 
 func httpRequestTimeout(p HTTPRequestPayload) time.Duration {
 	if p.Timeout > 0 {
-		if p.Timeout > 300 {
-			return 300 * time.Second
+		if p.Timeout > 600 {
+			return 600 * time.Second
 		}
 		return time.Duration(p.Timeout) * time.Second
 	}
 	if p.BodyBase64 != "" {
-		return 120 * time.Second
+		return 300 * time.Second
 	}
-	return 60 * time.Second
+	return 300 * time.Second
 }
 
 // RegisterHostModule creates and instantiates host modules in Wazero runtime.
