@@ -107,7 +107,7 @@ export function PluginConfigForm({ plugin, onSaved, onCancel }: PluginConfigForm
   // Group properties strictly by x-ui-group
   const groupedProperties = useMemo(() => {
     const groups: Record<string, Array<{ key: string; prop: ConfigSchemaProperty }>> = {};
-    const defaultGroup = 'General Settings';
+    const defaultGroup = t('config.generalGroup');
 
     Object.entries(schemaProperties).forEach(([key, prop]) => {
       const groupName = (prop['x-ui-group'] as string) || defaultGroup;
@@ -123,7 +123,7 @@ export function PluginConfigForm({ plugin, onSaved, onCancel }: PluginConfigForm
     });
 
     return groups;
-  }, [schemaProperties]);
+  }, [schemaProperties, t]);
 
   const handleFieldChange = (key: string, value: unknown) => {
     setFormData((prev) => ({
@@ -353,7 +353,7 @@ export function PluginConfigForm({ plugin, onSaved, onCancel }: PluginConfigForm
                           </label>
                           {isSecret && (
                             <span className="text-[10px] text-slate font-mono flex items-center gap-1">
-                              <Lock className="w-2.5 h-2.5" /> Vault
+                              <Lock className="w-2.5 h-2.5" /> {t('config.secretBadge')}
                             </span>
                           )}
                         </div>
@@ -510,7 +510,7 @@ export function PluginConfigForm({ plugin, onSaved, onCancel }: PluginConfigForm
           </label>
           {isSecret && (
             <span className="inline-flex items-center gap-1 text-[11px] font-mono text-slate bg-canvas px-2.5 py-0.5 rounded-full border border-onyx/10 shadow-2xs">
-              <Lock className="w-3 h-3 text-slate" /> Vault
+              <Lock className="w-3 h-3 text-slate" /> {t('config.secretBadge')}
               {isVaultConfigured && <CheckCircle2 className="w-3 h-3 text-status-success" />}
             </span>
           )}
@@ -520,7 +520,7 @@ export function PluginConfigForm({ plugin, onSaved, onCancel }: PluginConfigForm
             type={isSecret && !showSecret ? 'password' : isNumber ? 'number' : 'text'}
             min={prop.minimum}
             max={prop.maximum}
-            placeholder={(prop['x-ui-placeholder'] as string) || (isVaultConfigured ? '•••••••• (Configured in Vault)' : '')}
+            placeholder={(prop['x-ui-placeholder'] as string) || (isVaultConfigured ? `•••••••• (${t('config.secretSaved')})` : '')}
             value={(val as string | number) || ''}
             onChange={(e) => handleFieldChange(key, isNumber ? Number(e.target.value) : e.target.value)}
             className={`${inputStyle} ${isSecret || isNumber ? 'font-mono' : 'font-sans'} ${

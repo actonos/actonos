@@ -28,7 +28,7 @@ export function PluginUploadModal({
 
   const handleFileSelect = (file: File) => {
     if (!file.name.toLowerCase().endsWith('.actonpkg')) {
-      error(t('modals.invalidFile', 'Invalid File'), t('modals.invalidFile', 'Please select an ActonOS Plugin package (.actonpkg)'));
+      error(t('modals.invalidFile'), t('modals.invalidFile'));
       return;
     }
     setSelectedFile(file);
@@ -46,7 +46,7 @@ export function PluginUploadModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedFile) {
-      error(t('modals.invalidFile', 'Missing File'), t('modals.invalidFile', 'Please select an ActonOS Plugin package (.actonpkg)'));
+      error(t('modals.invalidFile'), t('modals.invalidFile'));
       return;
     }
 
@@ -61,7 +61,7 @@ export function PluginUploadModal({
       onSuccess();
       handleClose();
     } catch (err) {
-      error('Installation Failed', getErrorMessage(err));
+      error(t('errors.installFailed'), getErrorMessage(err));
     } finally {
       setIsUploading(false);
     }
@@ -78,14 +78,14 @@ export function PluginUploadModal({
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
-      title={t('modals.uploadTitle', 'Install Plugin Package')}
+      title={t('modals.uploadTitle')}
       maxWidth="max-w-xl"
     >
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Dropzone Container */}
         <div>
           <label className="block text-body-sm font-semibold text-deep-ink mb-2">
-            {t('modals.packageFileLabel', 'ActonOS Plugin Package (.actonpkg)')} <span className="text-red-500">*</span>
+            {t('modals.packageFileLabel')} <span className="text-red-500">*</span>
           </label>
           <div
             onDragOver={(e) => {
@@ -126,7 +126,7 @@ export function PluginUploadModal({
                       <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                     </p>
                     <p className="text-caption text-slate mt-0.5">
-                      {(selectedFile.size / 1024).toFixed(1)} KB • {t('modals.packageBadge', 'ActonOS Plugin Bundle')}
+                      {(selectedFile.size / 1024).toFixed(1)} KB • {t('modals.packageBadge')}
                     </p>
                   </div>
                 </div>
@@ -138,7 +138,7 @@ export function PluginUploadModal({
                     if (fileInputRef.current) fileInputRef.current.value = '';
                   }}
                   className="p-1.5 rounded-full hover:bg-onyx/10 dark:hover:bg-white/10 text-slate hover:text-deep-ink transition-colors"
-                  title="Remove file"
+                  title={t('modals.removeFile')}
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -149,10 +149,10 @@ export function PluginUploadModal({
                   <Upload className="w-6 h-6" />
                 </div>
                 <p className="text-body-sm font-semibold text-deep-ink mb-1">
-                  {t('modals.packageDropzone', 'Drag & drop your .actonpkg file here, or click to browse')}
+                  {t('modals.packageDropzone')}
                 </p>
                 <p className="text-caption text-slate max-w-sm mx-auto">
-                  {t('modals.packageHint', "Packaged plugin bundle created with 'acton-plugin pack' containing manifest.json, plugin.wasm, and signatures.")}
+                  {t('modals.packageHint')}
                 </p>
               </div>
             )}
@@ -163,10 +163,10 @@ export function PluginUploadModal({
         <div className="p-4 rounded-2xl bg-soft-meadow/80 dark:bg-soft-meadow/40 border border-onyx/15 dark:border-white/10 space-y-2 shadow-xs">
           <div className="flex items-center gap-2 text-deep-ink text-caption font-semibold">
             <FileCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-            <span>Plugin Package Verification</span>
+            <span>{t('modals.verifyTitle')}</span>
           </div>
           <p className="text-caption text-slate leading-relaxed">
-            ActonOS will automatically unpack the bundle, parse <code className="px-1.5 py-0.5 rounded bg-white dark:bg-black/40 border border-onyx/15 dark:border-white/15 font-mono text-[11px] font-semibold text-deep-ink shadow-2xs">manifest.json</code>, compile <code className="px-1.5 py-0.5 rounded bg-white dark:bg-black/40 border border-onyx/15 dark:border-white/15 font-mono text-[11px] font-semibold text-deep-ink shadow-2xs">plugin.wasm</code> into the Wazero runtime, and register exported Tools, Channels, or Connectors.
+            {t('modals.verifyBody')}
           </p>
         </div>
 
@@ -174,8 +174,8 @@ export function PluginUploadModal({
         <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 shadow-2xs">
           <Shield className="w-4.5 h-4.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
           <p className="text-caption text-slate leading-relaxed">
-            <strong className="text-deep-ink">{t('modals.sandboxNoticeTitle', 'Fail-Closed Sandbox')}: </strong>
-            {t('modals.sandboxNotice', 'Outbound network domains, Hardware Vault secrets, and KV storage permissions declared in the package manifest will be strictly enforced by the kernel security gate.')}
+            <strong className="text-deep-ink">{t('modals.sandboxNoticeTitle')}: </strong>
+            {t('modals.sandboxNotice')}
           </p>
         </div>
 
@@ -190,7 +190,7 @@ export function PluginUploadModal({
             disabled={!selectedFile || isUploading}
             icon={isUploading ? <Package className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
           >
-            {isUploading ? t('modals.installing', 'Validating & Installing...') : t('modals.installBtn', 'Install & Activate')}
+            {isUploading ? t('modals.installing') : t('modals.installBtn')}
           </Button>
         </div>
       </form>

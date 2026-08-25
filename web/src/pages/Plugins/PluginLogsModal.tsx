@@ -84,10 +84,10 @@ export function PluginLogsModal({ plugin, isOpen, onClose }: PluginLogsModalProp
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-onyx/5 dark:border-white/5 pb-3">
           <div className="flex items-center gap-2">
             <Badge variant={plugin.enabled ? 'active' : 'neutral'} className="font-mono uppercase text-[11px]">
-              {plugin.status}
+              {t(`status.${plugin.status}`, plugin.status)}
             </Badge>
             <span className="font-mono text-caption text-slate">
-              {logs.length} {logs.length === 1 ? 'event' : 'events'} recorded
+              {t('modals.logCount', { count: logs.length })}
             </span>
           </div>
 
@@ -100,7 +100,7 @@ export function PluginLogsModal({ plugin, isOpen, onClose }: PluginLogsModalProp
               disabled={logs.length === 0}
               icon={copied ? <Check className="mr-1.5 h-3.5 w-3.5 text-emerald-500" /> : <Copy className="mr-1.5 h-3.5 w-3.5" />}
             >
-              {copied ? 'Copied' : 'Copy Logs'}
+              {copied ? t('actions.copied') : t('actions.copy')}
             </Button>
             <Button
               type="button"
@@ -136,15 +136,15 @@ export function PluginLogsModal({ plugin, isOpen, onClose }: PluginLogsModalProp
           ) : (
             <div className="flex h-full flex-col items-center justify-center text-center text-white/50">
               <Terminal className="h-8 w-8 mb-2 opacity-40 text-cyan-400" />
-              <p className="text-white/80 font-medium">{t('modals.noLogs', 'No runtime log events recorded yet.')}</p>
-              <p className="text-[11px] mt-1 text-white/40">Syscalls and guest runtime traces will appear here automatically.</p>
+              <p className="text-white/80 font-medium">{t('modals.noLogs')}</p>
+              <p className="text-[11px] mt-1 text-white/40">{t('modals.noLogsHint')}</p>
             </div>
           )}
         </div>
 
         <div className="flex justify-end pt-2">
           <Button type="button" variant="secondary" onClick={onClose}>
-            Close
+            {t('actions.close')}
           </Button>
         </div>
       </div>

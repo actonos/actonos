@@ -89,11 +89,11 @@ export function PluginsPage() {
       setPlugins(pluginsRes.plugins || []);
       setHubCatalog(hubRes.catalog || []);
     } catch (err) {
-      error('Failed to load plugins', getErrorMessage(err));
+      error(t('errors.loadFailed'), getErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [error]);
+  }, [error, t]);
 
   useEffect(() => {
     fetchData();
@@ -121,14 +121,14 @@ export function PluginsPage() {
     try {
       if (shouldEnable) {
         await api.enablePlugin(id);
-        success(t('actions.enable'), `Plugin ${plugin.manifest.name || id} is now running.`);
+        success(t('actions.enable'), t('actions.enabledSuccess', { name: plugin.manifest.name || id }));
       } else {
         await api.disablePlugin(id);
-        info(t('actions.disable'), `Plugin ${plugin.manifest.name || id} has been stopped.`);
+        info(t('actions.disable'), t('actions.disabledSuccess', { name: plugin.manifest.name || id }));
       }
       await fetchData();
     } catch (err) {
-      error('Toggle Error', getErrorMessage(err));
+      error(t('errors.toggleFailed'), getErrorMessage(err));
     } finally {
       setTogglingID(null);
     }
@@ -142,7 +142,7 @@ export function PluginsPage() {
     }
     try {
       await api.deletePlugin(pluginId);
-      success(t('actions.uninstall'), `Plugin ${name} was uninstalled.`);
+      success(t('actions.uninstall'), t('actions.uninstalledSuccess', { name }));
       if (selectedPlugin?.manifest.id === pluginId) {
         setIsDetailOpen(false);
         setIsLogsOpen(false);
@@ -152,7 +152,7 @@ export function PluginsPage() {
       }
       await fetchData();
     } catch (err) {
-      error('Uninstall Error', getErrorMessage(err));
+      error(t('errors.uninstallFailed'), getErrorMessage(err));
     }
   };
 
@@ -162,17 +162,15 @@ export function PluginsPage() {
     executeAction({
       targetId: pluginId,
       title: t('hub.installingTitle', { name: targetName, defaultValue: `Installing Plugin: ${targetName}` }),
-      subtitle: t('hub.installingSubtitle', {
-        defaultValue: 'Downloading package files, verifying sandbox permissions, and hot-reloading into Wazero runtime.',
-      }),
+      subtitle: t('hub.installingSubtitle'),
       steps: [
-        { id: 'auth', label: t('actionProgress.steps.auth', { defaultValue: 'Security Authorization & Validation' }) },
-        { id: 'download', label: t('actionProgress.steps.download', { defaultValue: 'Package Acquisition & Download' }) },
-        { id: 'verify', label: t('actionProgress.steps.verify', { defaultValue: 'Sandbox Verification & Hot-Reload' }) },
+        { id: 'auth', label: t('actionProgress.steps.auth') },
+        { id: 'download', label: t('actionProgress.steps.download') },
+        { id: 'verify', label: t('actionProgress.steps.verify') },
       ],
       action: () => api.installAvailablePlugin(pluginId, downloadUrl),
       onSuccess: () => {
-        success(t('hub.installed', 'Installed'), `Plugin ${targetName} is now installed and active.`);
+        success(t('hub.installed'), t('hub.installedSuccessDesc', { name: targetName }));
         fetchData();
         if (inspectHubPlugin?.id === pluginId) {
           setInspectHubPlugin((prev) => (prev ? { ...prev, installed: true } : null));
@@ -314,12 +312,9 @@ export function PluginsPage() {
       <PageContainer maxWidth="wide">
         {/* Header */}
         <PageHeader
-          eyebrow={t('eyebrow', 'EXTENSIONS & RUNTIMES')}
-          title={t('title', 'WASM Plugins')}
-          description={t(
-            'subtitle',
-            'Polyglot sandboxed WebAssembly extensions running inside Wazero JIT runtime with hardware vault brokering and domain egress firewall.'
-          )}
+          eyebrow={t('eyebrow')}
+          title={t('title')}
+          description={t('subtitle')}
           actions={
             <div className="flex flex-wrap items-center gap-3">
               <Button
@@ -613,7 +608,7 @@ export function PluginsPage() {
 
                         {/* Description */}
                         <p className="text-caption text-slate line-clamp-2 mb-4 leading-relaxed">
-                          {manifest.description || 'Polyglot WebAssembly extension executing inside linear sandbox runtime.'}
+                          {manifest.description || t('empty.noDescription')}
                         </p>
 
                         {/* Capability Tags */}

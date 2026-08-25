@@ -74,8 +74,8 @@ export function PluginDetailModal({
         {/* Meta Header */}
         <div className="-mt-3 mb-2 flex items-center justify-between font-mono text-caption text-slate">
           <div>
-            ID: <span className="text-deep-ink font-semibold">{manifest.id}</span> • v{manifest.version || '1.0.0'}
-            {manifest.author && <span> • by {manifest.author}</span>}
+            <span className="text-deep-ink font-semibold">{manifest.id}</span> • v{manifest.version || '1.0.0'}
+            {manifest.author && <span> • {t('hub.byAuthor', { author: manifest.author })}</span>}
           </div>
           {manifest.license && (
             <span className="px-2.5 py-0.5 rounded-full bg-soft-meadow border border-onyx/10 text-[11px] font-semibold text-deep-ink">
@@ -96,7 +96,7 @@ export function PluginDetailModal({
             }`}
           >
             <ShieldCheck className="h-3.5 w-3.5" />
-            <span>{t('tabs.overview', 'Overview & Permissions')}</span>
+            <span>{t('tabs.overview')}</span>
           </button>
 
           <button
@@ -109,7 +109,7 @@ export function PluginDetailModal({
             }`}
           >
             <Sliders className="h-3.5 w-3.5" />
-            <span>{t('tabs.config', 'Configuration & Secrets')}</span>
+            <span>{t('tabs.config')}</span>
             {hasConfig && (
               <span className="w-2 h-2 rounded-full bg-status-warning" />
             )}
@@ -125,7 +125,7 @@ export function PluginDetailModal({
             }`}
           >
             <Wrench className="h-3.5 w-3.5" />
-            <span>{t('tabs.tools', 'Exported Tools')} ({tools.length})</span>
+            <span>{t('tabs.tools')} ({tools.length})</span>
           </button>
 
           <button
@@ -138,7 +138,7 @@ export function PluginDetailModal({
             }`}
           >
             <Code2 className="h-3.5 w-3.5" />
-            <span>{t('tabs.manifest', 'Manifest JSON')}</span>
+            <span>{t('tabs.manifest')}</span>
           </button>
         </div>
 
@@ -173,7 +173,7 @@ export function PluginDetailModal({
             {/* Capabilities */}
             <div>
               <span className="mb-2.5 block text-caption font-semibold uppercase tracking-wider text-slate">
-                Capabilities
+                {t('modals.capabilities')}
               </span>
               <div className="flex flex-wrap gap-2">
                 {(manifest.capabilities || []).map((cap) => (
@@ -197,7 +197,7 @@ export function PluginDetailModal({
             {channels.length > 0 && (
               <div>
                 <span className="mb-2.5 block text-caption font-semibold uppercase tracking-wider text-slate">
-                  Channel Gateways
+                  {t('modals.channels')}
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {channels.map((ch) => (
@@ -207,7 +207,7 @@ export function PluginDetailModal({
                         <div className="text-caption font-mono text-slate mt-0.5">@{ch.name}</div>
                       </div>
                       {ch.requires_pairing && (
-                        <Badge variant="accent">Pairing Code</Badge>
+                        <Badge variant="accent">{t('modals.pairingCode')}</Badge>
                       )}
                     </div>
                   ))}
@@ -219,7 +219,7 @@ export function PluginDetailModal({
             {connectors.length > 0 && (
               <div>
                 <span className="mb-2.5 block text-caption font-semibold uppercase tracking-wider text-slate">
-                  SaaS Connector Definitions
+                  {t('modals.connectors')}
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {connectors.map((conn) => (
@@ -232,7 +232,7 @@ export function PluginDetailModal({
                       </div>
                       {conn.actions && (
                         <div className="text-[11px] text-slate font-mono">
-                          Actions: {conn.actions.join(', ')}
+                          {t('modals.connectorActions', { list: conn.actions.join(', ') })}
                         </div>
                       )}
                     </div>
@@ -277,7 +277,7 @@ export function PluginDetailModal({
                       <Key className="h-4 w-4 text-slate" />
                       <span>{t('permissions.secrets', 'Vault Secrets')}</span>
                     </div>
-                    <span className="text-[10px] uppercase font-mono text-slate">AES-256-GCM</span>
+                    <span className="text-[10px] uppercase font-mono text-slate">{t('modals.encrypted')}</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {(permissions.secrets || []).length > 0 ? (
@@ -366,7 +366,7 @@ export function PluginDetailModal({
                         {tool.name}
                       </div>
                       <span className="px-2.5 py-0.5 rounded-full bg-canvas border border-onyx/10 font-mono text-[11px] text-slate">
-                        WASM Export
+                        {t('modals.toolKind')}
                       </span>
                     </div>
                     {tool.description && (
@@ -375,7 +375,7 @@ export function PluginDetailModal({
                     {(tool.parameters || tool.schema) && (
                       <div className="mt-3">
                         <span className="mb-1.5 block text-[11px] font-semibold uppercase text-slate">
-                          Parameters Schema
+                          {t('modals.parameters')}
                         </span>
                         <pre className="max-h-40 overflow-auto rounded-xl bg-canvas border border-onyx/10 p-3 font-mono text-[11px] text-deep-ink shadow-2xs">
                           {JSON.stringify(tool.parameters || tool.schema, null, 2)}
@@ -403,7 +403,7 @@ export function PluginDetailModal({
                 icon={copied ? <Check className="h-3.5 w-3.5 text-status-success" /> : <Copy className="h-3.5 w-3.5" />}
                 onClick={handleCopyManifest}
               >
-                {copied ? 'Copied' : 'Copy JSON'}
+                {copied ? t('actions.copied') : t('actions.copyJson')}
               </Button>
             </div>
             <pre className="max-h-96 overflow-auto rounded-2xl bg-soft-meadow border border-onyx/10 p-4 font-mono text-caption text-deep-ink leading-relaxed shadow-xs">
@@ -415,7 +415,7 @@ export function PluginDetailModal({
         {/* Modal Action Buttons */}
         <div className="flex justify-end border-t border-onyx/10 pt-4">
           <Button variant="ghost" onClick={onClose}>
-            Close
+            {t('actions.close')}
           </Button>
         </div>
       </div>
