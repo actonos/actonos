@@ -17,7 +17,7 @@
 - [Channel Accounts & Device Pairing](#channel-accounts--device-pairing)
 - [Tools & Tool Hub](#tools--tool-hub)
 - [Plugins (WasmLoader)](#plugins-wasmloader)
-- [Hardware Vault Secrets](#hardware-vault-secrets)
+- [Vault Secrets](#vault-secrets)
 - [Workspace File Manager](#workspace-file-manager)
 - [Error Format](#error-format)
 
@@ -604,7 +604,7 @@ Download, unpack, verify, and hot-reload an official WASM plugin package (.acton
 ```
 
 ### `POST /api/plugins/upload`
-Upload an `.actonpkg` package bundle (or compiled `.wasm` binary) via multipart form data (`file`). The server unpacks `manifest.json`, `plugin.wasm`, and optional signatures, activating the plugin sandbox in the Wazero runtime. If administrative approval is configured, returns `202 Accepted` with a pending approval request.
+Upload an `.actonpkg` package bundle (or compiled `.wasm` binary) via multipart form data (`file`). The server unpacks `manifest.json`, `plugin.wasm`, and `signature.sig` when present. A present signature is always verified; remote registry installs fail closed without a valid Ed25519 signature. If administrative approval is configured, returns `202 Accepted` with a pending approval request.
 
 ### `POST /api/plugins/{id}/enable` | `POST /api/plugins/{id}/disable`
 Enable or disable a specific WASM plugin at runtime without restarting the daemon.
@@ -616,7 +616,7 @@ Uninstall a plugin and remove its binary and configuration from `/data/plugins/{
 Retrieve execution logs and telemetry emitted by the plugin sandbox.
 
 ### `POST /api/plugins/{id}/config` | `PUT /api/plugins/{id}/config`
-Update plugin configuration values and persist declared Hardware Vault secrets. Immediately triggers a hot-reload of the plugin instance in the Wazero sandbox runtime.
+Update plugin configuration values and persist declared vault secrets. Immediately triggers a hot-reload of the plugin instance in the Wazero sandbox runtime.
 
 **Request Body**:
 ```json
@@ -639,12 +639,12 @@ Update plugin configuration values and persist declared Hardware Vault secrets. 
 
 ---
 
-## Hardware Vault Secrets
+## Vault Secrets
 
-The Hardware Vault encrypts credentials at rest using AES-256-GCM and Argon2id key derivation, brokering access to authorized sandboxed WASM plugins and agents.
+The vault encrypts credentials at rest using AES-256-GCM and Argon2id key derivation. DMI/CPU hardware binding is not applied. Secrets are brokered to authorized sandboxed WASM plugins and agents.
 
 ### `GET /api/vault/secrets`
-List metadata for all encrypted secrets stored in the Hardware Vault.
+List metadata for all encrypted secrets stored in the vault.
 
 **Response `200 OK`**:
 ```json

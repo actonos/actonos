@@ -26,7 +26,7 @@ A single-purpose appliance OS designed as a **customizable, self-governing agent
 | **Static Core Daemon** | The core system compiles into one `actond` binary (`CGO_ENABLED=0`); local ONNX inference runs in a separately packaged loopback helper. |
 | **Universal Agent Engine** | Create unlimited AI agents with custom personas, system prompts, tool bindings, LLM models, and delegation scopes. |
 | **Multi-Agent Swarm** | Agent-to-Agent delegation via Goroutines. Orchestration agents decompose tasks and dispatch to specialized sub-agents. |
-| **WasmLoader Plugin Engine** | Sandboxed WebAssembly runtime (Wazero pure Go) running Tools, Messaging Channels, and SaaS Connectors with strict egress firewalls and Hardware Vault brokering. |
+| **WasmLoader Plugin Engine** | Sandboxed WebAssembly runtime (Wazero pure Go) running Tools, Messaging Channels, and SaaS Connectors with strict egress firewalls and AES-256-GCM vault brokering (not DMI/CPU bound). |
 | **Dynamic Tooling Hub** | Hot-load MCP servers, WASM plugins, and Skill-as-a-Folder scripts at runtime — no restarts needed. |
 | **Dual-Runtime HAL** | Automatic environment detection: bare-metal (D-Bus, Wi-Fi Hotspot, Bubblewrap sandbox) or Docker (container metrics, jailed exec). |
 | **Hybrid Memory (RAG)** | SQLite FTS5 + Chromem-go vectors generated locally by pinned multilingual-e5-small ONNX, with a durable one-minute debounce queue. |

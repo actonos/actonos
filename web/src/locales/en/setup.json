@@ -39,7 +39,7 @@
     "validationTitle": "Validation Error",
     "nameRequired": "Please enter your name.",
     "passwordShortTitle": "Password Too Short",
-    "passwordShort": "Password must be at least 4 characters long.",
+    "passwordShort": "Password must be at least 8 characters long.",
     "passwordMismatchTitle": "Passwords Do Not Match",
     "passwordMismatch": "Please ensure both passwords match.",
     "successTitle": "Setup Complete",

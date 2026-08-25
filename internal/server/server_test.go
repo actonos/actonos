@@ -4,6 +4,8 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -179,6 +181,7 @@ func newTestServer(t *testing.T) *Server {
 		WASMDir:             filepath.Join(tempDir, "tools", "wasm"),
 		PluginsDir:          filepath.Join(tempDir, "plugins"),
 		DataDir:             tempDir,
+		DisableAuthForTest:  true,
 	}
 
 	return NewServer(cfg)
@@ -335,12 +338,6 @@ func TestServer_PluginsEndpoint_ActonPkg(t *testing.T) {
 		t.Fatalf("creating wasm in zip: %v", err)
 	}
 	_, _ = ww.Write(minimalWasm)
-
-	sw, err := zw.Create("signature.sig")
-	if err != nil {
-		t.Fatalf("creating sig in zip: %v", err)
-	}
-	_, _ = sw.Write([]byte("mock_signature_hex"))
 
 	_ = zw.Close()
 
@@ -1206,6 +1203,32 @@ func TestServer_AuthAndProtection(t *testing.T) {
 	if wLogin.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK for login, got %d", wLogin.Code)
 	}
+
+	change := httptest.NewRequest(http.MethodPut, "/api/auth/password", strings.NewReader(`{"current_password":"AdminPassword123!","new_password":"AdminPassword456!"}`))
+	change.Header.Set("Content-Type", "application/json")
+	change.Header.Set("Authorization", "Bearer "+token)
+	cw := httptest.NewRecorder()
+	srv.Router().ServeHTTP(cw, change)
+	if cw.Code != http.StatusOK {
+		t.Fatalf("change password: %d %s", cw.Code, cw.Body.String())
+	}
+
+	queryTok := httptest.NewRequest(http.MethodGet, "/api/agents?token="+token, nil)
+	wQuery := httptest.NewRecorder()
+	srv.Router().ServeHTTP(wQuery, queryTok)
+	if wQuery.Code != http.StatusUnauthorized {
+		t.Fatalf("expected query token to be ignored, got %d", wQuery.Code)
+	}
+}
+
+func TestServer_MissingAuthFailClosed(t *testing.T) {
+	srv := NewServer(Config{DataDir: t.TempDir()})
+	req := httptest.NewRequest(http.MethodGet, "/api/agents", nil)
+	w := httptest.NewRecorder()
+	srv.Router().ServeHTTP(w, req)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 when auth is missing, got %d %s", w.Code, w.Body.String())
+	}
 }
 
 func TestServer_ProductionEndpoints(t *testing.T) {
@@ -1229,14 +1252,15 @@ func TestServer_ProductionEndpoints(t *testing.T) {
 	heartbeat := agent.NewHeartbeatDaemon(agentMgr, engine, eventBus, db.SQLDB(), tempDir, 5*time.Minute)
 
 	cfg := Config{
-		AgentManager:    agentMgr,
-		Engine:          engine,
-		ToolRegistry:    toolReg,
-		LLMRouter:       llmRouter,
-		EventBus:        eventBus,
-		TokenTracker:    tokenTracker,
-		CronScheduler:   cronSched,
-		HeartbeatDaemon: heartbeat,
+		AgentManager:       agentMgr,
+		Engine:             engine,
+		ToolRegistry:       toolReg,
+		LLMRouter:          llmRouter,
+		EventBus:           eventBus,
+		TokenTracker:       tokenTracker,
+		CronScheduler:      cronSched,
+		HeartbeatDaemon:    heartbeat,
+		DisableAuthForTest: true,
 	}
 	srv := NewServer(cfg)
 
@@ -1514,10 +1538,10 @@ func TestServer_AvailablePlugins(t *testing.T) {
 	var envelope struct {
 		Data struct {
 			Catalog []plugin.RegistryPlugin `json:"catalog"`
-			Count   int                      `json:"count"`
+			Count   int                     `json:"count"`
 		} `json:"data"`
 		Catalog []plugin.RegistryPlugin `json:"catalog"`
-		Count   int                      `json:"count"`
+		Count   int                     `json:"count"`
 	}
 	if err := json.NewDecoder(w.Body).Decode(&envelope); err != nil {
 		t.Fatalf("failed to decode catalog response: %v", err)
@@ -1541,8 +1565,17 @@ func TestServer_AvailablePlugins(t *testing.T) {
 	}`)
 	mf, _ := zw.Create("manifest.json")
 	_, _ = mf.Write(manifestData)
+	wasm := []byte("\x00asm\x01\x00\x00\x00")
 	wf, _ := zw.Create("plugin.wasm")
-	_, _ = wf.Write([]byte("\x00asm\x01\x00\x00\x00"))
+	_, _ = wf.Write(wasm)
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generating plugin signing key: %v", err)
+	}
+	plugin.SetPluginVerifyKeys([]ed25519.PublicKey{pub})
+	t.Cleanup(func() { plugin.SetPluginVerifyKeys(nil) })
+	sf, _ := zw.Create("signature.sig")
+	_, _ = sf.Write(ed25519.Sign(priv, wasm))
 	_ = zw.Close()
 
 	assetServer := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
@@ -1570,7 +1603,7 @@ func TestServer_AvailablePlugins(t *testing.T) {
 	var envAfter struct {
 		Data struct {
 			Catalog []plugin.RegistryPlugin `json:"catalog"`
-			Count   int                      `json:"count"`
+			Count   int                     `json:"count"`
 		} `json:"data"`
 		Catalog []plugin.RegistryPlugin `json:"catalog"`
 	}
@@ -1596,5 +1629,3 @@ func TestServer_AvailablePlugins(t *testing.T) {
 		}
 	}
 }
-
-

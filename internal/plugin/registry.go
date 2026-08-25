@@ -450,6 +450,10 @@ func (prm *PluginRegistryManager) InstallPlugin(ctx context.Context, pluginID, d
 		cleanID = parsedManifest.ID
 	}
 
+	if err := VerifyRemotePluginPackage(wasmBytes, sigBytes); err != nil {
+		return nil, fmt.Errorf("verifying plugin signature: %w", err)
+	}
+
 	targetDir := filepath.Join(prm.pluginsDir, cleanID)
 	if err := os.MkdirAll(targetDir, 0755); err != nil {
 		return nil, fmt.Errorf("creating plugin directory %s: %w", targetDir, err)

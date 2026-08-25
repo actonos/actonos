@@ -150,7 +150,7 @@ func main() {
 		slog.Error("failed to initialize vault", "error", err)
 		os.Exit(1)
 	}
-	slog.Info("hardware-bound vault initialized (AES-256-GCM + Argon2id)")
+	slog.Info("vault initialized (AES-256-GCM + Argon2id)")
 
 	// 4. Initialize Hybrid Memory Engine
 	hybridEngine := memory.NewHybridEngine(db, vectorStore, nil)

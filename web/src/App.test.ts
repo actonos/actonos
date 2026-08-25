@@ -25,4 +25,14 @@ describe('hash routing', () => {
     window.location.hash = '#/operations?view=runtime';
     expect(tabFromLocation()).toBe('operations');
   });
+
+  it('restores the channels pairing surface', () => {
+    window.location.hash = '#/channels';
+    expect(tabFromLocation()).toBe('channels');
+  });
+
+  it('keeps channels as the primary route for pairing deep links', () => {
+    window.location.hash = '#/channels?view=pairing';
+    expect(tabFromLocation()).toBe('channels');
+  });
 });

@@ -31,7 +31,7 @@
   },
   "pairing": {
     "title": "Ghép kênh",
-    "description": "Tạo mã 6 số, gửi cho người dùng trên chat, họ gõ /pair 123456. Người lạ bị chặn đến khi được ghép hoặc cho phép.",
+    "description": "Tạo mã ghép, gửi cho người dùng trên chat, họ gõ /pair ABCD2345. Người lạ bị chặn đến khi được ghép hoặc cho phép.",
     "channelLabel": "Kênh",
     "requireLabel": "Bắt buộc mã ghép trước khi agent trả lời",
     "activeCodes": "Mã đang hiệu lực",
@@ -44,7 +44,7 @@
     "pendingEmptyHint": "Khi ai đó nhắn bot được bảo vệ, họ hiện ở đây.",
     "usersTitle": "Người đã ghép",
     "usersEmpty": "Chưa ghép ai",
-    "howTo": "Trong chat, gửi /pair rồi đến mã 6 số.",
+    "howTo": "Trong chat, gửi /pair rồi đến mã 8 ký tự.",
     "createdFor": "Cho {{channel}}"
   },
   "catalog": {

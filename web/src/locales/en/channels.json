@@ -31,7 +31,7 @@
   },
   "pairing": {
     "title": "Pairing",
-    "description": "Create a 6-digit code, send it to the person in chat, and they type /pair 123456. Unknown senders stay blocked until paired or allowed.",
+    "description": "Create a pairing code, send it to the person in chat, and they type /pair ABCD2345. Unknown senders stay blocked until paired or allowed.",
     "channelLabel": "Channel",
     "requireLabel": "Require a pairing code before agents reply",
     "activeCodes": "Active codes",
@@ -44,7 +44,7 @@
     "pendingEmptyHint": "When someone messages a protected bot, they appear here.",
     "usersTitle": "Paired people",
     "usersEmpty": "Nobody paired yet",
-    "howTo": "In chat, send /pair followed by the 6-digit code.",
+    "howTo": "In chat, send /pair followed by the 8-character code.",
     "createdFor": "For {{channel}}"
   },
   "catalog": {

@@ -6,9 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/actonos/actonos/internal/bus"
+	"github.com/actonos/actonos/internal/security"
 )
 
 // WebhookAdapter dispatches outbound agent events and receives inbound webhooks.
@@ -38,12 +41,15 @@ func (w *WebhookAdapter) Stop() error {
 }
 
 func (w *WebhookAdapter) SendMessage(ctx context.Context, msg OutboundMessage) error {
-	url := w.targetURL
-	if msg.Recipient != "" && msg.Recipient != "default" {
-		url = msg.Recipient
+	target := w.targetURL
+	if recipientURL := absoluteHTTPURL(msg.Recipient); recipientURL != "" {
+		if err := security.ValidateOutboundURL(ctx, recipientURL); err != nil {
+			return fmt.Errorf("webhook recipient url rejected: %w", err)
+		}
+		target = recipientURL
 	}
 
-	if url == "" {
+	if target == "" {
 		return fmt.Errorf("target webhook url not configured")
 	}
 
@@ -52,7 +58,7 @@ func (w *WebhookAdapter) SendMessage(ctx context.Context, msg OutboundMessage) e
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, target, bytes.NewReader(data))
 	if err != nil {
 		return err
 	}
@@ -69,4 +75,19 @@ func (w *WebhookAdapter) SendMessage(ctx context.Context, msg OutboundMessage) e
 	}
 
 	return nil
+}
+
+func absoluteHTTPURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || strings.EqualFold(raw, "default") {
+		return ""
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" {
+		return ""
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return ""
+	}
+	return raw
 }

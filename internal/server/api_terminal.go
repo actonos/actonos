@@ -62,7 +62,7 @@ func (s *Server) handleTerminalInfo(w http.ResponseWriter, r *http.Request) {
 // handleTerminalWebSocket handles interactive web terminal sessions via WebSocket.
 func (s *Server) handleTerminalWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		InsecureSkipVerify: true,
+		OriginPatterns: []string{r.Host, "localhost:*", "127.0.0.1:*"},
 	})
 	if err != nil {
 		slog.Warn("terminal: websocket upgrade failed", "error", err)

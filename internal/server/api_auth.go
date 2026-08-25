@@ -42,9 +42,6 @@ func (s *Server) extractToken(r *http.Request) string {
 	if cookie, err := r.Cookie("actonos_token"); err == nil && cookie != nil {
 		return strings.TrimSpace(cookie.Value)
 	}
-	if queryToken := r.URL.Query().Get("token"); queryToken != "" {
-		return strings.TrimSpace(queryToken)
-	}
 	return ""
 }
 
@@ -110,7 +107,7 @@ func (s *Server) handleSetupAuth(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if errors.Is(err, auth.ErrPasswordTooShort) {
-			s.respondError(w, http.StatusBadRequest, "INVALID_PASSWORD", "password must be at least 4 characters")
+			s.respondError(w, http.StatusBadRequest, "INVALID_PASSWORD", "password must be at least 8 characters")
 			return
 		}
 		s.respondError(w, http.StatusInternalServerError, "SETUP_FAILED", err.Error())
@@ -168,6 +165,10 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 			s.respondError(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "incorrect administrator password")
 			return
 		}
+		if errors.Is(err, auth.ErrTooManyAttempts) {
+			s.respondError(w, http.StatusTooManyRequests, "LOGIN_LOCKED", "too many failed login attempts, try again later")
+			return
+		}
 		if errors.Is(err, auth.ErrNotInitialized) {
 			s.respondError(w, http.StatusForbidden, "SETUP_REQUIRED", "system onboarding has not been completed")
 			return
@@ -215,7 +216,7 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if errors.Is(err, auth.ErrPasswordTooShort) {
-			s.respondError(w, http.StatusBadRequest, "INVALID_NEW_PASSWORD", "new password must be at least 4 characters")
+			s.respondError(w, http.StatusBadRequest, "INVALID_NEW_PASSWORD", "new password must be at least 8 characters")
 			return
 		}
 		s.respondError(w, http.StatusInternalServerError, "CHANGE_PASSWORD_FAILED", err.Error())
@@ -232,7 +233,11 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 func (s *Server) RequireAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.sysAuth == nil {
-			next.ServeHTTP(w, r)
+			if s.allowMissingAuth {
+				next.ServeHTTP(w, r)
+				return
+			}
+			s.respondError(w, http.StatusServiceUnavailable, "AUTH_UNAVAILABLE", "system authentication is not configured")
 			return
 		}
 

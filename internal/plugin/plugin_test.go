@@ -49,6 +49,28 @@ func TestSecurityGate(t *testing.T) {
 		{"https://malicious.evil.com/leak", false},
 		{"https://telegram.org.evil.com", false},
 		{"http://127.0.0.1:8080/internal", false},
+		{"http://169.254.169.254/latest/meta-data", false},
+		{"file:///etc/passwd", false},
+		{"https://example.com", false},
+	}
+
+	starGate := NewSecurityGate(PluginManifest{
+		Permissions: PluginPermissions{NetOutbound: []string{"*"}},
+	})
+	if err := starGate.CheckOutboundURL("https://example.com"); err == nil {
+		t.Fatal("expected wildcard * net_outbound to be rejected")
+	}
+	broadGate := NewSecurityGate(PluginManifest{
+		Permissions: PluginPermissions{NetOutbound: []string{"*.com"}},
+	})
+	if err := broadGate.CheckOutboundURL("https://evil.com"); err == nil {
+		t.Fatal("expected one-label wildcard *.com to be rejected")
+	}
+	loopGate := NewSecurityGate(PluginManifest{
+		Permissions: PluginPermissions{NetOutbound: []string{"127.0.0.1", "localhost"}},
+	})
+	if err := loopGate.CheckOutboundURL("http://127.0.0.1:8080/internal"); err == nil {
+		t.Fatal("whitelisted loopback must still be blocked as SSRF")
 	}
 
 	for _, tt := range tests {

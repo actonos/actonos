@@ -152,7 +152,7 @@ make docker-multiarch
 | `LISTEN_ADDR` | `:8080` | HTTP server listen address |
 | `DATA_DIR` | `/data` | Path to persistent data directory |
 | `DISABLE_TAILSCALE` | `false` | Skip Tailscale initialization |
-| `DISABLE_SANDBOX` | `false` | Skip Bubblewrap sandbox (dev only) |
+| `ACTONOS_ALLOW_INSECURE_EXEC` | unset | Dev-only unsandboxed command exec; never set in production |
 | `TAILSCALE_AUTH_KEY` | — | Tailscale auth key for headless setup |
 | `TZ` | `UTC` | Timezone for cron schedules and logs |
 

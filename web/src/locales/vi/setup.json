@@ -39,7 +39,7 @@
     "validationTitle": "Chưa điền đủ thông tin",
     "nameRequired": "Vui lòng nhập tên của bạn.",
     "passwordShortTitle": "Mật khẩu quá ngắn",
-    "passwordShort": "Mật khẩu cần có ít nhất 4 ký tự.",
+    "passwordShort": "Mật khẩu cần có ít nhất 8 ký tự.",
     "passwordMismatchTitle": "Mật khẩu không khớp",
     "passwordMismatch": "Hai mật khẩu vừa nhập không trùng khớp.",
     "successTitle": "Thiết Lập Thành Công",

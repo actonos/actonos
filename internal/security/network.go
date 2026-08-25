@@ -21,7 +21,13 @@ func ValidateOutboundURL(ctx context.Context, rawURL string) error {
 	if err != nil {
 		return fmt.Errorf("parsing URL: %w", err)
 	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+	switch parsed.Scheme {
+	case "http", "https":
+	case "ws":
+		parsed.Scheme = "http"
+	case "wss":
+		parsed.Scheme = "https"
+	default:
 		return fmt.Errorf("%w: unsupported scheme %q", ErrUnsafeURL, parsed.Scheme)
 	}
 	if parsed.User != nil {

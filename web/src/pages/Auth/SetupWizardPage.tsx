@@ -94,7 +94,7 @@ export function SetupWizardPage({ onCompleted }: SetupWizardPageProps) {
 
   const handleNextFromStep2 = (e: FormEvent) => {
     e.preventDefault();
-    if (password.length < 4) {
+    if (password.length < 8) {
       error(t('wizard.passwordShortTitle'), t('wizard.passwordShort'));
       return;
     }

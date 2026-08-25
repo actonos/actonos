@@ -4,6 +4,8 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -45,13 +47,27 @@ func createTestActonPkg(t *testing.T, id, name, version string) []byte {
 		t.Fatalf("writing manifest.json: %v", err)
 	}
 
+	wasm := []byte("\x00asm\x01\x00\x00\x00")
 	wf, err := zw.Create("plugin.wasm")
 	if err != nil {
 		t.Fatalf("creating plugin.wasm in zip: %v", err)
 	}
-	// Valid wasm magic header: \x00asm\x01\x00\x00\x00
-	if _, err := wf.Write([]byte("\x00asm\x01\x00\x00\x00")); err != nil {
+	if _, err := wf.Write(wasm); err != nil {
 		t.Fatalf("writing plugin.wasm: %v", err)
+	}
+
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generating test signing key: %v", err)
+	}
+	SetPluginVerifyKeys([]ed25519.PublicKey{pub})
+	t.Cleanup(func() { SetPluginVerifyKeys(nil) })
+	sf, err := zw.Create("signature.sig")
+	if err != nil {
+		t.Fatalf("creating signature.sig in zip: %v", err)
+	}
+	if _, err := sf.Write(ed25519.Sign(priv, wasm)); err != nil {
+		t.Fatalf("writing signature.sig: %v", err)
 	}
 
 	if err := zw.Close(); err != nil {

@@ -3,6 +3,7 @@ package channels
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -29,20 +30,30 @@ func (m *mockAgentProvider) Get(ctx context.Context, agentID string) (*agent.Age
 }
 
 type mockEngineExecutor struct {
+	mu          sync.Mutex
 	lastAgentID string
 	lastPrompt  string
 	result      *llm.Response
 }
 
 func (m *mockEngineExecutor) ExecuteStepWithHistory(ctx context.Context, agentID, prompt string, history []llm.Message) (*llm.Response, error) {
+	m.mu.Lock()
 	m.lastAgentID = agentID
 	m.lastPrompt = prompt
-	if m.result != nil {
-		return m.result, nil
+	result := m.result
+	m.mu.Unlock()
+	if result != nil {
+		return result, nil
 	}
 	return &llm.Response{
 		Content: "Mock response from " + agentID,
 	}, nil
+}
+
+func (m *mockEngineExecutor) lastAgent() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.lastAgentID
 }
 
 func TestExtractAgentMention(t *testing.T) {
@@ -203,8 +214,8 @@ func TestMessageRouter_Route(t *testing.T) {
 		t.Fatalf("Route failed: %v", err)
 	}
 
-	if engine.lastAgentID != "agent_support" {
-		t.Fatalf("expected engine to execute with agent_support, got %s", engine.lastAgentID)
+	if engine.lastAgent() != "agent_support" {
+		t.Fatalf("expected engine to execute with agent_support, got %s", engine.lastAgent())
 	}
 }
 
@@ -247,8 +258,8 @@ func TestMessageRouter_EventBusSubscription(t *testing.T) {
 	// Allow goroutine to process
 	time.Sleep(100 * time.Millisecond)
 
-	if engine.lastAgentID != "agent_system_core" {
-		t.Fatalf("expected event router to dispatch to agent_system_core, got %s", engine.lastAgentID)
+	if engine.lastAgent() != "agent_system_core" {
+		t.Fatalf("expected event router to dispatch to agent_system_core, got %s", engine.lastAgent())
 	}
 
 	router.Stop()

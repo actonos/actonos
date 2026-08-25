@@ -50,8 +50,8 @@ ActonOS provides a self-adjusting cognitive infrastructure for every user-create
 | **Procedural Memory** | Error handling history, optimized command sequences (best practices) | Stored as Workflow Patterns, injected into System Prompt on similar tasks |
 | **Episodic Memory** | Past conversation/task journals with timestamps | SQLite FTS5 + Chromem-go vector indexing |
 
-Semantic indexing uses a durable SQLite queue. Web chat, Telegram, WhatsApp,
-Discord and workspace file mutations upsert a job keyed by source. Repeated
+Semantic indexing uses a durable SQLite queue. Web chat, WASM channel
+plugins, and workspace file mutations upsert a job keyed by source. Repeated
 changes reset `due_at` to one minute after the latest mutation and increment a
 generation, so bursts produce one final embedding. File deletion tombstones
 the semantic source immediately and removes its Chromem vectors when the
@@ -467,7 +467,7 @@ graph TD
         TR["ToolRegistry (Single Execution Boundary)"]
         CM["ChannelManager (Dynamic Adapters)"]
         EB["Unified Event Bus"]
-        HV["Hardware Vault (AES-256-GCM)"]
+        HV["AES-256-GCM Vault"]
         KV["Isolated SQLite KV Storage"]
     end
 
@@ -502,14 +502,16 @@ graph TD
 - **`acton_sys`**: Structured logging (`log`) and host response streaming (`read_response`).
 - **`acton_net`**: Sandboxed HTTP egress (`http_request`) validated against `manifest.permissions.net_outbound`.
 - **`acton_ws`**: Real-time WebSocket connection lifecycle (`ws_connect`, `ws_send`, `ws_poll`, `ws_close`).
-- **`acton_vault`**: Scoped credential retrieval (`get_secret`) from Hardware Vault (`manifest.permissions.secrets`).
+- **`acton_vault`**: Scoped credential retrieval (`get_secret`) from the AES-256-GCM vault (`manifest.permissions.secrets`).
 - **`acton_storage`**: Scoped SQLite key-value persistence (`kv_get`, `kv_set`).
 - **`acton_bus`**: System event publishing (`emit_event`) onto ActonOS Event Bus.
 
 #### Security & Sandboxing Invariants:
-- **Egress Firewall**: Outbound HTTP calls are strictly constrained to domains declared in `manifest.permissions.net_outbound`. Direct raw TCP/UDP socket access is impossible.
-- **Hardware Vault Brokering**: Plugins receive scoped tokens/credentials dynamically without ever seeing raw Master Keys or unencrypted storage files.
-- **Resource & Timeout Quota**: Hard memory limits (32–64 MB per instance) and epoch-based execution deadlines (default 15s) with crash isolation (guest panics never crash `actond`).
+- **Egress Firewall**: Outbound HTTP/WS calls must match `net_outbound` and pass SSRF checks (no loopback/private/metadata; redirects re-validated). Direct raw TCP/UDP is impossible.
+- **Vault brokering**: Plugins receive scoped secrets without host file or table access. Values are redacted from plugin logs. Encryption at rest is AES-256-GCM + Argon2id; there is no DMI/CPU binding.
+- **Signatures**: Remote `.actonpkg` installs verify Ed25519 signatures fail-closed.
+- **Resource & Timeout Quota**: 64 MB memory cap and 15s tool/poll deadline; guest panics never crash `actond`.
+- **Channels UI**: `/#/channels` is pairing and account routing for installed WASM chat plugins, not native Telegram/Discord/WhatsApp adapters.
 
 
 ### Community Skills Registry & Requirements Verification

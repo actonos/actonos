@@ -76,6 +76,8 @@ func TestValidateOutboundURLRejectsPrivateTargets(t *testing.T) {
 		"file:///etc/passwd",
 		"https://user:pass@example.com/",
 		"https:///",
+		"ws://127.0.0.1:8080/socket",
+		"wss://localhost/socket",
 	} {
 		if err := ValidateOutboundURL(context.Background(), target); err == nil {
 			t.Fatalf("expected unsafe URL rejection for %s", target)

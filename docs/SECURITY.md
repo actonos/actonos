@@ -78,9 +78,10 @@ must not be enabled in production.
 WASM plugins execute in **Wazero** within an isolated linear memory sandbox. They possess zero ambient authority:
 
 1. **Capability-Based Permissions**: Plugins declare requested permissions in `manifest.json` (`net_outbound`, `secrets`, `storage`, `bus_events`). All undeclared actions are denied by default.
-2. **Egress Network Firewall**: Outbound HTTP traffic from plugins is proxied through the host syscall `acton_net.http_request` and strictly filtered against `net_outbound` domain whitelists (e.g. `api.telegram.org`, `*.slack.com`). Direct raw TCP/UDP socket creation is impossible.
-3. **Hardware Vault Brokering**: Plugins cannot read host files or database tables. Scoped secrets requested via `acton_vault.get_secret` are validated against approved manifest permissions and dynamically decrypted from the AES-256-GCM Hardware Vault.
-4. **Resource Metering & Fault Isolation**: Each plugin instance is constrained to a 32–64 MB memory cap and an Epoch-based execution deadline (default 15s) to prevent infinite loops. Guest panics and memory traps are caught cleanly without crashing the `actond` daemon.
+2. **Egress Network Firewall**: Outbound HTTP/WebSocket traffic is proxied through host syscalls (`acton_net.http_request`, `acton_ws.ws_connect`). Destinations must match `net_outbound` (exact host or `*.example.com`; a bare `*` or `*.com` is rejected) and pass `security.ValidateOutboundURL` (no loopback, private, link-local, metadata, or non-HTTP schemes). Redirect hops are re-validated. Direct raw TCP/UDP sockets are impossible.
+3. **Vault brokering**: Plugins cannot read host files or database tables. Scoped secrets requested via `acton_vault.get_secret` are validated against `manifest.permissions.secrets` and decrypted from the AES-256-GCM vault. Retrieved values are redacted from plugin logs. Vault keys are Argon2id-derived; DMI/CPU hardware binding is not applied.
+4. **Signed packages**: Remote 1-click installs fail closed unless `plugin.wasm` verifies against configured Ed25519 public keys (`ACTONOS_PLUGIN_PUBKEYS`). Unsigned remote installs require `ACTONOS_ALLOW_UNSIGNED_PLUGINS=1`. Operator uploads without a signature are allowed; a present signature is always verified.
+5. **Resource Metering & Fault Isolation**: Each plugin instance is capped at 64 MB linear memory and a 15s tool/poll deadline. Guest panics and memory traps are caught without crashing `actond`.
 
 ### Vault Encryption
 

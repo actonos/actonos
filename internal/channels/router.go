@@ -106,17 +106,15 @@ func (r *MessageRouter) Start(ctx context.Context) {
 				if inMsg, ok := ev.Payload.(InboundMessage); ok {
 					if r.inbound != nil {
 						r.drainInboundQueue()
-					} else {
-						go func(msg InboundMessage) {
-							if err := r.Route(r.ctx, msg); err != nil {
-								slog.Error("failed to route inbound channel message",
-									"channel", msg.ChannelID,
-									"account", msg.AccountID,
-									"sender", msg.SenderID,
-									"error", err,
-								)
-							}
-						}(inMsg)
+						continue
+					}
+					if err := r.Route(r.ctx, inMsg); err != nil {
+						slog.Error("failed to route inbound channel message",
+							"channel", inMsg.ChannelID,
+							"account", inMsg.AccountID,
+							"sender", inMsg.SenderID,
+							"error", err,
+						)
 					}
 				}
 			case ev, ok := <-doneSub:
@@ -309,7 +307,7 @@ func (r *MessageRouter) enforcePairing(ctx context.Context, msg InboundMessage) 
 		}
 	}
 	r.pairing.NoteUnpaired(msg.ChannelID, msg.SenderID, msg.SenderName, msg.Content)
-	r.replyPairing(ctx, msg, "This chat is not paired yet. Ask the ActonOS operator for a 6-digit code, then send:\n/pair 123456\n\nKênh này chưa ghép. Nhờ người quản trị lấy mã 6 số, rồi gửi:\n/pair 123456")
+	r.replyPairing(ctx, msg, "This chat is not paired yet. Ask the ActonOS operator for a pairing code, then send:\n/pair ABCD2345\n\nKênh này chưa ghép. Nhờ người quản trị lấy mã, rồi gửi:\n/pair ABCD2345")
 	return &UnpairedSenderError{ChannelID: msg.ChannelID, SenderID: msg.SenderID, SenderName: msg.SenderName}
 }
 

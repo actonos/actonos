@@ -9,16 +9,30 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/crypto/argon2"
+)
+
+const (
+	passwordMinLen       = 8
+	loginFailLimit       = 5
+	loginFailWindow      = 15 * time.Minute
+	argonPasswordTime    = 1
+	argonPasswordMemKB   = 32 * 1024
+	argonPasswordThreads = 4
+	argonPasswordKeyLen  = 32
 )
 
 var (
-	ErrNotInitialized       = errors.New("system authentication is not initialized")
-	ErrAlreadyInitialized   = errors.New("system is already initialized")
-	ErrInvalidCredentials   = errors.New("invalid administrator password")
-	ErrInvalidToken         = errors.New("invalid or expired session token")
-	ErrPasswordTooShort     = errors.New("password must be at least 4 characters long")
+	ErrNotInitialized     = errors.New("system authentication is not initialized")
+	ErrAlreadyInitialized = errors.New("system is already initialized")
+	ErrInvalidCredentials = errors.New("invalid administrator password")
+	ErrInvalidToken       = errors.New("invalid or expired session token")
+	ErrPasswordTooShort   = errors.New("password must be at least 8 characters long")
+	ErrTooManyAttempts    = errors.New("too many failed login attempts")
 )
 
 type SessionInfo struct {
@@ -29,9 +43,13 @@ type SessionInfo struct {
 
 // SystemAuthManager manages administrator authentication, session tokens, and initial onboarding state.
 type SystemAuthManager struct {
-	db       *sql.DB
-	mu       sync.RWMutex
-	sessions map[string]SessionInfo
+	db          *sql.DB
+	mu          sync.RWMutex
+	sessions    map[string]SessionInfo
+	failMu      sync.Mutex
+	failCount   int
+	failWindow  time.Time
+	lockedUntil time.Time
 }
 
 // NewSystemAuthManager creates a new SystemAuthManager instance.
@@ -63,7 +81,7 @@ func (m *SystemAuthManager) IsInitialized(ctx context.Context) (bool, error) {
 
 // SetupAdmin completes the initial onboarding by configuring the master administrator password.
 func (m *SystemAuthManager) SetupAdmin(ctx context.Context, password string) (string, error) {
-	if len(password) < 4 {
+	if len(password) < passwordMinLen {
 		return "", ErrPasswordTooShort
 	}
 
@@ -104,6 +122,9 @@ func (m *SystemAuthManager) Login(ctx context.Context, password string) (string,
 	if m.db == nil {
 		return "", ErrNotInitialized
 	}
+	if err := m.checkLoginLock(); err != nil {
+		return "", err
+	}
 
 	var storedHash, storedSalt string
 	var isInit bool
@@ -116,9 +137,14 @@ func (m *SystemAuthManager) Login(ctx context.Context, password string) (string,
 		return "", err
 	}
 
-	testHash := hashPassword(password, storedSalt)
-	if subtle.ConstantTimeCompare([]byte(storedHash), []byte(testHash)) != 1 {
+	if !passwordMatches(password, storedHash, storedSalt) {
+		m.recordLoginFailure()
 		return "", ErrInvalidCredentials
+	}
+	m.clearLoginFailures()
+
+	if isLegacyPasswordHash(storedHash) {
+		_ = m.persistPassword(ctx, password)
 	}
 
 	return m.generateSession()
@@ -157,7 +183,7 @@ func (m *SystemAuthManager) Logout(token string) {
 
 // ChangePassword updates the administrator password after validating current password.
 func (m *SystemAuthManager) ChangePassword(ctx context.Context, currentPassword, newPassword string) error {
-	if len(newPassword) < 4 {
+	if len(newPassword) < passwordMinLen {
 		return ErrPasswordTooShort
 	}
 
@@ -168,22 +194,59 @@ func (m *SystemAuthManager) ChangePassword(ctx context.Context, currentPassword,
 		return err
 	}
 
-	testHash := hashPassword(currentPassword, storedSalt)
-	if subtle.ConstantTimeCompare([]byte(storedHash), []byte(testHash)) != 1 {
+	if !passwordMatches(currentPassword, storedHash, storedSalt) {
 		return ErrInvalidCredentials
 	}
 
+	return m.persistPassword(ctx, newPassword)
+}
+
+func (m *SystemAuthManager) persistPassword(ctx context.Context, password string) error {
 	saltBytes := make([]byte, 16)
 	if _, err := rand.Read(saltBytes); err != nil {
 		return err
 	}
-	newSaltHex := hex.EncodeToString(saltBytes)
-	newHashHex := hashPassword(newPassword, newSaltHex)
-
+	saltHex := hex.EncodeToString(saltBytes)
+	hash := hashPassword(password, saltHex)
 	now := time.Now().UTC()
-	updateQuery := `UPDATE system_auth SET password_hash = ?, salt = ?, updated_at = ? WHERE id = 'admin'`
-	_, err = m.db.ExecContext(ctx, updateQuery, newHashHex, newSaltHex, now)
+	_, err := m.db.ExecContext(ctx, `UPDATE system_auth SET password_hash = ?, salt = ?, updated_at = ? WHERE id = 'admin'`, hash, saltHex, now)
 	return err
+}
+
+func (m *SystemAuthManager) checkLoginLock() error {
+	m.failMu.Lock()
+	defer m.failMu.Unlock()
+	now := time.Now().UTC()
+	if now.Before(m.lockedUntil) {
+		return ErrTooManyAttempts
+	}
+	if !m.failWindow.IsZero() && now.Sub(m.failWindow) > loginFailWindow {
+		m.failCount = 0
+		m.failWindow = time.Time{}
+	}
+	return nil
+}
+
+func (m *SystemAuthManager) recordLoginFailure() {
+	m.failMu.Lock()
+	defer m.failMu.Unlock()
+	now := time.Now().UTC()
+	if m.failWindow.IsZero() || now.Sub(m.failWindow) > loginFailWindow {
+		m.failWindow = now
+		m.failCount = 0
+	}
+	m.failCount++
+	if m.failCount >= loginFailLimit {
+		m.lockedUntil = now.Add(loginFailWindow)
+	}
+}
+
+func (m *SystemAuthManager) clearLoginFailures() {
+	m.failMu.Lock()
+	defer m.failMu.Unlock()
+	m.failCount = 0
+	m.failWindow = time.Time{}
+	m.lockedUntil = time.Time{}
 }
 
 func (m *SystemAuthManager) generateSession() (string, error) {
@@ -207,10 +270,37 @@ func (m *SystemAuthManager) generateSession() (string, error) {
 	return token, nil
 }
 
-func hashPassword(password, salt string) string {
+func hashPassword(password, saltHex string) string {
+	salt, err := hex.DecodeString(saltHex)
+	if err != nil {
+		salt = []byte(saltHex)
+	}
+	key := argon2.IDKey([]byte(password), salt, argonPasswordTime, argonPasswordMemKB, argonPasswordThreads, argonPasswordKeyLen)
+	return fmt.Sprintf("argon2id$v=19$m=%d,t=%d,p=%d$%s$%s",
+		argonPasswordMemKB, argonPasswordTime, argonPasswordThreads, saltHex, hex.EncodeToString(key))
+}
+
+func legacySHA256Hash(password, salt string) string {
 	h := sha256.New()
 	h.Write([]byte(salt))
 	h.Write([]byte(password))
 	h.Write([]byte(salt))
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+func isLegacyPasswordHash(stored string) bool {
+	return !strings.HasPrefix(stored, "argon2id$")
+}
+
+func passwordMatches(password, storedHash, salt string) bool {
+	var candidate string
+	if isLegacyPasswordHash(storedHash) {
+		candidate = legacySHA256Hash(password, salt)
+	} else {
+		candidate = hashPassword(password, salt)
+	}
+	if len(candidate) != len(storedHash) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(candidate), []byte(storedHash)) == 1
 }

@@ -45,13 +45,16 @@ test('operations view has a stable visual baseline', async ({ page }) => {
 test('primary routes render without horizontal overflow', async ({ page }) => {
   const routes = [
     'agents', 'agents/new', 'chat', 'missions', 'automations', 'channels',
-    'connectors', 'tools', 'skills', 'workspace', 'settings',
+    'plugins', 'tools', 'skills', 'workspace', 'terminal', 'settings',
   ];
   for (const route of routes) {
     await page.goto(`/#/${route}`);
     await expect(page.locator('body')).not.toHaveCSS('overflow-x', 'scroll');
     await expect(page.locator('h1').first()).toBeVisible();
   }
+  await page.goto('/#/channels?view=pairing');
+  await expect(page.locator('h1').first()).toBeVisible();
+  await expect(page).toHaveURL(/channels\?view=pairing/);
 });
 
 test('agent studio protects unsaved changes and settings preserves section state', async ({ page }) => {
@@ -101,7 +104,7 @@ test('chat session drawer is available on narrow layouts', async ({ page }) => {
 });
 
 test('primary authenticated routes have no serious accessibility violations', async ({ page }) => {
-  for (const route of ['agents', 'agents/new', 'chat', 'missions', 'automations', 'channels', 'connectors', 'tools', 'skills', 'workspace', 'settings']) {
+  for (const route of ['agents', 'agents/new', 'chat', 'missions', 'automations', 'channels', 'plugins', 'tools', 'skills', 'workspace', 'settings']) {
     await page.goto(`/#/${route}`);
     await expect(page.locator('h1').first()).toBeVisible();
     await page.waitForTimeout(250);

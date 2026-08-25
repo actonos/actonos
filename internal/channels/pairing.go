@@ -11,8 +11,18 @@ import (
 	"time"
 )
 
+const (
+	pairingCodeLength   = 8
+	pairingCodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+	pairingFailLimit    = 5
+	pairingFailWindow   = 15 * time.Minute
+)
+
 // ErrUnpairedSender is returned when pairing is required and the sender is not authorized.
 var ErrUnpairedSender = errors.New("unpaired sender")
+
+// ErrPairingLocked is returned after too many failed pairing attempts.
+var ErrPairingLocked = errors.New("too many failed pairing attempts")
 
 // UnpairedSenderError carries the inbound identity so the router can reply in-channel.
 type UnpairedSenderError struct {
@@ -66,6 +76,8 @@ type PairingManager struct {
 	users       map[string]AuthorizedUser // "channel:sender" -> user
 	policies    map[string]bool           // channel_id -> pairing required
 	pending     map[string]PendingSender  // "channel:sender" -> waiting user
+	failCount   map[string]int            // "channel:sender" -> consecutive failed PIN tries
+	failWindow  map[string]time.Time
 }
 
 // NewPairingManager creates a new PairingManager.
@@ -76,6 +88,8 @@ func NewPairingManager(db *sql.DB) (*PairingManager, error) {
 		users:       make(map[string]AuthorizedUser),
 		policies:    make(map[string]bool),
 		pending:     make(map[string]PendingSender),
+		failCount:   make(map[string]int),
+		failWindow:  make(map[string]time.Time),
 	}
 
 	if db != nil {
@@ -86,6 +100,9 @@ func NewPairingManager(db *sql.DB) (*PairingManager, error) {
 			return nil, err
 		}
 		if err := pm.loadPolicies(); err != nil {
+			return nil, err
+		}
+		if err := pm.loadCodes(); err != nil {
 			return nil, err
 		}
 	}
@@ -108,6 +125,12 @@ func (pm *PairingManager) initSchema() error {
 		channel_id TEXT PRIMARY KEY,
 		required INTEGER NOT NULL DEFAULT 0
 	);
+	CREATE TABLE IF NOT EXISTS channel_pairing_codes (
+		code TEXT PRIMARY KEY,
+		channel_id TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		expires_at DATETIME NOT NULL
+	);
 	`
 	_, err := pm.db.Exec(schema)
 	return err
@@ -129,6 +152,25 @@ func (pm *PairingManager) loadPolicies() error {
 		}
 	}
 	return nil
+}
+
+func (pm *PairingManager) loadCodes() error {
+	now := time.Now().UTC()
+	_, _ = pm.db.Exec(`DELETE FROM channel_pairing_codes WHERE expires_at <= ?`, now)
+	rows, err := pm.db.Query(`SELECT code, channel_id, created_at, expires_at FROM channel_pairing_codes WHERE expires_at > ?`, now)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+	for rows.Next() {
+		var req PairingRequest
+		if err := rows.Scan(&req.Code, &req.ChannelID, &req.CreatedAt, &req.ExpiresAt); err == nil && req.Code != "" {
+			pm.activeCodes[req.Code] = req
+		}
+	}
+	return rows.Err()
 }
 
 func (pm *PairingManager) loadUsers() error {
@@ -155,12 +197,24 @@ func (pm *PairingManager) loadUsers() error {
 	return nil
 }
 
-// GeneratePairingCode generates a 6-digit numeric PIN with a 10-minute expiry.
+func generatePairingCode() (string, error) {
+	out := make([]byte, pairingCodeLength)
+	for i := range out {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(pairingCodeAlphabet))))
+		if err != nil {
+			return "", err
+		}
+		out[i] = pairingCodeAlphabet[n.Int64()]
+	}
+	return string(out), nil
+}
+
+// GeneratePairingCode generates an 8-character pairing code with a 10-minute expiry.
+// It does not change pairing policy; the operator must enable pairing separately.
 func (pm *PairingManager) GeneratePairingCode(channelID string) (string, error) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
-	// Clean up expired codes
 	now := time.Now().UTC()
 	for code, req := range pm.activeCodes {
 		if now.After(req.ExpiresAt) {
@@ -168,29 +222,31 @@ func (pm *PairingManager) GeneratePairingCode(channelID string) (string, error) 
 		}
 	}
 
-	// Generate random 6-digit PIN
-	nBig, err := rand.Int(rand.Reader, big.NewInt(900000))
+	code, err := generatePairingCode()
 	if err != nil {
 		return "", err
 	}
-	code := fmt.Sprintf("%06d", nBig.Int64()+100000)
 
 	channelID = strings.ToLower(strings.TrimSpace(channelID))
 	if channelID == "" {
 		channelID = "all"
 	}
-	pm.activeCodes[code] = PairingRequest{
+	req := PairingRequest{
 		Code:      code,
 		ChannelID: channelID,
 		CreatedAt: now,
 		ExpiresAt: now.Add(10 * time.Minute),
 	}
-	pm.policies[channelID] = true
+	pm.activeCodes[code] = req
 	if pm.db != nil {
 		_, _ = pm.db.Exec(`
-			INSERT INTO channel_pairing_policy (channel_id, required) VALUES (?, 1)
-			ON CONFLICT(channel_id) DO UPDATE SET required = 1
-		`, channelID)
+			INSERT INTO channel_pairing_codes (code, channel_id, created_at, expires_at)
+			VALUES (?, ?, ?, ?)
+			ON CONFLICT(code) DO UPDATE SET
+				channel_id = excluded.channel_id,
+				created_at = excluded.created_at,
+				expires_at = excluded.expires_at
+		`, code, channelID, now, req.ExpiresAt)
 	}
 
 	return code, nil
@@ -206,27 +262,43 @@ func (pm *PairingManager) ValidateAndPair(channelID, code, senderID, senderName 
 	defer pm.mu.Unlock()
 
 	channelID = strings.ToLower(strings.TrimSpace(channelID))
-	code = strings.TrimSpace(code)
+	code = strings.ToUpper(strings.TrimSpace(code))
+	failKey := pairingKey(channelID, senderID)
+	now := time.Now().UTC()
+	if started, ok := pm.failWindow[failKey]; !ok || now.Sub(started) > pairingFailWindow {
+		pm.failCount[failKey] = 0
+		pm.failWindow[failKey] = now
+	}
+	if pm.failCount[failKey] >= pairingFailLimit {
+		return false, ErrPairingLocked
+	}
 
 	req, exists := pm.activeCodes[code]
 	if !exists {
+		pm.failCount[failKey]++
 		return false, nil
 	}
 
 	reqChannel := strings.ToLower(req.ChannelID)
 	if reqChannel != "" && reqChannel != "all" && reqChannel != channelID {
+		pm.failCount[failKey]++
 		return false, nil
 	}
 
 	if time.Now().UTC().After(req.ExpiresAt) {
 		delete(pm.activeCodes, code)
+		pm.failCount[failKey]++
 		return false, nil
 	}
 
-	// Code matched — consume code
 	delete(pm.activeCodes, code)
+	delete(pm.failCount, failKey)
+	delete(pm.failWindow, failKey)
+	if pm.db != nil {
+		_, _ = pm.db.Exec(`DELETE FROM channel_pairing_codes WHERE code = ?`, code)
+	}
 
-	now := time.Now().UTC()
+	now = time.Now().UTC()
 	user := AuthorizedUser{
 		ChannelID:    channelID,
 		SenderID:     senderID,
@@ -278,13 +350,11 @@ func (pm *PairingManager) TouchUser(channelID, senderID string) {
 		pm.users[key] = u
 
 		if pm.db != nil {
-			go func() {
-				_, _ = pm.db.Exec(`
-					UPDATE channel_authorizations
-					SET last_active_at = ?
-					WHERE channel_id = ? AND sender_id = ?
-				`, u.LastActiveAt, channelID, senderID)
-			}()
+			_, _ = pm.db.Exec(`
+				UPDATE channel_authorizations
+				SET last_active_at = ?
+				WHERE channel_id = ? AND sender_id = ?
+			`, u.LastActiveAt, channelID, senderID)
 		}
 	}
 }
@@ -326,26 +396,35 @@ func (pm *PairingManager) RevokeUser(channelID, senderID string) error {
 	return nil
 }
 
-// ExtractPairingPIN extracts a 6-digit numeric pairing PIN from message text (e.g. "/pair 123456", "123456", "@Bot /pair 123456").
+// ExtractPairingPIN extracts a pairing code only from an explicit "/pair CODE" command.
 func ExtractPairingPIN(text string) string {
 	trimmed := strings.TrimSpace(text)
-	if len(trimmed) == 6 && isAllDigits(trimmed) {
-		return trimmed
+	idx := strings.Index(strings.ToLower(trimmed), "/pair")
+	if idx == -1 {
+		return ""
 	}
-	if idx := strings.Index(trimmed, "/pair"); idx != -1 {
-		after := strings.TrimSpace(trimmed[idx+len("/pair"):])
-		fields := strings.Fields(after)
-		if len(fields) > 0 && len(fields[0]) == 6 && isAllDigits(fields[0]) {
-			return fields[0]
-		}
+	after := strings.TrimSpace(trimmed[idx+len("/pair"):])
+	fields := strings.Fields(after)
+	if len(fields) == 0 {
+		return ""
 	}
-	for _, word := range strings.Fields(trimmed) {
-		clean := strings.Trim(word, ":,.!?()[]{}'\"")
-		if len(clean) == 6 && isAllDigits(clean) {
-			return clean
-		}
+	code := strings.ToUpper(strings.Trim(fields[0], ":,.!?()[]{}'\""))
+	if isPairingCode(code) {
+		return code
 	}
 	return ""
+}
+
+func isPairingCode(code string) bool {
+	if len(code) != pairingCodeLength {
+		return false
+	}
+	for _, c := range code {
+		if !strings.ContainsRune(pairingCodeAlphabet, c) {
+			return false
+		}
+	}
+	return true
 }
 
 // ListActiveCodes returns unexpired pairing PINs for the operator UI.
@@ -472,13 +551,3 @@ func (pm *PairingManager) AuthorizeSender(channelID, senderID, senderName string
 	}
 	return nil
 }
-
-func isAllDigits(s string) bool {
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			return false
-		}
-	}
-	return true
-}
-

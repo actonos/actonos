@@ -7,14 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Plugin egress now reuses SSRF validation (no loopback/private/metadata, no `*`/`*.com`, redirect re-check). Remote plugin installs fail closed without a valid Ed25519 signature. Pairing codes are 8-character `/pair`-only with lockout. Admin passwords use Argon2id (min 8) with login lockout; query-string tokens are ignored. Webhook recipient URLs are validated. Plugin logs redact vault secrets. Chat markdown strips `javascript:` links.
+
+### Changed
+- Channels UI is the pairing/accounts surface for installed WASM chat plugins (not restored native adapters). Coverage floors are enforced by `scripts/cover-gate.go` from `make test-unit`. Integration Makefile target runs `./internal/...` with the `integration` tag.
+
 ### Added
 - **Unified WasmLoader Plugin Architecture & Sandboxed Extensions**:
   - Polyglot plugin execution engine (`internal/plugin/`) powered by Wazero (100% pure Go, zero CGO, `CGO_ENABLED=0` static binary compliant).
-  - Unified plugin model consolidating **Tools**, **Chat Channels**, and **SaaS Connectors** into portable `.actonpkg` package bundles with `manifest.json`, `plugin.wasm`, and optional Ed25519 signature files.
+  - Unified plugin model consolidating **Tools**, **Chat Channels**, and **SaaS Connectors** into portable `.actonpkg` package bundles with `manifest.json`, `plugin.wasm`, and Ed25519 `signature.sig` (required and verified for remote registry installs; verified when present on operator upload).
   - Packaged Plugin Upload: Streamlined UI to directly accept `.actonpkg` bundles created with the ActonOS Plugin SDK (`acton-plugin pack`), removing legacy in-browser starter scaffolding.
-  - Granular Host Syscall modules: `acton_sys` (structured logging and response streaming), `acton_net` (sandboxed HTTP egress with domain whitelisting), `acton_ws` (real-time WebSocket gateway for streaming channel protocols), `acton_vault` (AES-256-GCM Hardware Vault brokering), `acton_storage` (scoped SQLite key-value persistence), `acton_bus` (event bus publisher), and `acton_host` (legacy compatibility module).
+  - Granular Host Syscall modules: `acton_sys` (structured logging and response streaming), `acton_net` (sandboxed HTTP egress with domain whitelisting), `acton_ws` (real-time WebSocket gateway for streaming channel protocols), `acton_vault` (AES-256-GCM vault brokering, not DMI/CPU bound), `acton_storage` (scoped SQLite key-value persistence), `acton_bus` (event bus publisher), and `acton_host` (legacy compatibility module).
   - Bridges: `WasmToolBridge` for `tools.ToolRegistry` (enforcing Single Execution Boundary), `WasmChannelBridge` for `channels.ChannelManager`, and `WasmConnectorBridge` for SaaS integrations.
-  - Lifecycle management: Hot-loading, runtime enable/disable, dynamic uninstallation, log telemetry, configuration update, and Hardware Vault secret persistence via `/api/plugins/*`.
+  - Lifecycle management: Hot-loading, runtime enable/disable, dynamic uninstallation, log telemetry, configuration update, and vault secret persistence via `/api/plugins/*`.
   - Comprehensive documentation across `ARCHITECTURE.md`, `API.md`, `SECURITY.md`, `DEVELOPMENT.md`, `CONTRIBUTING.md`, and `.agents/rules/source-registry.md`.
   - Complete TypeScript types (`PluginInfo`, `PluginManifest`, `PluginCapability`, etc.) and English / Vietnamese localization namespaces (`plugins.json`).
   - Dedicated `MessageRouter` (`internal/channels/router.go`) decoupled from daemon entrypoint to coordinate multi-account inbound dispatch across Telegram, Discord, and WhatsApp.

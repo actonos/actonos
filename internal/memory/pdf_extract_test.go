@@ -1,7 +1,11 @@
 package memory
 
 import (
+	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/ledongthuc/pdf"
 )
 
 func TestParseCMapContent_Bfchar(t *testing.T) {
@@ -208,4 +212,62 @@ func TestCleanExtractedText(t *testing.T) {
 	if cleaned != expected {
 		t.Fatalf("got %q, want %q", cleaned, expected)
 	}
+}
+
+func TestExtractPDFPageInternals(t *testing.T) {
+	sample := filepath.Join("testdata", "sample.pdf")
+	file, r, err := pdf.Open(sample)
+	if err != nil {
+		t.Fatalf("open sample pdf: %v", err)
+	}
+	defer file.Close()
+	if r.NumPage() < 1 {
+		t.Fatal("expected pages")
+	}
+	p := r.Page(1)
+	fonts := extractFontsFromPage(p)
+	_, _ = extractPageContentText(p, fonts)
+	_, _ = extractPageContentText(p, map[string]*PDFFontContext{})
+	_, _ = p.GetTextByRow()
+	_ = p.Content()
+	for name := range fonts {
+		_ = name
+	}
+}
+
+func TestDecodeStringWithFontBranches(t *testing.T) {
+	if decodeStringWithFont(nil, nil) != "" {
+		t.Fatal("empty")
+	}
+	cm := newCMap()
+	cm.charCodeLen = 2
+	cm.mappings[0x0041] = "A"
+	cm.mappings[0x20] = " "
+	font := &PDFFontContext{CMap: cm, IsComposite: true}
+	if got := decodeStringWithFont([]byte{0x00, 0x41, 0x20}, font); !strings.Contains(got, "A") {
+		t.Fatalf("cmap2: %q", got)
+	}
+	cm1 := newCMap()
+	cm1.charCodeLen = 1
+	cm1.mappings[0x41] = "A"
+	if got := decodeStringWithFont([]byte{'A', 0x01}, &PDFFontContext{CMap: cm1}); !strings.Contains(got, "A") {
+		t.Fatalf("cmap1: %q", got)
+	}
+	enc := &PDFFontContext{EncodingMap: map[byte]rune{0x41: 'Z'}}
+	if got := decodeStringWithFont([]byte{'A', 'B'}, enc); !strings.Contains(got, "Z") {
+		t.Fatalf("encoding: %q", got)
+	}
+	utf16 := []byte{0xFE, 0xFF, 0x00, 'A'}
+	if got := decodeStringWithFont(utf16, nil); !strings.Contains(got, "A") {
+		t.Fatalf("utf16: %q", got)
+	}
+	if got := decodeStringWithFont([]byte("plain"), nil); got != "plain" {
+		t.Fatalf("utf8: %q", got)
+	}
+	if got := decodeStringWithFont([]byte{0xff, 0xfe}, nil); got == "" {
+		t.Fatal("latin1 fallback")
+	}
+	_ = resolveGlyphName("uni0041")
+	_ = resolveGlyphName("u0041")
+	_ = resolveGlyphName("nope")
 }

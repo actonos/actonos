@@ -85,6 +85,7 @@ test-unit:
 	@echo "==> Running unit tests..."
 	@mkdir -p $(BUILD_DIR)
 	$(GO) test -count=1 -coverprofile=$(BUILD_DIR)/coverage.out ./internal/...
+	go run ./scripts/cover-gate.go $(BUILD_DIR)/coverage.out
 	@echo "==> Unit tests passed."
 
 test-race:
@@ -93,9 +94,9 @@ test-race:
 	@echo "==> Race detector passed."
 
 test-integ:
-	@echo "==> Running integration tests..."
+	@echo "==> Running integration-tagged tests in packages..."
 	@mkdir -p $(BUILD_DIR)
-	$(GO) test -count=1 -tags=integration ./tests/...
+	$(GO) test -count=1 -tags=integration ./internal/...
 	@echo "==> Integration tests passed."
 
 # ------------------------------------------------------------------------------

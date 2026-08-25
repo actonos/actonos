@@ -31,10 +31,22 @@ export function parseMarkdownToHTML(markdown: string): string {
 
   if (!cleanMarkdown) return '';
 
-  return marked.parse(cleanMarkdown, {
+  const html = marked.parse(cleanMarkdown, {
     gfm: true,
     breaks: true,
   }) as string;
+  return sanitizeMarkdownHTML(html);
+}
+
+/** Strips javascript: URLs and inline event handlers from rendered markdown HTML. */
+export function sanitizeMarkdownHTML(html: string): string {
+  if (!html) return '';
+  return html
+    .replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/href\s*=\s*(["'])\s*javascript:[^"']*\1/gi, 'href="#"')
+    .replace(/href\s*=\s*javascript:[^\s>]*/gi, 'href="#"')
+    .replace(/src\s*=\s*(["'])\s*javascript:[^"']*\1/gi, '')
+    .replace(/src\s*=\s*javascript:[^\s>]*/gi, '');
 }
 
 export function MarkdownContent({ content, className = '', isUser = false }: MarkdownContentProps) {
@@ -46,7 +58,8 @@ export function MarkdownContent({ content, className = '', isUser = false }: Mar
         heading: { levels: [1, 2, 3] }
       }),
       Link.configure({
-        openOnClick: true,
+        openOnClick: false,
+        protocols: ['http', 'https'],
         HTMLAttributes: {
           class: isUser
             ? 'text-hi-yellow underline font-semibold'

@@ -182,6 +182,11 @@ func (s *Server) handleUploadPlugin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := plugin.VerifyOptionalPluginSignature(wasmBytes, sigBytes); err != nil {
+		s.respondError(w, http.StatusBadRequest, "INVALID_PLUGIN_SIGNATURE", err.Error())
+		return
+	}
+
 	if err := os.WriteFile(filepath.Join(pluginDir, "plugin.wasm"), wasmBytes, 0644); err != nil {
 		s.respondError(w, http.StatusInternalServerError, "SAVE_WASM_FAILED", err.Error())
 		return
@@ -327,7 +332,7 @@ func (s *Server) handleUpdatePluginConfig(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// 1. Persist secrets securely to Hardware Vault
+	// 1. Persist secrets securely to the encrypted vault
 	if len(req.Secrets) > 0 && s.vault != nil {
 		for secretKey, secretVal := range req.Secrets {
 			if secretVal != "" {
@@ -376,4 +381,3 @@ func (s *Server) handleUpdatePluginConfig(w http.ResponseWriter, r *http.Request
 		"plugin": info,
 	})
 }
-

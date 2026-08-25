@@ -18,8 +18,8 @@ Use this skill when writing or running tests for ActonOS.
 | Category | Location | Build Tag | Command |
 |:---|:---|:---|:---|
 | Unit Tests | `internal/**/*_test.go` | (none) | `make test-unit` |
-| Integration Tests | `tests/integration/` or `*_integ_test.go` | `integration` | `make test-integ` |
-| E2E / Smoke Tests | `tests/e2e/` | `e2e` | `go test -tags=e2e ./tests/e2e/...` |
+| Integration Tests | `*_os_test.go` / `*_integ_test.go` under `internal/` | `integration` | `make test-integ` |
+| E2E / Smoke Tests | `web/tests/*.spec.ts` | (none) | `cd web && npm run test:e2e` |
 | Frontend Unit | `web/src/**/*.test.{ts,tsx}` | (none) | `cd web && npm test` |
 | Frontend Browser | `web/tests/*.spec.ts` | (none) | `cd web && npm run test:e2e` |
 | Frontend Quality | `web/` | (none) | `cd web && npm run quality` |
@@ -32,11 +32,12 @@ make test
 
 # Unit tests only (fast, no external dependencies)
 make test-unit
-# Equivalent to: CGO_ENABLED=0 go test -race -count=1 -coverprofile=build/coverage.out ./internal/...
+# Equivalent to: CGO_ENABLED=0 go test -count=1 -coverprofile=build/coverage.out ./internal/...
+# then go run ./scripts/cover-gate.go build/coverage.out
 
 # Integration tests
 make test-integ
-# Equivalent to: CGO_ENABLED=0 go test -race -count=1 -tags=integration ./tests/...
+# Equivalent to: CGO_ENABLED=0 go test -count=1 -tags=integration ./internal/...
 
 # Specific package
 go test -v ./internal/agent/...
@@ -257,8 +258,11 @@ func TestHandleListAgents(t *testing.T) {
 | `internal/agent/` | 70%+ | High (core logic) |
 | `internal/auth/` | 80%+ | Critical (security) |
 | `internal/server/` | 60%+ | Medium (handlers) |
+| `internal/plugin/` | 70%+ | High (WASM sandbox) |
+| `internal/channels/` | 70%+ | High (pairing/routing) |
 | `internal/tools/` | 60%+ | Medium |
 | `internal/sandbox/` | 70%+ | High (security) |
+| `internal/security/` | 90%+ | Critical |
 
 ## Test File Naming
 

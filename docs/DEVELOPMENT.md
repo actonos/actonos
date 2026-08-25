@@ -77,7 +77,7 @@ LOG_LEVEL=debug               # debug | info | warn | error
 LISTEN_ADDR=:8080             # HTTP listen address
 DATA_DIR=./dev-data           # Local data directory (instead of /data)
 DISABLE_TAILSCALE=true        # Skip Tailscale in development
-DISABLE_SANDBOX=true          # Skip Bubblewrap sandbox in development
+ACTONOS_ALLOW_INSECURE_EXEC=1 # Dev-only: allow unsandboxed command exec (never production)
 ACTON_EMBEDDING_URL=http://127.0.0.1:8091
 ACTON_EMBEDDING_MODEL_DIR=./build/models/multilingual-e5-small/614241f622f53c4eeff9890bdc4f31cfecc418b3
 ONNXRUNTIME_SHARED_LIBRARY_PATH=/path/to/libonnxruntime.so.1.28.0
@@ -165,7 +165,7 @@ actonos/
 │   │   ├── embedding_watcher.go    # Recursive workspace mutation watcher
 │   │   ├── decay.go                # Ebbinghaus decay algorithm
 │   │   ├── hybrid.go               # Calibrated sigmoid fusion
-│   │   └── vault.go                # AES-256-GCM hardware-bound vault
+│   │   └── vault.go                # AES-256-GCM vault (Argon2id; not DMI/CPU bound)
 │   │
 │   ├── system/                     # Hardware Abstraction Layer
 │   │   ├── hal.go                  # HAL interface
@@ -664,7 +664,7 @@ ActonOS supports building plugins in any language compiling to WebAssembly (`was
 A production plugin package contains:
 - `manifest.json`: Metadata, declared capabilities (`tool`, `channel`, `connector`), permissions, config schemas, and tool definitions.
 - `plugin.wasm`: Compiled WebAssembly bytecode.
-- `signature.sig`: (Optional) Ed25519 digital signature.
+- `signature.sig`: Ed25519 signature over `plugin.wasm`. Required for remote registry installs; verified when present on operator upload.
 - `README.md`: (Optional) Plugin user guide and documentation.
 
 #### Guest Exports (WASM to Host)
@@ -689,7 +689,7 @@ A production plugin package contains:
   - `ws_poll(handleID) -> i32`: Non-blocking poll for incoming WebSocket frames.
   - `ws_close(handleID) -> i32`: Closes active WebSocket connection.
 - **`acton_vault`**:
-  - `get_secret(key_ptr: u32, key_len: u32) -> u32`: Retrieves authorized secret credentials from AES-256-GCM Hardware Vault.
+  - `get_secret(key_ptr: u32, key_len: u32) -> u32`: Retrieves authorized secret credentials from the AES-256-GCM vault (not DMI/CPU bound).
 - **`acton_storage`**:
   - `kv_get(key_ptr, key_len) -> u32` / `kv_set(k_ptr, k_len, v_ptr, v_len) -> i32`: Isolated SQLite key-value persistence.
 - **`acton_bus`**:

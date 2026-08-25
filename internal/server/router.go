@@ -22,49 +22,50 @@ import (
 
 // Server holds all subsystem references and handles HTTP routing.
 type Server struct {
-	router         chi.Router
-	agentMgr       *agent.AgentManager
-	swarmMgr       *agent.SwarmManager
-	engine         *agent.Engine
-	cronSched      *agent.CronScheduler
-	heartbeat      *agent.HeartbeatDaemon
-	taskMgr        *agent.TaskManager
-	tokenTracker   *memory.TokenTracker
-	profileMgr     *agent.UserProfileManager
-	llmRouter      *llm.ModelCascadeRouter
-	toolReg        *tools.ToolRegistry
-	mcpHost        *tools.MCPHostEngine
-	approvalMgr    *tools.ApprovalManager
-	runStore       *agent.RunStore
-	hubMgr         *tools.HubManager
-	memory         *memory.HybridEngine
-	embedding      *memory.EmbeddingService
-	hal            system.HAL
-	tailscale      *system.TailscaleManager
-	tokenDaemon    *auth.TokenRefreshDaemon
-	oauthEngine    *auth.OAuthEngine
-	stateStore     *auth.StateStore
-	sysAuth        *auth.SystemAuthManager
-	bus            *bus.EventBus
-	auditLogger    *system.AuditLogger
-	notifMgr       *system.NotificationManager
-	vault          *memory.Vault
-	pairingMgr     *channels.PairingManager
-	channelMgr     *channels.ChannelManager
-	skillWatcher   *tools.SkillWatcher
-	pluginMgr      *plugin.Manager
-	pluginHubMgr   *plugin.PluginRegistryManager
-	startTime      time.Time
-	dataDir        string
-	workspaceDir   string
-	workspaceStore *workspacepkg.Store
-	skillsDir      string
-	wasmDir        string
-	pluginsDir     string
-	version        string
-	gitCommit      string
-	buildTime      string
-	realtime       *realtimeHub
+	router           chi.Router
+	agentMgr         *agent.AgentManager
+	swarmMgr         *agent.SwarmManager
+	engine           *agent.Engine
+	cronSched        *agent.CronScheduler
+	heartbeat        *agent.HeartbeatDaemon
+	taskMgr          *agent.TaskManager
+	tokenTracker     *memory.TokenTracker
+	profileMgr       *agent.UserProfileManager
+	llmRouter        *llm.ModelCascadeRouter
+	toolReg          *tools.ToolRegistry
+	mcpHost          *tools.MCPHostEngine
+	approvalMgr      *tools.ApprovalManager
+	runStore         *agent.RunStore
+	hubMgr           *tools.HubManager
+	memory           *memory.HybridEngine
+	embedding        *memory.EmbeddingService
+	hal              system.HAL
+	tailscale        *system.TailscaleManager
+	tokenDaemon      *auth.TokenRefreshDaemon
+	oauthEngine      *auth.OAuthEngine
+	stateStore       *auth.StateStore
+	sysAuth          *auth.SystemAuthManager
+	bus              *bus.EventBus
+	auditLogger      *system.AuditLogger
+	notifMgr         *system.NotificationManager
+	vault            *memory.Vault
+	pairingMgr       *channels.PairingManager
+	channelMgr       *channels.ChannelManager
+	skillWatcher     *tools.SkillWatcher
+	pluginMgr        *plugin.Manager
+	pluginHubMgr     *plugin.PluginRegistryManager
+	startTime        time.Time
+	dataDir          string
+	workspaceDir     string
+	workspaceStore   *workspacepkg.Store
+	skillsDir        string
+	wasmDir          string
+	pluginsDir       string
+	version          string
+	gitCommit        string
+	buildTime        string
+	realtime         *realtimeHub
+	allowMissingAuth bool
 }
 
 // Config holds configuration parameters for the HTTP server.
@@ -110,6 +111,9 @@ type Config struct {
 	Version   string
 	GitCommit string
 	BuildTime string
+	// DisableAuthForTest skips RequireAuthMiddleware when SystemAuth is unset.
+	// Production must leave this false.
+	DisableAuthForTest bool
 }
 
 // NewServer initializes the HTTP API Server with all endpoints and middlewares.
@@ -147,47 +151,48 @@ func NewServer(cfg Config) *Server {
 		buildTime = "unspecified"
 	}
 	s := &Server{
-		agentMgr:       cfg.AgentManager,
-		swarmMgr:       cfg.SwarmManager,
-		engine:         cfg.Engine,
-		cronSched:      cfg.CronScheduler,
-		heartbeat:      cfg.HeartbeatDaemon,
-		taskMgr:        cfg.TaskManager,
-		tokenTracker:   cfg.TokenTracker,
-		profileMgr:     cfg.ProfileManager,
-		llmRouter:      cfg.LLMRouter,
-		toolReg:        cfg.ToolRegistry,
-		skillWatcher:   cfg.SkillWatcher,
-		mcpHost:        cfg.MCPHost,
-		approvalMgr:    cfg.ApprovalManager,
-		runStore:       cfg.RunStore,
-		hubMgr:         cfg.HubManager,
-		memory:         cfg.Memory,
-		embedding:      cfg.Embedding,
-		hal:            cfg.HAL,
-		tailscale:      cfg.Tailscale,
-		tokenDaemon:    cfg.TokenRefreshDaemon,
-		oauthEngine:    cfg.OAuthEngine,
-		stateStore:     cfg.StateStore,
-		sysAuth:        cfg.SystemAuth,
-		bus:            cfg.EventBus,
-		auditLogger:    cfg.AuditLogger,
-		notifMgr:       cfg.NotificationManager,
-		vault:          cfg.Vault,
-		pairingMgr:     cfg.PairingManager,
-		channelMgr:     cfg.ChannelManager,
-		pluginMgr:      cfg.PluginManager,
-		pluginHubMgr:   cfg.PluginHubManager,
-		startTime:      time.Now(),
-		dataDir:        dataDir,
-		workspaceDir:   workspaceDir,
-		workspaceStore: cfg.WorkspaceStore,
-		skillsDir:      skillsDir,
-		wasmDir:        wasmDir,
-		pluginsDir:     pluginsDir,
-		version:        version,
-		gitCommit:      gitCommit,
-		buildTime:      buildTime,
+		agentMgr:         cfg.AgentManager,
+		swarmMgr:         cfg.SwarmManager,
+		engine:           cfg.Engine,
+		cronSched:        cfg.CronScheduler,
+		heartbeat:        cfg.HeartbeatDaemon,
+		taskMgr:          cfg.TaskManager,
+		tokenTracker:     cfg.TokenTracker,
+		profileMgr:       cfg.ProfileManager,
+		llmRouter:        cfg.LLMRouter,
+		toolReg:          cfg.ToolRegistry,
+		skillWatcher:     cfg.SkillWatcher,
+		mcpHost:          cfg.MCPHost,
+		approvalMgr:      cfg.ApprovalManager,
+		runStore:         cfg.RunStore,
+		hubMgr:           cfg.HubManager,
+		memory:           cfg.Memory,
+		embedding:        cfg.Embedding,
+		hal:              cfg.HAL,
+		tailscale:        cfg.Tailscale,
+		tokenDaemon:      cfg.TokenRefreshDaemon,
+		oauthEngine:      cfg.OAuthEngine,
+		stateStore:       cfg.StateStore,
+		sysAuth:          cfg.SystemAuth,
+		bus:              cfg.EventBus,
+		auditLogger:      cfg.AuditLogger,
+		notifMgr:         cfg.NotificationManager,
+		vault:            cfg.Vault,
+		pairingMgr:       cfg.PairingManager,
+		channelMgr:       cfg.ChannelManager,
+		pluginMgr:        cfg.PluginManager,
+		pluginHubMgr:     cfg.PluginHubManager,
+		startTime:        time.Now(),
+		dataDir:          dataDir,
+		workspaceDir:     workspaceDir,
+		workspaceStore:   cfg.WorkspaceStore,
+		skillsDir:        skillsDir,
+		wasmDir:          wasmDir,
+		pluginsDir:       pluginsDir,
+		version:          version,
+		gitCommit:        gitCommit,
+		buildTime:        buildTime,
+		allowMissingAuth: cfg.DisableAuthForTest,
 	}
 	s.realtime = newRealtimeHub(s)
 	if s.engine != nil && s.taskMgr != nil {
@@ -509,5 +514,3 @@ func (s *Server) decodeJSON(r *http.Request, v any) error {
 	r.Body = http.MaxBytesReader(nil, r.Body, 1<<20) // 1 MB limit
 	return json.NewDecoder(r.Body).Decode(v)
 }
-
-

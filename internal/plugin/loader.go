@@ -22,6 +22,8 @@ var (
 	ErrModuleInstantiation = errors.New("wasm module instantiation failed")
 )
 
+const pluginToolTimeout = 15 * time.Second
+
 // WasmLoader manages compilation and sandboxed execution of WASM plugins using Wazero.
 type WasmLoader struct {
 	runtime wazero.Runtime
@@ -185,7 +187,7 @@ func (inst *PluginInstance) ExecuteTool(ctx context.Context, toolName string, ar
 		return "", fmt.Errorf("%w: acton_tool_execute", ErrFunctionNotFound)
 	}
 
-	execCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	execCtx, cancel := context.WithTimeout(ctx, pluginToolTimeout)
 	defer cancel()
 
 	execCtx = WithHostContext(execCtx, inst.hostCtx)
@@ -272,7 +274,7 @@ func (inst *PluginInstance) PollChannel(ctx context.Context) ([]byte, error) {
 		return nil, nil
 	}
 
-	execCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	execCtx, cancel := context.WithTimeout(ctx, pluginToolTimeout)
 	defer cancel()
 
 	execCtx = WithHostContext(execCtx, inst.hostCtx)

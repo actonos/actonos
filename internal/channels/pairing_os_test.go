@@ -101,6 +101,9 @@ func TestPairingPINFromChatAuthorizesWithoutAccountID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := pm.SetChannelRequiresPairing("telegram", true); err != nil {
+		t.Fatal(err)
+	}
 	eventBus := bus.NewEventBus()
 	cm := NewChannelManager(eventBus, pm)
 	adapter := &recordingAdapter{name: "telegram"}

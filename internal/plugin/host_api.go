@@ -26,7 +26,7 @@ type KVStore interface {
 	Delete(pluginID, key string) error
 }
 
-// SecretProvider abstracts access to the Hardware Vault or configured credentials.
+// SecretProvider abstracts access to the encrypted vault or configured credentials.
 type SecretProvider interface {
 	GetSecret(ctx context.Context, secretName string) (string, error)
 }
@@ -68,6 +68,7 @@ type HostContext struct {
 	Memory       api.Memory
 	LastResponse []byte
 	LogBuffer    []string
+	secretValues []string
 	wsConns      map[int32]*HostWSConn
 	nextWSID     int32
 	mu           sync.Mutex
@@ -96,7 +97,38 @@ func (h *HostContext) AppendLog(line string) {
 	h.appendLogLocked(line)
 }
 
+func (h *HostContext) rememberSecret(value string) {
+	if h == nil || value == "" {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.rememberSecretLocked(value)
+}
+
+func (h *HostContext) rememberSecretLocked(value string) {
+	if value == "" {
+		return
+	}
+	for _, existing := range h.secretValues {
+		if existing == value {
+			return
+		}
+	}
+	h.secretValues = append(h.secretValues, value)
+}
+
+func (h *HostContext) redactSecretsLocked(line string) string {
+	for _, secret := range h.secretValues {
+		if secret != "" && strings.Contains(line, secret) {
+			line = strings.ReplaceAll(line, secret, "••••")
+		}
+	}
+	return line
+}
+
 func (h *HostContext) appendLogLocked(line string) {
+	line = h.redactSecretsLocked(line)
 	if len(line) > maxPluginLogLine {
 		line = line[:maxPluginLogLine] + "…[truncated]"
 	}
@@ -216,7 +248,7 @@ func RegisterHostModule(ctx context.Context, r wazero.Runtime) error {
 		return fmt.Errorf("instantiating acton_net: %w", err)
 	}
 
-	// 3. acton_vault (SDK Hardware Vault secret retrieval)
+	// 3. acton_vault (SDK vault secret retrieval)
 	if _, err := r.NewHostModuleBuilder("acton_vault").
 		NewFunctionBuilder().
 		WithFunc(vaultGetSecret).
@@ -316,6 +348,41 @@ func HostContextFrom(ctx context.Context) *HostContext {
 	return nil
 }
 
+const maxPluginHTTPBody = 1 << 20
+
+func sandboxedHTTPClient(h *HostContext, timeout time.Duration) *http.Client {
+	gate := (*SecurityGate)(nil)
+	if h != nil {
+		gate = h.Gate
+		if h.HTTPClient != nil {
+			cloned := *h.HTTPClient
+			if cloned.Timeout == 0 {
+				cloned.Timeout = timeout
+			}
+			if cloned.CheckRedirect == nil {
+				cloned.CheckRedirect = pluginRedirectCheck(gate)
+			}
+			return &cloned
+		}
+	}
+	return &http.Client{
+		Timeout:       timeout,
+		CheckRedirect: pluginRedirectCheck(gate),
+	}
+}
+
+func pluginRedirectCheck(gate *SecurityGate) func(*http.Request, []*http.Request) error {
+	return func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 3 {
+			return fmt.Errorf("too many redirects")
+		}
+		if gate == nil {
+			return fmt.Errorf("%w: missing security gate", ErrDomainNotWhitelisted)
+		}
+		return gate.CheckOutboundURLContext(req.Context(), req.URL.String())
+	}
+}
+
 func readBufferFromMemory(mem api.Memory, ptr, length uint32) ([]byte, error) {
 	if length == 0 {
 		return []byte{}, nil
@@ -395,7 +462,7 @@ func netHTTPRequest(ctx context.Context, m api.Module, reqPtr, reqLen uint32) in
 		return int32(len(resBytes))
 	}
 
-	if err := h.Gate.CheckOutboundURL(reqPayload.URL); err != nil {
+	if err := h.Gate.CheckOutboundURLContext(ctx, reqPayload.URL); err != nil {
 		resBytes, _ := json.Marshal(HTTPResponsePayload{Status: 403, Error: err.Error()})
 		h.mu.Lock()
 		h.LastResponse = resBytes
@@ -403,10 +470,7 @@ func netHTTPRequest(ctx context.Context, m api.Module, reqPtr, reqLen uint32) in
 		return int32(len(resBytes))
 	}
 
-	client := h.HTTPClient
-	if client == nil {
-		client = &http.Client{Timeout: 15 * time.Second}
-	}
+	client := sandboxedHTTPClient(h, 15*time.Second)
 
 	reqTimeout := 15 * time.Second
 	if reqPayload.Timeout > 0 && reqPayload.Timeout <= 60 {
@@ -449,7 +513,7 @@ func netHTTPRequest(ctx context.Context, m api.Module, reqPtr, reqLen uint32) in
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, maxPluginHTTPBody))
 	h.Record("DEBUG", fmt.Sprintf("HTTP %s %s -> %d (%d bytes)", method, reqPayload.URL, resp.StatusCode, len(respBody)))
 	headers := make(map[string]string)
 	for k, v := range resp.Header {
@@ -484,7 +548,7 @@ func wsConnect(ctx context.Context, m api.Module, urlPtr, urlLen, headersPtr, he
 	}
 	wsURL := string(urlBytes)
 
-	if err := h.Gate.CheckOutboundURL(wsURL); err != nil {
+	if err := h.Gate.CheckOutboundURLContext(ctx, wsURL); err != nil {
 		h.Record("WARN", fmt.Sprintf("websocket blocked: %s (%v)", wsURL, err))
 		return -1
 	}
@@ -684,6 +748,7 @@ func vaultGetSecret(ctx context.Context, m api.Module, namePtr, nameLen uint32) 
 	}
 
 	h.mu.Lock()
+	h.rememberSecretLocked(val)
 	h.LastResponse = []byte(val)
 	h.mu.Unlock()
 
@@ -762,16 +827,13 @@ func hostHTTPRequest(ctx context.Context, m api.Module, reqPtr, reqLen uint32) u
 		return res
 	}
 
-	if err := h.Gate.CheckOutboundURL(reqPayload.URL); err != nil {
+	if err := h.Gate.CheckOutboundURLContext(ctx, reqPayload.URL); err != nil {
 		resBytes, _ := json.Marshal(HTTPResponsePayload{Status: 403, Error: err.Error()})
 		res, _ := writeBufferToGuest(ctx, h, resBytes)
 		return res
 	}
 
-	client := h.HTTPClient
-	if client == nil {
-		client = &http.Client{Timeout: 15 * time.Second}
-	}
+	client := sandboxedHTTPClient(h, 15*time.Second)
 
 	reqTimeout := 15 * time.Second
 	if reqPayload.Timeout > 0 && reqPayload.Timeout <= 60 {
@@ -810,7 +872,7 @@ func hostHTTPRequest(ctx context.Context, m api.Module, reqPtr, reqLen uint32) u
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 10<<20)) // 10MB limit
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, maxPluginHTTPBody))
 	headers := make(map[string]string)
 	for k, v := range resp.Header {
 		if len(v) > 0 {
@@ -849,6 +911,7 @@ func hostGetSecret(ctx context.Context, m api.Module, keyPtr, keyLen uint32) uin
 	if err != nil {
 		return 0
 	}
+	h.rememberSecret(val)
 
 	packed, _ := writeBufferToGuest(ctx, h, []byte(val))
 	return packed
