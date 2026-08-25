@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -210,11 +211,12 @@ func (w *pluginStdioWriter) Write(p []byte) (int, error) {
 
 // HTTPRequestPayload is the JSON wire format for host_http_request.
 type HTTPRequestPayload struct {
-	Method  string            `json:"method"`
-	URL     string            `json:"url"`
-	Headers map[string]string `json:"headers,omitempty"`
-	Body    string            `json:"body,omitempty"`
-	Timeout int               `json:"timeout_seconds,omitempty"`
+	Method     string            `json:"method"`
+	URL        string            `json:"url"`
+	Headers    map[string]string `json:"headers,omitempty"`
+	Body       string            `json:"body,omitempty"`
+	BodyBase64 string            `json:"body_base64,omitempty"`
+	Timeout    int               `json:"timeout_seconds,omitempty"`
 }
 
 // HTTPResponsePayload is the JSON wire format returned by host_http_request.
@@ -223,6 +225,30 @@ type HTTPResponsePayload struct {
 	Headers map[string]string `json:"headers,omitempty"`
 	Body    string            `json:"body,omitempty"`
 	Error   string            `json:"error,omitempty"`
+}
+
+func decodeHTTPRequestBody(p HTTPRequestPayload) ([]byte, error) {
+	if strings.TrimSpace(p.BodyBase64) != "" {
+		decoded, err := base64.StdEncoding.DecodeString(p.BodyBase64)
+		if err != nil {
+			return nil, fmt.Errorf("decoding body_base64: %w", err)
+		}
+		return decoded, nil
+	}
+	if p.Body == "" {
+		return nil, nil
+	}
+	return []byte(p.Body), nil
+}
+
+func httpRequestTimeout(p HTTPRequestPayload) time.Duration {
+	if p.Timeout > 0 && p.Timeout <= 60 {
+		return time.Duration(p.Timeout) * time.Second
+	}
+	if p.BodyBase64 != "" {
+		return 60 * time.Second
+	}
+	return 15 * time.Second
 }
 
 // RegisterHostModule creates and instantiates host modules in Wazero runtime.
@@ -470,12 +496,8 @@ func netHTTPRequest(ctx context.Context, m api.Module, reqPtr, reqLen uint32) in
 		return int32(len(resBytes))
 	}
 
-	client := sandboxedHTTPClient(h, 15*time.Second)
-
-	reqTimeout := 15 * time.Second
-	if reqPayload.Timeout > 0 && reqPayload.Timeout <= 60 {
-		reqTimeout = time.Duration(reqPayload.Timeout) * time.Second
-	}
+	reqTimeout := httpRequestTimeout(reqPayload)
+	client := sandboxedHTTPClient(h, reqTimeout)
 
 	reqCtx, reqCancel := context.WithTimeout(ctx, reqTimeout)
 	defer reqCancel()
@@ -485,9 +507,17 @@ func netHTTPRequest(ctx context.Context, m api.Module, reqPtr, reqLen uint32) in
 		method = http.MethodGet
 	}
 
+	bodyBytes, err := decodeHTTPRequestBody(reqPayload)
+	if err != nil {
+		resBytes, _ := json.Marshal(HTTPResponsePayload{Status: 400, Error: err.Error()})
+		h.mu.Lock()
+		h.LastResponse = resBytes
+		h.mu.Unlock()
+		return int32(len(resBytes))
+	}
 	var bodyReader io.Reader
-	if reqPayload.Body != "" {
-		bodyReader = bytes.NewBufferString(reqPayload.Body)
+	if len(bodyBytes) > 0 {
+		bodyReader = bytes.NewReader(bodyBytes)
 	}
 
 	httpReq, err := http.NewRequestWithContext(reqCtx, method, reqPayload.URL, bodyReader)
@@ -833,12 +863,8 @@ func hostHTTPRequest(ctx context.Context, m api.Module, reqPtr, reqLen uint32) u
 		return res
 	}
 
-	client := sandboxedHTTPClient(h, 15*time.Second)
-
-	reqTimeout := 15 * time.Second
-	if reqPayload.Timeout > 0 && reqPayload.Timeout <= 60 {
-		reqTimeout = time.Duration(reqPayload.Timeout) * time.Second
-	}
+	reqTimeout := httpRequestTimeout(reqPayload)
+	client := sandboxedHTTPClient(h, reqTimeout)
 
 	reqCtx, reqCancel := context.WithTimeout(ctx, reqTimeout)
 	defer reqCancel()
@@ -848,9 +874,15 @@ func hostHTTPRequest(ctx context.Context, m api.Module, reqPtr, reqLen uint32) u
 		method = http.MethodGet
 	}
 
+	bodyBytes, err := decodeHTTPRequestBody(reqPayload)
+	if err != nil {
+		resBytes, _ := json.Marshal(HTTPResponsePayload{Status: 400, Error: err.Error()})
+		res, _ := writeBufferToGuest(ctx, h, resBytes)
+		return res
+	}
 	var bodyReader io.Reader
-	if reqPayload.Body != "" {
-		bodyReader = bytes.NewBufferString(reqPayload.Body)
+	if len(bodyBytes) > 0 {
+		bodyReader = bytes.NewReader(bodyBytes)
 	}
 
 	httpReq, err := http.NewRequestWithContext(reqCtx, method, reqPayload.URL, bodyReader)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -22,6 +23,24 @@ import (
 	"github.com/tetratelabs/wazero"
 	_ "modernc.org/sqlite"
 )
+
+func TestDecodeHTTPRequestBodyPrefersBase64(t *testing.T) {
+	pdf := []byte{0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37, 0x00, 0xff, 0x80}
+	got, err := decodeHTTPRequestBody(HTTPRequestPayload{
+		Body:       "should-be-ignored",
+		BodyBase64: base64.StdEncoding.EncodeToString(pdf),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, pdf) {
+		t.Fatalf("decoded=%x want=%x", got, pdf)
+	}
+	text, err := decodeHTTPRequestBody(HTTPRequestPayload{Body: `{"ok":true}`})
+	if err != nil || string(text) != `{"ok":true}` {
+		t.Fatalf("text body: %q err=%v", text, err)
+	}
+}
 
 func TestSecurityGate(t *testing.T) {
 	manifest := PluginManifest{
