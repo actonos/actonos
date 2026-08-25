@@ -65,6 +65,9 @@ type OutboundMessage struct {
 	Action    string            `json:"action,omitempty"`
 	Typing    bool              `json:"typing,omitempty"`
 	Metadata  map[string]string `json:"metadata,omitempty"`
+	FileName  string            `json:"file_name,omitempty"`
+	MIMEType  string            `json:"mime_type,omitempty"`
+	FileData  []byte            `json:"file_data,omitempty"`
 }
 
 // ExtractAgentMention parses @agent_name, /agent agent_name, or @agent_id from user text.

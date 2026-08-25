@@ -145,18 +145,32 @@ func (m *OutboundMessage) Normalize() {
 		m.Metadata[metaTyping] = "true"
 	}
 
+	m.FileName = FirstNonEmpty(m.FileName, m.Metadata[metaFileName])
+	if m.FileName != "" {
+		setMetaIfEmpty(m.Metadata, metaFileName, m.FileName)
+	}
+	m.MIMEType = FirstNonEmpty(m.MIMEType, m.Metadata[metaMIMEType])
+	if m.MIMEType != "" {
+		setMetaIfEmpty(m.Metadata, metaMIMEType, m.MIMEType)
+	}
+
 	if m.Kind == "" {
 		switch {
-		case m.Typing && strings.TrimSpace(m.Content) == "" && m.Reaction == "" && !hasMediaMeta(m.Metadata):
+		case m.Typing && strings.TrimSpace(m.Content) == "" && m.Reaction == "" && !m.HasFile():
 			m.Kind = MessageKindTyping
-		case m.Reaction != "" && strings.TrimSpace(m.Content) == "" && !hasMediaMeta(m.Metadata):
+		case m.Reaction != "" && strings.TrimSpace(m.Content) == "" && !m.HasFile():
 			m.Kind = MessageKindReaction
-		case hasMediaMeta(m.Metadata):
+		case m.HasFile():
 			m.Kind = MessageKindMedia
 		default:
 			m.Kind = MessageKindText
 		}
 	}
+}
+
+// HasFile reports an outbound payload that carries a file for the channel plugin.
+func (m OutboundMessage) HasFile() bool {
+	return len(m.FileData) > 0 || hasMediaMeta(m.Metadata)
 }
 
 // RecipientForReply is the conversation target plugins should deliver to.

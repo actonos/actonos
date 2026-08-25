@@ -56,6 +56,12 @@ func TestBuildHostEnvironmentPrompt(t *testing.T) {
 	if !strings.Contains(prompt, "<user_workspace") {
 		t.Errorf("prompt missing <user_workspace> tag, got:\n%s", prompt)
 	}
+	if !strings.Contains(prompt, "ACTONOS_USER_WORKSPACE") || !strings.Contains(prompt, "user-workspace") {
+		t.Errorf("prompt missing named workspace exec paths, got:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "user_workspace_exec_paths") {
+		t.Errorf("prompt missing user_workspace_exec_paths rule, got:\n%s", prompt)
+	}
 	if !strings.Contains(prompt, "<agent_private_scratchpad") {
 		t.Errorf("prompt missing <agent_private_scratchpad> tag, got:\n%s", prompt)
 	}

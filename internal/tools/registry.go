@@ -770,13 +770,21 @@ func (r *ToolRegistry) Execute(ctx context.Context, agentID, name string, inputJ
 			}
 		}
 	}
-	if res != nil && (name == "native_workspace_write" || name == "native_workspace_delete") {
+	if res != nil && (name == "native_workspace_write" || name == "native_workspace_delete" || name == "native_exec") {
 		r.mu.RLock()
 		sink := r.workspaceMutations
 		r.mu.RUnlock()
 		if sink != nil && res.Data != nil {
 			if fileID, ok := res.Data["workspace_file_id"].(string); ok && fileID != "" {
 				_ = sink.NotifyWorkspaceMutation(context.Background(), fileID, agentID, name == "native_workspace_delete")
+			}
+			switch ids := res.Data["workspace_file_ids"].(type) {
+			case []string:
+				for _, fileID := range ids {
+					if fileID != "" {
+						_ = sink.NotifyWorkspaceMutation(context.Background(), fileID, agentID, false)
+					}
+				}
 			}
 		}
 	}

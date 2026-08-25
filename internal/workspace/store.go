@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -48,6 +49,7 @@ type Node struct {
 	UpdatedAt    string  `json:"updated_at"`
 	DeletedAt    *string `json:"deleted_at,omitempty"`
 	VirtualPath  string  `json:"virtual_path"`
+	ExecPath     string  `json:"exec_path,omitempty"`
 }
 
 type WriteRequest struct {
@@ -73,9 +75,14 @@ type Stats struct {
 }
 
 type Store struct {
-	db   *sql.DB
-	root string
-	now  func() time.Time
+	db          *sql.DB
+	root        string
+	namedRoot   string
+	now         func() time.Time
+	namedMu     sync.RWMutex
+	namedPaused bool
+	execByID    map[string]string
+	idByExec    map[string]string
 }
 
 func NewStore(ctx context.Context, db *sql.DB, root string) (*Store, error) {
@@ -89,7 +96,20 @@ func NewStore(ctx context.Context, db *sql.DB, root string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Join(absRoot, rootFolderID), 0750); err != nil {
 		return nil, fmt.Errorf("creating workspace root folder: %w", err)
 	}
-	return &Store{db: db, root: absRoot, now: time.Now}, nil
+	namedRoot := filepath.Join(absRoot, NamedDirName)
+	if err := os.MkdirAll(namedRoot, 0750); err != nil {
+		return nil, fmt.Errorf("creating named workspace projection: %w", err)
+	}
+	store := &Store{
+		db:        db,
+		root:      absRoot,
+		namedRoot: namedRoot,
+		now:       time.Now,
+		execByID:  map[string]string{},
+		idByExec:  map[string]string{},
+	}
+	store.refreshNamed(ctx)
+	return store, nil
 }
 
 func (s *Store) DB() *sql.DB { return s.db }
@@ -205,6 +225,7 @@ func (s *Store) Get(ctx context.Context, id string) (Node, error) {
 	if err != nil {
 		return Node{}, err
 	}
+	node.ExecPath = s.lookupExecPath(node.ID)
 	return node, nil
 }
 
@@ -267,7 +288,7 @@ func (s *Store) List(ctx context.Context, parentID string) ([]Node, error) {
 		return nil, fmt.Errorf("closing workspace node rows: %w", err)
 	}
 	for index := range nodes {
-		nodes[index].VirtualPath, _ = s.VirtualPath(ctx, nodes[index].ID)
+		s.attachDerivedPaths(ctx, &nodes[index])
 	}
 	return nodes, nil
 }
@@ -333,7 +354,7 @@ func (s *Store) ResolveLegacyPath(ctx context.Context, legacyPath string) (Node,
 		}
 		parentID = node.ID
 	}
-	node.VirtualPath, _ = s.VirtualPath(ctx, node.ID)
+	s.attachDerivedPaths(ctx, &node)
 	return node, nil
 }
 
@@ -402,6 +423,7 @@ func (s *Store) CreateDirectory(ctx context.Context, parentID, name string) (Nod
 		}
 		return Node{}, fmt.Errorf("creating workspace directory: %w", err)
 	}
+	s.refreshNamed(ctx)
 	return s.Get(ctx, id)
 }
 
@@ -498,6 +520,7 @@ func (s *Store) Write(ctx context.Context, req WriteRequest) (Node, error) {
 		return Node{}, fmt.Errorf("committing workspace write: %w", err)
 	}
 	finalizeFile()
+	s.refreshNamed(ctx)
 	return s.Get(ctx, nodeID)
 }
 
@@ -697,6 +720,7 @@ func (s *Store) Rename(ctx context.Context, id, newParentID, newName string, exp
 		rollbackMove()
 		return Node{}, fmt.Errorf("committing workspace rename: %w", err)
 	}
+	s.refreshNamed(ctx)
 	return s.Get(ctx, id)
 }
 
@@ -768,6 +792,7 @@ func (s *Store) Delete(ctx context.Context, id string, expectedVersion int64, re
 			return fmt.Errorf("removing workspace directory storage: %w", removeErr)
 		}
 	}
+	s.refreshNamed(ctx)
 	return nil
 }
 
@@ -863,7 +888,7 @@ func (s *Store) Search(ctx context.Context, query, parentID string, limit int) (
 		return nil, fmt.Errorf("closing workspace search rows: %w", err)
 	}
 	for index := range results {
-		results[index].VirtualPath, _ = s.VirtualPath(ctx, results[index].ID)
+		s.attachDerivedPaths(ctx, &results[index].Node)
 	}
 	return results, nil
 }

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -244,6 +245,86 @@ func TestWorkspaceWriteRejectsStaleVersion(t *testing.T) {
 	}
 	if _, err := registry.Execute(ctx, "agent_alpha", "native_workspace_write", update); !errors.Is(err, ErrExecutionFailed) || !strings.Contains(err.Error(), workspacepkg.ErrVersion.Error()) {
 		t.Fatalf("stale update error = %v, want wrapped ErrVersion", err)
+	}
+}
+
+func TestWorkspaceReadByPathAndBinaryHint(t *testing.T) {
+	registry, store, dataDir := newWorkspaceToolRegistry(t)
+	ctx := context.Background()
+	dir, err := store.CreateDirectory(ctx, "", "Reports")
+	if err != nil {
+		t.Fatalf("creating directory: %v", err)
+	}
+	pdf := []byte("%PDF-1.7\nbinary-not-for-context\n%%EOF")
+	node, err := store.Write(ctx, workspacepkg.WriteRequest{
+		ParentID: dir.ID, Name: "report.pdf", Content: pdf, MIMEType: "application/pdf", ActorID: "agent_alpha",
+	})
+	if err != nil {
+		t.Fatalf("writing pdf: %v", err)
+	}
+	if node.ExecPath != "Reports/report.pdf" {
+		t.Fatalf("exec_path = %q", node.ExecPath)
+	}
+
+	pathRead, err := registry.Execute(ctx, "agent_alpha", "native_workspace_read", json.RawMessage(`{"path":"Reports/report.pdf"}`))
+	if err != nil {
+		t.Fatalf("reading by path: %v", err)
+	}
+	if !strings.Contains(pathRead.Content, "Binary workspace file") || !strings.Contains(pathRead.Content, "ACTONOS_USER_WORKSPACE") {
+		t.Fatalf("expected binary exec hint, got %q", pathRead.Content)
+	}
+	if pathRead.Data["exec_path"] != "Reports/report.pdf" {
+		t.Fatalf("read result missing exec_path: %#v", pathRead.Data)
+	}
+	assertNoHostPath(t, dataDir, pathRead)
+
+	explicit, err := registry.Execute(ctx, "agent_alpha", "native_workspace_read", json.RawMessage(`{"path":"Reports/report.pdf","encoding":"base64"}`))
+	if err != nil {
+		t.Fatalf("explicit base64 read: %v", err)
+	}
+	decoded, err := base64.StdEncoding.DecodeString(explicit.Content)
+	if err != nil || !bytes.Equal(decoded, pdf) {
+		t.Fatalf("explicit base64 mismatch: %q err=%v", explicit.Content, err)
+	}
+}
+
+func TestNativeExecReadsNamedWorkspaceFile(t *testing.T) {
+	t.Setenv("ACTONOS_ALLOW_INSECURE_EXEC", "1")
+	registry, store, _ := newWorkspaceToolRegistry(t)
+	ctx := context.Background()
+	if _, err := store.Write(ctx, workspacepkg.WriteRequest{Name: "hello.txt", Content: []byte("named-hello"), ActorID: "agent_alpha"}); err != nil {
+		t.Fatalf("writing workspace file: %v", err)
+	}
+
+	command := "Get-Content -Raw -LiteralPath (Join-Path $env:ACTONOS_USER_WORKSPACE 'hello.txt')"
+	if runtime.GOOS != "windows" {
+		command = "cat \"$ACTONOS_USER_WORKSPACE/hello.txt\""
+	}
+
+	payload, _ := json.Marshal(map[string]string{"command": command})
+	result, err := registry.Execute(ctx, "agent_alpha", "native_exec", payload)
+	if err != nil {
+		t.Fatalf("native_exec: %v", err)
+	}
+	if !strings.Contains(result.Content, "named-hello") {
+		t.Fatalf("expected named workspace content in exec output, got %q", result.Content)
+	}
+
+	writeCmd := "Set-Content -LiteralPath (Join-Path $env:ACTONOS_USER_WORKSPACE 'from-exec.txt') -Value 'from-exec' -NoNewline"
+	if runtime.GOOS != "windows" {
+		writeCmd = "printf from-exec > \"$ACTONOS_USER_WORKSPACE/from-exec.txt\""
+	}
+	writePayload, _ := json.Marshal(map[string]string{"command": writeCmd})
+	if _, err := registry.Execute(ctx, "agent_alpha", "native_exec", writePayload); err != nil {
+		t.Fatalf("native_exec write: %v", err)
+	}
+	ingested, err := store.ResolveRef(ctx, "from-exec.txt")
+	if err != nil {
+		t.Fatalf("exec write was not ingested: %v", err)
+	}
+	_, got, err := store.Read(ctx, ingested.ID, 0, 0)
+	if err != nil || !strings.Contains(string(got), "from-exec") {
+		t.Fatalf("ingested content = %q err=%v", got, err)
 	}
 }
 

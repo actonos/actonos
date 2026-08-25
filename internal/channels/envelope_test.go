@@ -1,6 +1,10 @@
 package channels
 
-import "testing"
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
 
 func TestInboundNormalizeAliases(t *testing.T) {
 	msg := InboundMessage{
@@ -58,6 +62,39 @@ func TestNewReplyAndTyping(t *testing.T) {
 	react := NewReaction(in, "👀")
 	if react.Kind != MessageKindReaction || react.Reaction != "👀" || react.ReplyToID != "m-1" {
 		t.Fatalf("reaction=%+v", react)
+	}
+}
+
+func TestOutboundFileDataIsMediaForPlugins(t *testing.T) {
+	msg := OutboundMessage{
+		ChannelID: "telegram",
+		Recipient: "888",
+		Content:   "caption",
+		FileName:  "report.pdf",
+		MIMEType:  "application/pdf",
+		FileData:  []byte("%PDF-1.7"),
+	}
+	msg.Normalize()
+	if msg.Kind != MessageKindMedia {
+		t.Fatalf("kind=%q", msg.Kind)
+	}
+	if !msg.HasFile() {
+		t.Fatal("expected HasFile")
+	}
+	raw, err := json.Marshal(msg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded := string(raw)
+	if !strings.Contains(encoded, `"file_name":"report.pdf"`) || !strings.Contains(encoded, `"file_data":`) {
+		t.Fatalf("plugin JSON missing file fields: %s", encoded)
+	}
+	var roundtrip OutboundMessage
+	if err := json.Unmarshal(raw, &roundtrip); err != nil {
+		t.Fatal(err)
+	}
+	if string(roundtrip.FileData) != "%PDF-1.7" {
+		t.Fatalf("plugin did not receive file bytes: %q", roundtrip.FileData)
 	}
 }
 

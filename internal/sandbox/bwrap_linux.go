@@ -51,9 +51,22 @@ func (s *BubblewrapSandbox) Execute(ctx context.Context, req CommandRequest) (*C
 		"--cap-drop", "ALL",
 		"--bind", workspace, "/workspace",
 		"--setenv", "PATH", "/usr/bin:/bin:/data/bin",
-		"--chdir", "/workspace",
-		"bash", "-c", req.Command,
 	}
+	for _, mount := range req.BindMounts {
+		source, err := filepath.Abs(mount.Source)
+		if err != nil {
+			return nil, fmt.Errorf("resolving bind mount source: %w", err)
+		}
+		flag := "--bind"
+		if mount.ReadOnly {
+			flag = "--ro-bind"
+		}
+		args = append(args, flag, source, mount.Dest)
+	}
+	for key, value := range req.Env {
+		args = append(args, "--setenv", key, value)
+	}
+	args = append(args, "--chdir", "/workspace", "bash", "-c", req.Command)
 
 	cmd := exec.CommandContext(execCtx, "bwrap", args...)
 	if len(req.Env) > 0 {

@@ -3,7 +3,10 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
+
+	workspacepkg "github.com/actonos/actonos/internal/workspace"
 )
 
 type envelopeCapture struct {
@@ -52,5 +55,61 @@ func TestChannelNotifyToolRequiresMessageForText(t *testing.T) {
 	tool := NewChannelNotifyTool(nil)
 	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"channel":"telegram"}`)); err == nil {
 		t.Fatal("expected error when text kind has no message")
+	}
+}
+
+func TestChannelNotifyToolSendsWorkspaceFile(t *testing.T) {
+	registry, store, _ := newWorkspaceToolRegistry(t)
+	ctx := context.Background()
+	node, err := store.Write(ctx, workspacepkg.WriteRequest{
+		Name: "report.pdf", Content: []byte("%PDF-1.7 demo"), MIMEType: "application/pdf", ActorID: "agent_alpha",
+	})
+	if err != nil {
+		t.Fatalf("writing workspace pdf: %v", err)
+	}
+	cap := &envelopeCapture{}
+	tool, ok := registry.tools["native_channel_notify"].(*ChannelNotifyTool)
+	if !ok {
+		t.Fatal("native_channel_notify missing")
+	}
+	tool.SetSender(cap)
+
+	payload, _ := json.Marshal(map[string]string{
+		"channel": "telegram",
+		"chat_id": "888",
+		"message": "Báo cáo Q2",
+		"path":    "report.pdf",
+	})
+	result, err := tool.Execute(ctx, payload)
+	if err != nil {
+		t.Fatalf("notify file: %v", err)
+	}
+	if len(cap.envs) != 1 {
+		t.Fatalf("envs=%d", len(cap.envs))
+	}
+	got := cap.envs[0]
+	if got.Kind != "media" || got.FileName != "report.pdf" || string(got.FileBytes) != "%PDF-1.7 demo" {
+		t.Fatalf("envelope=%+v bytes=%q", got, got.FileBytes)
+	}
+	if got.ChatID != "888" || got.Content != "Báo cáo Q2" {
+		t.Fatalf("chat/caption=%+v", got)
+	}
+	if !strings.Contains(result.Content, "report.pdf") {
+		t.Fatalf("result=%q", result.Content)
+	}
+	_ = node
+}
+
+func TestChannelNotifyToolRejectsAllChannelForFiles(t *testing.T) {
+	registry, store, _ := newWorkspaceToolRegistry(t)
+	ctx := context.Background()
+	if _, err := store.Write(ctx, workspacepkg.WriteRequest{Name: "a.txt", Content: []byte("x"), ActorID: "agent_alpha"}); err != nil {
+		t.Fatal(err)
+	}
+	tool := registry.tools["native_channel_notify"].(*ChannelNotifyTool)
+	tool.SetSender(&envelopeCapture{})
+	_, err := tool.Execute(ctx, json.RawMessage(`{"channel":"all","path":"a.txt","chat_id":"1"}`))
+	if err == nil {
+		t.Fatal("expected error when sending a file to channel=all")
 	}
 }

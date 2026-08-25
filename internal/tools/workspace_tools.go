@@ -29,7 +29,7 @@ func NewWorkspaceSearchTool(store *workspacepkg.Store) *WorkspaceSearchTool {
 
 func (t *WorkspaceSearchTool) Name() string { return "native_workspace_search" }
 func (t *WorkspaceSearchTool) Description() string {
-	return "Search or browse files and folders in the official User Workspace (visible in the user's Workspace UI). Use this to find user documents, get file_id values, and inspect user files."
+	return "Search or browse files and folders in the official User Workspace (visible in the user's Workspace UI). Results include file_id, virtual_path, and exec_path (original filename relative to $ACTONOS_USER_WORKSPACE / user-workspace/). Use exec_path with native_exec/python to open PDFs and other binaries."
 }
 func (t *WorkspaceSearchTool) Category() string { return "native" }
 func (t *WorkspaceSearchTool) ParametersSchema() json.RawMessage {
@@ -76,7 +76,7 @@ func NewWorkspaceReadTool(store *workspacepkg.Store) *WorkspaceReadTool {
 
 func (t *WorkspaceReadTool) Name() string { return "native_workspace_read" }
 func (t *WorkspaceReadTool) Description() string {
-	return "Read a user document from the official User Workspace by its opaque file_id (discover file_id first via native_workspace_search)."
+	return "Read a user document from the official User Workspace by file_id or path (virtual_path or exec_path from native_workspace_search). Text files are returned as UTF-8. Binary files such as PDF are not dumped as base64 by default; use native_exec with exec_path / $ACTONOS_USER_WORKSPACE to process them."
 }
 func (t *WorkspaceReadTool) Category() string { return "native" }
 func (t *WorkspaceReadTool) ParametersSchema() json.RawMessage {
@@ -84,11 +84,11 @@ func (t *WorkspaceReadTool) ParametersSchema() json.RawMessage {
 		"type":"object",
 		"properties":{
 			"file_id":{"type":"string","description":"Opaque file ID returned by native_workspace_search"},
+			"path":{"type":"string","description":"Virtual or exec path when file_id is unknown (e.g. 'Reports/report.pdf', '/data/workspace/Reports/report.pdf', or 'user-workspace/report.pdf')"},
 			"offset":{"type":"integer","minimum":0,"default":0},
 			"limit":{"type":"integer","minimum":1,"maximum":1048576,"default":65536},
 			"encoding":{"type":"string","enum":["auto","utf8","base64"],"default":"auto"}
-		},
-		"required":["file_id"]
+		}
 	}`)
 }
 func (t *WorkspaceReadTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {
@@ -97,6 +97,7 @@ func (t *WorkspaceReadTool) Execute(ctx context.Context, inputJSON json.RawMessa
 	}
 	var input struct {
 		FileID   string `json:"file_id"`
+		Path     string `json:"path"`
 		Offset   int64  `json:"offset"`
 		Limit    int64  `json:"limit"`
 		Encoding string `json:"encoding"`
@@ -104,8 +105,16 @@ func (t *WorkspaceReadTool) Execute(ctx context.Context, inputJSON json.RawMessa
 	if err := json.Unmarshal(NormalizeToolInput(inputJSON), &input); err != nil {
 		return nil, fmt.Errorf("decoding workspace read input: %w", err)
 	}
-	if input.FileID == "" {
-		return nil, errors.New("file_id is required")
+	ref := strings.TrimSpace(input.FileID)
+	if ref == "" {
+		ref = strings.TrimSpace(input.Path)
+	}
+	if ref == "" {
+		return nil, errors.New("file_id or path is required")
+	}
+	resolved, err := t.store.ResolveRef(ctx, ref)
+	if err != nil {
+		return nil, fmt.Errorf("resolving user workspace file: %w", err)
 	}
 	if input.Limit == 0 {
 		input.Limit = defaultWorkspaceReadLimit
@@ -113,12 +122,29 @@ func (t *WorkspaceReadTool) Execute(ctx context.Context, inputJSON json.RawMessa
 	if input.Offset < 0 || input.Limit < 1 || input.Limit > maxWorkspaceReadLimit {
 		return nil, fmt.Errorf("invalid read range: limit must be between 1 and %d", maxWorkspaceReadLimit)
 	}
-	node, content, err := t.store.Read(ctx, input.FileID, input.Offset, input.Limit)
+	node, content, err := t.store.Read(ctx, resolved.ID, input.Offset, input.Limit)
 	if err != nil {
 		return nil, fmt.Errorf("reading user workspace file: %w", err)
 	}
 	encoding := strings.ToLower(input.Encoding)
 	if encoding == "" || encoding == "auto" {
+		if workspaceBinaryHint(node, content) {
+			execPath := node.ExecPath
+			if execPath == "" {
+				execPath = node.Name
+			}
+			return &ToolResult{
+				Content: fmt.Sprintf("[Binary workspace file %q (%s, %d bytes). Do not request base64 for large binaries. Open it from native_exec with python using exec_path %q, which is relative to $ACTONOS_USER_WORKSPACE and also available as %s/%s.]",
+					node.Name, node.MIMEType, node.SizeBytes, execPath, workspacepkg.AgentViewName, execPath),
+				Data: workspaceNodeData(node, map[string]any{
+					"offset":         input.Offset,
+					"returned_bytes": 0,
+					"truncated":      node.SizeBytes > 0,
+					"encoding":       "binary",
+					"is_binary":      true,
+				}),
+			}, nil
+		}
 		if utf8.Valid(content) && !strings.ContainsRune(string(content), '\x00') {
 			encoding = "utf8"
 		} else {
@@ -140,20 +166,46 @@ func (t *WorkspaceReadTool) Execute(ctx context.Context, inputJSON json.RawMessa
 	truncated := input.Offset+int64(len(content)) < node.SizeBytes
 	return &ToolResult{
 		Content: rendered,
-		Data: map[string]any{
-			"file_id":        node.ID,
-			"name":           node.Name,
-			"virtual_path":   node.VirtualPath,
-			"mime_type":      node.MIMEType,
-			"version":        node.Version,
-			"size_bytes":     node.SizeBytes,
+		Data: workspaceNodeData(node, map[string]any{
 			"offset":         input.Offset,
 			"returned_bytes": len(content),
 			"next_offset":    input.Offset + int64(len(content)),
 			"truncated":      truncated,
 			"encoding":       encoding,
-		},
+		}),
 	}, nil
+}
+
+func workspaceBinaryHint(node workspacepkg.Node, content []byte) bool {
+	kind := workspacepkg.MediaKind(node.MIMEType)
+	switch kind {
+	case "pdf", "image", "audio", "video", "archive", "binary":
+		return true
+	}
+	if len(content) > 0 && strings.IndexByte(string(content[:min(len(content), 1024)]), 0) != -1 {
+		return true
+	}
+	return false
+}
+
+func workspaceNodeData(node workspacepkg.Node, extra map[string]any) map[string]any {
+	data := map[string]any{
+		"workspace_file_id": node.ID,
+		"file_id":           node.ID,
+		"name":              node.Name,
+		"virtual_path":      node.VirtualPath,
+		"exec_path":         node.ExecPath,
+		"mime_type":         node.MIMEType,
+		"version":           node.Version,
+		"size_bytes":        node.SizeBytes,
+	}
+	if node.ExecPath != "" {
+		data["scratchpad_path"] = workspacepkg.AgentViewName + "/" + node.ExecPath
+	}
+	for key, value := range extra {
+		data[key] = value
+	}
+	return data
 }
 
 type WorkspaceWriteTool struct {
@@ -338,16 +390,8 @@ func (t *WorkspaceWriteTool) Execute(ctx context.Context, inputJSON json.RawMess
 		return nil, fmt.Errorf("writing user workspace file: %w", err)
 	}
 	return &ToolResult{
-		Content: fmt.Sprintf("Saved user workspace file %q (id=%s, version=%d, bytes=%d)", node.Name, node.ID, node.Version, node.SizeBytes),
-		Data: map[string]any{
-			"workspace_file_id": node.ID,
-			"file_id":           node.ID,
-			"name":              node.Name,
-			"virtual_path":      node.VirtualPath,
-			"mime_type":         node.MIMEType,
-			"version":           node.Version,
-			"size_bytes":        node.SizeBytes,
-		},
+		Content: fmt.Sprintf("Saved user workspace file %q (id=%s, version=%d, bytes=%d, exec_path=%s)", node.Name, node.ID, node.Version, node.SizeBytes, node.ExecPath),
+		Data:    workspaceNodeData(node, nil),
 	}, nil
 }
 
@@ -397,12 +441,6 @@ func (t *WorkspaceDeleteTool) Execute(ctx context.Context, inputJSON json.RawMes
 	}
 	return &ToolResult{
 		Content: fmt.Sprintf("Moved user workspace item %q (id=%s) to trash", node.Name, node.ID),
-		Data: map[string]any{
-			"workspace_file_id": node.ID,
-			"file_id":           node.ID,
-			"name":              node.Name,
-			"virtual_path":      node.VirtualPath,
-			"deleted":           true,
-		},
+		Data:    workspaceNodeData(node, map[string]any{"deleted": true}),
 	}, nil
 }

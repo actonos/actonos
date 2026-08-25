@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	workspacepkg "github.com/actonos/actonos/internal/workspace"
 )
 
 // ToolCapability represents a detected system CLI tool or runtime on the host.
@@ -181,8 +183,8 @@ func BuildAgentEnvironmentPrompt(dataDir, workspaceDir, agentSlug string) string
 	agentWorkspaceAbs := filepath.Join(dataDir, "agents", agentSlug, "workspace")
 
 	sb.WriteString("  <filesystem_layout>\n")
-	fmt.Fprintf(&sb, "    <user_workspace virtual_root=\"/data/workspace\" storage=\"user_documents_db\">\n")
-	sb.WriteString("      OFFICIAL USER WORKSPACE (VISIBLE TO USER IN WEB UI): This is the user's primary document repository shown on their Workspace page. Whenever the user asks to save, store, create, read, search, or delete files in their workspace (e.g. 'lưu vào workspace', 'tạo file trong workspace', 'lưu tài liệu cho tôi', 'đọc workspace'), you MUST use the `native_workspace_*` tools (`native_workspace_write`, `native_workspace_read`, `native_workspace_search`, `native_workspace_delete`).\n")
+	fmt.Fprintf(&sb, "    <user_workspace virtual_root=\"/data/workspace\" exec_root=\"$ACTONOS_USER_WORKSPACE\" scratchpad_view=\"%s\" storage=\"user_documents_db\">\n", workspacepkg.AgentViewName)
+	sb.WriteString("      OFFICIAL USER WORKSPACE (VISIBLE TO USER IN WEB UI): This is the user's primary document repository shown on their Workspace page. Use `native_workspace_search` / `native_workspace_read` / `native_workspace_write` / `native_workspace_delete` for metadata and text. Binary files (PDF, images, Office, ZIP) MUST be opened from native_exec using original filenames: join($ACTONOS_USER_WORKSPACE, exec_path) or the relative path user-workspace/<exec_path>. Never open UUID paths under data/workspace/<folder_uuid>/<file_uuid>.\n")
 	sb.WriteString("    </user_workspace>\n")
 	fmt.Fprintf(&sb, "    <agent_private_scratchpad path=\"%s\" host_dir=\"%s\">\n", agentWorkspaceRel, agentWorkspaceAbs)
 	sb.WriteString("      AGENT INTERNAL SCRATCHPAD (HIDDEN FROM USER UI): This is your private internal scratchpad for temporary build scripts, intermediate calculation files, or raw CLI tools. Use `native_file_*` and `native_exec` for internal working steps only. Final deliverables meant for the user MUST be saved to the User Workspace via `native_workspace_write`.\n")
@@ -210,6 +212,12 @@ func BuildAgentEnvironmentPrompt(dataDir, workspaceDir, agentSlug string) string
 		sb.WriteString("  <workspace_state path=\"" + agentWorkspaceRel + "\">\n")
 		sb.WriteString(wsOverview)
 		sb.WriteString("  </workspace_state>\n")
+	}
+	namedDir := filepath.Join(dataDir, "workspace", workspacepkg.NamedDirName)
+	if namedOverview := scanWorkspaceOverview(namedDir); namedOverview != "" {
+		sb.WriteString("  <user_workspace_files path=\"" + workspacepkg.AgentViewName + "\" env=\"ACTONOS_USER_WORKSPACE\">\n")
+		sb.WriteString(namedOverview)
+		sb.WriteString("  </user_workspace_files>\n")
 	}
 
 	// 4. Live Connected SaaS Integrations
@@ -247,8 +255,10 @@ func BuildAgentEnvironmentPrompt(dataDir, workspaceDir, agentSlug string) string
 	// 5. Dedicated Storage Policy & Global Data Access
 	sb.WriteString("<workspace_storage_policy>\n")
 	sb.WriteString("  <rule id=\"user_workspace_mandate\">USER WORKSPACE (MANDATORY): Whenever interacting with user documents, or when the user says 'lưu vào workspace', 'save to workspace', 'tạo tài liệu', or asks to access their workspace files, you MUST use `native_workspace_*` tools (`native_workspace_write`, `native_workspace_read`, `native_workspace_search`, `native_workspace_delete`). Files saved here appear directly on the user's Workspace Page UI.</rule>\n")
+	sb.WriteString("  <rule id=\"user_workspace_exec_paths\">USER WORKSPACE IN SHELL/PYTHON: native_exec cwd is the private scratchpad, but user documents are mirrored with original names. native_workspace_search returns exec_path. Open binaries with python using os.path.join(os.environ['ACTONOS_USER_WORKSPACE'], exec_path) or the relative path user-workspace/exec_path (e.g. python3 -c \"import os; p=os.path.join(os.environ['ACTONOS_USER_WORKSPACE'], 'report.pdf'); print(open(p,'rb').read(8))\"). Do not pass UUID file_id to python open().</rule>\n")
+	sb.WriteString("  <rule id=\"channel_file_delivery\">SEND FILES TO CHAT: When the user asks to send a workspace document through a chat channel, call native_channel_notify with the installed plugin name (channel), chat_id/recipient, optional caption in message, and file_id or path from native_workspace_search. The host forwards the file to that plugin. Do not paste base64 into the chat. Do not use channel=all when attaching a file.</rule>\n")
 	fmt.Fprintf(&sb, "  <rule id=\"agent_internal_scratchpad\">AGENT SCRATCHPAD: Use `native_file_*` tools and `native_exec` ONLY for internal temporary scripts, building/compiling code, or running CLI tools in `%s/`. Do NOT expect the user to see files created by `native_file_write` unless they are published to the user workspace with `native_workspace_write`.</rule>\n", agentWorkspaceRel)
-	sb.WriteString("  <rule id=\"binary_files_publishing\">BINARY & LARGE FILES: When generating binary files (PDF, images, ZIP, DOCX, XLSX, audio) or multi-step generated documents, build the file in your private scratchpad (`" + agentWorkspaceRel + "/`), then publish it to the User Workspace using `native_workspace_write` with `from_path: \"<relative_path>\"` (e.g. `native_workspace_write(name=\"plan.pdf\", from_path=\"plan.pdf\")`). This guarantees 100% lossless binary publishing without base64 truncation or encoding corruption.</rule>\n")
+	sb.WriteString("  <rule id=\"binary_files_publishing\">BINARY & LARGE FILES: When generating binary files (PDF, images, ZIP, DOCX, XLSX, audio) or multi-step generated documents, build the file in your private scratchpad (`" + agentWorkspaceRel + "/`), then publish it to the User Workspace using `native_workspace_write` with `from_path: \"<relative_path>\"` (e.g. `native_workspace_write(name=\"plan.pdf\", from_path=\"plan.pdf\")`). This guarantees 100% lossless binary publishing without base64 truncation or encoding corruption. To process an uploaded PDF, search the workspace then run python against $ACTONOS_USER_WORKSPACE/<exec_path> instead of native_workspace_read base64.</rule>\n")
 	sb.WriteString("  <rule id=\"system_structure\">SYSTEM STRUCTURE: System-level directories ('skills/', 'config/', 'plugins/', 'logs/', 'storage/') exist under data root. Only write to 'skills/' when explicitly creating/managing skills, and 'config/' for system configurations.</rule>\n")
 	sb.WriteString("</workspace_storage_policy>\n\n")
 

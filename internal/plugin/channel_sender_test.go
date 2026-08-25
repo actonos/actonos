@@ -44,6 +44,31 @@ func TestChannelToolSenderEnvelope(t *testing.T) {
 	if got.Kind != channels.MessageKindReaction || got.Reaction != "👀" || got.ReplyToID != "42" {
 		t.Fatalf("outbound=%+v", got)
 	}
+
+	err = envSender.SendEnvelope(context.Background(), tools.ChannelEnvelope{
+		ChannelID: "telegram",
+		AccountID: "tg_1",
+		Recipient: "888",
+		ChatID:    "888",
+		Kind:      "media",
+		Content:   "Báo cáo",
+		FileName:  "report.pdf",
+		MIMEType:  "application/pdf",
+		FileBytes: []byte("%PDF-1.7"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(adapter.sent) != 2 {
+		t.Fatalf("sent=%d", len(adapter.sent))
+	}
+	file := adapter.sent[1]
+	if file.Kind != channels.MessageKindMedia || file.FileName != "report.pdf" || string(file.FileData) != "%PDF-1.7" {
+		t.Fatalf("file outbound=%+v data=%q", file, file.FileData)
+	}
+	if file.Metadata["file_name"] != "report.pdf" {
+		t.Fatalf("file metadata=%v", file.Metadata)
+	}
 }
 
 type recordingChannelAdapter struct {

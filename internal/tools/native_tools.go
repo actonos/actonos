@@ -73,7 +73,9 @@ func RegisterNativeToolsWithConfig(r *ToolRegistry, config NativeToolsConfig) {
 	_ = r.Register(NewFileDeleteTool(config.DataDir, config.AgentsDir))
 	_ = r.Register(NewFileMoveTool(config.DataDir, config.AgentsDir))
 	_ = r.Register(NewFileCopyTool(config.DataDir, config.AgentsDir))
-	_ = r.Register(NewExecTool(config.DataDir, config.AgentsDir))
+	execTool := NewExecTool(config.DataDir, config.AgentsDir)
+	execTool.SetUserWorkspace(config.UserWorkspace)
+	_ = r.Register(execTool)
 	if config.UserWorkspace != nil {
 		_ = r.Register(NewWorkspaceSearchTool(config.UserWorkspace))
 		_ = r.Register(NewWorkspaceReadTool(config.UserWorkspace))
@@ -81,7 +83,9 @@ func RegisterNativeToolsWithConfig(r *ToolRegistry, config NativeToolsConfig) {
 		_ = r.Register(NewWorkspaceDeleteTool(config.UserWorkspace))
 	}
 	_ = r.Register(NewWebSearchTool())
-	_ = r.Register(NewChannelNotifyTool(r.bus))
+	notify := NewChannelNotifyTool(r.bus)
+	notify.SetWorkspace(config.UserWorkspace, config.DataDir, config.AgentsDir)
+	_ = r.Register(notify)
 	_ = r.Register(NewSysInfoTool(config.DataDir))
 	_ = r.Register(NewBrowserNavigateTool())
 	_ = r.Register(NewBrowserScreenshotTool(config.AgentsDir))
@@ -1671,8 +1675,9 @@ func (t *FileCopyTool) Execute(ctx context.Context, inputJSON json.RawMessage) (
 // -----------------------------------------------------------------------------
 
 type ExecTool struct {
-	dataDir   string
-	agentsDir string
+	dataDir       string
+	agentsDir     string
+	userWorkspace *workspacepkg.Store
 }
 
 func NewExecTool(dataDir string, agentsDir ...string) *ExecTool {
@@ -1680,9 +1685,13 @@ func NewExecTool(dataDir string, agentsDir ...string) *ExecTool {
 	return &ExecTool{dataDir: d, agentsDir: agDir}
 }
 
+func (t *ExecTool) SetUserWorkspace(store *workspacepkg.Store) {
+	t.userWorkspace = store
+}
+
 func (t *ExecTool) Name() string { return "native_exec" }
 func (t *ExecTool) Description() string {
-	return "Execute a shell or PowerShell command inside your private agent workspace directory (timeout: 60s, max memory: 512MB)."
+	return "Execute a shell or PowerShell command inside your private agent workspace directory (timeout: 60s, max memory: 512MB). User Workspace documents are available with original filenames via $ACTONOS_USER_WORKSPACE and the relative folder user-workspace/ (for example python3 can open $ACTONOS_USER_WORKSPACE/report.pdf). Files created or modified there are ingested back into the user's Workspace UI."
 }
 func (t *ExecTool) Category() string { return "native" }
 
@@ -1717,18 +1726,49 @@ func (t *ExecTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*Too
 	if err != nil {
 		return nil, err
 	}
+
+	env := map[string]string{}
+	var bindMounts []sandbox.BindMount
+	if t.userWorkspace != nil {
+		namedRoot := t.userWorkspace.NamedRoot()
+		if namedRoot != "" {
+			_ = os.MkdirAll(namedRoot, 0750)
+			_ = t.userWorkspace.EnsureAgentView(agentWorkspace)
+			env["ACTONOS_USER_WORKSPACE"] = namedRoot
+			if sb.Name() == "bubblewrap" {
+				env["ACTONOS_USER_WORKSPACE"] = workspacepkg.SandboxUserWorkspace
+				bindMounts = append(bindMounts, sandbox.BindMount{
+					Source: namedRoot,
+					Dest:   workspacepkg.SandboxUserWorkspace,
+				})
+			}
+		}
+	}
+
 	result, err := sb.Execute(ctx, sandbox.CommandRequest{
 		Command:      input.Command,
 		WorkspaceDir: agentWorkspace,
+		Env:          env,
+		BindMounts:   bindMounts,
 		Timeout:      timeout,
 		MaxMemoryMB:  512,
 		MaxProcesses: 30,
 	})
+	var reconcile workspacepkg.ReconcileReport
+	if t.userWorkspace != nil {
+		if rec, recErr := t.userWorkspace.ReconcileNamed(ctx, AgentIDFromContext(ctx)); recErr != nil {
+			slog.Warn("reconciling named workspace after exec", "error", recErr)
+		} else {
+			reconcile = rec
+		}
+	}
+
 	if err != nil {
 		return &ToolResult{
 			Content: fmt.Sprintf("(Command execution failed: %v)", err),
 			Data: map[string]any{
-				"error": err.Error(),
+				"error":              err.Error(),
+				"workspace_file_ids": append(append([]string{}, reconcile.Updated...), reconcile.Created...),
 			},
 		}, nil
 	}
@@ -1752,13 +1792,17 @@ func (t *ExecTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*Too
 		output = output[:32768] + truncatedMsg
 	}
 
+	workspaceIDs := append(append([]string{}, reconcile.Updated...), reconcile.Created...)
 	return &ToolResult{
 		Content: output,
 		Data: map[string]any{
-			"exit_code":      result.ExitCode,
-			"stderr":         result.Stderr,
-			"execution_time": result.ExecutionTime.String(),
-			"killed":         result.Killed,
+			"exit_code":          result.ExitCode,
+			"stderr":             result.Stderr,
+			"execution_time":     result.ExecutionTime.String(),
+			"killed":             result.Killed,
+			"workspace_file_ids": workspaceIDs,
+			"workspace_updated":  reconcile.Updated,
+			"workspace_created":  reconcile.Created,
 		},
 	}, nil
 }
@@ -1997,12 +2041,14 @@ func (t *WebSearchTool) searchDDGAPI(ctx context.Context, query string, maxResul
 // 9. Channel Notify Tool (Proactive Message Dispatch)
 // -----------------------------------------------------------------------------
 
+const maxChannelNotifyFile = 20 << 20
+
 // ChannelMessageSender delivers outbound notifications to active channel adapters.
 type ChannelMessageSender interface {
 	Send(ctx context.Context, channelID, accountID, recipient, content string) error
 }
 
-// ChannelEnvelope is the host→plugin outbound contract for typing, reactions, and quotes.
+// ChannelEnvelope is the host→plugin outbound contract for typing, reactions, quotes, and files.
 type ChannelEnvelope struct {
 	ChannelID string            `json:"channel_id"`
 	AccountID string            `json:"account_id"`
@@ -2016,6 +2062,9 @@ type ChannelEnvelope struct {
 	Action    string            `json:"action,omitempty"`
 	Typing    bool              `json:"typing,omitempty"`
 	Metadata  map[string]string `json:"metadata,omitempty"`
+	FileName  string            `json:"file_name,omitempty"`
+	MIMEType  string            `json:"mime_type,omitempty"`
+	FileBytes []byte            `json:"-"`
 }
 
 // ChannelEnvelopeSender is an optional richer sender implemented by the channel manager adapter.
@@ -2024,8 +2073,11 @@ type ChannelEnvelopeSender interface {
 }
 
 type ChannelNotifyTool struct {
-	bus    *bus.EventBus
-	sender ChannelMessageSender
+	bus       *bus.EventBus
+	sender    ChannelMessageSender
+	workspace *workspacepkg.Store
+	dataDir   string
+	agentsDir string
 }
 
 func NewChannelNotifyTool(eventBus *bus.EventBus) *ChannelNotifyTool {
@@ -2036,9 +2088,15 @@ func (t *ChannelNotifyTool) SetSender(s ChannelMessageSender) {
 	t.sender = s
 }
 
+func (t *ChannelNotifyTool) SetWorkspace(store *workspacepkg.Store, dataDir, agentsDir string) {
+	t.workspace = store
+	t.dataDir = dataDir
+	t.agentsDir = agentsDir
+}
+
 func (t *ChannelNotifyTool) Name() string { return "native_channel_notify" }
 func (t *ChannelNotifyTool) Description() string {
-	return "Send a channel message, typing indicator, quote-reply, or emoji reaction to Telegram, Discord, Slack, WhatsApp, Zalo, or all connected channels."
+	return "Send a channel message, file, typing indicator, quote-reply, or emoji reaction through an installed chat plugin. To deliver a user document, pass file_id or path from native_workspace_search, or from_path for a scratchpad file. The host forwards the file to the plugin; the plugin uploads it. Specify a concrete channel plugin (not 'all') when attaching a file."
 }
 func (t *ChannelNotifyTool) Category() string { return "native" }
 
@@ -2046,12 +2104,16 @@ func (t *ChannelNotifyTool) ParametersSchema() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {
-			"channel": { "type": "string", "description": "Target channel name or 'all' (default 'all')" },
+			"channel": { "type": "string", "description": "Target installed channel plugin name or 'all' (default 'all'). Must be a specific plugin when sending a file." },
 			"account_id": { "type": "string", "description": "Target account ID or 'all' (default 'all')" },
 			"recipient": { "type": "string", "description": "Optional recipient chat ID or phone number" },
 			"chat_id": { "type": "string", "description": "Conversation/chat/channel id (preferred over recipient when known)" },
-			"message": { "type": "string", "description": "Message content to send (required for kind=text)" },
-			"kind": { "type": "string", "enum": ["text", "typing", "reaction", "media"], "description": "Outbound envelope kind (default text)" },
+			"message": { "type": "string", "description": "Message text or file caption (required for kind=text without a file)" },
+			"kind": { "type": "string", "enum": ["text", "typing", "reaction", "media"], "description": "Outbound envelope kind (default text, or media when a file is attached)" },
+			"file_id": { "type": "string", "description": "Opaque User Workspace file ID from native_workspace_search to send as a chat attachment" },
+			"path": { "type": "string", "description": "User Workspace virtual/exec path (e.g. 'Reports/report.pdf') when file_id is unknown" },
+			"from_path": { "type": "string", "description": "Scratchpad-relative file to send (e.g. 'report.pdf'). Prefer workspace file_id/path for user documents." },
+			"file_name": { "type": "string", "description": "Optional download filename override for the attachment" },
 			"reply_to_id": { "type": "string", "description": "Source message id to quote / attach a reaction to" },
 			"thread_id": { "type": "string", "description": "Optional thread parent id (Slack thread_ts)" },
 			"reaction": { "type": "string", "description": "Emoji to apply when kind=reaction (e.g. 👀 or ✅)" },
@@ -2071,6 +2133,10 @@ func (t *ChannelNotifyTool) Execute(ctx context.Context, inputJSON json.RawMessa
 		ChatID    string `json:"chat_id"`
 		Message   string `json:"message"`
 		Kind      string `json:"kind"`
+		FileID    string `json:"file_id"`
+		Path      string `json:"path"`
+		FromPath  string `json:"from_path"`
+		FileName  string `json:"file_name"`
 		ReplyToID string `json:"reply_to_id"`
 		ThreadID  string `json:"thread_id"`
 		Reaction  string `json:"reaction"`
@@ -2080,9 +2146,17 @@ func (t *ChannelNotifyTool) Execute(ctx context.Context, inputJSON json.RawMessa
 	if err := json.Unmarshal(inputJSON, &input); err != nil {
 		return nil, errors.New("invalid channel notify payload")
 	}
+
+	attachment, err := t.loadChannelAttachment(ctx, input.FileID, input.Path, input.FromPath, input.FileName)
+	if err != nil {
+		return nil, err
+	}
+
 	kind := strings.TrimSpace(strings.ToLower(input.Kind))
 	if kind == "" {
 		switch {
+		case attachment != nil:
+			kind = "media"
 		case input.Typing || strings.EqualFold(input.Action, "typing"):
 			kind = "typing"
 		case strings.TrimSpace(input.Reaction) != "" && strings.TrimSpace(input.Message) == "":
@@ -2091,14 +2165,23 @@ func (t *ChannelNotifyTool) Execute(ctx context.Context, inputJSON json.RawMessa
 			kind = "text"
 		}
 	}
+	if attachment != nil {
+		kind = "media"
+	}
 	if kind == "text" && strings.TrimSpace(input.Message) == "" {
 		return nil, errors.New("message parameter is required")
+	}
+	if kind == "media" && attachment == nil {
+		return nil, errors.New("file_id, path, or from_path is required when kind=media")
 	}
 	if kind == "reaction" && strings.TrimSpace(input.Reaction) == "" {
 		return nil, errors.New("reaction parameter is required when kind=reaction")
 	}
 	if input.Channel == "" {
 		input.Channel = "all"
+	}
+	if attachment != nil && (strings.EqualFold(input.Channel, "all") || strings.TrimSpace(input.Channel) == "") {
+		return nil, errors.New("channel must be a specific installed chat plugin when sending a file")
 	}
 	if input.AccountID == "" {
 		input.AccountID = "all"
@@ -2121,32 +2204,135 @@ func (t *ChannelNotifyTool) Execute(ctx context.Context, inputJSON json.RawMessa
 		Action:    input.Action,
 		Typing:    input.Typing || kind == "typing",
 	}
-
-	if t.sender != nil {
-		var err error
-		if es, ok := t.sender.(ChannelEnvelopeSender); ok {
-			err = es.SendEnvelope(ctx, env)
-		} else {
-			err = t.sender.Send(ctx, input.Channel, input.AccountID, recipient, input.Message)
+	if attachment != nil {
+		env.FileName = attachment.name
+		env.MIMEType = attachment.mimeType
+		env.FileBytes = attachment.content
+		if env.Metadata == nil {
+			env.Metadata = map[string]string{}
 		}
-		if err != nil {
-			slog.Warn("channel notify direct send failed", "channel", input.Channel, "kind", kind, "error", err)
+		env.Metadata["file_name"] = attachment.name
+		env.Metadata["mime_type"] = attachment.mimeType
+		if attachment.fileID != "" {
+			env.Metadata["workspace_file_id"] = attachment.fileID
 		}
 	}
 
+	if t.sender != nil {
+		var sendErr error
+		if es, ok := t.sender.(ChannelEnvelopeSender); ok {
+			sendErr = es.SendEnvelope(ctx, env)
+		} else if attachment == nil {
+			sendErr = t.sender.Send(ctx, input.Channel, input.AccountID, recipient, input.Message)
+		} else {
+			sendErr = errors.New("channel sender does not support file attachments")
+		}
+		if sendErr != nil {
+			if attachment != nil {
+				return nil, fmt.Errorf("sending file to channel %s: %w", input.Channel, sendErr)
+			}
+			slog.Warn("channel notify direct send failed", "channel", input.Channel, "kind", kind, "error", sendErr)
+		}
+	}
+
+	result := fmt.Sprintf("Successfully dispatched proactive notification to channel '%s' (account: %s, kind: %s)", input.Channel, input.AccountID, kind)
+	if attachment != nil {
+		result = fmt.Sprintf("Sent file %q (%s, %d bytes) to %s chat %s", attachment.name, attachment.mimeType, len(attachment.content), input.Channel, env.ChatID)
+	}
 	return &ToolResult{
-		Content: fmt.Sprintf("Successfully dispatched proactive notification to channel '%s' (account: %s, kind: %s)", input.Channel, input.AccountID, kind),
+		Content: result,
 		Data: map[string]any{
 			"channel":     input.Channel,
 			"account_id":  input.AccountID,
 			"recipient":   recipient,
 			"chat_id":     env.ChatID,
 			"kind":        kind,
+			"file_name":   env.FileName,
+			"mime_type":   env.MIMEType,
+			"size_bytes":  len(env.FileBytes),
 			"reply_to_id": input.ReplyToID,
 			"reaction":    input.Reaction,
 			"status":      "dispatched",
 		},
 	}, nil
+}
+
+type channelAttachment struct {
+	fileID   string
+	name     string
+	mimeType string
+	content  []byte
+}
+
+func (t *ChannelNotifyTool) loadChannelAttachment(ctx context.Context, fileID, path, fromPath, fileName string) (*channelAttachment, error) {
+	fileID = strings.TrimSpace(fileID)
+	path = strings.TrimSpace(path)
+	fromPath = strings.TrimSpace(fromPath)
+	fileName = strings.TrimSpace(fileName)
+	if fileID == "" && path == "" && fromPath == "" {
+		return nil, nil
+	}
+	if (fileID != "" || path != "") && fromPath != "" {
+		return nil, errors.New("provide only one of file_id/path or from_path")
+	}
+	if fileID != "" || path != "" {
+		if t.workspace == nil {
+			return nil, errors.New("user workspace store is unavailable")
+		}
+		ref := fileID
+		if ref == "" {
+			ref = path
+		}
+		node, err := t.workspace.ResolveRef(ctx, ref)
+		if err != nil {
+			return nil, fmt.Errorf("resolving workspace file: %w", err)
+		}
+		if node.Type != "file" {
+			return nil, errors.New("workspace path is a folder; send a file")
+		}
+		if node.SizeBytes > maxChannelNotifyFile {
+			return nil, fmt.Errorf("workspace file exceeds %d-byte channel upload limit", maxChannelNotifyFile)
+		}
+		_, content, err := t.workspace.Read(ctx, node.ID, 0, 0)
+		if err != nil {
+			return nil, fmt.Errorf("reading workspace file: %w", err)
+		}
+		name := fileName
+		if name == "" {
+			name = node.Name
+		}
+		return &channelAttachment{fileID: node.ID, name: name, mimeType: node.MIMEType, content: content}, nil
+	}
+
+	agentID := AgentIDFromContext(ctx)
+	fromPath = sanitizeAgentRelativePath(fromPath, agentID)
+	allowedRoot, baseDir, targetRel, err := resolveTargetBaseDir(ctx, t.dataDir, t.agentsDir, fromPath)
+	if err != nil {
+		return nil, fmt.Errorf("resolving from_path: %w", err)
+	}
+	targetPath, err := security.ResolvePathWithBase(allowedRoot, baseDir, targetRel, false)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrPathEscape, err)
+	}
+	info, err := os.Stat(targetPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading from_path (%s): %w", fromPath, err)
+	}
+	if info.IsDir() {
+		return nil, errors.New("from_path is a directory; send a file")
+	}
+	if info.Size() > maxChannelNotifyFile {
+		return nil, fmt.Errorf("from_path exceeds %d-byte channel upload limit", maxChannelNotifyFile)
+	}
+	content, err := os.ReadFile(targetPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading from_path (%s): %w", fromPath, err)
+	}
+	name := fileName
+	if name == "" {
+		name = filepath.Base(fromPath)
+	}
+	return &channelAttachment{name: name, mimeType: "", content: content}, nil
 }
 
 func firstNonEmptyArg(values ...string) string {
