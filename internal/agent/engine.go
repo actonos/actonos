@@ -274,6 +274,13 @@ func (e *Engine) ExecuteAutonomousGoal(ctx context.Context, agentID, goal string
 		if stepErr != nil {
 			return resp, stepErr
 		}
+		if resp != nil && MissionDeliverableSatisfied(goal, resp.ToolCalls) {
+			if plan != nil {
+				plan.markRemainingComplete("Deliverable already produced.")
+				e.writeTaskPlan(ctx, task, plan)
+			}
+			return resp, nil
+		}
 		if plan != nil && plan.AllStepsCompleted() {
 			return resp, nil
 		}
@@ -333,8 +340,8 @@ func (e *Engine) ExecuteNextPlanStep(ctx context.Context, agentID, goal string, 
 		if plan.AllStepsCompleted() {
 			return &llm.Response{Content: plan.CompletionSummary()}, plan, nil
 		}
-		resp, execErr := e.ExecuteStepWithHistory(ctx, agentID, goal, history)
-		return resp, plan, execErr
+		// Deadlocked or failed dependencies: do not re-run the entire goal.
+		return &llm.Response{Content: "Plan cannot advance; remaining steps are blocked on unfinished or failed dependencies."}, plan, nil
 	}
 	execAgentID := agentID
 	if step.AgentRole != "" && step.AgentRole != "general" && e.agentMgr != nil {

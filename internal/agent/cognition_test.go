@@ -236,6 +236,19 @@ func TestVerifierJSONSemanticAndCompletion(t *testing.T) {
 	if err := v.VerifyToolCommand(json.RawMessage(`{"command":"echo safe"}`)); err != nil {
 		t.Fatal(err)
 	}
+	if !MissionDeliverableSatisfied("Nghiên cứu đề tài và lưu file workspace", []llm.ToolCall{{
+		Function: llm.FunctionCall{Name: "native_workspace_write"},
+	}}) {
+		t.Fatal("workspace write should satisfy a save-to-workspace research mission")
+	}
+	if MissionDeliverableSatisfied("Nghiên cứu đề tài và lưu file workspace", nil) {
+		t.Fatal("research mission satisfied without a write tool")
+	}
+	if MissionDeliverableSatisfied("summarize verbally", []llm.ToolCall{{
+		Function: llm.FunctionCall{Name: "native_workspace_write"},
+	}}) {
+		t.Fatal("unrelated write should not complete a verbal-only goal")
+	}
 	if err := v.VerifyToolCommand(json.RawMessage(`{}`)); err == nil {
 		t.Fatal("empty command accepted")
 	}

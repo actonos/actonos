@@ -56,6 +56,19 @@ func ExecutionSource(ctx context.Context) string {
 
 // IsCannedOrEmptyCompletion reports whether content is empty or the legacy canned
 // success phrase and must not complete a mission.
+func missionWorkGoal(title, description string) string {
+	title = strings.TrimSpace(title)
+	description = strings.TrimSpace(description)
+	switch {
+	case title != "" && description != "" && !strings.EqualFold(title, description):
+		return title + "\n" + description
+	case description != "":
+		return description
+	default:
+		return title
+	}
+}
+
 func IsCannedOrEmptyCompletion(content string) bool {
 	trimmed := strings.TrimSpace(content)
 	if trimmed == "" {

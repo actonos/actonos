@@ -468,7 +468,7 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) (run *Hea
 		if h.engine != nil {
 			skills = h.engine.SkillCatalogForAgent(ctx, assignedAgent)
 		}
-		prompt := BuildHeartbeatMissionPrompt(activeTask.Title, activeTask.Description, standingDirectives, skills...)
+		workGoal := missionWorkGoal(activeTask.Title, activeTask.Description)
 
 		// Suppress episodic memory for heartbeat task execution to prevent stale
 		// memories from deleted tasks from contaminating the current task context.
@@ -481,7 +481,7 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) (run *Hea
 		if h.cronSched != nil && h.cronSched.CountJobsForAgent(assignedAgent) >= DefaultCronJobsPerAgent {
 			taskCtx = tools.WithDeniedTools(taskCtx, "native_cron_schedule")
 		}
-		resp, execErr := h.engine.ExecuteAutonomousGoal(taskCtx, assignedAgent, prompt, history)
+		resp, execErr := h.engine.ExecuteAutonomousGoal(taskCtx, assignedAgent, workGoal, history)
 		h.adoptPersistedPlan(ctx, activeTask)
 		if execErr != nil {
 			var approvalErr *tools.ApprovalRequiredError
@@ -517,11 +517,17 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) (run *Hea
 			fullCleaned := cleanFullContent(content)
 			shortLog := shortSummary(content, 250)
 			planDone := activeTask.Plan != nil && activeTask.Plan.AllStepsCompleted()
+			if activeTask.Plan != nil {
+				if pct := activeTask.Plan.ProgressPercent(); pct > activeTask.Progress {
+					activeTask.Progress = pct
+				}
+			}
+			deliverableDone := MissionDeliverableSatisfied(workGoal, resp.ToolCalls)
 
 			// Parse Task status transitions. Empty/canned replies never complete a
 			// mission unless the durable DAG is already fully done — progress 100%
 			// from completed plan steps is the completion signal, not a stall.
-			if IsCannedOrEmptyCompletion(content) && !planDone && activeTask.Status != "completed" {
+			if IsCannedOrEmptyCompletion(content) && !planDone && !deliverableDone && activeTask.Status != "completed" {
 				activeTask.Status = "in_progress"
 				activeTask.FailCount++
 				activeTask.ExecutionLog = "Empty or canned success ignored; mission remains in progress."
@@ -531,7 +537,7 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) (run *Hea
 					activeTask.Status = "blocked"
 					run.Summary += " [blocked after empty completions]"
 				}
-			} else if planDone || activeTask.Status == "completed" || (strings.Contains(content, "[TASK_COMPLETED]") && h.engine.verifier.VerifyTaskCompletion(activeTask.Description, content, resp.ToolCalls)) {
+			} else if planDone || deliverableDone || activeTask.Status == "completed" || (strings.Contains(content, "[TASK_COMPLETED]") && h.engine.verifier.VerifyTaskCompletion(activeTask.Description, content, resp.ToolCalls)) {
 				activeTask.Status = "completed"
 				activeTask.Progress = 100
 				activeTask.FailCount = 0
@@ -608,14 +614,15 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) (run *Hea
 				}))
 			}
 
-			// Keep draining the backlog without waiting for the next scheduled
-			// tick: finished missions yield to pending work, and an unfinished
-			// DAG keeps going after the 15s trigger cooldown.
-			if h.taskMgr != nil && (activeTask.Status == "completed" || activeTask.Status == "in_progress") {
+			// Immediate follow-up only when there is new work: another pending
+			// mission, or a remaining dependency-ready plan step. An in_progress
+			// mission with no ready step must not be re-woken to repeat itself.
+			if h.taskMgr != nil {
 				pendingTasks, _ := h.taskMgr.ListTasks(ctx, "pending", "")
-				moreWork := activeTask.Status == "in_progress" || len(pendingTasks) > 0
+				readyMore := activeTask.Status == "in_progress" && activeTask.Plan != nil && activeTask.Plan.HasReadyStep()
+				moreWork := (activeTask.Status == "completed" && len(pendingTasks) > 0) || readyMore
 				if moreWork {
-					slog.Info("queueing immediate next heartbeat cycle", "task_id", activeTask.ID, "status", activeTask.Status, "pending_count", len(pendingTasks))
+					slog.Info("queueing immediate next heartbeat cycle", "task_id", activeTask.ID, "status", activeTask.Status, "pending_count", len(pendingTasks), "ready_more", readyMore)
 					go func() {
 						time.Sleep(2 * time.Second)
 						h.TriggerWakeup()

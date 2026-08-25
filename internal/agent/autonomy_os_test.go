@@ -468,6 +468,96 @@ func TestHeartbeatCompletesMissionWhenPlanAlreadyDone(t *testing.T) {
 	}
 }
 
+func TestHeartbeatCompletesAfterFileDeliverableWithoutCompletionMarker(t *testing.T) {
+	db, eventBus := setupTestDB(t)
+	manager, err := NewAgentManager(db, eventBus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace := t.TempDir()
+	registry := tools.NewToolRegistry(eventBus)
+	tools.RegisterNativeTools(registry, workspace)
+	registry.SetPolicyResolver(func(context.Context, string) (tools.AgentToolPolicy, error) {
+		return tools.AgentToolPolicy{AuthorizedTools: []string{"*"}, ApprovalThreshold: "Low", AllowedPaths: []string{"*"}}, nil
+	})
+	taskManager, err := NewTaskManager(db.SQLDB(), workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := taskManager.CreateTask(context.Background(), AutonomousTask{
+		Title: "Nghiên cứu đề tài ngẫu nhiên", Description: "Nghiên cứu và lưu file workspace", CreatedBy: "user", TargetChannel: "none",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := llm.NewMockProvider("openai/gpt-4o", "")
+	provider.CompleteFunc = func(_ context.Context, _ []llm.Message, _ llm.CompletionOptions) (*llm.Response, error) {
+		if provider.CompleteCalls == 1 {
+			return &llm.Response{
+				Model: "openai/gpt-4o",
+				ToolCalls: []llm.ToolCall{{
+					ID: "w1", Type: "function",
+					Function: llm.FunctionCall{Name: "native_file_write", Arguments: json.RawMessage(`{"path":"research.md","content":"findings"}`)},
+				}},
+			}, nil
+		}
+		return &llm.Response{Model: "openai/gpt-4o", Content: "Đã lưu research.md vào workspace.", Usage: llm.Usage{TotalTokens: 8}}, nil
+	}
+	router := llm.NewModelCascadeRouter()
+	router.RegisterProvider("openai/gpt-4o", provider)
+	engine := NewEngine(manager, eventBus, router, nil)
+	engine.SetToolRegistry(registry)
+	engine.SetTaskManager(taskManager)
+	daemon := NewHeartbeatDaemon(manager, engine, eventBus, db.SQLDB(), workspace, time.Minute)
+	daemon.SetTaskManager(taskManager)
+	daemon.SetSessionManager(nil)
+
+	run, err := daemon.TriggerManualPulse(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := taskManager.GetTask(context.Background(), task.ID)
+	if err != nil || got.Status != "completed" || got.Progress != 100 {
+		t.Fatalf("expected deliverable to complete the mission: run=%+v task=%+v err=%v", run, got, err)
+	}
+}
+
+func TestExecuteAutonomousGoalDoesNotRerunStuckPlan(t *testing.T) {
+	db, eventBus := setupTestDB(t)
+	manager, err := NewAgentManager(db, eventBus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	taskManager, err := NewTaskManager(db.SQLDB(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := taskManager.CreateTask(context.Background(), AutonomousTask{
+		Title: "Stuck", Description: "cannot advance", CreatedBy: "user",
+		Plan: &TaskPlan{Goal: "cannot advance", Steps: []PlanStep{
+			{ID: "task_1", Description: "first", Status: "failed"},
+			{ID: "task_2", Description: "second", Status: "pending", Dependencies: []string{"task_1"}},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := llm.NewMockProvider("openai/gpt-4o", "should not run")
+	router := llm.NewModelCascadeRouter()
+	router.RegisterProvider("openai/gpt-4o", provider)
+	engine := NewEngine(manager, eventBus, router, nil)
+	engine.SetPlanner(NewPlanner(router))
+	engine.SetTaskManager(taskManager)
+	ctx := context.WithValue(context.Background(), "task_id", task.ID)
+	resp, err := engine.ExecuteAutonomousGoal(ctx, DefaultSystemAgentID, task.Description, nil)
+	if err != nil {
+		t.Fatalf("stuck plan should not error: %v", err)
+	}
+	if provider.CompleteCalls != 0 {
+		t.Fatalf("stuck plan re-ran the whole goal, calls=%d resp=%v", provider.CompleteCalls, resp)
+	}
+}
+
 func TestCustomAgentHeartbeatIntervalHonored(t *testing.T) {
 	db, eventBus := setupTestDB(t)
 	manager, err := NewAgentManager(db, eventBus)

@@ -295,6 +295,26 @@ func (p *Planner) NextReadyStep(plan *TaskPlan) (*PlanStep, error) {
 	return nil, nil
 }
 
+// HasReadyStep reports whether a pending step can run now.
+func (p *TaskPlan) HasReadyStep() bool {
+	step, err := (*Planner)(nil).NextReadyStep(p)
+	return err == nil && step != nil
+}
+
+func (p *TaskPlan) markRemainingComplete(result string) {
+	if p == nil {
+		return
+	}
+	for i := range p.Steps {
+		if p.Steps[i].Status != "completed" && p.Steps[i].Status != "failed" {
+			p.Steps[i].Status = "completed"
+			if strings.TrimSpace(p.Steps[i].Result) == "" {
+				p.Steps[i].Result = result
+			}
+		}
+	}
+}
+
 // MarkStep records a step outcome on the in-memory plan.
 func (p *TaskPlan) MarkStep(id, status, result string) {
 	if p == nil {
