@@ -2002,6 +2002,27 @@ type ChannelMessageSender interface {
 	Send(ctx context.Context, channelID, accountID, recipient, content string) error
 }
 
+// ChannelEnvelope is the host→plugin outbound contract for typing, reactions, and quotes.
+type ChannelEnvelope struct {
+	ChannelID string            `json:"channel_id"`
+	AccountID string            `json:"account_id"`
+	Recipient string            `json:"recipient"`
+	Content   string            `json:"content"`
+	Kind      string            `json:"kind,omitempty"`
+	ChatID    string            `json:"chat_id,omitempty"`
+	ReplyToID string            `json:"reply_to_id,omitempty"`
+	ThreadID  string            `json:"thread_id,omitempty"`
+	Reaction  string            `json:"reaction,omitempty"`
+	Action    string            `json:"action,omitempty"`
+	Typing    bool              `json:"typing,omitempty"`
+	Metadata  map[string]string `json:"metadata,omitempty"`
+}
+
+// ChannelEnvelopeSender is an optional richer sender implemented by the channel manager adapter.
+type ChannelEnvelopeSender interface {
+	SendEnvelope(ctx context.Context, env ChannelEnvelope) error
+}
+
 type ChannelNotifyTool struct {
 	bus    *bus.EventBus
 	sender ChannelMessageSender
@@ -2017,7 +2038,7 @@ func (t *ChannelNotifyTool) SetSender(s ChannelMessageSender) {
 
 func (t *ChannelNotifyTool) Name() string { return "native_channel_notify" }
 func (t *ChannelNotifyTool) Description() string {
-	return "Proactively send a message or status update to the user via Telegram, WhatsApp, Discord, or Web."
+	return "Send a channel message, typing indicator, quote-reply, or emoji reaction to Telegram, Discord, Slack, WhatsApp, Zalo, or all connected channels."
 }
 func (t *ChannelNotifyTool) Category() string { return "native" }
 
@@ -2028,9 +2049,16 @@ func (t *ChannelNotifyTool) ParametersSchema() json.RawMessage {
 			"channel": { "type": "string", "description": "Target channel name or 'all' (default 'all')" },
 			"account_id": { "type": "string", "description": "Target account ID or 'all' (default 'all')" },
 			"recipient": { "type": "string", "description": "Optional recipient chat ID or phone number" },
-			"message": { "type": "string", "description": "Message content to send" }
+			"chat_id": { "type": "string", "description": "Conversation/chat/channel id (preferred over recipient when known)" },
+			"message": { "type": "string", "description": "Message content to send (required for kind=text)" },
+			"kind": { "type": "string", "enum": ["text", "typing", "reaction", "media"], "description": "Outbound envelope kind (default text)" },
+			"reply_to_id": { "type": "string", "description": "Source message id to quote / attach a reaction to" },
+			"thread_id": { "type": "string", "description": "Optional thread parent id (Slack thread_ts)" },
+			"reaction": { "type": "string", "description": "Emoji to apply when kind=reaction (e.g. 👀 or ✅)" },
+			"typing": { "type": "boolean", "description": "If true, emit a typing indicator (also implied by kind=typing)" },
+			"action": { "type": "string", "description": "Chat action such as typing, upload_photo, upload_document" }
 		},
-		"required": ["message"]
+		"required": []
 	}`)
 }
 
@@ -2040,10 +2068,34 @@ func (t *ChannelNotifyTool) Execute(ctx context.Context, inputJSON json.RawMessa
 		Channel   string `json:"channel"`
 		AccountID string `json:"account_id"`
 		Recipient string `json:"recipient"`
+		ChatID    string `json:"chat_id"`
 		Message   string `json:"message"`
+		Kind      string `json:"kind"`
+		ReplyToID string `json:"reply_to_id"`
+		ThreadID  string `json:"thread_id"`
+		Reaction  string `json:"reaction"`
+		Typing    bool   `json:"typing"`
+		Action    string `json:"action"`
 	}
-	if err := json.Unmarshal(inputJSON, &input); err != nil || input.Message == "" {
+	if err := json.Unmarshal(inputJSON, &input); err != nil {
+		return nil, errors.New("invalid channel notify payload")
+	}
+	kind := strings.TrimSpace(strings.ToLower(input.Kind))
+	if kind == "" {
+		switch {
+		case input.Typing || strings.EqualFold(input.Action, "typing"):
+			kind = "typing"
+		case strings.TrimSpace(input.Reaction) != "" && strings.TrimSpace(input.Message) == "":
+			kind = "reaction"
+		default:
+			kind = "text"
+		}
+	}
+	if kind == "text" && strings.TrimSpace(input.Message) == "" {
 		return nil, errors.New("message parameter is required")
+	}
+	if kind == "reaction" && strings.TrimSpace(input.Reaction) == "" {
+		return nil, errors.New("reaction parameter is required when kind=reaction")
 	}
 	if input.Channel == "" {
 		input.Channel = "all"
@@ -2051,22 +2103,59 @@ func (t *ChannelNotifyTool) Execute(ctx context.Context, inputJSON json.RawMessa
 	if input.AccountID == "" {
 		input.AccountID = "all"
 	}
+	recipient := strings.TrimSpace(input.Recipient)
+	if recipient == "" {
+		recipient = strings.TrimSpace(input.ChatID)
+	}
+
+	env := ChannelEnvelope{
+		ChannelID: input.Channel,
+		AccountID: input.AccountID,
+		Recipient: recipient,
+		Content:   input.Message,
+		Kind:      kind,
+		ChatID:    firstNonEmptyArg(input.ChatID, recipient),
+		ReplyToID: input.ReplyToID,
+		ThreadID:  input.ThreadID,
+		Reaction:  input.Reaction,
+		Action:    input.Action,
+		Typing:    input.Typing || kind == "typing",
+	}
 
 	if t.sender != nil {
-		if err := t.sender.Send(ctx, input.Channel, input.AccountID, input.Recipient, input.Message); err != nil {
-			slog.Warn("channel notify direct send failed", "channel", input.Channel, "error", err)
+		var err error
+		if es, ok := t.sender.(ChannelEnvelopeSender); ok {
+			err = es.SendEnvelope(ctx, env)
+		} else {
+			err = t.sender.Send(ctx, input.Channel, input.AccountID, recipient, input.Message)
+		}
+		if err != nil {
+			slog.Warn("channel notify direct send failed", "channel", input.Channel, "kind", kind, "error", err)
 		}
 	}
 
 	return &ToolResult{
-		Content: fmt.Sprintf("Successfully dispatched proactive notification to channel '%s' (account: %s)", input.Channel, input.AccountID),
+		Content: fmt.Sprintf("Successfully dispatched proactive notification to channel '%s' (account: %s, kind: %s)", input.Channel, input.AccountID, kind),
 		Data: map[string]any{
-			"channel":    input.Channel,
-			"account_id": input.AccountID,
-			"recipient":  input.Recipient,
-			"status":     "dispatched",
+			"channel":     input.Channel,
+			"account_id":  input.AccountID,
+			"recipient":   recipient,
+			"chat_id":     env.ChatID,
+			"kind":        kind,
+			"reply_to_id": input.ReplyToID,
+			"reaction":    input.Reaction,
+			"status":      "dispatched",
 		},
 	}, nil
+}
+
+func firstNonEmptyArg(values ...string) string {
+	for _, v := range values {
+		if s := strings.TrimSpace(v); s != "" {
+			return s
+		}
+	}
+	return ""
 }
 
 // -----------------------------------------------------------------------------

@@ -219,6 +219,92 @@ func TestMessageRouter_Route(t *testing.T) {
 	}
 }
 
+func TestMessageRouter_TypingAndQuoteReply(t *testing.T) {
+	agents := []agent.AgentManifest{
+		{
+			AgentID:        "agent_support",
+			Name:           "Support Bot",
+			Status:         agent.StatusActive,
+			ListenChannels: []string{"telegram"},
+		},
+	}
+
+	eb := bus.NewEventBus()
+	defer eb.Close()
+	cm := NewChannelManager(eb, nil)
+	defer cm.Stop()
+
+	adapter := &recordingAdapter{name: "telegram"}
+	if err := cm.RegisterAdapter(adapter); err != nil {
+		t.Fatal(err)
+	}
+
+	cm.accounts["tg_1"] = ChannelAccount{
+		ID:            "tg_1",
+		Channel:       "telegram",
+		Enabled:       true,
+		BoundAgentIDs: []string{"agent_support"},
+	}
+
+	engine := &mockEngineExecutor{
+		result: &llm.Response{Content: "Hello, I am Support Bot!"},
+	}
+	router := NewMessageRouter(cm, &mockAgentProvider{agents: agents}, NewChannelSessionManager(nil), engine, eb)
+
+	err := router.Route(context.Background(), InboundMessage{
+		ChannelID:  "telegram",
+		AccountID:  "tg_1",
+		SenderID:   "user_100",
+		SenderName: "Ada",
+		ChatID:     "888",
+		MessageID:  "42",
+		Content:    "Hello!",
+	})
+	if err != nil {
+		t.Fatalf("Route failed: %v", err)
+	}
+
+	sent := adapter.snapshot()
+	if len(sent) < 2 {
+		t.Fatalf("expected typing + reply, got %#v", sent)
+	}
+	if sent[0].Kind != MessageKindTyping || !sent[0].Typing {
+		t.Fatalf("first outbound should be typing, got %+v", sent[0])
+	}
+	reply := sent[len(sent)-1]
+	if reply.Content != "Hello, I am Support Bot!" {
+		t.Fatalf("reply content=%q", reply.Content)
+	}
+	if reply.ReplyToID != "42" {
+		t.Fatalf("expected quote reply_to_id=42, got %q", reply.ReplyToID)
+	}
+	if reply.ChatID != "888" {
+		t.Fatalf("expected chat_id=888, got %q", reply.ChatID)
+	}
+	if reply.Kind != MessageKindText {
+		t.Fatalf("reply kind=%q", reply.Kind)
+	}
+}
+
+func TestMessageRouter_SkipsControlInbound(t *testing.T) {
+	engine := &mockEngineExecutor{}
+	eb := bus.NewEventBus()
+	defer eb.Close()
+	cm := NewChannelManager(eb, nil)
+	defer cm.Stop()
+	router := NewMessageRouter(cm, &mockAgentProvider{}, nil, engine, eb)
+	if err := router.Route(context.Background(), InboundMessage{
+		ChannelID: "telegram",
+		Kind:      MessageKindTyping,
+		SenderID:  "u",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if engine.lastAgent() != "" {
+		t.Fatalf("engine should not run for typing inbound, got %s", engine.lastAgent())
+	}
+}
+
 func TestMessageRouter_EventBusSubscription(t *testing.T) {
 	agents := []agent.AgentManifest{
 		{

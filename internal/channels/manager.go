@@ -236,6 +236,7 @@ func (m *ChannelManager) Send(ctx context.Context, channelID, accountID, recipie
 
 // SendMessage dispatches an outbound message to matching channel adapters.
 func (m *ChannelManager) SendMessage(ctx context.Context, msg OutboundMessage) error {
+	msg.Normalize()
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 

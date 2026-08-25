@@ -280,12 +280,39 @@ func (r *MessageRouter) replyPairing(ctx context.Context, msg InboundMessage, co
 	if r.channelMgr == nil || strings.TrimSpace(content) == "" {
 		return
 	}
-	_ = r.channelMgr.SendMessage(ctx, OutboundMessage{
-		ChannelID: msg.ChannelID,
-		AccountID: msg.AccountID,
-		Recipient: msg.SenderID,
-		Content:   content,
-	})
+	_ = r.channelMgr.SendMessage(ctx, NewReply(msg, content))
+}
+
+func (r *MessageRouter) dispatch(ctx context.Context, msg OutboundMessage) {
+	if r.channelMgr == nil {
+		return
+	}
+	msg.Normalize()
+	_ = r.channelMgr.SendMessage(ctx, msg)
+}
+
+// startTypingPulse sends an immediate typing frame, then refreshes it until the
+// returned stop func is called (Discord typing expires in ~10s).
+func (r *MessageRouter) startTypingPulse(ctx context.Context, inbound InboundMessage) func() {
+	if r.channelMgr == nil {
+		return func() {}
+	}
+	pulseCtx, cancel := context.WithCancel(ctx)
+	frame := NewTyping(inbound)
+	r.dispatch(pulseCtx, frame)
+	go func() {
+		ticker := time.NewTicker(8 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-pulseCtx.Done():
+				return
+			case <-ticker.C:
+				r.dispatch(pulseCtx, frame)
+			}
+		}
+	}()
+	return cancel
 }
 
 func (r *MessageRouter) enforcePairing(ctx context.Context, msg InboundMessage) error {
@@ -352,15 +379,16 @@ func (r *MessageRouter) drainInboundQueue() {
 
 // Route executes the full end-to-end routing flow for an inbound message.
 func (r *MessageRouter) Route(ctx context.Context, msg InboundMessage) error {
+	msg.Normalize()
+	if msg.IsControlEvent() {
+		return nil
+	}
 	if err := r.enforcePairing(ctx, msg); err != nil {
 		return err
 	}
 	targetAgent := r.ResolveAgent(ctx, msg)
 
-	senderID := msg.SenderID
-	if msg.Metadata != nil && msg.Metadata["chat_id"] != "" {
-		senderID = msg.Metadata["chat_id"]
-	}
+	senderID := ConversationID(msg)
 
 	// 1. Get or create deterministic intelligent session (agent-aware)
 	var convID string
@@ -385,8 +413,8 @@ func (r *MessageRouter) Route(ctx context.Context, msg InboundMessage) error {
 
 	// 4. Construct contextual metadata prompt
 	chatMeta := ""
-	if msg.Metadata != nil && msg.Metadata["chat_id"] != "" {
-		chatMeta = fmt.Sprintf("[Channel: %s | Account: %s | Chat ID: %s | Sender: %s]\n", msg.ChannelID, msg.AccountID, msg.Metadata["chat_id"], msg.SenderName)
+	if chatID := FirstNonEmpty(msg.ChatID, senderID); chatID != "" && msg.ChannelID != "" {
+		chatMeta = fmt.Sprintf("[Channel: %s | Account: %s | Chat ID: %s | Sender: %s]\n", msg.ChannelID, msg.AccountID, chatID, msg.SenderName)
 	} else if msg.ChannelID != "" {
 		chatMeta = fmt.Sprintf("[Channel: %s | Account: %s | Sender ID: %s]\n", msg.ChannelID, msg.AccountID, msg.SenderID)
 	}
@@ -397,6 +425,8 @@ func (r *MessageRouter) Route(ctx context.Context, msg InboundMessage) error {
 		"channel", msg.ChannelID,
 		"account", msg.AccountID,
 		"sender", msg.SenderID,
+		"chat_id", msg.ChatID,
+		"message_id", msg.MessageID,
 		"target_agent", targetAgent,
 	)
 
@@ -405,18 +435,13 @@ func (r *MessageRouter) Route(ctx context.Context, msg InboundMessage) error {
 	}
 
 	channelCtx := agent.WithConversationContext(agent.WithExecutionSource(ctx, "channel"), convID)
+	stopTyping := r.startTypingPulse(channelCtx, msg)
+	defer stopTyping()
+
 	resp, execErr := r.engine.ExecuteStepWithHistory(channelCtx, targetAgent, promptWithMeta, history)
 	if execErr != nil {
 		slog.Error("failed to process channel message", "channel", msg.ChannelID, "error", execErr)
-		if r.channelMgr != nil {
-			_ = r.channelMgr.SendMessage(context.Background(), OutboundMessage{
-				ChannelID: msg.ChannelID,
-				AccountID: msg.AccountID,
-				Recipient: senderID,
-				Content:   fmt.Sprintf("⚠️ Unable to process request: %v", execErr),
-				Metadata:  msg.Metadata,
-			})
-		}
+		r.dispatch(context.Background(), NewReply(msg, fmt.Sprintf("⚠️ Unable to process request: %v", execErr)))
 		return execErr
 	}
 
@@ -436,13 +461,7 @@ func (r *MessageRouter) Route(ctx context.Context, msg InboundMessage) error {
 		}
 	}
 	if resp != nil && !alreadySentViaNotifyTool && r.channelMgr != nil {
-		_ = r.channelMgr.SendMessage(context.Background(), OutboundMessage{
-			ChannelID: msg.ChannelID,
-			AccountID: msg.AccountID,
-			Recipient: senderID,
-			Content:   resp.Content,
-			Metadata:  msg.Metadata,
-		})
+		r.dispatch(context.Background(), NewReply(msg, resp.Content))
 	}
 
 	return nil

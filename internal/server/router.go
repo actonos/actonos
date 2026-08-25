@@ -205,7 +205,7 @@ func NewServer(cfg Config) *Server {
 		s.heartbeat.SetApprovalManager(s.approvalMgr)
 	}
 	if s.toolReg != nil && s.channelMgr != nil {
-		s.toolReg.SetChannelSender(s.channelMgr)
+		s.toolReg.SetChannelSender(plugin.ChannelToolSender(s.channelMgr))
 	}
 	if s.pluginHubMgr == nil && s.pluginsDir != "" {
 		s.pluginHubMgr = plugin.NewPluginRegistryManager(s.pluginsDir, s.pluginMgr, s.bus)

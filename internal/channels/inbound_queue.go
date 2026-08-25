@@ -62,6 +62,7 @@ func (q *InboundQueue) PersistEvent(ev *bus.Event) error {
 	if !ok {
 		return nil
 	}
+	msg.Normalize()
 	id, err := q.Enqueue(msg)
 	if err != nil {
 		return err
@@ -93,6 +94,7 @@ func (q *InboundQueue) Pending(limit int) ([]QueuedInbound, error) {
 		}
 		var msg InboundMessage
 		if json.Unmarshal([]byte(raw), &msg) == nil {
+			msg.Normalize()
 			out = append(out, QueuedInbound{ID: id, Message: msg})
 		}
 	}

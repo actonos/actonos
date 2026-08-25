@@ -111,6 +111,7 @@ func (b *WasmChannelBridge) pollOnce(ctx context.Context) {
 			if msg.ChannelID == "" {
 				msg.ChannelID = b.channelName
 			}
+			msg.Normalize()
 			if b.eventBus != nil {
 				b.eventBus.Publish(bus.NewEvent(bus.EventChannelMessage, b.channelName, msg))
 			}
@@ -124,6 +125,7 @@ func (b *WasmChannelBridge) pollOnce(ctx context.Context) {
 		if single.ChannelID == "" {
 			single.ChannelID = b.channelName
 		}
+		single.Normalize()
 		if b.eventBus != nil {
 			b.eventBus.Publish(bus.NewEvent(bus.EventChannelMessage, b.channelName, single))
 		}
@@ -150,6 +152,7 @@ func (b *WasmChannelBridge) SendMessage(ctx context.Context, msg channels.Outbou
 		return fmt.Errorf("plugin instance %s is inactive", b.pluginID)
 	}
 
+	msg.Normalize()
 	msgBytes, err := json.Marshal(msg)
 	if err != nil {
 		return fmt.Errorf("marshaling outbound message: %w", err)

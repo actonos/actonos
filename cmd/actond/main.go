@@ -329,7 +329,7 @@ func main() {
 	}
 
 	channelMgr := channels.NewChannelManager(eventBus, pairingMgr)
-	toolReg.SetChannelSender(channelMgr)
+	toolReg.SetChannelSender(plugin.ChannelToolSender(channelMgr))
 
 	// 10b. Initialize Unified WasmLoader Plugin System
 	pluginKV, err := plugin.NewSQLiteKVStore(db.SQLDB())

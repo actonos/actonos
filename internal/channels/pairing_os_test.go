@@ -3,6 +3,7 @@ package channels
 import (
 	"context"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/actonos/actonos/internal/agent"
@@ -75,15 +76,26 @@ func TestUnpairedInboundRejectedWhenRequired(t *testing.T) {
 
 type recordingAdapter struct {
 	name string
+	mu   sync.Mutex
 	sent []OutboundMessage
 }
 
-func (a *recordingAdapter) Name() string { return a.name }
+func (a *recordingAdapter) Name() string                { return a.name }
 func (a *recordingAdapter) Start(context.Context) error { return nil }
-func (a *recordingAdapter) Stop() error { return nil }
+func (a *recordingAdapter) Stop() error                 { return nil }
 func (a *recordingAdapter) SendMessage(_ context.Context, msg OutboundMessage) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	a.sent = append(a.sent, msg)
 	return nil
+}
+
+func (a *recordingAdapter) snapshot() []OutboundMessage {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	out := make([]OutboundMessage, len(a.sent))
+	copy(out, a.sent)
+	return out
 }
 
 func TestPairingPINFromChatAuthorizesWithoutAccountID(t *testing.T) {
