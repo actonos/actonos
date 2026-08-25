@@ -70,7 +70,7 @@
     "updatedAt": "Last Updated",
     "completedAt": "Completed At",
     "close": "Close",
-    "cancelRun": "Cancel run",
+    "cancelRun": "Cancel",
     "cancelFailed": "Could not cancel run"
   },
   "priorities": {

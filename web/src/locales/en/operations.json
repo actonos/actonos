@@ -61,7 +61,7 @@
     "title": "Agent process table",
     "subtitle": "Running and recent durable executions. Cancel interrupts in-flight work.",
     "empty": "No durable runs are recorded.",
-    "cancel": "Cancel run",
+    "cancel": "Cancel",
     "cancelled": "Run cancelled",
     "cancelFailed": "Could not cancel run"
   },
