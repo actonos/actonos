@@ -7,8 +7,44 @@ import Highlight from '@tiptap/extension-highlight';
 import CodeBlock from '@tiptap/extension-code-block';
 import { TableKit } from "@tiptap/extension-table";
 import HorizontalRule from '@tiptap/extension-horizontal-rule'
+import { Node } from '@tiptap/core';
 
 import { marked } from 'marked';
+
+export const ImageExtension = Node.create({
+  name: 'image',
+  group: 'block',
+  selectable: true,
+  draggable: true,
+  atom: true,
+
+  addAttributes() {
+    return {
+      src: { default: null },
+      alt: { default: null },
+      title: { default: null },
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'img[src]',
+      },
+    ];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return [
+      'img',
+      {
+        ...HTMLAttributes,
+        class: 'rounded-xl max-w-full h-auto my-3 border border-border-subtle shadow-sm object-contain max-h-[512px] bg-subtle-box inline-block',
+        loading: 'lazy',
+      },
+    ];
+  },
+});
 
 export interface MarkdownContentProps {
   content: string;
@@ -72,7 +108,8 @@ export function MarkdownContent({ content, className = '', isUser = false }: Mar
       Highlight,
       CodeBlock,
       TableKit,
-      HorizontalRule
+      HorizontalRule,
+      ImageExtension,
     ],
     content: htmlContent,
     editable: false,
