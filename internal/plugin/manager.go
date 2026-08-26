@@ -15,6 +15,7 @@ import (
 	"github.com/actonos/actonos/internal/bus"
 	"github.com/actonos/actonos/internal/channels"
 	"github.com/actonos/actonos/internal/tools"
+	"github.com/actonos/actonos/internal/workspace"
 )
 
 var (
@@ -44,6 +45,7 @@ type Manager struct {
 	eventBus    *bus.EventBus
 	kvStore     KVStore
 	secrets     SecretProvider
+	workspace   *workspace.Store
 	pluginsDir  string
 	plugins     map[string]*loadedPluginState
 	disabledIDs map[string]bool
@@ -70,6 +72,14 @@ func NewManager(
 		plugins:     make(map[string]*loadedPluginState),
 		disabledIDs: make(map[string]bool),
 	}
+}
+
+// SetWorkspaceStore assigns the User Workspace store to the plugin manager.
+func (m *Manager) SetWorkspaceStore(ws *workspace.Store) *Manager {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.workspace = ws
+	return m
 }
 
 // ScanAndLoadAll scans the plugins directory and loads all valid plugins.
@@ -227,12 +237,13 @@ func (m *Manager) activatePlugin(ctx context.Context, manifest PluginManifest, w
 
 	gate := NewSecurityGate(manifest)
 	hostCtx := &HostContext{
-		PluginID: id,
-		Manifest: manifest,
-		Gate:     gate,
-		KV:       m.kvStore,
-		Secrets:  m.secrets,
-		EventBus: m.eventBus,
+		PluginID:  id,
+		Manifest:  manifest,
+		Gate:      gate,
+		KV:        m.kvStore,
+		Secrets:   m.secrets,
+		EventBus:  m.eventBus,
+		Workspace: m.workspace,
 	}
 	hostCtx.SeedLogs(preservedLogs)
 

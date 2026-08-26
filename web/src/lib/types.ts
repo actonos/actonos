@@ -584,6 +584,7 @@ export interface PluginPermissions {
   net_outbound?: string[];
   secrets?: string[];
   storage?: boolean;
+  workspace?: boolean;
   bus_events?: string[];
 }
 

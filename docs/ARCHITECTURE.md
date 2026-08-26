@@ -504,6 +504,7 @@ graph TD
 - **`acton_ws`**: Real-time WebSocket connection lifecycle (`ws_connect`, `ws_send`, `ws_poll`, `ws_close`).
 - **`acton_vault`**: Scoped credential retrieval (`get_secret`) from the AES-256-GCM vault (`manifest.permissions.secrets`).
 - **`acton_storage`**: Scoped SQLite key-value persistence (`kv_get`, `kv_set`).
+- **`acton_workspace`**: User Workspace document and binary asset persistence (`save_file`, `read_file`).
 - **`acton_bus`**: System event publishing (`emit_event`) onto ActonOS Event Bus.
 
 #### Security & Sandboxing Invariants:

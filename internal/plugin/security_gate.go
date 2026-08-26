@@ -16,6 +16,7 @@ var (
 	ErrDomainNotWhitelisted = errors.New("outbound network domain not whitelisted in plugin manifest")
 	ErrSecretUnauthorized   = errors.New("secret access not authorized in plugin manifest")
 	ErrStorageDisabled      = errors.New("persistent storage is not enabled for this plugin")
+	ErrWorkspaceDisabled    = errors.New("workspace access is not enabled for this plugin")
 	ErrBusEventUnauthorized = errors.New("bus event emission not authorized for topic")
 )
 
@@ -109,6 +110,18 @@ func (g *SecurityGate) CheckStorageAccess() error {
 		return ErrStorageDisabled
 	}
 	return nil
+}
+
+// CheckWorkspaceAccess verifies if the plugin has permission to read or write User Workspace files.
+func (g *SecurityGate) CheckWorkspaceAccess() error {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+
+	// Allow if explicitly granted workspace permission or if storage is granted (for backwards compatibility with tools)
+	if g.manifest.Permissions.Workspace || g.manifest.Permissions.Storage {
+		return nil
+	}
+	return ErrWorkspaceDisabled
 }
 
 // CheckBusEvent verifies if the plugin is permitted to emit the specified event topic.

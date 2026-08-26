@@ -343,6 +343,9 @@ func main() {
 	var pluginMgr *plugin.Manager
 	if wasmLoader != nil {
 		pluginMgr = plugin.NewManager(wasmLoader, toolReg, channelMgr, eventBus, pluginKV, vault, pluginsDir)
+		if userWorkspace != nil {
+			pluginMgr.SetWorkspaceStore(userWorkspace)
+		}
 		if err := pluginMgr.ScanAndLoadAll(ctx); err != nil {
 			slog.Warn("failed to load wasm plugins", "error", err)
 		}

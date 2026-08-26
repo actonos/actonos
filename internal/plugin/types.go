@@ -19,6 +19,7 @@ type PluginPermissions struct {
 	NetOutbound []string `json:"net_outbound,omitempty"` // Whitelist of allowed domain patterns (e.g. "api.telegram.org", "*.slack.com")
 	Secrets     []string `json:"secrets,omitempty"`      // Whitelist of secret IDs this plugin is authorized to retrieve
 	Storage     bool     `json:"storage,omitempty"`      // True if plugin is granted scoped persistent KV storage
+	Workspace   bool     `json:"workspace,omitempty"`    // True if plugin is granted access to read/write User Workspace files
 	BusEvents   []string `json:"bus_events,omitempty"`   // Whitelist of event topics plugin can emit to internal/bus
 }
 
