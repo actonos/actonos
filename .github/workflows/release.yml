@@ -9,8 +9,31 @@ permissions:
   contents: write
 
 jobs:
+  web:
+    name: Build embedded Web UI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build frontend into internal/server/dist
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+          test -f ../internal/server/dist/index.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: internal/server/dist
+          if-no-files-found: error
+
   build:
     name: Build ${{ matrix.goos }}/${{ matrix.goarch }} ${{ matrix.binary }}
+    needs: web
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -28,6 +51,7 @@ jobs:
             binary: embeddingd
             cgo: "1"
             tags: ORT
+            ort: linux-x64
           - os: ubuntu-latest
             goos: linux
             goarch: arm64
@@ -40,6 +64,8 @@ jobs:
             binary: embeddingd
             cgo: "1"
             tags: ORT
+            ort: linux-aarch64
+            cross_cc: aarch64-linux-gnu-gcc
           - os: windows-latest
             goos: windows
             goarch: amd64
@@ -52,25 +78,59 @@ jobs:
             binary: embeddingd
             cgo: "1"
             tags: ORT
+            ort: win-x64
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
-      - name: Install ONNX Runtime (Linux)
-        if: matrix.tags == 'ORT' && matrix.goos == 'linux'
+      - name: Restore embedded Web UI
+        if: matrix.binary == 'actond'
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: internal/server/dist
+      - name: Verify go:embed dist
+        if: matrix.binary == 'actond'
+        shell: bash
+        run: test -f internal/server/dist/index.html
+      - name: Install aarch64 cross-compiler
+        if: matrix.cross_cc != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+      - name: Install MinGW (Windows CGO)
+        if: matrix.binary == 'embeddingd' && matrix.goos == 'windows'
+        run: choco install mingw -y --no-progress
+      - name: Install ONNX Runtime
+        if: matrix.ort != ''
+        shell: bash
         run: |
           set -euo pipefail
-          curl -fsSL -o ort.tgz https://github.com/microsoft/onnxruntime/releases/download/v1.28.0/onnxruntime-linux-x64-1.28.0.tgz
-          tar -xzf ort.tgz
-          echo "ORT_DIR=$PWD/onnxruntime-linux-x64-1.28.0" >> "$GITHUB_ENV"
+          ver="1.28.0"
+          mkdir -p "$HOME/ort"
+          if [[ "${{ matrix.goos }}" == "windows" ]]; then
+            curl -fsSL -o /tmp/ort.zip \
+              "https://github.com/microsoft/onnxruntime/releases/download/v${ver}/onnxruntime-${{ matrix.ort }}-${ver}.zip"
+            python -c "import zipfile; zipfile.ZipFile('/tmp/ort.zip').extractall(r'$HOME/ort')"
+            inner=$(find "$HOME/ort" -maxdepth 1 -type d -name 'onnxruntime-*' | head -n1)
+            echo "ORT_DIR=$inner" >> "$GITHUB_ENV"
+            echo "$inner/lib" >> "$GITHUB_PATH"
+          else
+            curl -fsSL -o /tmp/ort.tgz \
+              "https://github.com/microsoft/onnxruntime/releases/download/v${ver}/onnxruntime-${{ matrix.ort }}-${ver}.tgz"
+            tar -xzf /tmp/ort.tgz -C "$HOME/ort" --strip-components=1
+            echo "ORT_DIR=$HOME/ort" >> "$GITHUB_ENV"
+          fi
       - name: Build
         env:
           CGO_ENABLED: ${{ matrix.cgo }}
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+        shell: bash
         run: |
+          set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
           arch="x86_64"
           if [ "${{ matrix.goarch }}" = "arm64" ]; then arch="arm64"; fi
@@ -78,15 +138,33 @@ jobs:
           if [ "${{ matrix.goos }}" = "windows" ]; then ext=".exe"; fi
           out="dist/${{ matrix.binary }}_v${version}_${arch}${ext}"
           mkdir -p dist
-          extra=""
-          if [ -n "${{ matrix.tags }}" ]; then extra="-tags ${{ matrix.tags }}"; fi
-          go build -trimpath -ldflags "-s -w -X main.Version=${version}" $extra -o "$out" ./cmd/${{ matrix.binary }}
+
+          extra=()
+          if [ -n "${{ matrix.tags }}" ]; then extra+=(-tags "${{ matrix.tags }}"); fi
+
+          if [ -n "${{ matrix.cross_cc }}" ]; then
+            export CC="${{ matrix.cross_cc }}"
+          fi
+          if [ -n "${ORT_DIR:-}" ]; then
+            export CGO_CFLAGS="-I${ORT_DIR}/include ${CGO_CFLAGS:-}"
+            if [ "${{ matrix.goos }}" = "windows" ]; then
+              export CGO_LDFLAGS="-L${ORT_DIR}/lib -lonnxruntime ${CGO_LDFLAGS:-}"
+            else
+              export CGO_LDFLAGS="-L${ORT_DIR}/lib -lonnxruntime -Wl,-rpath,\$ORIGIN ${CGO_LDFLAGS:-}"
+            fi
+          fi
+
+          go build -trimpath \
+            -ldflags "-s -w -X main.Version=${version} -X main.GitCommit=${GITHUB_SHA::7}" \
+            "${extra[@]}" \
+            -o "$out" \
+            ./cmd/${{ matrix.binary }}
           ls -l "$out"
-        shell: bash
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.binary }}-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/*
+          if-no-files-found: error
 
   publish:
     needs: build
@@ -94,6 +172,12 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
+          pattern: "actond-*"
+          path: dist
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: "embeddingd-*"
           path: dist
           merge-multiple: true
       - name: Require named OTA assets including Windows embeddingd
