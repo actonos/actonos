@@ -5,11 +5,23 @@ All notable changes to ActonOS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-
 ## [1.0.1] - 2026-08-26
 
+### Added
+- GitHub-backed Auto Update: the daemon fetches `GET https://api.github.com/repos/actonos/actonos/releases/latest` (JSON, never the HTML `/releases` page), compares Canonical SemVer as-is, and can download `actond` plus `embeddingd` into `{dataDir}/releases/{version}/`. Linux uses symlink activate; native Windows copies into `{dataDir}/bin/` then parent-wait restarts. Docker and Darwin remain check-only. Apply/rollback are High-risk approvals that enqueue so the HTTP request returns immediately. A 24h ticker emits one notification per new `latest_version`.
+- Token Ledger & Cost is a System sidebar destination at `#/costs` (including `#/costs?view=transactions`) with a dedicated `costs` locale. `#/settings?view=tokens` still opens the ledger. Live Operations `?view=cost` stays a compact summary with a link to the full ledger.
+- Header agent-activity chip on every authenticated page, fed by the existing `/api/realtime` snapshot (running runs unioned with the recent 30). Opening a row goes to `#/operations?view=feed&run={id}` and fetches that run if it is not in the snapshot.
+- Tag-triggered GitHub Actions release workflow that publishes `{actond|embeddingd}_v{version}_{x86_64|arm64}[.exe]` plus `SHA256SUMS`, and fails if Windows `embeddingd.exe` is missing.
+
+### Changed
+- Settings Maintenance OTA card reports GitHub `error_code` honestly (rate limit is not “up to date”), shows Install only when `canInstall`, and can roll back the previous binary.
+- `embeddingd.service` prefers `/var/lib/acton/bin/embeddingd` when present, matching `actond.service`.
+
+### Fixed
+- Chat “New Chat” no longer toasts `conversation not found`: draft sessions use `?session_id=new` and do not GET until the server creates the row.
+- Markdown images no longer leave an empty `<p>` above the figure (marked wraps `<img>` in a paragraph; TipTap lifts block images).
+- Operations deep-link `#/operations?view=feed&run=` keeps a fetched run in the feed instead of showing empty when the run fell out of the realtime snapshot.
+- `changelog-gen.sh` no longer dies on `)` in the conventional-commit regex, and no longer drops the last commit (`tformat`).
 
 ## [1.0.0] - 2026-08-25
 

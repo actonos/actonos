@@ -142,7 +142,7 @@ For convenience, use the changelog generation script to auto-populate entries fr
 bash scripts/changelog-gen.sh
 ```
 
-This script groups commits by type (`feat` → Added, `fix` → Fixed, etc.) and outputs formatted changelog entries to stdout. You can then review and paste them into `CHANGELOG.md`.
+This script groups commits by type (`feat` → Added, `fix` → Fixed, etc.), prints them to stdout, and writes the same sections under `## [Unreleased]` in `CHANGELOG.md`. Use `--stdout-only` to print without editing the file.
 
 ---
 
