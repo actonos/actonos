@@ -30,7 +30,6 @@ import {
 import { api, type DashboardSummaryData } from '@/lib/api';
 import type { TokenUsageSummary, HeartbeatRun, HealthReport } from '@/lib/types';
 import type { NavTab } from '@/components/layout/Sidebar';
-import { TokenLedgerModal } from '@/components/modals/TokenLedgerModal';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { QuickStartPanel } from '@/components/features/dashboard/QuickStartPanel';
 import { SystemHealthStrip } from '@/components/features/dashboard/SystemHealthStrip';
@@ -48,7 +47,6 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
   const [tokenStats, setTokenStats] = useState<TokenUsageSummary | null>(null);
   const [heartbeatRuns, setHeartbeatRuns] = useState<HeartbeatRun[]>([]);
   const [health, setHealth] = useState<HealthReport | null>(null);
-  const [isTokenLedgerOpen, setIsTokenLedgerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // QuickStart Checklist State stored in localStorage
@@ -435,7 +433,7 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
               </div>
               <button
                 type="button"
-                onClick={() => setIsTokenLedgerOpen(true)}
+                onClick={() => onNavigateTab('costs')}
                 className="text-[11px] font-semibold text-deep-ink hover:text-emerald-700 underline cursor-pointer"
               >
                 {t('tokens.inspect')}
@@ -638,11 +636,6 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
           </Card>
         </div>
 
-        {/* Full Token Consumption & Cost Ledger Modal */}
-        <TokenLedgerModal
-          isOpen={isTokenLedgerOpen}
-          onClose={() => setIsTokenLedgerOpen(false)}
-        />
       </PageContainer>
     </div>
   );

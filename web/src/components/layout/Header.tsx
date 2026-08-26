@@ -4,6 +4,7 @@ import type { NavTab } from '@/components/layout/Sidebar';
 import { useRealtime } from '@/components/providers/RealtimeProvider';
 import { useTheme } from '@/components/providers/ThemeProvider';
 import { NotificationBell } from '@/components/features/notifications/NotificationBell';
+import { AgentActivityIndicator } from '@/components/features/telemetry/AgentActivityIndicator';
 
 export interface HeaderProps {
   activeTab: NavTab;
@@ -12,9 +13,10 @@ export interface HeaderProps {
   onLogout?: () => void;
   onOpenSearch: () => void;
   onNavigateTab?: (tab: NavTab) => void;
+  onOpenChat?: (agentID: string) => void;
 }
 
-export function Header({ activeTab, onOpenMobileSidebar, onLogout, onOpenSearch, onNavigateTab }: HeaderProps) {
+export function Header({ activeTab, onOpenMobileSidebar, onLogout, onOpenSearch, onNavigateTab, onOpenChat }: HeaderProps) {
   const { t } = useTranslation(['nav', 'common']);
   const { snapshot } = useRealtime();
   const { resolvedTheme, toggleTheme } = useTheme();
@@ -36,6 +38,7 @@ export function Header({ activeTab, onOpenMobileSidebar, onLogout, onOpenSearch,
     terminal: { title: t('nav:links.terminal', 'Terminal'), category: t('nav:categories.system') },
     notifications: { title: t('nav:links.notifications', 'Notifications'), category: t('nav:categories.system') },
     'audit-logs': { title: t('nav:links.audit-logs', 'Audit Logs'), category: t('nav:categories.system') },
+    costs: { title: t('nav:links.costs'), category: t('nav:categories.system') },
     settings: { title: t('nav:links.settings'), category: t('nav:categories.system') },
   };
 
@@ -72,6 +75,8 @@ export function Header({ activeTab, onOpenMobileSidebar, onLogout, onOpenSearch,
 
       {/* Right: Telemetry mini badges & Lock Action */}
       <div className="flex items-center gap-2.5">
+        <AgentActivityIndicator onNavigateTab={onNavigateTab} onOpenChat={onOpenChat} />
+
         <button
           type="button"
           onClick={onOpenSearch}
@@ -81,6 +86,7 @@ export function Header({ activeTab, onOpenMobileSidebar, onLogout, onOpenSearch,
           <span>{t('nav:search.trigger')}</span>
           <kbd className="rounded-full border border-onyx/10 bg-canvas px-1.5 py-0.5 font-mono text-[10px]">{t('nav:search.shortcut')}</kbd>
         </button>
+
         {metrics && (
           <div className="hidden md:flex items-center gap-3 px-3 py-2 bg-soft-meadow rounded-full border border-onyx/10 text-caption font-mono text-slate">
             <span>{t('nav:telemetry.cpu', { value: metrics.cpu?.usage_percent?.toFixed(0) || 0 })}</span>

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/actonos/actonos/internal/agent"
 	"github.com/actonos/actonos/internal/bus"
 	"github.com/coder/websocket"
 )
@@ -129,7 +130,7 @@ func (s *Server) collectRealtimeSnapshot(ctx context.Context) realtimeSnapshot {
 		snapshot.Metrics, _ = s.hal.GetMetrics(ctx)
 	}
 	if s.runStore != nil {
-		snapshot.Runs, _ = s.runStore.List(ctx, 30)
+		snapshot.Runs = s.unionRealtimeRuns(ctx)
 	}
 	if s.approvalMgr != nil {
 		snapshot.Approvals, _ = s.approvalMgr.List(ctx, "pending", 100)
@@ -142,4 +143,41 @@ func (s *Server) collectRealtimeSnapshot(ctx context.Context) realtimeSnapshot {
 		snapshot.LatestNotification, _ = s.notifMgr.GetLatest(ctx)
 	}
 	return snapshot
+}
+
+func (s *Server) unionRealtimeRuns(ctx context.Context) []agent.AgentRun {
+	recent, _ := s.runStore.List(ctx, 30)
+	running, _ := s.runStore.ListFiltered(ctx, agent.RunListFilter{Status: agent.RunRunning, Limit: 100})
+	byID := make(map[string]agent.AgentRun, len(recent)+len(running))
+	order := make([]string, 0, len(recent)+len(running))
+	for _, run := range running {
+		if _, ok := byID[run.ID]; !ok {
+			order = append(order, run.ID)
+		}
+		byID[run.ID] = run
+	}
+	for _, run := range recent {
+		if _, ok := byID[run.ID]; !ok {
+			order = append(order, run.ID)
+		}
+		byID[run.ID] = run
+	}
+	out := make([]agent.AgentRun, 0, len(order))
+	for _, id := range order {
+		run := byID[id]
+		s.annotateRunName(ctx, &run)
+		out = append(out, run)
+	}
+	return out
+}
+
+func (s *Server) annotateRunName(ctx context.Context, run *agent.AgentRun) {
+	if run == nil || s.agentMgr == nil || run.AgentID == "" {
+		return
+	}
+	manifest, err := s.agentMgr.Get(ctx, run.AgentID)
+	if err != nil || manifest == nil {
+		return
+	}
+	run.AgentName = manifest.Name
 }

@@ -38,7 +38,7 @@ function response(pathname: string) {
       timestamp: new Date().toISOString(),
     };
   }
-  if (pathname.startsWith('/api/system/tokens')) {
+  if (pathname.startsWith('/api/system/token-usage')) {
     return { today_tokens: 1200, today_cost_usd: 0.12, month_tokens: 12500, month_cost_usd: 1.42, by_model: [], by_agent: [] };
   }
   if (pathname.startsWith('/api/heartbeat')) {

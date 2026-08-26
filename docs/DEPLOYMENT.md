@@ -221,23 +221,24 @@ The ISO build process:
 
 ### Automatic Updates
 
-Operator-triggered OTA applies an update atomically:
+Operator-triggered OTA (Settings → Maintenance) applies an update atomically:
 
-1. Download new binary to `/data/releases/vX.Y.Z/`
-2. Verify SHA256 checksum when provided
-3. Atomic symlink swap: `/data/bin/actond` → new version
-4. Persist `{active, previous}` in `/data/releases/state.json`
-5. Restart via systemd (`Restart=always`); `ExecStart` prefers `/data/bin/actond`
-6. **Rollback**: `OTAEngine.Rollback()` restores the persisted previous binary
+1. Daemon fetches `https://api.github.com/repos/actonos/actonos/releases/latest`
+2. Download `actond_v{version}_{arch}[.exe]` and `embeddingd_…` into `{dataDir}/releases/{version}/`
+3. Verify SHA-256 (`digest` or `SHA256SUMS`)
+4. Activate into `{dataDir}/bin/` (Linux symlink; Windows copy)
+5. Persist `{active, previous}` in `{dataDir}/releases/state.json`
+6. Restart embeddingd (if swapped) then actond
+7. **Rollback**: distinct High-risk `admin_ota_rollback`, includes restart
+
+Docker image binaries are not overwritten (`apply_supported=false`). A Windows supervisor must exec `{dataDir}/bin/actond.exe`, not `build/actond.exe`.
 
 ### Manual Update
 
 ```bash
-# Download and verify
-wget https://releases.actonos.io/v1.0.1/actond -O /data/releases/v1.0.1/actond
-echo "<sha256>  /data/releases/v1.0.1/actond" | sha256sum -c
-
-# Swap
+# Public GitHub assets
+curl -L -o /data/releases/v1.0.1/actond \
+  https://github.com/actonos/actonos/releases/latest/download/actond_v1.0.1_x86_64
 ln -sfn /data/releases/v1.0.1/actond /data/bin/actond
 systemctl restart actond
 ```

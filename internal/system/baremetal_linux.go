@@ -120,3 +120,12 @@ func (h *BaremetalHAL) RestartDaemon(ctx context.Context) error {
 	cmd := exec.CommandContext(ctx, "systemctl", "restart", "actond")
 	return cmd.Run()
 }
+
+func (h *BaremetalHAL) RestartEmbeddingd(ctx context.Context) error {
+	cmd := exec.CommandContext(ctx, "systemctl", "restart", "embeddingd")
+	if err := cmd.Run(); err != nil {
+		// Unit missing/disabled: continue with actond-only restart.
+		return nil
+	}
+	return nil
+}

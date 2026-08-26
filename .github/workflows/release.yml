@@ -1,0 +1,112 @@
+name: Release OTA assets
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }} ${{ matrix.binary }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            binary: actond
+            cgo: "0"
+            tags: ""
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            binary: embeddingd
+            cgo: "1"
+            tags: ORT
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            binary: actond
+            cgo: "0"
+            tags: ""
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            binary: embeddingd
+            cgo: "1"
+            tags: ORT
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+            binary: actond
+            cgo: "0"
+            tags: ""
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+            binary: embeddingd
+            cgo: "1"
+            tags: ORT
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install ONNX Runtime (Linux)
+        if: matrix.tags == 'ORT' && matrix.goos == 'linux'
+        run: |
+          set -euo pipefail
+          curl -fsSL -o ort.tgz https://github.com/microsoft/onnxruntime/releases/download/v1.28.0/onnxruntime-linux-x64-1.28.0.tgz
+          tar -xzf ort.tgz
+          echo "ORT_DIR=$PWD/onnxruntime-linux-x64-1.28.0" >> "$GITHUB_ENV"
+      - name: Build
+        env:
+          CGO_ENABLED: ${{ matrix.cgo }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          arch="x86_64"
+          if [ "${{ matrix.goarch }}" = "arm64" ]; then arch="arm64"; fi
+          ext=""
+          if [ "${{ matrix.goos }}" = "windows" ]; then ext=".exe"; fi
+          out="dist/${{ matrix.binary }}_v${version}_${arch}${ext}"
+          mkdir -p dist
+          extra=""
+          if [ -n "${{ matrix.tags }}" ]; then extra="-tags ${{ matrix.tags }}"; fi
+          go build -trimpath -ldflags "-s -w -X main.Version=${version}" $extra -o "$out" ./cmd/${{ matrix.binary }}
+          ls -l "$out"
+        shell: bash
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.binary }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Require named OTA assets including Windows embeddingd
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          test -f "dist/actond_v${version}_x86_64"
+          test -f "dist/embeddingd_v${version}_x86_64"
+          test -f "dist/actond_v${version}_x86_64.exe"
+          test -f "dist/embeddingd_v${version}_x86_64.exe"
+          ( cd dist && sha256sum * > SHA256SUMS )
+          echo "SHA256SUMS:" && cat dist/SHA256SUMS
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: dist/*

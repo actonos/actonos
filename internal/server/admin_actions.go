@@ -209,6 +209,22 @@ func (s *Server) executeAdminAction(ctx context.Context, action string, raw json
 			_ = s.hal.RestartDaemon(context.Background())
 		}()
 		return map[string]string{"status": "restarting"}, nil
+	case "ota_apply":
+		if s.ota == nil {
+			return nil, errors.New("ota engine is not configured")
+		}
+		if err := s.ota.EnqueueApply(ctx, s.version, s.embeddingdRequired()); err != nil {
+			return nil, err
+		}
+		return map[string]any{"status": "applying"}, nil
+	case "ota_rollback":
+		if s.ota == nil {
+			return nil, errors.New("ota engine is not configured")
+		}
+		if err := s.ota.EnqueueRollback(); err != nil {
+			return nil, err
+		}
+		return map[string]any{"status": "rolling_back"}, nil
 	default:
 		return nil, fmt.Errorf("unknown administrative action %q", action)
 	}

@@ -8,10 +8,8 @@ Type=simple
 User=acton
 Group=acton
 WorkingDirectory=/var/lib/acton
-ExecStart=/usr/local/bin/embeddingd \
-    -listen-addr 127.0.0.1:8091 \
-    -model-dir /opt/actonos/models/multilingual-e5-small/614241f622f53c4eeff9890bdc4f31cfecc418b3 \
-    -onnxruntime-library /usr/lib/libonnxruntime.so.1.28.0
+ExecStart=/bin/sh -c 'BIN=/usr/local/bin/embeddingd; if [ -x /var/lib/acton/bin/embeddingd ]; then BIN=/var/lib/acton/bin/embeddingd; fi; exec "$BIN" -listen-addr 127.0.0.1:8091 -model-dir /opt/actonos/models/multilingual-e5-small/614241f622f53c4eeff9890bdc4f31cfecc418b3 -onnxruntime-library /usr/lib/libonnxruntime.so.1.28.0'
+ReadWritePaths=/var/lib/acton
 Restart=on-failure
 RestartSec=5s
 TimeoutStopSec=15s

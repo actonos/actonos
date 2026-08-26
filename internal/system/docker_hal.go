@@ -154,6 +154,10 @@ func (h *DockerHAL) RestartDaemon(ctx context.Context) error {
 	return nil
 }
 
+func (h *DockerHAL) RestartEmbeddingd(ctx context.Context) error {
+	return nil
+}
+
 // AutoDetectHAL inspects the environment and returns the appropriate HAL implementation.
 func AutoDetectHAL(dataDir string) HAL {
 	modeEnv := os.Getenv("RUNTIME_MODE")

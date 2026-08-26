@@ -25,48 +25,6 @@
     "connect": "Connect",
     "password": "Password"
   },
-  "tokenLedger": {
-    "title": "Token Consumption & Cost Ledger",
-    "overview": "Overview & Breakdown",
-    "transactions": "Transaction Ledger ({{count}})",
-    "refresh": "Refresh",
-    "today": "Today Volume",
-    "month": "This Month",
-    "lifetime": "Lifetime Tokens",
-    "inputOutput": "{{input}} in / {{output}} out",
-    "totalCost": "Total Cost Burn",
-    "marketCatalog": "Live Market Catalog",
-    "trend": "14-Day Token Traffic Trend",
-    "dailyRollup": "Daily Rollup",
-    "noTrend": "No token consumption recorded in the last 14 days.",
-    "byModel": "Consumption by Model",
-    "noModels": "No model stats available.",
-    "byAgent": "Consumption by Agent",
-    "noAgents": "No agent stats available.",
-    "filters": "Filters:",
-    "allAgents": "All Agents",
-    "allSources": "All Sources",
-    "sourceChat": "Chat (Interactive)",
-    "sourceStream": "Chat Stream (SSE)",
-    "sourceCron": "Cron Automations",
-    "sourceHeartbeat": "Heartbeat Loop",
-    "sourceChannel": "External Channels",
-    "columns": {
-      "time": "Time",
-      "agent": "Agent",
-      "model": "Model",
-      "source": "Source",
-      "prompt": "Prompt",
-      "completion": "Completion",
-      "total": "Total",
-      "cost": "Cost (USD)"
-    },
-    "noTransactions": "No token ledger transactions matching the selected criteria.",
-    "close": "Close",
-    "currency": "${{value}} USD",
-    "tooltip": "{{date}}: {{tokens}} tokens (${{cost}})",
-    "usage": "{{tokens}} tok (${{cost}})"
-  },
   "header": {
     "activeModels": "{{configured}}/{{total}} LLMs Active"
   },
@@ -78,7 +36,6 @@
     "label": "Settings sections",
     "identity": "Identity & Soul",
     "providers": "LLM Providers ({{count}})",
-    "tokens": "Token Ledger & Cost",
     "network": "Hardware & Tailscale",
     "audit": "Audit Logs ({{count}})",
     "maintenance": "Storage & OTA"
@@ -195,7 +152,24 @@
     "yes": "YES",
     "no": "NO",
     "checking": "Checking Releases...",
-    "check": "Check for Updates"
+    "check": "Check for Updates",
+    "install": "Install update",
+    "installing": "Installing…",
+    "rollback": "Roll back previous version",
+    "rollingBack": "Rolling back…",
+    "checksumWarning": "Checksum is missing. Install is blocked unless unsigned apply is enabled.",
+    "unsupported": "Apply is not supported on this runtime ({{reason}}).",
+    "progress": "Progress: {{percent}}%",
+    "jobStatus": "Job: {{status}}",
+    "toast": {
+      "available": "ActonOS {{version}} is available.",
+      "upToDate": "Running latest version {{version}}.",
+      "rateLimit": "GitHub rate limit. Retry after {{seconds}}s.",
+      "checkFailed": "Could not check for updates.",
+      "unsigned": "Update found but checksum is missing.",
+      "applyQueued": "Update install queued.",
+      "rollbackQueued": "Rollback queued."
+    }
   },
   "restart": {
     "title": "Restart ActonOS Kernel",

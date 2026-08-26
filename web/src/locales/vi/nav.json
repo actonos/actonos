@@ -16,6 +16,7 @@
     "channels": "Kênh chat",
     "notifications": "Thông báo",
     "audit-logs": "Nhật ký kiểm toán",
+    "costs": "Chi phí",
     "settings": "Cài đặt"
   },
   "sections": {
@@ -77,6 +78,15 @@
   "session": {
     "lock": "Khóa",
     "lockTitle": "Khóa phiên ActonOS"
+  },
+  "activity": {
+    "idle": "Không có agent đang chạy",
+    "runningOne": "{{name}} — {{task}}",
+    "runningMany": "{{count}} agent đang chạy",
+    "empty": "Không có lượt chạy nào đang diễn ra.",
+    "openChat": "Mở chat",
+    "openAutomations": "Mở tự động hóa",
+    "openMissions": "Mở nhiệm vụ"
   },
   "language": {
     "title": "Ngôn ngữ",

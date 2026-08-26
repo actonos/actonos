@@ -277,6 +277,13 @@ h3,
   margin-bottom: 0;
 }
 
+/* Block images lifted out of <p> still leave a ProseMirror trailing <p><br></p>. */
+.tiptap-renderer .tiptap p:empty,
+.tiptap-renderer .tiptap p:has(> br:only-child) {
+  display: none;
+  margin: 0;
+}
+
 .tiptap-renderer .tiptap h1,
 .tiptap-renderer .tiptap h2,
 .tiptap-renderer .tiptap h3 {

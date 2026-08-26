@@ -21,6 +21,7 @@ import enNotifications from '../locales/en/notifications.json';
 import enTerminal from '../locales/en/terminal.json';
 import enPlugins from '../locales/en/plugins.json';
 import enChannels from '../locales/en/channels.json';
+import enCosts from '../locales/en/costs.json';
 
 // Vietnamese translations
 import viCommon from '../locales/vi/common.json';
@@ -41,6 +42,7 @@ import viNotifications from '../locales/vi/notifications.json';
 import viTerminal from '../locales/vi/terminal.json';
 import viPlugins from '../locales/vi/plugins.json';
 import viChannels from '../locales/vi/channels.json';
+import viCosts from '../locales/vi/costs.json';
 
 export const defaultNS = 'common';
 export const resources = {
@@ -63,6 +65,7 @@ export const resources = {
     terminal: enTerminal,
     plugins: enPlugins,
     channels: enChannels,
+    costs: enCosts,
   },
   vi: {
     common: viCommon,
@@ -83,6 +86,7 @@ export const resources = {
     terminal: viTerminal,
     plugins: viPlugins,
     channels: viChannels,
+    costs: viCosts,
   },
 } as const;
 
@@ -111,6 +115,7 @@ i18n
       'terminal',
       'plugins',
       'channels',
+      'costs',
     ],
     resources,
     interpolation: {

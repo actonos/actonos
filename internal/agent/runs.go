@@ -29,6 +29,7 @@ type AgentRun struct {
 	ID                string     `json:"id"`
 	TraceID           string     `json:"trace_id"`
 	AgentID           string     `json:"agent_id"`
+	AgentName         string     `json:"agent_name,omitempty"`
 	Goal              string     `json:"goal"`
 	Source            string     `json:"source"`
 	Status            RunStatus  `json:"status"`

@@ -11,7 +11,8 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { api } from '@/lib/api';
-import type { AutonomousTask, HealthReport, RunEvent } from '@/lib/types';
+import type { AgentRun, AutonomousTask, HealthReport, RunEvent } from '@/lib/types';
+import { isRunNotFoundError, mergeVisibleRuns } from './operations-runs';
 import { SUPERVISOR_COMPONENTS, componentStatus, supervisorTone } from '@/lib/health';
 import { useRealtime } from '@/components/providers/RealtimeProvider';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -34,6 +35,9 @@ export function OperationsPage() {
   const [events, setEvents] = useState<RunEvent[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [selectedRun, setSelectedRun] = useState<string>('');
+  const [fetchedRun, setFetchedRun] = useState<AgentRun | null>(null);
+  const [missingRun, setMissingRun] = useState(false);
+  const [hashTick, setHashTick] = useState(0);
   const [view, setView] = useState<'overview' | 'feed' | 'runtime' | 'cost'>(() => {
     const value = readHashParams().get('view');
     return value === 'feed' || value === 'runtime' || value === 'cost' ? value : 'overview';
@@ -46,19 +50,61 @@ export function OperationsPage() {
   }, []);
 
   useEffect(() => {
-    refreshTasks();
+    let cancelled = false;
     const loadHealth = async () => {
       const report = await api.getHealth().catch(() => null);
-      setHealth(report);
+      if (!cancelled) setHealth(report);
     };
-    loadHealth();
+    void refreshTasks();
+    void loadHealth();
     const interval = window.setInterval(loadHealth, 15000);
-    return () => window.clearInterval(interval);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
   }, [refreshTasks]);
 
   useEffect(() => {
+    const sync = () => {
+      const params = readHashParams();
+      const viewParam = params.get('view');
+      if (viewParam === 'feed' || viewParam === 'runtime' || viewParam === 'cost') {
+        setView(viewParam);
+      }
+      setHashTick((n) => n + 1);
+    };
+    window.addEventListener('hashchange', sync);
+    return () => window.removeEventListener('hashchange', sync);
+  }, []);
+
+  useEffect(() => {
+    const runId = readHashParams().get('run');
+    if (runId) {
+      setView('feed');
+      if (runs.some((run) => run.id === runId)) {
+        setSelectedRun(runId);
+        setMissingRun(false);
+        setFetchedRun((current) => (current?.id === runId ? current : null));
+        return;
+      }
+      let cancelled = false;
+      api.getAgentRun(runId).then((res) => {
+        if (cancelled) return;
+        setFetchedRun(res.run);
+        setSelectedRun(res.run.id);
+        setMissingRun(false);
+      }).catch((cause) => {
+        if (cancelled) return;
+        setFetchedRun(null);
+        setSelectedRun(runId);
+        setMissingRun(isRunNotFoundError(cause));
+      });
+      return () => { cancelled = true; };
+    }
+    setMissingRun(false);
+    setFetchedRun(null);
     setSelectedRun((current) => current || runs[0]?.id || '');
-  }, [runs]);
+  }, [runs, hashTick]);
 
   useEffect(() => {
     if (!selectedRun) {
@@ -100,7 +146,11 @@ export function OperationsPage() {
     }
   };
 
-  const selected = useMemo(() => runs.find((run) => run.id === selectedRun), [runs, selectedRun]);
+  const visibleRuns = useMemo(() => mergeVisibleRuns(runs, fetchedRun), [runs, fetchedRun]);
+  const selected = useMemo(
+    () => visibleRuns.find((run) => run.id === selectedRun),
+    [visibleRuns, selectedRun],
+  );
   const ramPercent = metrics ? (metrics.memory.used_mb / Math.max(metrics.memory.total_mb, 1)) * 100 : 0;
   const diskPercent = metrics ? (metrics.disk.used_gb / Math.max(metrics.disk.total_gb, 1)) * 100 : 0;
 
@@ -182,12 +232,21 @@ export function OperationsPage() {
             <div className="min-w-0 flex-1">
               <h2 className="font-serif text-heading-sm font-bold">{t('feed.title')}</h2>
               <p className="text-caption text-slate line-clamp-2 break-words" title={selected?.goal || undefined}>
-                {selected?.goal || t('feed.empty')}
+                {missingRun ? t('process.missingRun') : (selected?.goal || t('feed.empty'))}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <select value={selectedRun} onChange={(event) => setSelectedRun(event.target.value)} className="rounded-full bg-canvas border border-onyx/10 px-3 py-2 text-caption max-w-[240px]">
-                {runs.map((run) => <option key={run.id} value={run.id}>{run.agent_id} · {run.status}</option>)}
+              <select
+                value={selectedRun}
+                onChange={(event) => {
+                  const id = event.target.value;
+                  setSelectedRun(id);
+                  setHashParam('run', id || undefined);
+                }}
+                aria-label={t('feed.title')}
+                className="rounded-full bg-canvas border border-onyx/10 px-3 py-2 text-caption max-w-[240px]"
+              >
+                {visibleRuns.map((run) => <option key={run.id} value={run.id}>{run.agent_id} · {run.status}</option>)}
               </select>
               {selected?.status === 'running' && (
                 <Button
@@ -285,7 +344,16 @@ export function OperationsPage() {
         </Card>
 
         <Card className={`${view === 'overview' || view === 'cost' ? 'block' : 'hidden'} xl:col-span-5 p-5 border border-onyx/10`}>
-          <div className="flex items-center gap-2 mb-4"><Coins className="w-5 h-5" /><h2 className="font-serif text-heading-sm font-bold">{t('cost.title')}</h2></div>
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <div className="flex items-center gap-2"><Coins className="w-5 h-5" /><h2 className="font-serif text-heading-sm font-bold">{t('cost.title')}</h2></div>
+            <button
+              type="button"
+              className="text-caption font-semibold text-deep-ink underline cursor-pointer"
+              onClick={() => { window.location.hash = '/costs'; }}
+            >
+              {t('cost.openLedger')}
+            </button>
+          </div>
           <div className="grid grid-cols-2 gap-3 mb-4">
             <div className="p-3 rounded-[18px] bg-soft-meadow"><p className="text-caption text-slate">{t('cost.today')}</p><p className="text-heading-sm font-bold">${(tokens?.today_cost_usd || 0).toFixed(4)}</p><p className="text-[11px] text-slate">{t('units.tokens', { value: (tokens?.today_tokens || 0).toLocaleString() })}</p></div>
             <div className="p-3 rounded-[18px] bg-soft-meadow"><p className="text-caption text-slate">{t('cost.month')}</p><p className="text-heading-sm font-bold">${(tokens?.month_cost_usd || 0).toFixed(4)}</p><p className="text-[11px] text-slate">{t('units.tokens', { value: (tokens?.month_tokens || 0).toLocaleString() })}</p></div>

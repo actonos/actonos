@@ -768,14 +768,16 @@ flowchart TD
 
 ## 9. OTA Update System
 
-`OTAEngine` downloads a release, verifies an optional SHA-256 checksum, atomically
-swaps `/data/bin/actond`, and persists `{active, previous}` in
-`/data/releases/state.json` so rollback survives process restart. systemd
-`ExecStart` prefers `/data/bin/actond` (or `/var/lib/acton/bin/actond`) over
-`/usr/local/bin/actond`. `/api/health` reports `degraded`/`unhealthy` when there
-is no real LLM, disk is exhausted, or heartbeat lag exceeds ~2× interval;
-systemd `Restart=always` restarts a crashed daemon. There is no
-in-process GPG-signed health-poll watchdog.
+`OTAEngine` fetches GitHub REST `/repos/actonos/actonos/releases/latest` (JSON,
+never the HTML `/releases` page). Check compares Canonical SemVer as-is. When
+the operator approves `admin_ota_apply`, the engine **enqueues** a background job
+that downloads host-arch `actond` and (when required) `embeddingd` into
+`{dataDir}/releases/{version}/`, verifies SHA-256 (`sha256:` stripped; GNU
+`SHA256SUMS` accepted), then activates into `{dataDir}/bin/`. Linux uses the
+existing symlink swap; native Windows copies then parent-wait spawns the
+versioned `actond.exe`. Docker and Darwin are check-only. A 24h ticker emits one
+notification per new `latest_version`. Rollback is `admin_ota_rollback` and
+includes restart. There is no in-process GPG-signed health-poll watchdog.
 
 ---
 

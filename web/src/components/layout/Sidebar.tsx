@@ -26,6 +26,7 @@ import {
   Terminal,
   Boxes,
   Radio,
+  Coins,
 } from 'lucide-react';
 import { useTheme } from '../providers/ThemeProvider';
 
@@ -45,6 +46,7 @@ export type NavTab =
   | 'terminal'
   | 'notifications'
   | 'audit-logs'
+  | 'costs'
   | 'settings';
 
 interface NavItem {
@@ -117,6 +119,7 @@ export function Sidebar({
       items: [
         { id: 'notifications', label: t('links.notifications', 'Notifications'), icon: Bell },
         { id: 'audit-logs', label: t('links.audit-logs', 'Audit Logs'), icon: ShieldCheck },
+        { id: 'costs', label: t('links.costs'), icon: Coins },
         { id: 'settings', label: t('links.settings', 'Settings'), icon: Sliders },
       ],
     },

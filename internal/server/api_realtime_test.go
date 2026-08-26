@@ -32,7 +32,8 @@ func (h *countingHAL) ConnectWifi(context.Context, string, string) error { retur
 func (h *countingHAL) GetWifiStatus(context.Context) (*system.WifiStatus, error) {
 	return &system.WifiStatus{}, nil
 }
-func (h *countingHAL) RestartDaemon(context.Context) error { return nil }
+func (h *countingHAL) RestartDaemon(context.Context) error     { return nil }
+func (h *countingHAL) RestartEmbeddingd(context.Context) error { return nil }
 func (h *countingHAL) callCount() int {
 	h.mu.Lock()
 	defer h.mu.Unlock()

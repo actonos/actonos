@@ -14,7 +14,7 @@ import type {
   VaultSecretMeta,
 } from './types';
 import { API_BASE, fetchJSON, getAuthHeaders, HTTP_STATUS_ACCEPTED } from './api/client';
-import { operationsApi, type OTAStatus } from './api/operations';
+import { operationsApi } from './api/operations';
 export { API_BASE, createRealtimeSocket, fetchJSON, getAuthHeaders } from './api/client';
 export type { OTAStatus, WifiNetwork } from './api/operations';
 
@@ -480,11 +480,11 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(profile),
     }),
-  checkOTA: () =>
-    fetchJSON<OTAStatus>(
-      '/system/ota/check',
-      { method: 'POST' }
-    ),
+  checkOTA: (force = true) => operationsApi.checkOTA(force),
+  otaStatus: () => operationsApi.otaStatus(),
+  applyOTA: () => operationsApi.applyOTA(),
+  rollbackOTA: () => operationsApi.rollbackOTA(),
+  getAgentRun: (id: string) => operationsApi.getAgentRun(id),
 
   // Chat Channels
   getChannels: () =>

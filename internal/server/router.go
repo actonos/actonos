@@ -64,6 +64,7 @@ type Server struct {
 	version          string
 	gitCommit        string
 	buildTime        string
+	ota              *system.OTAEngine
 	realtime         *realtimeHub
 	allowMissingAuth bool
 }
@@ -111,6 +112,7 @@ type Config struct {
 	Version   string
 	GitCommit string
 	BuildTime string
+	OTAEngine *system.OTAEngine
 	// DisableAuthForTest skips RequireAuthMiddleware when SystemAuth is unset.
 	// Production must leave this false.
 	DisableAuthForTest bool
@@ -192,7 +194,16 @@ func NewServer(cfg Config) *Server {
 		version:          version,
 		gitCommit:        gitCommit,
 		buildTime:        buildTime,
+		ota:              cfg.OTAEngine,
 		allowMissingAuth: cfg.DisableAuthForTest,
+	}
+	if s.ota == nil {
+		s.ota = system.NewOTAEngine(dataDir)
+	}
+	s.ota.SetVersionMeta(version, gitCommit, buildTime)
+	s.ota.SetSkipRestart(cfg.DisableAuthForTest)
+	if cfg.HAL != nil {
+		s.ota.SetRestarter(system.HALRestarter{HAL: cfg.HAL, Engine: s.ota})
 	}
 	s.realtime = newRealtimeHub(s)
 	if s.engine != nil && s.taskMgr != nil {
@@ -374,6 +385,7 @@ func (s *Server) setupRoutes() {
 
 			r.Route("/runs", func(r chi.Router) {
 				r.Get("/", s.handleListAgentRuns)
+				r.Get("/{id}", s.handleGetAgentRun)
 				r.Get("/{id}/events", s.handleListRunEvents)
 				r.Post("/{id}/cancel", s.handleCancelAgentRun)
 			})
@@ -473,6 +485,9 @@ func (s *Server) setupRoutes() {
 				r.Get("/embedding", s.handleGetEmbeddingStatus)
 				r.Get("/backup", s.handleGetBackup)
 				r.Post("/ota/check", s.handleCheckOTA)
+				r.Get("/ota/status", s.handleOTAStatus)
+				r.Post("/ota/apply", s.handleApplyOTA)
+				r.Post("/ota/rollback", s.handleRollbackOTA)
 				r.Get("/tailscale", s.handleGetTailscale)
 				r.Get("/wifi/scan", s.handleWifiScan)
 				r.Post("/wifi/connect", s.handleWifiConnect)

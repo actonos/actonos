@@ -863,18 +863,57 @@ func (s *Server) handleGetStorageInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCheckOTA(w http.ResponseWriter, r *http.Request) {
-	eng := system.NewOTAEngine(s.dataDir)
-	active, previous := eng.State()
-	s.respondJSON(w, http.StatusOK, map[string]any{
-		"current_version":  s.version,
-		"update_available": false,
-		"latest_version":   s.version,
-		"git_commit":       s.gitCommit,
-		"build_time":       s.buildTime,
-		"last_checked":     time.Now().UTC().Format(time.RFC3339),
-		"active_binary":    active,
-		"previous_binary":  previous,
-	})
+	var req struct {
+		Force bool `json:"force"`
+	}
+	_ = s.decodeJSON(r, &req)
+	if s.ota == nil {
+		s.respondError(w, http.StatusServiceUnavailable, "OTA_UNAVAILABLE", "ota engine is not configured")
+		return
+	}
+	result := s.ota.Check(r.Context(), s.version, req.Force, s.embeddingdRequired())
+	s.respondJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleOTAStatus(w http.ResponseWriter, r *http.Request) {
+	if s.ota == nil {
+		s.respondError(w, http.StatusServiceUnavailable, "OTA_UNAVAILABLE", "ota engine is not configured")
+		return
+	}
+	s.respondJSON(w, http.StatusOK, s.ota.Status())
+}
+
+func (s *Server) handleApplyOTA(w http.ResponseWriter, r *http.Request) {
+	approval, err := s.requestAdminAction(r.Context(), "ota_apply", map[string]any{})
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "APPROVAL_REQUEST_FAILED", err.Error())
+		return
+	}
+	s.respondJSON(w, http.StatusAccepted, map[string]any{"status": "approval_required", "approval": approval})
+}
+
+func (s *Server) handleRollbackOTA(w http.ResponseWriter, r *http.Request) {
+	approval, err := s.requestAdminAction(r.Context(), "ota_rollback", map[string]any{})
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "APPROVAL_REQUEST_FAILED", err.Error())
+		return
+	}
+	s.respondJSON(w, http.StatusAccepted, map[string]any{"status": "approval_required", "approval": approval})
+}
+
+func (s *Server) embeddingdRequired() bool {
+	in := system.EmbeddingRequiredInput{EnvForce: os.Getenv("ACTONOS_OTA_EMBEDDINGD")}
+	if s.ota != nil {
+		active, _ := s.ota.EmbeddingState()
+		in.PriorEmbeddingActive = active
+	}
+	if s.embedding != nil {
+		st, err := s.embedding.Status(context.Background())
+		if err == nil {
+			in.ServiceReady = st.ServiceReady
+		}
+	}
+	return system.EmbeddingdRequired(in)
 }
 
 func (s *Server) handleGetBackup(w http.ResponseWriter, r *http.Request) {

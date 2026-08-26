@@ -410,6 +410,7 @@ export interface AgentRun {
   id: string;
   trace_id: string;
   agent_id: string;
+  agent_name?: string;
   goal: string;
   source: string;
   status: AgentRunStatus;

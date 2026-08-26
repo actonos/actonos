@@ -20,11 +20,22 @@ interface TokenLedgerModalProps {
 interface TokenLedgerPanelProps {
   active?: boolean;
   onClose?: () => void;
+  urlView?: 'overview' | 'transactions';
+  onViewChange?: (view: 'overview' | 'transactions') => void;
 }
 
-export function TokenLedgerPanel({ active = true, onClose }: TokenLedgerPanelProps) {
-  const { t } = useTranslation('settings');
-  const [activeTab, setActiveTab] = useState<'overview' | 'transactions'>('overview');
+export function TokenLedgerPanel({ active = true, onClose, urlView, onViewChange }: TokenLedgerPanelProps) {
+  const { t } = useTranslation('costs');
+  const [activeTab, setActiveTab] = useState<'overview' | 'transactions'>(urlView ?? 'overview');
+
+  useEffect(() => {
+    if (urlView) setActiveTab(urlView);
+  }, [urlView]);
+
+  const selectTab = (next: 'overview' | 'transactions') => {
+    setActiveTab(next);
+    onViewChange?.(next);
+  };
   const [summary, setSummary] = useState<TokenUsageSummary | null>(null);
   const [history, setHistory] = useState<TokenUsageRecord[]>([]);
   const [agents, setAgents] = useState<AgentManifest[]>([]);
@@ -86,7 +97,7 @@ export function TokenLedgerPanel({ active = true, onClose }: TokenLedgerPanelPro
         <div className="flex items-center gap-1.5 p-1 bg-soft-meadow rounded-full border border-onyx/10">
           <button
             type="button"
-            onClick={() => setActiveTab('overview')}
+            onClick={() => selectTab('overview')}
             className={`px-4 py-1.5 rounded-full text-caption font-sans transition-all cursor-pointer ${activeTab === 'overview'
               ? 'bg-deep-ink text-white font-semibold shadow-xs'
               : 'text-slate hover:text-deep-ink'
@@ -96,7 +107,7 @@ export function TokenLedgerPanel({ active = true, onClose }: TokenLedgerPanelPro
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab('transactions')}
+            onClick={() => selectTab('transactions')}
             className={`px-4 py-1.5 rounded-full text-caption font-sans transition-all cursor-pointer ${activeTab === 'transactions'
               ? 'bg-deep-ink text-white font-semibold shadow-xs'
               : 'text-slate hover:text-deep-ink'
@@ -304,6 +315,7 @@ export function TokenLedgerPanel({ active = true, onClose }: TokenLedgerPanelPro
             <select
               value={selectedAgent}
               onChange={(e) => setSelectedAgent(e.target.value)}
+              aria-label={t('tokenLedger.allAgents')}
               className="bg-canvas text-deep-ink text-[12px] font-sans px-3 py-1.5 rounded-full border border-onyx/10 focus:outline-none"
             >
               <option value="all">{t('tokenLedger.allAgents')}</option>
@@ -317,6 +329,7 @@ export function TokenLedgerPanel({ active = true, onClose }: TokenLedgerPanelPro
             <select
               value={selectedSource}
               onChange={(e) => setSelectedSource(e.target.value)}
+              aria-label={t('tokenLedger.allSources')}
               className="bg-canvas text-deep-ink text-[12px] font-sans px-3 py-1.5 rounded-full border border-onyx/10 focus:outline-none"
             >
               <option value="all">{t('tokenLedger.allSources')}</option>

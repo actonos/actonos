@@ -9,7 +9,6 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
-import { TokenLedgerPanel } from '@/components/modals/TokenLedgerModal';
 import { useToast } from '@/components/ui/Toast';
 import {
   Shield,
@@ -46,7 +45,7 @@ import { readHashParams, setHashParam } from '@/lib/url-state';
 import { useTheme, type UITheme } from '@/components/providers/ThemeProvider';
 import { useDensity, type UIDensity } from '@/components/providers/DensityProvider';
 
-type SettingsTab = 'identity' | 'keys' | 'tokens' | 'network' | 'maintenance';
+type SettingsTab = 'identity' | 'keys' | 'network' | 'maintenance';
 
 import { useModelCatalog } from '@/components/providers/ModelProvider';
 import type { ProviderMeta } from '@/lib/models';
@@ -59,7 +58,7 @@ export function SettingsPage() {
   const { providers: providerMetas } = useModelCatalog();
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
     const value = readHashParams().get('view');
-    return ['identity', 'keys', 'tokens', 'network', 'maintenance'].includes(value || '')
+    return ['identity', 'keys', 'network', 'maintenance'].includes(value || '')
       ? value as SettingsTab
       : 'keys';
   });
@@ -260,17 +259,75 @@ export function SettingsPage() {
   const handleCheckOTA = async () => {
     setCheckingOTA(true);
     try {
-      const res = await api.checkOTA();
+      const res = await api.checkOTA(true);
       setOtaStatus(res);
-      if (res.update_available) {
-        info('Update Available', `ActonOS v${res.latest_version} is available for installation.`);
+      if (res.error_code === 'GITHUB_RATE_LIMIT') {
+        info(t('maintenance.toast.rateLimit', { seconds: res.retry_after || 0 }));
+      } else if (res.error_code) {
+        error(t('maintenance.toast.checkFailed'), res.error_message || res.error_code);
+      } else if (res.update_available && res.checksum_missing) {
+        info(t('maintenance.toast.unsigned'));
+      } else if (res.update_available) {
+        info(t('maintenance.toast.available', { version: res.latest_version }));
       } else {
-        success('System Up-to-Date', `Running latest version v${res.current_version}.`);
+        success(t('maintenance.toast.upToDate', { version: res.current_version }));
       }
     } catch (err) {
-      error('OTA check failed', getErrorMessage(err));
+      error(t('maintenance.toast.checkFailed'), getErrorMessage(err));
     } finally {
       setCheckingOTA(false);
+    }
+  };
+
+  const pollOTAStatus = async () => {
+    try {
+      const res = await api.otaStatus();
+      setOtaStatus(res);
+      return res;
+    } catch {
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    const onDecided = (event: Event) => {
+      const tool = (event as CustomEvent<{ tool?: string }>).detail?.tool;
+      if (tool === 'admin_ota_apply' || tool === 'admin_ota_rollback') {
+        void pollOTAStatus();
+      }
+    };
+    window.addEventListener('actonos:approval-decided', onDecided);
+    return () => window.removeEventListener('actonos:approval-decided', onDecided);
+  }, []);
+
+  useEffect(() => {
+    const status = otaStatus?.job?.status;
+    if (!status || !['queued', 'downloading', 'verifying', 'swapping', 'restarting'].includes(status)) {
+      return;
+    }
+    const timer = window.setInterval(() => { void pollOTAStatus(); }, 2000);
+    return () => window.clearInterval(timer);
+  }, [otaStatus?.job?.status]);
+
+  const handleApplyOTA = async () => {
+    try {
+      const result = await api.applyOTA();
+      if (isApprovalRequired(result)) return;
+      info(t('maintenance.toast.applyQueued'));
+      void pollOTAStatus();
+    } catch (err) {
+      error(t('maintenance.toast.checkFailed'), getErrorMessage(err));
+    }
+  };
+
+  const handleRollbackOTA = async () => {
+    try {
+      const result = await api.rollbackOTA();
+      if (isApprovalRequired(result)) return;
+      info(t('maintenance.toast.rollbackQueued'));
+      void pollOTAStatus();
+    } catch (err) {
+      error(t('maintenance.toast.checkFailed'), getErrorMessage(err));
     }
   };
 
@@ -329,7 +386,6 @@ export function SettingsPage() {
           options={[
             { value: 'identity', label: t('tabs.identity') },
             { value: 'keys', label: t('tabs.providers', { count: configuredCount }) },
-            { value: 'tokens', label: t('tabs.tokens') },
             { value: 'network', label: t('tabs.network') },
             { value: 'maintenance', label: t('tabs.maintenance') },
           ]}
@@ -746,9 +802,6 @@ export function SettingsPage() {
           </div>
         )}
 
-        {/* TAB: Token Consumption & Cost Ledger */}
-        {activeTab === 'tokens' && <TokenLedgerPanel />}
-
         {/* TAB: Hardware & Network */}
         {activeTab === 'network' && (
           <div className="space-y-6">
@@ -1003,18 +1056,40 @@ export function SettingsPage() {
                     <div>{t('maintenance.updateAvailable')} <span className={otaStatus.update_available ? 'text-hi-yellow font-bold' : 'text-emerald-700'}>
                       {otaStatus.update_available ? t('maintenance.yes') : t('maintenance.no')}
                     </span></div>
+                    {otaStatus.job && (
+                      <div>{t('maintenance.jobStatus', { status: otaStatus.job.status })} {t('maintenance.progress', { percent: otaStatus.job.progress || 0 })}</div>
+                    )}
                   </div>
                 )}
 
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={handleCheckOTA}
-                  disabled={checkingOTA}
-                  className="w-full justify-center"
-                >
-                  {checkingOTA ? t('maintenance.checking') : t('maintenance.check')}
-                </Button>
+                {otaStatus?.checksum_missing && otaStatus.update_available && (
+                  <p className="text-caption text-slate">{t('maintenance.checksumWarning')}</p>
+                )}
+                {otaStatus && otaStatus.apply_supported === false && (
+                  <p className="text-caption text-slate">{t('maintenance.unsupported', { reason: otaStatus.apply_unsupported_reason || '' })}</p>
+                )}
+
+                <div className="flex flex-col gap-2">
+                  {otaStatus?.can_install ? (
+                    <Button variant="primary" size="sm" onClick={handleApplyOTA} className="w-full justify-center">
+                      {t('maintenance.install')}
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant={otaStatus?.can_install ? 'ghost' : 'primary'}
+                    size="sm"
+                    onClick={handleCheckOTA}
+                    disabled={checkingOTA}
+                    className="w-full justify-center"
+                  >
+                    {checkingOTA ? t('maintenance.checking') : t('maintenance.check')}
+                  </Button>
+                  {otaStatus?.previous_binary ? (
+                    <Button variant="ghost" size="sm" onClick={handleRollbackOTA} className="w-full justify-center">
+                      {t('maintenance.rollback')}
+                    </Button>
+                  ) : null}
+                </div>
               </Card>
             </div>
           </div>

@@ -1,12 +1,9 @@
 import { useEffect, useMemo } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import Link from '@tiptap/extension-link';
 import Typography from '@tiptap/extension-typography';
 import Highlight from '@tiptap/extension-highlight';
-import CodeBlock from '@tiptap/extension-code-block';
 import { TableKit } from "@tiptap/extension-table";
-import HorizontalRule from '@tiptap/extension-horizontal-rule'
 import { Node } from '@tiptap/core';
 
 import { marked } from 'marked';
@@ -71,7 +68,22 @@ export function parseMarkdownToHTML(markdown: string): string {
     gfm: true,
     breaks: true,
   }) as string;
-  return sanitizeMarkdownHTML(html);
+  return unwrapStandaloneImages(sanitizeMarkdownHTML(html));
+}
+
+/**
+ * marked wraps images in <p><img></p>. TipTap's image node is a block atom, so
+ * that paragraph is split into an empty <p><br></p> sitting above the image.
+ * Lift image-only paragraphs (and leftover empty ones) before setContent.
+ */
+export function unwrapStandaloneImages(html: string): string {
+  if (!html) return '';
+  return html
+    .replace(
+      /<p>(?:\s|<br\s*\/?>)*((?:<img\b[^>]*>\s*(?:<br\s*\/?>\s*)?)+)<\/p>/gi,
+      (_match, images: string) => images.replace(/<br\s*\/?>/gi, '').trim(),
+    )
+    .replace(/<p>(?:\s|&nbsp;|<br\s*\/?>)*<\/p>/gi, '');
 }
 
 /** Strips javascript: URLs and inline event handlers from rendered markdown HTML. */
@@ -93,22 +105,9 @@ export function MarkdownContent({ content, className = '', isUser = false }: Mar
       StarterKit.configure({
         heading: { levels: [1, 2, 3] }
       }),
-      Link.configure({
-        openOnClick: false,
-        protocols: ['http', 'https'],
-        HTMLAttributes: {
-          class: isUser
-            ? 'text-hi-yellow underline font-semibold'
-            : 'text-deep-ink underline font-semibold hover:opacity-80 transition-opacity',
-          target: '_blank',
-          rel: 'noopener noreferrer',
-        },
-      }),
       Typography,
       Highlight,
-      CodeBlock,
       TableKit,
-      HorizontalRule,
       ImageExtension,
     ],
     content: htmlContent,

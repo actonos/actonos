@@ -205,7 +205,20 @@ Export Prometheus-compatible telemetry metrics (`actonos_uptime_seconds`, `acton
 Download full system state snapshot (SQLite DB, manifests, profiles, SOUL.md).
 
 ### `POST /api/system/ota/check`
-Check for software updates.
+Ask the daemon to fetch GitHub REST `GET https://api.github.com/repos/actonos/actonos/releases/latest` (never the HTML `/releases` page, never from the browser). Body `{ "force": true }` bypasses the 15-minute cache.
+
+The JSON includes `update_available`, `can_install`, `checksum_missing`, `apply_supported`, `error_code` (`GITHUB_RATE_LIMIT`, `ASSET_MISSING`, `INVALID_VERSION`, `OTA_CHECK_FAILED`), and the current job. HTTP 200 is used for rate-limit and missing-asset cases so the UI can distinguish them from “up to date”.
+
+Asset names are `{actond|embeddingd}_v{version}_{x86_64|arm64}[.exe]`.
+
+### `GET /api/system/ota/status`
+Latest check result plus live `job` (`queued|downloading|verifying|swapping|restarting` or terminal `succeeded|failed|interrupted`).
+
+### `POST /api/system/ota/apply` | `POST /api/system/ota/rollback`
+High-risk admin actions (`admin_ota_apply` / `admin_ota_rollback`). Approval **enqueues** work and returns immediately. Apply downloads into `{dataDir}/releases/{version}/`, verifies SHA-256, activates into `{dataDir}/bin/`, then restarts.
+
+### `GET /api/runs/{id}`
+Fetch one durable run. 404 `RUN_NOT_FOUND` when missing.
 
 ### `GET /api/system/tailscale`
 Tailscale node status and peers.

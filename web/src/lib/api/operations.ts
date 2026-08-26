@@ -21,11 +21,47 @@ export interface WifiNetwork {
   security: string;
 }
 
+export interface OTAJob {
+  id: string;
+  action: string;
+  status: string;
+  version?: string;
+  error?: string;
+  progress?: number;
+  started_at?: string;
+  updated_at?: string;
+}
+
+export interface OTAAsset {
+  name: string;
+  role: string;
+  required: boolean;
+  present: boolean;
+  download_url?: string;
+  checksum?: string;
+  checksum_missing: boolean;
+}
+
 export interface OTAStatus {
   current_version: string;
   update_available: boolean;
   latest_version: string;
   last_checked: string;
+  apply_supported?: boolean;
+  apply_unsupported_reason?: string;
+  can_install?: boolean;
+  checksum_missing?: boolean;
+  allow_unsigned?: boolean;
+  embeddingd_required?: boolean;
+  error_code?: string;
+  error_message?: string;
+  retry_after?: number;
+  git_commit?: string;
+  build_time?: string;
+  active_binary?: string;
+  previous_binary?: string;
+  assets?: OTAAsset[];
+  job?: OTAJob | null;
 }
 
 export const operationsApi = {
@@ -82,6 +118,17 @@ export const operationsApi = {
     fetchJSON<MutationResult<{ status: string }>>('/system/restart', {
       method: 'POST',
     }),
+  checkOTA: (force = true) =>
+    fetchJSON<OTAStatus>('/system/ota/check', {
+      method: 'POST',
+      body: JSON.stringify({ force }),
+    }),
+  otaStatus: () => fetchJSON<OTAStatus>('/system/ota/status'),
+  applyOTA: () =>
+    fetchJSON<MutationResult<{ status: string }>>('/system/ota/apply', { method: 'POST' }),
+  rollbackOTA: () =>
+    fetchJSON<MutationResult<{ status: string }>>('/system/ota/rollback', { method: 'POST' }),
+  getAgentRun: (id: string) => fetchJSON<{ run: AgentRun }>(`/runs/${id}`),
   downloadBackup: async () => {
     const response = await fetch(`${API_BASE}/system/backup`, {
       headers: getAuthHeaders(),

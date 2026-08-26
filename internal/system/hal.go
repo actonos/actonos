@@ -109,4 +109,9 @@ type HAL interface {
 
 	// RestartDaemon triggers a graceful daemon restart.
 	RestartDaemon(ctx context.Context) error
+
+	// RestartEmbeddingd restarts the embedding helper if this runtime manages it.
+	// DockerHAL is a no-op. BaremetalHAL runs systemctl restart embeddingd and
+	// treats a missing unit as success so actond-only swaps still complete.
+	RestartEmbeddingd(ctx context.Context) error
 }

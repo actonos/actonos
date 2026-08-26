@@ -41,6 +41,16 @@ This file is read by:
 - `scripts/changelog-gen.sh` — determines the current release section
 - CI/CD pipelines — tags Docker images and GitHub releases
 
+GitHub Release assets must be named:
+
+```
+actond_v{VERSION}_{x86_64|arm64}[.exe]
+embeddingd_v{VERSION}_{x86_64|arm64}[.exe]
+SHA256SUMS
+```
+
+The tag-triggered workflow `.github/workflows/release.yml` fails if Windows `embeddingd_v*_x86_64.exe` is missing. Host OTA check only requires **this machine’s** OS/arch assets.
+
 ---
 
 ## Version Bump Workflow

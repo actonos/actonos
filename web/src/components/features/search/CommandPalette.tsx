@@ -14,6 +14,7 @@ import {
   Wrench,
   Bell,
   Radio,
+  Coins,
   type LucideIcon,
 } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -96,6 +97,7 @@ export function CommandPalette({
       ['tools', Wrench],
       ['notifications', Bell],
       ['audit-logs', ShieldCheck],
+      ['costs', Coins],
       ['settings', Settings],
     ].map(([tab, icon]) => ({
       id: `nav:${tab}`,

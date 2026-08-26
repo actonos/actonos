@@ -33,16 +33,20 @@ const TerminalPage = lazy(() => import('@/pages/Terminal/TerminalPage').then((m)
 const SettingsPage = lazy(() => import('@/pages/Settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const AuditLogsPage = lazy(() => import('@/pages/AuditLogs/AuditLogsPage').then((m) => ({ default: m.AuditLogsPage })));
 const NotificationsPage = lazy(() => import('@/pages/Notifications/NotificationsPage').then((m) => ({ default: m.NotificationsPage })));
+const CostsPage = lazy(() => import('@/pages/Costs/CostsPage').then((m) => ({ default: m.CostsPage })));
 
 export const navTabs: NavTab[] = [
   'dashboard', 'agents', 'agent-studio', 'chat', 'missions', 'operations',
-  'automations', 'plugins', 'channels', 'tools', 'skills', 'workspace', 'terminal', 'notifications', 'audit-logs', 'settings',
+  'automations', 'plugins', 'channels', 'tools', 'skills', 'workspace', 'terminal', 'notifications', 'audit-logs', 'costs', 'settings',
 ];
 
 export function tabFromLocation(): NavTab {
-  const value = window.location.hash.replace(/^#\/?/, '').split('?')[0];
-  if (value === 'agents/new' || value.startsWith('agents/')) return 'agent-studio';
-  return navTabs.includes(value as NavTab) ? value as NavTab : 'dashboard';
+  const raw = window.location.hash.replace(/^#\/?/, '');
+  const [path, query = ''] = raw.split('?');
+  const params = new URLSearchParams(query);
+  if (path === 'settings' && params.get('view') === 'tokens') return 'costs';
+  if (path === 'agents/new' || path.startsWith('agents/')) return 'agent-studio';
+  return navTabs.includes(path as NavTab) ? path as NavTab : 'dashboard';
 }
 
 export function App() {
@@ -92,8 +96,15 @@ export function App() {
 
   useEffect(() => {
     const handleHashChange = () => {
+      const raw = window.location.hash.replace(/^#\/?/, '');
+      const [path, query = ''] = raw.split('?');
+      const params = new URLSearchParams(query);
+      if (path === 'settings' && params.get('view') === 'tokens') {
+        window.location.hash = '/costs';
+        return;
+      }
       const nextTab = tabFromLocation();
-      const route = window.location.hash.replace(/^#\/?/, '').split('?')[0];
+      const route = path;
       if (nextTab === 'agent-studio' && route.startsWith('agents/')) {
         setStudioAgentID(decodeURIComponent(route.slice('agents/'.length)) || 'new');
       }
@@ -116,6 +127,12 @@ export function App() {
 
   const navigateTab = (tab: NavTab) => {
     setIsNavigating(true);
+    const current = window.location.hash.replace(/^#\/?/, '').split('?')[0];
+    if (tab === 'costs' && current === 'costs') {
+      setActiveTab(tab);
+      setTimeout(() => setIsNavigating(false), 240);
+      return;
+    }
     if (window.location.hash !== `#/${tab}`) window.location.hash = `/${tab}`;
     setActiveTab(tab);
     setTimeout(() => setIsNavigating(false), 240);
@@ -218,6 +235,7 @@ export function App() {
                       onLogout={handleLogout}
                       onOpenSearch={() => setCommandOpen(true)}
                       onNavigateTab={navigateTab}
+                      onOpenChat={handleOpenChatWithAgent}
                     />
 
                     {/* Page Views */}
@@ -271,6 +289,7 @@ export function App() {
                             />
                           )}
                           {activeTab === 'audit-logs' && <AuditLogsPage />}
+                          {activeTab === 'costs' && <CostsPage />}
                           {activeTab === 'settings' && <SettingsPage />}
                         </Suspense>
                       </ErrorBoundary>

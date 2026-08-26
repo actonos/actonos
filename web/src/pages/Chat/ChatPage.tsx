@@ -41,6 +41,7 @@ import {
   type ChatMessage,
   type ToolCallTrace,
 } from './chatTypes';
+import { isPersistedChatSession, NEW_CHAT_SESSION_PARAM, parseChatSessionRoute } from './chatSession';
 
 export interface ChatPageProps {
   selectedAgentID?: string;
@@ -140,6 +141,11 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
   };
 
   const selectConversation = async (convID: string) => {
+    if (!isPersistedChatSession(convID)) {
+      setActiveConvID(null);
+      setMessages([]);
+      return;
+    }
     setActiveConvID(convID);
     localStorage.setItem('actonos_active_conv_id', convID);
     try {
@@ -250,25 +256,31 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
         console.warn('Failed to load workspace file for chat:', err);
       }
 
-      if (!activeConvID) {
-        const newConvId = `conv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        setHashParam('session_id', newConvId);
-        setActiveConvID(newConvId);
-        localStorage.setItem('actonos_active_conv_id', newConvId);
+      if (!isPersistedChatSession(activeConvID)) {
+        setHashParam('session_id', NEW_CHAT_SESSION_PARAM);
+        setActiveConvID(null);
+        localStorage.removeItem('actonos_active_conv_id');
         setMessages([]);
       }
       setViewMode('chat');
       setTimeout(() => {
         inputRef.current?.focus();
       }, 150);
-    } else if (urlSessionId) {
-      if (urlSessionId !== activeConvID) {
-        selectConversation(urlSessionId);
-      }
-      setViewMode('chat');
     } else {
-      setViewMode('sessions');
-      setActiveConvID(null);
+      const route = parseChatSessionRoute(urlSessionId);
+      if (route.mode === 'draft') {
+        setActiveConvID(null);
+        setMessages([]);
+        setViewMode('chat');
+      } else if (route.mode === 'load') {
+        if (route.sessionId !== activeConvID) {
+          void selectConversation(route.sessionId);
+        }
+        setViewMode('chat');
+      } else {
+        setViewMode('sessions');
+        setActiveConvID(null);
+      }
     }
   };
 
@@ -292,10 +304,9 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
   };
 
   const handleNewChat = () => {
-    const newConvId = `conv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    setHashParam('session_id', newConvId);
-    setActiveConvID(newConvId);
-    localStorage.setItem('actonos_active_conv_id', newConvId);
+    setHashParam('session_id', NEW_CHAT_SESSION_PARAM);
+    setActiveConvID(null);
+    localStorage.removeItem('actonos_active_conv_id');
     setMessages([]);
     setViewMode('chat');
     setTimeout(() => {
@@ -391,7 +402,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
       const currentID = activeConvIDRef.current;
 
       try {
-        if (currentID) {
+        if (isPersistedChatSession(currentID)) {
           const res = await api.getConversation(currentID);
           if (cancelled || !res.messages) return;
 
@@ -628,7 +639,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
       const response = await api.streamChat(
         activeAgentID,
         {
-          conversation_id: activeConvID,
+          conversation_id: isPersistedChatSession(activeConvID) ? activeConvID : undefined,
           message: userMsgText,
         },
         abortController.signal

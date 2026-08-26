@@ -63,7 +63,8 @@
     "empty": "Chưa có lần thực thi bền vững nào.",
     "cancel": "Hủy lần chạy",
     "cancelled": "Đã hủy lần chạy",
-    "cancelFailed": "Không thể hủy lần chạy"
+    "cancelFailed": "Không thể hủy lần chạy",
+    "missingRun": "Lần chạy đó không còn tồn tại."
   },
   "queue": {
     "title": "Hàng đợi tác vụ nền",
@@ -79,7 +80,8 @@
   "cost": {
     "title": "Theo dõi token & chi phí",
     "today": "Hôm nay",
-    "month": "Tháng này"
+    "month": "Tháng này",
+    "openLedger": "Mở sổ cái đầy đủ"
   },
   "approval": {
     "title": "Thao tác nhạy cảm cần phê duyệt",

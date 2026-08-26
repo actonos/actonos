@@ -63,7 +63,8 @@
     "empty": "No durable runs are recorded.",
     "cancel": "Cancel",
     "cancelled": "Run cancelled",
-    "cancelFailed": "Could not cancel run"
+    "cancelFailed": "Could not cancel run",
+    "missingRun": "That run is no longer available."
   },
   "queue": {
     "title": "Background task queue",
@@ -79,7 +80,8 @@
   "cost": {
     "title": "Token & cost tracker",
     "today": "Today",
-    "month": "This month"
+    "month": "This month",
+    "openLedger": "Open full ledger"
   },
   "approval": {
     "title": "Sensitive action requires approval",

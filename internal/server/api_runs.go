@@ -1,6 +1,8 @@
 package server
 
 import (
+	"database/sql"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -28,6 +30,24 @@ func (s *Server) handleListAgentRuns(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.respondJSON(w, http.StatusOK, map[string]any{"runs": runs})
+}
+
+func (s *Server) handleGetAgentRun(w http.ResponseWriter, r *http.Request) {
+	if s.runStore == nil {
+		s.respondError(w, http.StatusNotImplemented, "RUN_STORE_NOT_ENABLED", "agent run store is not configured")
+		return
+	}
+	run, err := s.runStore.Get(r.Context(), chi.URLParam(r, "id"))
+	if errors.Is(err, sql.ErrNoRows) {
+		s.respondError(w, http.StatusNotFound, "RUN_NOT_FOUND", "run not found")
+		return
+	}
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "RUN_GET_FAILED", err.Error())
+		return
+	}
+	s.annotateRunName(r.Context(), run)
+	s.respondJSON(w, http.StatusOK, map[string]any{"run": run})
 }
 
 func (s *Server) handleCancelAgentRun(w http.ResponseWriter, r *http.Request) {

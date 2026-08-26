@@ -49,6 +49,7 @@ func main() {
 		showVer      = flag.Bool("version", false, "Print version information and exit")
 	)
 	flag.Parse()
+	system.WaitForOTAParent()
 
 	// Environment variable overrides
 	if envData := os.Getenv("ACTON_DATA_DIR"); envData != "" {
@@ -403,6 +404,9 @@ func main() {
 
 	// 12. Initialize Hardware Abstraction Layer (HAL)
 	hal := system.AutoDetectHAL(*dataDir)
+	otaEngine := system.NewOTAEngine(*dataDir)
+	otaEngine.SetVersionMeta(Version, GitCommit, BuildTime)
+	otaEngine.SetRestarter(system.HALRestarter{HAL: hal, Engine: otaEngine})
 	slog.Info("hardware abstraction layer loaded", "runtime_mode", hal.RuntimeMode())
 
 	// 13. Initialize Embedded Tailscale Node
@@ -461,10 +465,12 @@ func main() {
 		Version:             Version,
 		GitCommit:           GitCommit,
 		BuildTime:           BuildTime,
+		OTAEngine:           otaEngine,
 	}
 
 	apiServer := server.NewServer(srvConfig)
 	apiServer.RegisterStaticRoutes(overridesDir)
+	go runOTACheckTicker(ctx, otaEngine, Version, embeddingService, notifMgr)
 
 	httpServer := &http.Server{
 		Addr:              *listenAddr,
@@ -508,4 +514,44 @@ func main() {
 
 	eventBus.Publish(bus.NewEvent(bus.EventSystemShutdown, "kernel", nil))
 	slog.Info("ActonOS daemon stopped cleanly")
+}
+
+func runOTACheckTicker(ctx context.Context, engine *system.OTAEngine, currentVersion string, embedding *memory.EmbeddingService, notifier *system.NotificationManager) {
+	if engine == nil {
+		return
+	}
+	fire := func() {
+		in := system.EmbeddingRequiredInput{EnvForce: os.Getenv("ACTONOS_OTA_EMBEDDINGD")}
+		if engine != nil {
+			active, _ := engine.EmbeddingState()
+			in.PriorEmbeddingActive = active
+		}
+		if embedding != nil {
+			if st, err := embedding.Status(ctx); err == nil {
+				in.ServiceReady = st.ServiceReady
+			}
+		}
+		res := engine.Check(ctx, currentVersion, false, system.EmbeddingdRequired(in))
+		if notifier != nil {
+			_ = engine.MaybeNotify(ctx, res, notifier)
+		}
+	}
+	timer := time.NewTimer(15 * time.Minute)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return
+	case <-timer.C:
+		fire()
+	}
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			fire()
+		}
+	}
 }

@@ -16,6 +16,7 @@
     "channels": "Channels",
     "notifications": "Notifications",
     "audit-logs": "Audit Logs",
+    "costs": "Costs",
     "settings": "Settings"
   },
   "sections": {
@@ -77,6 +78,15 @@
   "session": {
     "lock": "Lock",
     "lockTitle": "Lock ActonOS session"
+  },
+  "activity": {
+    "idle": "No agents working",
+    "runningOne": "{{name}} — {{task}}",
+    "runningMany": "{{count}} agents working",
+    "empty": "No in-flight agent runs.",
+    "openChat": "Open chat",
+    "openAutomations": "Open automations",
+    "openMissions": "Open missions"
   },
   "language": {
     "title": "Language",

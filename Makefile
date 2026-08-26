@@ -23,7 +23,7 @@
 #   make help          Show this help message
 # ==============================================================================
 
-.PHONY: all deps dev lint test test-unit test-race test-integ build-web build build-embedding model-embedding docker docker-multiarch docker-run iso iso-arm64 \
+.PHONY: all deps dev lint test test-unit test-race test-integ build-web build build-embedding dist model-embedding docker docker-multiarch docker-run iso iso-arm64 \
         clean version bump-patch bump-minor bump-major release help
 
 # ------------------------------------------------------------------------------
@@ -129,6 +129,19 @@ build-embedding:
 	@echo "==> Building embeddingd (requires CGO and ONNX Runtime at runtime)..."
 	@mkdir -p $(BUILD_DIR)
 	CGO_ENABLED=1 go build $(GOFLAGS) -tags ORT -o $(BUILD_DIR)/embeddingd ./cmd/embeddingd/
+
+# Named GitHub OTA artifacts. Cross-OS/CGO embeddingd is produced by
+# .github/workflows/release.yml — do not assume a local rename of build/actond
+# yields linux/arm64 or Windows embeddingd.exe.
+dist:
+	@echo "==> Copying host binaries to named OTA asset names..."
+	@mkdir -p $(BUILD_DIR)
+	@arch=x86_64; \
+	  case "`uname -m`" in arm64|aarch64) arch=arm64 ;; esac; \
+	  ext=""; case "`uname -s`" in MINGW*|MSYS*|CYGWIN*|Windows_NT) ext=".exe" ;; esac; \
+	  if [ -f $(BUILD_DIR)/$(BINARY)$$ext ]; then cp $(BUILD_DIR)/$(BINARY)$$ext $(BUILD_DIR)/actond_v$(VERSION)_$$arch$$ext; fi; \
+	  if [ -f $(BUILD_DIR)/embeddingd$$ext ]; then cp $(BUILD_DIR)/embeddingd$$ext $(BUILD_DIR)/embeddingd_v$(VERSION)_$$arch$$ext; fi; \
+	  echo "==> Named assets under $(BUILD_DIR)/ (host OS/arch only)"
 
 # ------------------------------------------------------------------------------
 # Docker

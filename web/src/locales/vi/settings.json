@@ -25,48 +25,6 @@
     "connect": "Kết nối",
     "password": "Mật khẩu"
   },
-  "tokenLedger": {
-    "title": "Tiêu thụ mã thông báo và sổ cái chi phí",
-    "overview": "Tổng quan & Phân tích",
-    "transactions": "Sổ cái giao dịch ({{count}})",
-    "refresh": "Làm mới",
-    "today": "Khối lượng hôm nay",
-    "month": "Tháng này",
-    "lifetime": "Mã thông báo trọn đời",
-    "inputOutput": "{{input}} vào / {{output}} ra",
-    "totalCost": "Tổng chi phí đốt",
-    "marketCatalog": "Danh mục thị trường trực tiếp",
-    "trend": "Xu hướng lưu lượng truy cập mã thông báo trong 14 ngày",
-    "dailyRollup": "Tổng hợp hàng ngày",
-    "noTrend": "Không có mức tiêu thụ mã thông báo nào được ghi lại trong 14 ngày qua.",
-    "byModel": "Mức tiêu thụ theo mẫu",
-    "noModels": "Không có số liệu thống kê mô hình có sẵn.",
-    "byAgent": "Tiêu thụ theo agent",
-    "noAgents": "Không có số liệu thống kê agent có sẵn.",
-    "filters": "Bộ lọc:",
-    "allAgents": "Tất cả agent",
-    "allSources": "Tất cả các nguồn",
-    "sourceChat": "Trò chuyện (Tương tác)",
-    "sourceStream": "Luồng trò chuyện (SSE)",
-    "sourceCron": "Tự động hóa Cron",
-    "sourceHeartbeat": "Vòng nhịp tim",
-    "sourceChannel": "Kênh bên ngoài",
-    "columns": {
-      "time": "Thời gian",
-      "agent": "Agent",
-      "model": "Người mẫu",
-      "source": "Nguồn",
-      "prompt": "Prompt",
-      "completion": "Completion",
-      "total": "Tổng cộng",
-      "cost": "Chi phí (USD)"
-    },
-    "noTransactions": "Không có giao dịch sổ cái mã thông báo nào phù hợp với tiêu chí đã chọn.",
-    "close": "Đóng",
-    "currency": "${{value}} USD",
-    "tooltip": "{{date}}: {{tokens}} token (${{cost}})",
-    "usage": "Mã {{tokens}} (${{cost}})"
-  },
   "header": {
     "activeModels": "{{configured}}/{{total}} LLM đang hoạt động"
   },
@@ -78,7 +36,6 @@
     "label": "Các phần cài đặt",
     "identity": "Bản sắc & Tâm hồn",
     "providers": "Nhà cung cấp LLM ({{count}})",
-    "tokens": "Sổ cái Token & Chi phí",
     "network": "Phần cứng & Kết nối",
     "audit": "Nhật ký kiểm tra ({{count}})",
     "maintenance": "Lưu trữ & OTA"
@@ -195,7 +152,24 @@
     "yes": "ĐÚNG",
     "no": "KHÔNG",
     "checking": "Kiểm tra các bản phát hành...",
-    "check": "Kiểm tra cập nhật"
+    "check": "Kiểm tra cập nhật",
+    "install": "Cài đặt bản cập nhật",
+    "installing": "Đang cài đặt…",
+    "rollback": "Khôi phục phiên bản trước",
+    "rollingBack": "Đang khôi phục…",
+    "checksumWarning": "Thiếu checksum. Không thể cài trừ khi cho phép bản không chữ ký.",
+    "unsupported": "Không hỗ trợ cài trên môi trường này ({{reason}}).",
+    "progress": "Tiến độ: {{percent}}%",
+    "jobStatus": "Tác vụ: {{status}}",
+    "toast": {
+      "available": "ActonOS {{version}} đã sẵn sàng.",
+      "upToDate": "Đang chạy phiên bản mới nhất {{version}}.",
+      "rateLimit": "GitHub giới hạn tốc độ. Thử lại sau {{seconds}} giây.",
+      "checkFailed": "Không kiểm tra được bản cập nhật.",
+      "unsigned": "Có bản mới nhưng thiếu checksum.",
+      "applyQueued": "Đã xếp hàng cài đặt.",
+      "rollbackQueued": "Đã xếp hàng khôi phục."
+    }
   },
   "restart": {
     "title": "Khởi động lại ActonOS",

@@ -42,9 +42,6 @@ func (s *Server) extractToken(r *http.Request) string {
 	if cookie, err := r.Cookie("actonos_token"); err == nil && cookie != nil {
 		return strings.TrimSpace(cookie.Value)
 	}
-	if tokenQuery := r.URL.Query().Get("token"); tokenQuery != "" {
-		return strings.TrimSpace(tokenQuery)
-	}
 	return ""
 }
 

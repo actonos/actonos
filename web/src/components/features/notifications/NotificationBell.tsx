@@ -90,12 +90,11 @@ export function NotificationBell({ onNavigateTab }: NotificationBellProps) {
     }
     setIsOpen(false);
     if (item.link) {
-      const target = item.link.replace(/^#\/?/, '').replace(/^\//, '') as NavTab;
-      if (onNavigateTab) {
-        onNavigateTab(target);
-      } else {
-        window.location.hash = `#/${target}`;
-      }
+      const cleaned = item.link.replace(/^#\/?/, '').replace(/^\//, '');
+      const [path, query] = cleaned.split('?');
+      window.location.hash = `/${path}${query ? `?${query}` : ''}`;
+      const tab = path.split('/')[0] as NavTab;
+      onNavigateTab?.(tab);
     }
   };
 
