@@ -103,26 +103,32 @@ jobs:
       - name: Install MinGW (Windows CGO)
         if: matrix.binary == 'embeddingd' && matrix.goos == 'windows'
         run: choco install mingw -y --no-progress
-      - name: Install ONNX Runtime
-        if: matrix.ort != ''
-        shell: bash
+      - name: Install ONNX Runtime (Linux)
+        if: startsWith(matrix.ort, 'linux-')
         run: |
           set -euo pipefail
           ver="1.28.0"
           mkdir -p "$HOME/ort"
-          if [[ "${{ matrix.goos }}" == "windows" ]]; then
-            curl -fsSL -o /tmp/ort.zip \
-              "https://github.com/microsoft/onnxruntime/releases/download/v${ver}/onnxruntime-${{ matrix.ort }}-${ver}.zip"
-            python -c "import zipfile; zipfile.ZipFile('/tmp/ort.zip').extractall(r'$HOME/ort')"
-            inner=$(find "$HOME/ort" -maxdepth 1 -type d -name 'onnxruntime-*' | head -n1)
-            echo "ORT_DIR=$inner" >> "$GITHUB_ENV"
-            echo "$inner/lib" >> "$GITHUB_PATH"
-          else
-            curl -fsSL -o /tmp/ort.tgz \
-              "https://github.com/microsoft/onnxruntime/releases/download/v${ver}/onnxruntime-${{ matrix.ort }}-${ver}.tgz"
-            tar -xzf /tmp/ort.tgz -C "$HOME/ort" --strip-components=1
-            echo "ORT_DIR=$HOME/ort" >> "$GITHUB_ENV"
-          fi
+          curl -fsSL -o "$RUNNER_TEMP/ort.tgz" \
+            "https://github.com/microsoft/onnxruntime/releases/download/v${ver}/onnxruntime-${{ matrix.ort }}-${ver}.tgz"
+          tar -xzf "$RUNNER_TEMP/ort.tgz" -C "$HOME/ort" --strip-components=1
+          echo "ORT_DIR=$HOME/ort" >> "$GITHUB_ENV"
+      - name: Install ONNX Runtime (Windows)
+        if: startsWith(matrix.ort, 'win-')
+        shell: pwsh
+        run: |
+          $ver = "1.28.0"
+          $zip = Join-Path $env:RUNNER_TEMP "ort.zip"
+          $dest = Join-Path $env:RUNNER_TEMP "ort"
+          $url = "https://github.com/microsoft/onnxruntime/releases/download/v$ver/onnxruntime-${{ matrix.ort }}-$ver.zip"
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+          Expand-Archive -Path $zip -DestinationPath $dest -Force
+          $inner = Get-ChildItem $dest -Directory | Where-Object { $_.Name -like "onnxruntime-*" } | Select-Object -First 1
+          if (-not $inner) { throw "ONNX Runtime zip did not contain an onnxruntime-* directory" }
+          Add-Content -Path $env:GITHUB_ENV -Value "ORT_DIR=$($inner.FullName)"
+          Add-Content -Path $env:GITHUB_PATH -Value "$($inner.FullName)\lib"
+          Add-Content -Path $env:GITHUB_PATH -Value "$($inner.FullName)\bin"
       - name: Build
         env:
           CGO_ENABLED: ${{ matrix.cgo }}
