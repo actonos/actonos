@@ -32,6 +32,8 @@ export default defineConfig(({ mode }) => {
   const buildDir = process.env.VITE_BUILD_DIR?.trim() || env.VITE_BUILD_DIR?.trim() || defaultBuildDir;
 
   return {
+    root: __dirname,
+    cacheDir: path.resolve(__dirname, 'node_modules/.vite'),
     define: {
       __APP_VERSION__: JSON.stringify(resolveVersion()),
     },

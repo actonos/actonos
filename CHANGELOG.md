@@ -5,6 +5,12 @@ All notable changes to ActonOS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3]
+
+### Fixed
+
+- Vitest created `node_modules` folder outside of the `web` folder
+
 ## [1.0.2] - 2026-08-27
 
 ### Changed
@@ -250,7 +256,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Apache 2.0 license
 
 <!-- Release links -->
-[Unreleased]: https://github.com/actonos/actonos/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/actonos/actonos/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/actonos/actonos/releases/tag/v1.0.3
 [1.0.2]: https://github.com/actonos/actonos/releases/tag/v1.0.2
 [1.0.1]: https://github.com/actonos/actonos/releases/tag/v1.0.1
 [1.0.0]: https://github.com/actonos/actonos/releases/tag/v1.0.0
