@@ -7,9 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.2] - 2026-08-27
 
+### Changed
+
+- Implement agent tool approval workflow with UI support and persistence in Chat
+
 ### Fixed
 
 - Kernel permission denied when trying to create a foldẻ in /sys/fs/cgroup
+- New chat session missed the first message
+- Agent loop sometime doesn't save the message if the run is too long
+- Tool call result exceeds the context window
 
 ## [1.0.1] - 2026-08-26
 
