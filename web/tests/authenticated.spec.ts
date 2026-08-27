@@ -103,6 +103,66 @@ test('chat session drawer is available on narrow layouts', async ({ page }) => {
   await expect(closeButton).toBeHidden();
 });
 
+test('new chat first reply stays visible when the session hash is assigned', async ({ page }) => {
+  const convId = 'conv_e2e_first';
+  const reply = 'Hello from the streamed agent.';
+  const sse = [
+    'event: thought',
+    `data: ${JSON.stringify({ conversation_id: convId, title: 'Ping', thought: 'Thinking with Nova...' })}`,
+    '',
+    'event: token',
+    `data: ${JSON.stringify({ conversation_id: convId, title: 'Ping', content: reply })}`,
+    '',
+    'event: done',
+    `data: ${JSON.stringify({ conversation_id: convId, title: 'Ping', content: reply, model: 'mock-model', tokens_used: 8 })}`,
+    '',
+  ].join('\n');
+
+  await page.route('**/api/agents/**/chat', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/event-stream',
+      body: sse,
+    });
+  });
+  await page.route(`**/api/conversations/${convId}`, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: {
+          conversation: {
+            id: convId,
+            agent_id: 'agent_system_core',
+            title: 'Ping',
+            channel: 'web',
+            is_pinned: false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+          messages: [
+            {
+              id: 'msg_user_only',
+              conversation_id: convId,
+              role: 'user',
+              content: 'Ping',
+              created_at: new Date().toISOString(),
+            },
+          ],
+        },
+      }),
+    });
+  });
+
+  await page.goto('/#/chat?session_id=new');
+  await expect(page.getByPlaceholder(/Ask anything/)).toBeVisible();
+  await page.getByPlaceholder(/Ask anything/).fill('Ping');
+  await page.getByRole('button', { name: /^Send$/ }).click();
+  await expect(page.getByText(reply)).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`session_id=${convId}`));
+});
+
 test('primary authenticated routes have no serious accessibility violations', async ({ page }) => {
   for (const route of ['agents', 'agents/new', 'chat', 'missions', 'automations', 'channels', 'plugins', 'tools', 'skills', 'workspace', 'settings']) {
     await page.goto(`/#/${route}`);

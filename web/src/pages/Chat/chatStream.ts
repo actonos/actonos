@@ -199,3 +199,29 @@ export function applyChatStreamEvent(
 
   return message;
 }
+
+/** Keep a live assistant bubble even if a snapshot replaced its optimistic id. */
+export function upsertStreamingAssistant(
+  messages: ChatMessage[],
+  assistantMsgId: string,
+  next: ChatMessage
+): ChatMessage[] {
+  const byId = messages.findIndex((message) => message.id === assistantMsgId);
+  if (byId >= 0) {
+    return messages.map((message, index) => (index === byId ? next : message));
+  }
+  let lastAssistant = -1;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index].role === 'assistant') {
+      lastAssistant = index;
+      break;
+    }
+  }
+  if (lastAssistant >= 0 && messages[lastAssistant].finalized === false) {
+    const existingId = messages[lastAssistant].id;
+    return messages.map((message, index) =>
+      index === lastAssistant ? { ...next, id: existingId } : message
+    );
+  }
+  return [...messages, next];
+}

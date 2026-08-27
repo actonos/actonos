@@ -19,3 +19,21 @@ export function parseChatSessionRoute(sessionId: string | null | undefined): Cha
   }
   return { mode: 'load', sessionId };
 }
+
+/** False when the hash only caught up with an in-flight first-message stream. */
+export function shouldHydrateChatSession(
+  route: ChatSessionRoute,
+  currentSessionId: string | null | undefined,
+  options?: { streaming?: boolean }
+): boolean {
+  if (route.mode !== 'load') {
+    return false;
+  }
+  if (route.sessionId === currentSessionId) {
+    return false;
+  }
+  if (options?.streaming && !isPersistedChatSession(currentSessionId)) {
+    return false;
+  }
+  return true;
+}

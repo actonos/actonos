@@ -41,8 +41,17 @@ import {
   type ChatMessage,
   type ToolCallTrace,
 } from './chatTypes';
-import { isPersistedChatSession, NEW_CHAT_SESSION_PARAM, parseChatSessionRoute } from './chatSession';
-import { applyChatStreamEvent, attachPendingApprovalToMessages } from './chatStream';
+import {
+  isPersistedChatSession,
+  NEW_CHAT_SESSION_PARAM,
+  parseChatSessionRoute,
+  shouldHydrateChatSession,
+} from './chatSession';
+import {
+  applyChatStreamEvent,
+  attachPendingApprovalToMessages,
+  upsertStreamingAssistant,
+} from './chatStream';
 
 export interface ChatPageProps {
   selectedAgentID?: string;
@@ -94,6 +103,11 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const activeStreamAbortController = useRef<AbortController | null>(null);
   const waitingForResumeRef = useRef(false);
+  const loadingRef = useRef(false);
+  loadingRef.current = loading;
+  const activeConvIDRef = useRef<string | null>(activeConvID);
+  activeConvIDRef.current = activeConvID;
+  const sessionHydrateGenRef = useRef(0);
 
   // Load agents and conversations
   const loadAgents = async () => {
@@ -144,14 +158,26 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
 
   const selectConversation = async (convID: string) => {
     if (!isPersistedChatSession(convID)) {
+      activeConvIDRef.current = null;
       setActiveConvID(null);
       setMessages([]);
       return;
     }
+    if (loadingRef.current && convID === activeConvIDRef.current) {
+      return;
+    }
+    const generation = ++sessionHydrateGenRef.current;
+    activeConvIDRef.current = convID;
     setActiveConvID(convID);
     localStorage.setItem('actonos_active_conv_id', convID);
     try {
       const res = await api.getConversation(convID);
+      if (generation !== sessionHydrateGenRef.current) {
+        return;
+      }
+      if (loadingRef.current && convID === activeConvIDRef.current) {
+        return;
+      }
       if (res.conversation?.agent_id) {
         setActiveAgentID(res.conversation.agent_id);
       }
@@ -269,8 +295,9 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
         console.warn('Failed to load workspace file for chat:', err);
       }
 
-      if (!isPersistedChatSession(activeConvID)) {
+      if (!isPersistedChatSession(activeConvIDRef.current)) {
         setHashParam('session_id', NEW_CHAT_SESSION_PARAM);
+        activeConvIDRef.current = null;
         setActiveConvID(null);
         localStorage.removeItem('actonos_active_conv_id');
         setMessages([]);
@@ -282,16 +309,28 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
     } else {
       const route = parseChatSessionRoute(urlSessionId);
       if (route.mode === 'draft') {
-        setActiveConvID(null);
-        setMessages([]);
+        if (!loadingRef.current) {
+          activeConvIDRef.current = null;
+          setActiveConvID(null);
+          setMessages([]);
+        }
         setViewMode('chat');
       } else if (route.mode === 'load') {
-        if (route.sessionId !== activeConvID) {
+        if (
+          shouldHydrateChatSession(route, activeConvIDRef.current, {
+            streaming: loadingRef.current,
+          })
+        ) {
           void selectConversation(route.sessionId);
+        } else if (route.sessionId !== activeConvIDRef.current) {
+          activeConvIDRef.current = route.sessionId;
+          setActiveConvID(route.sessionId);
+          localStorage.setItem('actonos_active_conv_id', route.sessionId);
         }
         setViewMode('chat');
       } else {
         setViewMode('sessions');
+        activeConvIDRef.current = null;
         setActiveConvID(null);
       }
     }
@@ -310,14 +349,29 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
+  const handleCancelStreaming = () => {
+    if (activeStreamAbortController.current) {
+      activeStreamAbortController.current.abort();
+      activeStreamAbortController.current = null;
+    }
+    waitingForResumeRef.current = false;
+    loadingRef.current = false;
+    setLoading(false);
+  };
+
   const handleViewSession = (convID: string) => {
+    handleCancelStreaming();
+    sessionHydrateGenRef.current += 1;
     setHashParam('session_id', convID);
     selectConversation(convID);
     setViewMode('chat');
   };
 
   const handleNewChat = () => {
+    handleCancelStreaming();
+    sessionHydrateGenRef.current += 1;
     setHashParam('session_id', NEW_CHAT_SESSION_PARAM);
+    activeConvIDRef.current = null;
     setActiveConvID(null);
     localStorage.removeItem('actonos_active_conv_id');
     setMessages([]);
@@ -328,7 +382,10 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
   };
 
   const handleBackToSessions = () => {
+    handleCancelStreaming();
+    sessionHydrateGenRef.current += 1;
     setHashParam('session_id', undefined);
+    activeConvIDRef.current = null;
     setActiveConvID(null);
     setViewMode('sessions');
     loadConversations();
@@ -394,10 +451,6 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
   };
 
   const { snapshot } = useRealtime();
-  const loadingRef = useRef(loading);
-  loadingRef.current = loading;
-  const activeConvIDRef = useRef(activeConvID);
-  activeConvIDRef.current = activeConvID;
 
   useEffect(() => {
     const onDecided = async (event: Event) => {
@@ -608,14 +661,6 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
     }
   }, [viewMode, messages, loading]);
 
-  const handleCancelStreaming = () => {
-    if (activeStreamAbortController.current) {
-      activeStreamAbortController.current.abort();
-      activeStreamAbortController.current = null;
-    }
-    setLoading(false);
-  };
-
   const handleSend = async (e?: FormEvent, attachedFiles: AttachedFile[] = []) => {
     if (e) e.preventDefault();
     if ((!input.trim() && attachedFiles.length === 0) || !activeAgentID || loading) return;
@@ -689,7 +734,9 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
       finalized: false,
     };
 
+    sessionHydrateGenRef.current += 1;
     setMessages((prev) => [...prev, userMsgObj, currentAssistantMsg]);
+    loadingRef.current = true;
     setLoading(true);
 
     const abortController = new AbortController();
@@ -748,11 +795,14 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
             try {
               const parsed = JSON.parse(dataStr);
 
-              // Update session ID and title
-              if (parsed.conversation_id) {
-                setActiveConvID(parsed.conversation_id);
-                setHashParam('session_id', parsed.conversation_id);
-                localStorage.setItem('actonos_active_conv_id', parsed.conversation_id);
+              if (typeof parsed.conversation_id === 'string' && parsed.conversation_id) {
+                const nextConvID = parsed.conversation_id;
+                if (activeConvIDRef.current !== nextConvID) {
+                  activeConvIDRef.current = nextConvID;
+                  setActiveConvID(nextConvID);
+                  setHashParam('session_id', nextConvID);
+                  localStorage.setItem('actonos_active_conv_id', nextConvID);
+                }
                 setConversations((prev) => {
                   const exists = prev.some((c) => c.id === parsed.conversation_id);
                   if (exists) {
@@ -804,7 +854,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
               }
 
               setMessages((prev) =>
-                prev.map((m) => (m.id === assistantMsgId ? { ...currentAssistantMsg } : m))
+                upsertStreamingAssistant(prev, assistantMsgId, currentAssistantMsg)
               );
 
               if (currentEvent === 'token') {
@@ -845,6 +895,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
         waitingForResumeRef.current = true;
       } else {
         waitingForResumeRef.current = false;
+        loadingRef.current = false;
         setLoading(false);
       }
     }

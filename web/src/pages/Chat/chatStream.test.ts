@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { ApprovalRequest } from '@/lib/types';
-import { applyChatStreamEvent, attachPendingApprovalToMessages, isApprovalRequiredErrorText } from './chatStream';
+import {
+  applyChatStreamEvent,
+  attachPendingApprovalToMessages,
+  isApprovalRequiredErrorText,
+  upsertStreamingAssistant,
+} from './chatStream';
 import type { ChatMessage } from './chatTypes';
 
 const baseMessage = (): ChatMessage => ({
@@ -87,5 +92,59 @@ describe('attachPendingApprovalToMessages', () => {
 describe('isApprovalRequiredErrorText', () => {
   it('detects the engine approval error string', () => {
     expect(isApprovalRequiredErrorText('human approval required: approval_id=apr_1 tool=x risk=High')).toBe(true);
+  });
+});
+
+describe('upsertStreamingAssistant', () => {
+  it('replaces the optimistic assistant bubble by id', () => {
+    const messages: ChatMessage[] = [
+      { id: 'u1', role: 'user', content: 'hi', timestamp: '10:00' },
+      { id: 'a-opt', role: 'assistant', content: '', timestamp: '10:00', finalized: false },
+    ];
+    const next: ChatMessage = {
+      id: 'a-opt',
+      role: 'assistant',
+      content: 'Hello.',
+      timestamp: '10:00',
+      finalized: false,
+    };
+    const result = upsertStreamingAssistant(messages, 'a-opt', next);
+    expect(result).toHaveLength(2);
+    expect(result[1]?.content).toBe('Hello.');
+  });
+
+  it('reinserts the live bubble after a user-only snapshot', () => {
+    const messages: ChatMessage[] = [
+      { id: 'u-server', role: 'user', content: 'hi', timestamp: '10:00' },
+    ];
+    const next: ChatMessage = {
+      id: 'a-opt',
+      role: 'assistant',
+      content: 'Hello.',
+      timestamp: '10:00',
+      finalized: false,
+    };
+    const result = upsertStreamingAssistant(messages, 'a-opt', next);
+    expect(result).toHaveLength(2);
+    expect(result[1]?.id).toBe('a-opt');
+    expect(result[1]?.content).toBe('Hello.');
+  });
+
+  it('continues an unfinalized assistant that lost its optimistic id', () => {
+    const messages: ChatMessage[] = [
+      { id: 'u1', role: 'user', content: 'hi', timestamp: '10:00' },
+      { id: 'a-server', role: 'assistant', content: '', timestamp: '10:00', finalized: false },
+    ];
+    const next: ChatMessage = {
+      id: 'a-opt',
+      role: 'assistant',
+      content: 'Hello.',
+      timestamp: '10:00',
+      finalized: false,
+    };
+    const result = upsertStreamingAssistant(messages, 'a-opt', next);
+    expect(result).toHaveLength(2);
+    expect(result[1]?.id).toBe('a-server');
+    expect(result[1]?.content).toBe('Hello.');
   });
 });

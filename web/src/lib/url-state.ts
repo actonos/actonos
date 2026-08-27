@@ -7,7 +7,11 @@ export function readHashParams(): URLSearchParams {
 export function updateHashQuery(params: URLSearchParams): void {
   const route = window.location.hash.replace(/^#\/?/, '').split('?')[0];
   const query = params.toString();
-  window.location.hash = `/${route}${query ? `?${query}` : ''}`;
+  const next = `#/${route}${query ? `?${query}` : ''}`;
+  if (window.location.hash === next) {
+    return;
+  }
+  window.location.hash = next;
 }
 
 export function setHashParam(key: string, value?: string): void {
