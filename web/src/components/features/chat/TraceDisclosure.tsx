@@ -45,7 +45,7 @@ export function TraceDisclosure({
         )}
       </div>
       {expanded && (
-        <div className="mt-2 space-y-2 rounded-[14px] border border-onyx/10 bg-canvas p-3 font-mono text-caption text-slate">
+        <div className="mt-2 max-h-56 space-y-2 overflow-y-auto rounded-[14px] border border-onyx/10 bg-canvas p-3 font-mono text-caption text-slate">
           {activeTab === 'traces' ? (
             message.toolCalls?.length ? message.toolCalls.map((call, index) => (
               <div key={`${call.tool}-${index}`} className="space-y-1 rounded-xl border border-onyx/5 bg-soft-meadow p-2 text-[11px]">

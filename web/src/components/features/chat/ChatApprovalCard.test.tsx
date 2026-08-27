@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { describe, expect, it, vi } from 'vitest';
 import i18n from '@/lib/i18n';
@@ -28,7 +28,7 @@ const approval: ApprovalRequest = {
 };
 
 describe('ChatApprovalCard', () => {
-  it('keeps reject disabled until feedback is provided', () => {
+  it('shows only approve and reject actions', () => {
     render(
       <I18nextProvider i18n={i18n}>
         <ToastProvider>
@@ -36,9 +36,9 @@ describe('ChatApprovalCard', () => {
         </ToastProvider>
       </I18nextProvider>
     );
-    const reject = screen.getByRole('button', { name: /reject|từ chối/i });
-    expect(reject).toBeDisabled();
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Not safe to write that file' } });
-    expect(reject).toBeEnabled();
+    expect(screen.getByRole('button', { name: /approve|chấp thuận/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /reject|từ chối/i })).toBeEnabled();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /don't ask|không hỏi/i })).not.toBeInTheDocument();
   });
 });

@@ -21,6 +21,48 @@ import type { ChatMessage } from '@/pages/Chat/chatTypes';
 import { TraceDisclosure } from './TraceDisclosure';
 import { ChatApprovalCard } from './ChatApprovalCard';
 
+function hasPendingChatApproval(message: ChatMessage): boolean {
+  const approval = message.pendingApproval;
+  return Boolean(approval && approval.status !== 'approved' && approval.status !== 'rejected');
+}
+
+function AssistantPlaceholder({ message }: { message: ChatMessage }) {
+  const { t } = useTranslation('chat');
+  const hasTools = Boolean(message.toolCalls?.length);
+  const inProgress = message.finalized === false;
+
+  if (hasTools && !inProgress) {
+    return (
+      <span className="text-slate italic font-mono text-[11px]">
+        {t('operationsCompleted')}
+      </span>
+    );
+  }
+
+  if (hasTools && inProgress) {
+    if (message.thought || message.reasoning) {
+      return null;
+    }
+    return (
+      <div className="flex items-center gap-2 text-caption font-mono text-slate animate-pulse py-1">
+        <Sparkles className="h-3.5 w-3.5 text-hi-yellow animate-spin" />
+        <span>{t('runningTools')}</span>
+      </div>
+    );
+  }
+
+  if (!message.thought && !message.reasoning) {
+    return (
+      <div className="flex items-center gap-2 text-caption font-mono text-slate animate-pulse py-1">
+        <Sparkles className="h-3.5 w-3.5 text-hi-yellow animate-spin" />
+        <span>{t('connecting')}</span>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 function cleanReasoning(text: string): string {
   return text
     .replace(/<[|｜]{1,2}DSML[|｜]{1,2}[\s\S]*?<\/[|｜]{1,2}DSML[|｜]{1,2}tool_calls>/g, '')
@@ -92,6 +134,7 @@ export function MessageBubble({
   const reasoningSteps = hasSegments
     ? message.segments!.filter((s) => s.type === 'reasoning' && cleanReasoning(s.text).length > 0)
     : [];
+  const pendingApproval = hasPendingChatApproval(message);
 
   return (
     <>
@@ -115,10 +158,6 @@ export function MessageBubble({
               <span className="line-clamp-2 leading-tight">{message.thought}</span>
             </div>
           )}
-          {message.pendingApproval && message.pendingApproval.status !== 'approved' && message.pendingApproval.status !== 'rejected' && (
-            <ChatApprovalCard approval={message.pendingApproval} />
-          )}
-
         {isUser ? (
           <div className="font-sans text-body-sm leading-relaxed space-y-2.5">
             {message.attachments && message.attachments.length > 0 && (
@@ -217,15 +256,8 @@ export function MessageBubble({
               <div className="font-sans text-body-sm leading-relaxed">
                 {message.content ? (
                   <MarkdownContent content={message.content} isUser={false} />
-                ) : message.toolCalls && message.toolCalls.length > 0 ? (
-                  <span className="text-slate italic font-mono text-[11px]">
-                    {t('operationsCompleted', 'Completed operations successfully.')}
-                  </span>
                 ) : (
-                  <div className="flex items-center gap-2 text-caption font-mono text-slate animate-pulse py-1">
-                    <Sparkles className="h-3.5 w-3.5 text-hi-yellow animate-spin" />
-                    <span>{t('connecting')}</span>
-                  </div>
+                  <AssistantPlaceholder message={message} />
                 )}
               </div>
             </>
@@ -238,13 +270,16 @@ export function MessageBubble({
                     key={`stream-seg-${i}`}
                     text={seg.text}
                     title={t('thinkingProcess', 'Thinking Process')}
-                    defaultOpen={true}
+                    defaultOpen={!pendingApproval}
                   />
                 ) : (
                   <div key={`stream-seg-${i}`} className="font-sans text-body-sm leading-relaxed">
                     <MarkdownContent content={seg.text} isUser={false} />
                   </div>
                 )
+              )}
+              {!message.content && message.segments!.every((seg) => !seg.text.trim()) && (
+                <AssistantPlaceholder message={message} />
               )}
             </div>
           )
@@ -255,23 +290,14 @@ export function MessageBubble({
               <StreamingReasoningBlock
                 text={message.reasoning}
                 title={t('thinkingProcess', 'Thinking Process')}
-                defaultOpen={!message.content}
+                defaultOpen={!message.content && !pendingApproval}
               />
             )}
             <div className="font-sans text-body-sm leading-relaxed">
               {message.content ? (
                 <MarkdownContent content={message.content} isUser={false} />
-              ) : message.toolCalls && message.toolCalls.length > 0 ? (
-                <span className="text-slate italic font-mono text-[11px]">
-                  {t('operationsCompleted', 'Completed operations successfully.')}
-                </span>
               ) : (
-                !message.thought && !message.reasoning && (
-                  <div className="flex items-center gap-2 text-caption font-mono text-slate animate-pulse py-1">
-                    <Sparkles className="h-3.5 w-3.5 text-hi-yellow animate-spin" />
-                    <span>{t('connecting')}</span>
-                  </div>
-                )
+                <AssistantPlaceholder message={message} />
               )}
             </div>
           </>
@@ -292,6 +318,9 @@ export function MessageBubble({
             {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
           </button>
         </footer>
+        {pendingApproval && message.pendingApproval && (
+          <ChatApprovalCard approval={message.pendingApproval} />
+        )}
       </div>
     </article>
 
