@@ -226,3 +226,15 @@ func TestOpenAIProviderProtocolSelection(t *testing.T) {
 		}
 	}
 }
+
+func TestIsContextWindowError(t *testing.T) {
+	if !IsContextWindowError(errors.New("OpenAI Responses stream error: Your input exceeds the context window of this model. Please adjust your input and try again.")) {
+		t.Fatal("expected OpenAI Responses context-window error to match")
+	}
+	if IsContextWindowError(errors.New("rate limit exceeded")) {
+		t.Fatal("rate limit must not be treated as a context-window error")
+	}
+	if IsContextWindowError(nil) {
+		t.Fatal("nil error must not match")
+	}
+}

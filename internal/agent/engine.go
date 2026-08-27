@@ -613,6 +613,14 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 		}
 
 		resp, err := e.llm.CompleteWithCascade(ctx, cascadeOrder, messages, currentOpts)
+		if err != nil && llm.IsContextWindowError(err) {
+			runID := ""
+			if run != nil {
+				runID = run.ID
+			}
+			messages = e.compactAfterContextWindowError(ctx, runID, agent, messages)
+			resp, err = e.llm.CompleteWithCascade(ctx, cascadeOrder, messages, currentOpts)
+		}
 		if err != nil {
 			if e.bus != nil {
 				e.bus.Publish(bus.NewEvent(bus.EventAgentActionFailed, agentID, err.Error()))
@@ -691,6 +699,7 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 				resultStr = toolResult.Content
 				consecutiveFailures = 0
 			}
+			resultStr = capToolObservation(resultStr)
 			if resultStr == lastObservation {
 				repeatedObservations++
 			} else {
@@ -901,11 +910,11 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 	opts := llm.CompletionOptions{
 		ReasoningEffort: agent.ModelConfig.EffectiveReasoningEffort(),
 	}
-	defaultStreamMaxTokens := 32768
 	if agent.ModelConfig.MaxTokens > 0 {
 		opts.MaxTokens = &agent.ModelConfig.MaxTokens
 	} else {
-		opts.MaxTokens = &defaultStreamMaxTokens
+		maxOut := defaultStreamMaxTokens
+		opts.MaxTokens = &maxOut
 	}
 
 	if e.tools != nil && len(agent.AuthorizedTools) > 0 {
@@ -955,6 +964,18 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 			messages = e.contextManager.PruneAndSnapshot(ctx, runID, messages, e.contextBudget(agent))
 		}
 		resp, err := e.completeStreamIteration(ctx, cascadeOrder, messages, currentOpts, eventChan)
+		if err != nil && llm.IsContextWindowError(err) {
+			eventChan <- AgentStreamEvent{
+				Type:    EventStreamThought,
+				Thought: "Input exceeded the model context window. Compacting tool observations and retrying...",
+			}
+			runID := ""
+			if run != nil {
+				runID = run.ID
+			}
+			messages = e.compactAfterContextWindowError(ctx, runID, agent, messages)
+			resp, err = e.completeStreamIteration(ctx, cascadeOrder, messages, currentOpts, eventChan)
+		}
 		if err != nil {
 			if e.bus != nil {
 				e.bus.Publish(bus.NewEvent(bus.EventAgentActionFailed, agentID, err.Error()))
@@ -1146,6 +1167,7 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 				resultStr = toolResult.Content
 				consecutiveFailures = 0
 			}
+			resultStr = capToolObservation(resultStr)
 			if resultStr == lastObservation {
 				repeatedObservations++
 			} else {
@@ -1423,6 +1445,10 @@ func (e *Engine) ResumeApproved(ctx context.Context, approval tools.ApprovalRequ
 			messages = e.contextManager.PruneAndSnapshot(execCtx, run.ID, messages, e.contextBudget(manifest))
 		}
 		response, callErr := e.llm.CompleteWithCascade(execCtx, cascade, messages, currentOpts)
+		if callErr != nil && llm.IsContextWindowError(callErr) {
+			messages = e.compactAfterContextWindowError(execCtx, run.ID, manifest, messages)
+			response, callErr = e.llm.CompleteWithCascade(execCtx, cascade, messages, currentOpts)
+		}
 		if callErr != nil {
 			e.finishRun(execCtx, run, RunFailed, "infrastructure_failure", absoluteStep, usage)
 			return nil, callErr
@@ -1504,6 +1530,7 @@ func (e *Engine) ResumeApproved(ctx context.Context, approval tools.ApprovalRequ
 				Status: statusStr, ToolName: call.Function.Name,
 				Data: map[string]any{"tool_call_id": call.ID, "observation": truncateRunData(content, 4096)},
 			})
+			content = capToolObservation(content)
 			messages = append(messages, llm.Message{
 				Role: llm.RoleTool, Name: call.Function.Name, ToolCallID: call.ID, Content: content,
 			})
@@ -1522,12 +1549,41 @@ func (e *Engine) ResumeApproved(ctx context.Context, approval tools.ApprovalRequ
 	return nil, errors.New("resumed run exhausted iteration budget")
 }
 
-func (e *Engine) contextBudget(agent *AgentManifest) int {
-	max := 128000
-	if agent != nil && agent.ModelConfig.MaxTokens > 0 && agent.ModelConfig.MaxTokens < max-8192 {
-		return max - agent.ModelConfig.MaxTokens
+const (
+	defaultModelWindowTokens = 128000
+	defaultStreamMaxTokens   = 32768
+	maxToolObservationChars  = 16000
+	contextProtocolOverhead  = 16000
+)
+
+func capToolObservation(content string) string {
+	if len(content) <= maxToolObservationChars {
+		return content
 	}
-	return 100000
+	return content[:maxToolObservationChars] + fmt.Sprintf(
+		"\n\n[Observation truncated from %d to %d characters. Fetch a narrower URL or quote a specific section.]",
+		len(content), maxToolObservationChars,
+	)
+}
+
+func (e *Engine) compactAfterContextWindowError(ctx context.Context, runID string, agent *AgentManifest, messages []llm.Message) []llm.Message {
+	messages = compactToolObservations(messages, 4000)
+	if e.contextManager != nil {
+		return e.contextManager.PruneAndSnapshot(ctx, runID, messages, e.contextBudget(agent)/2)
+	}
+	return messages
+}
+
+func (e *Engine) contextBudget(agent *AgentManifest) int {
+	outputReserve := defaultStreamMaxTokens
+	if agent != nil && agent.ModelConfig.MaxTokens > 0 {
+		outputReserve = agent.ModelConfig.MaxTokens
+	}
+	budget := defaultModelWindowTokens - outputReserve - contextProtocolOverhead
+	if budget < 24000 {
+		budget = 24000
+	}
+	return budget
 }
 
 func (e *Engine) startRun(ctx context.Context, traceID, agentID, goal, source string) *AgentRun {

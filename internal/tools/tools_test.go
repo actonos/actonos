@@ -754,6 +754,32 @@ func TestNativeToolValidationAndSystemInfo(t *testing.T) {
 	cron.SetScheduler(nil)
 }
 
+func TestFormatHTTPFetchContentExtractsHTMLAndTruncates(t *testing.T) {
+	htmlPage := `<!doctype html><html><head><title>AI report</title>
+<script>window.tracker=true;</script><style>body{color:red}</style></head>
+<body><h1>State of AI</h1><p>Enterprises are adopting AI in operations.</p></body></html>`
+	got := formatHTTPFetchContent(200, "https://example.com/ai", "text/html; charset=utf-8", []byte(htmlPage))
+	if strings.Contains(got, "<script>") || strings.Contains(got, "window.tracker") {
+		t.Fatalf("raw HTML leaked into observation: %s", got)
+	}
+	if !strings.Contains(got, "HTTP 200") || !strings.Contains(got, "State of AI") {
+		t.Fatalf("readable text missing: %s", got)
+	}
+
+	huge := strings.Repeat("enterprise AI research paragraph ", 8000)
+	truncated := formatHTTPFetchContent(200, "https://example.com/huge", "text/plain", []byte(huge))
+	if len(truncated) > MaxHTTPFetchChars+200 {
+		t.Fatalf("truncated fetch still too large: %d", len(truncated))
+	}
+	if !strings.Contains(truncated, "Content truncated") {
+		t.Fatalf("expected truncation marker, got %s", truncated[:120])
+	}
+	binary := formatHTTPFetchContent(200, "https://example.com/img", "image/png", []byte{0x89, 0x50, 0, 0x4e})
+	if !strings.Contains(binary, "binary response") {
+		t.Fatalf("binary body not rejected: %s", binary)
+	}
+}
+
 func TestWASMToolAndPluginManagerFailureLifecycle(t *testing.T) {
 	ctx := context.Background()
 	tool, err := NewWASMTool(ctx, "broken", "Broken plugin", json.RawMessage(`{"type":"object"}`), []byte("not wasm"))

@@ -281,18 +281,10 @@ func fallbackHTTPFetch(ctx context.Context, targetURL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; ActonOS/1.0; +https://actonos.local)")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/json,text/plain;q=0.9,*/*;q=0.8")
 
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 5 {
-				return errors.New("too many redirects")
-			}
-			return security.ValidateOutboundURL(req.Context(), req.URL.String())
-		},
-	}
-	resp, err := client.Do(req)
+	resp, err := newOutboundHTTPClient(10 * time.Second).Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -303,5 +295,5 @@ func fallbackHTTPFetch(ctx context.Context, targetURL string) (string, error) {
 		return "", err
 	}
 
-	return string(body), nil
+	return formatHTTPFetchContent(resp.StatusCode, targetURL, resp.Header.Get("Content-Type"), body), nil
 }

@@ -126,9 +126,14 @@ func (c *ContextManager) PruneMessages(messages []llm.Message, maxTokens int) []
 		}
 		block := messages[start:end]
 		cost := estimateMessagesTokens(block)
-		if cost > remaining && len(retained) > 0 {
-			// A single oversized block cannot be split without corrupting it.
-			break
+		if cost > remaining {
+			if len(retained) > 0 {
+				break
+			}
+			// Newest block can still overflow the window (e.g. a raw HTML fetch).
+			// Shrink tool/user payloads in place so pairing stays valid.
+			block = shrinkMessagesToBudget(block, remaining)
+			cost = estimateMessagesTokens(block)
 		}
 		retained = append(append([]llm.Message{}, block...), retained...)
 		remaining -= cost
@@ -154,6 +159,56 @@ func (c *ContextManager) PruneMessages(messages []llm.Message, maxTokens int) []
 		})
 	}
 	return llm.SanitizeMessages(append(result, retained...))
+}
+
+func shrinkMessagesToBudget(messages []llm.Message, maxTokens int) []llm.Message {
+	if maxTokens < 64 {
+		maxTokens = 64
+	}
+	out := make([]llm.Message, len(messages))
+	copy(out, messages)
+	for estimateMessagesTokens(out) > maxTokens {
+		longest := -1
+		longestLen := 0
+		for i := range out {
+			if out[i].Role != llm.RoleTool {
+				continue
+			}
+			if n := len(out[i].Content); n > longestLen {
+				longestLen = n
+				longest = i
+			}
+		}
+		if longest < 0 || longestLen < 128 {
+			break
+		}
+		keep := longestLen / 2
+		if keep < 64 {
+			break
+		}
+		out[longest].Content = out[longest].Content[:keep] + "\n…[compacted to fit the model context window]"
+	}
+	return out
+}
+
+func compactToolObservations(messages []llm.Message, maxChars int) []llm.Message {
+	if maxChars < 256 {
+		maxChars = 256
+	}
+	out := make([]llm.Message, len(messages))
+	copy(out, messages)
+	for i := range out {
+		if out[i].Role != llm.RoleTool && out[i].Role != llm.RoleAssistant {
+			continue
+		}
+		if out[i].Role == llm.RoleAssistant && len(out[i].ToolCalls) > 0 {
+			continue
+		}
+		if len(out[i].Content) > maxChars {
+			out[i].Content = out[i].Content[:maxChars] + "\n…[compacted to fit the model context window]"
+		}
+	}
+	return out
 }
 
 func estimateMessagesTokens(messages []llm.Message) int {

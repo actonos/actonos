@@ -15,12 +15,27 @@ var (
 	ErrProviderNotFound   = errors.New("provider not found")
 )
 
+// IsContextWindowError reports provider errors caused by a prompt that does not
+// fit the model context window. Callers should compact observations and retry.
+func IsContextWindowError(err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(err.Error())
+	return strings.Contains(text, "context window") ||
+		strings.Contains(text, "context_length") ||
+		strings.Contains(text, "maximum context length") ||
+		strings.Contains(text, "prompt is too long") ||
+		strings.Contains(text, "input is too long") ||
+		strings.Contains(text, "too many tokens")
+}
+
 // ModelCascadeRouter routes completion and embedding requests through an ordered cascade of providers.
 type ModelCascadeRouter struct {
-	mu          sync.RWMutex
-	providers   map[string]LLMProvider
-	defaultID   string
-	failures    map[string]int
+	mu           sync.RWMutex
+	providers    map[string]LLMProvider
+	defaultID    string
+	failures     map[string]int
 	trippedUntil map[string]time.Time
 }
 

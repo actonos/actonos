@@ -93,6 +93,33 @@ func TestPruneMessagesKeepsMultiToolBlockIntact(t *testing.T) {
 	}
 }
 
+func TestPruneMessagesShrinksOversizedNewestToolBlock(t *testing.T) {
+	cm := NewContextManager(2048)
+	messages := []llm.Message{
+		{Role: llm.RoleSystem, Content: "system prompt"},
+		{Role: llm.RoleUser, Content: "research AI in the enterprise"},
+		{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{
+			{ID: "fetch1", Type: "function", Function: llm.FunctionCall{Name: "native_http_fetch"}},
+		}},
+		{Role: llm.RoleTool, Name: "native_http_fetch", ToolCallID: "fetch1",
+			Content: strings.Repeat("McKinsey HTML dump ", 8000)},
+	}
+	pruned := cm.PruneMessages(messages, 1500)
+	assertPrunedPairing(t, pruned)
+	if estimateMessagesTokens(pruned) > 1500+64 {
+		t.Fatalf("oversized fetch was not compacted: tokens=%d", estimateMessagesTokens(pruned))
+	}
+	var toolContent string
+	for _, msg := range pruned {
+		if msg.Role == llm.RoleTool {
+			toolContent = msg.Content
+		}
+	}
+	if !strings.Contains(toolContent, "compacted") {
+		t.Fatalf("expected compacted tool observation, got len=%d", len(toolContent))
+	}
+}
+
 func TestPruneMessagesIsStableAcrossRepeatedCalls(t *testing.T) {
 	// The engine prunes once per ReAct iteration, so pruning must be idempotent:
 	// re-pruning an already-pruned transcript must not corrupt tool pairing.
