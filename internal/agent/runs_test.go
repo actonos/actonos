@@ -67,6 +67,7 @@ func TestRunStoreLifecycleCheckpointAndEvents(t *testing.T) {
 		PendingTool: llm.ToolCall{ID: "call-1", Type: "function", Function: llm.FunctionCall{
 			Name: "write_file", Arguments: []byte(`{"path":"a.txt","content":"ok"}`),
 		}},
+		ConversationID: "conv_chat_1",
 	}
 	if err := store.SaveCheckpoint(ctx, checkpoint); err != nil {
 		t.Fatal(err)
@@ -76,7 +77,8 @@ func TestRunStoreLifecycleCheckpointAndEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 	if loaded.RunID != run.ID || loaded.PendingTool.Function.Name != "write_file" ||
-		loaded.Usage.TotalTokens != 8 || loadedRun.Status != RunApprovalPending {
+		loaded.Usage.TotalTokens != 8 || loadedRun.Status != RunApprovalPending ||
+		loaded.ConversationID != "conv_chat_1" {
 		t.Fatalf("checkpoint mismatch: checkpoint=%+v run=%+v", loaded, loadedRun)
 	}
 

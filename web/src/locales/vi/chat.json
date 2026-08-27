@@ -152,5 +152,11 @@
     "installedSkill": "Kỹ năng",
     "slashHint": "Gõ / để chọn kỹ năng",
     "mentionHint": "Gõ @ để gắn thẻ tệp"
-  }
+  },
+  "waitingApproval": "Đang chờ phê duyệt {{tool}}…",
+  "approvalTitle": "Hành động này cần bạn phê duyệt",
+  "approvalDescription": "{{agent}} muốn chạy {{tool}}. Kiểm tra tham số, rồi chấp thuận hoặc từ chối.",
+  "toolAwaitingApproval": "Đang chờ phê duyệt",
+  "toolRejected": "Đã từ chối",
+  "resumingAfterApproval": "Đang tiếp tục sau khi phê duyệt…"
 }

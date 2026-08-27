@@ -276,6 +276,8 @@
 | `pages/Plugins/PluginUploadModal.tsx` | `PluginUploadModal` | Upload and installation modal for `.actonpkg` package bundles |
 | `ui/Modal.tsx` | `Modal` | Accessible dialog container |
 | `ui/ConfirmModal.tsx` | `ConfirmModal` | Confirmation dialog with actions |
+| `features/chat/ChatApprovalCard.tsx` | `ChatApprovalCard` | In-bubble approve/reject for chat tool pauses |
+| `features/governance/ApprovalInterruption.tsx` | `ApprovalInterruption` | Full-screen approval overlay for mission, heartbeat, and REST 202 |
 
 ---
 

@@ -26,9 +26,10 @@ var (
 type executionContextKey string
 
 const (
-	traceIDContextKey  executionContextKey = "trace_id"
-	approvalContextKey executionContextKey = "approval_id"
-	agentIDContextKey  executionContextKey = "agent_id"
+	traceIDContextKey         executionContextKey = "trace_id"
+	approvalContextKey        executionContextKey = "approval_id"
+	agentIDContextKey         executionContextKey = "agent_id"
+	executionSourceContextKey executionContextKey = "execution_source"
 )
 
 // WithAgentID attaches the calling agent ID to context.
@@ -175,6 +176,28 @@ func (r *ToolRegistry) SetChannelSender(s ChannelMessageSender) {
 	if tool, ok := r.tools["native_channel_notify"].(*ChannelNotifyTool); ok {
 		tool.SetSender(s)
 	}
+}
+
+// WithExecutionSource tags ctx so durable approvals record the originating
+// surface (stream, chat, heartbeat, cron, channel) without importing agent.
+func WithExecutionSource(ctx context.Context, source string) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	source = strings.TrimSpace(source)
+	if source == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, executionSourceContextKey, source)
+}
+
+// ExecutionSourceFromContext returns the tagged origin or "".
+func ExecutionSourceFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	val, _ := ctx.Value(executionSourceContextKey).(string)
+	return strings.TrimSpace(val)
 }
 
 // WithTraceID propagates an end-to-end trace identifier into tool execution.

@@ -13,6 +13,7 @@ import (
 	"github.com/actonos/actonos/internal/agent"
 	"github.com/actonos/actonos/internal/channels"
 	"github.com/actonos/actonos/internal/llm"
+	"github.com/actonos/actonos/internal/tools"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
@@ -290,7 +291,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 		eventChan := make(chan agent.AgentStreamEvent, 64)
 		go func() {
-			chatCtx := agent.WithConversationContext(r.Context(), convID)
+			chatCtx := agent.WithExecutionSource(agent.WithConversationContext(r.Context(), convID), "stream")
 			_, _ = s.engine.ExecuteStepStreamWithHistory(chatCtx, agentID, req.Message, history, eventChan)
 		}()
 
@@ -299,7 +300,24 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		var finalModel string
 		var finalTokens int
 
-		for ev := range eventChan {
+		keepalive := time.NewTicker(15 * time.Second)
+		defer keepalive.Stop()
+	streamLoop:
+		for {
+			var ev agent.AgentStreamEvent
+			var ok bool
+			select {
+			case ev, ok = <-eventChan:
+				if !ok {
+					break streamLoop
+				}
+			case <-keepalive.C:
+				fmt.Fprintf(w, ": keepalive\n\n")
+				flusher.Flush()
+				continue
+			case <-r.Context().Done():
+				return
+			}
 			ev.ConversationID = convID
 			ev.Title = convTitle
 
@@ -411,6 +429,19 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 					"error":           ev.Error,
 				})
 				fmt.Fprintf(w, "event: error\ndata: %s\n\n", string(dataBytes))
+				flusher.Flush()
+
+			case agent.EventStreamApprovalRequired:
+				dataBytes, _ := json.Marshal(map[string]any{
+					"conversation_id": convID,
+					"title":           convTitle,
+					"tool":            ev.Tool,
+					"tool_call_id":    ev.ToolCallID,
+					"args":            ev.Args,
+					"status":          ev.Status,
+					"approval":        ev.Approval,
+				})
+				fmt.Fprintf(w, "event: approval_required\ndata: %s\n\n", string(dataBytes))
 				flusher.Flush()
 			}
 		}
@@ -798,19 +829,33 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 	resultCh := make(chan streamResult, 1)
 	go func() {
-		chatCtx := agent.WithConversationContext(r.Context(), convID)
+		chatCtx := agent.WithExecutionSource(agent.WithConversationContext(r.Context(), convID), "stream")
 		response, err := s.engine.ExecuteStepStreamWithHistory(chatCtx, agentID, req.Message, history, events)
 		resultCh <- streamResult{response: response, err: err}
 	}()
-	for event := range events {
-		event.ConversationID = convID
-		event.Title = title
-		payload, err := json.Marshal(event)
-		if err != nil {
-			continue
+	keepalive := time.NewTicker(15 * time.Second)
+	defer keepalive.Stop()
+eventLoop:
+	for {
+		select {
+		case event, ok := <-events:
+			if !ok {
+				break eventLoop
+			}
+			event.ConversationID = convID
+			event.Title = title
+			payload, err := json.Marshal(event)
+			if err != nil {
+				continue
+			}
+			_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event.Type, payload)
+			flusher.Flush()
+		case <-keepalive.C:
+			_, _ = fmt.Fprintf(w, ": keepalive\n\n")
+			flusher.Flush()
+		case <-r.Context().Done():
+			return
 		}
-		_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event.Type, payload)
-		flusher.Flush()
 	}
 	result := <-resultCh
 	if s.memory != nil {
@@ -826,7 +871,10 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 				toolCallsJSON = string(toolCalls)
 			}
 		} else if result.err != nil {
-			content = fmt.Sprintf("Execution error: %v", result.err)
+			var approvalErr *tools.ApprovalRequiredError
+			if !errors.As(result.err, &approvalErr) {
+				content = fmt.Sprintf("Execution error: %v", result.err)
+			}
 		}
 		if content != "" {
 			_, _ = s.memory.DB().SQLDB().ExecContext(context.Background(), `

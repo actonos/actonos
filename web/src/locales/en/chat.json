@@ -152,5 +152,11 @@
     "installedSkill": "Skill",
     "slashHint": "Type / to select a skill",
     "mentionHint": "Type @ to mention a file"
-  }
+  },
+  "waitingApproval": "Waiting for approval of {{tool}}…",
+  "approvalTitle": "This action needs your approval",
+  "approvalDescription": "{{agent}} wants to run {{tool}}. Review the arguments, then approve or reject.",
+  "toolAwaitingApproval": "Awaiting approval",
+  "toolRejected": "Rejected",
+  "resumingAfterApproval": "Resuming after approval…"
 }

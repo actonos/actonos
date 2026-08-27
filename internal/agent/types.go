@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/actonos/actonos/internal/llm"
+	"github.com/actonos/actonos/internal/tools"
 )
 
 // AgentStatus represents the lifecycle status of an agent.
@@ -127,9 +128,10 @@ const (
 	EventStreamTokenReset StreamEventType = "token_reset"
 	EventStreamToolCall   StreamEventType = "tool_call"
 	EventStreamToolResult StreamEventType = "tool_result"
-	EventStreamAudit      StreamEventType = "audit"
-	EventStreamDone       StreamEventType = "done"
-	EventStreamError      StreamEventType = "error"
+	EventStreamAudit            StreamEventType = "audit"
+	EventStreamDone             StreamEventType = "done"
+	EventStreamError            StreamEventType = "error"
+	EventStreamApprovalRequired StreamEventType = "approval_required"
 )
 
 // AuditLogEntry tracks an immutable security/governance record of an agent action.
@@ -159,7 +161,8 @@ type AgentStreamEvent struct {
 	AuditLog       *AuditLogEntry  `json:"audit_log,omitempty"`
 	Model          string          `json:"model,omitempty"`
 	Usage          *llm.Usage      `json:"usage,omitempty"`
-	ConversationID string          `json:"conversation_id,omitempty"`
-	Title          string          `json:"title,omitempty"`
-	Error          string          `json:"error,omitempty"`
+	ConversationID string                 `json:"conversation_id,omitempty"`
+	Title          string                 `json:"title,omitempty"`
+	Error          string                 `json:"error,omitempty"`
+	Approval       *tools.ApprovalRequest `json:"approval,omitempty"`
 }

@@ -42,6 +42,7 @@ import {
   type ToolCallTrace,
 } from './chatTypes';
 import { isPersistedChatSession, NEW_CHAT_SESSION_PARAM, parseChatSessionRoute } from './chatSession';
+import { applyChatStreamEvent, attachPendingApprovalToMessages } from './chatStream';
 
 export interface ChatPageProps {
   selectedAgentID?: string;
@@ -92,6 +93,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const activeStreamAbortController = useRef<AbortController | null>(null);
+  const waitingForResumeRef = useRef(false);
 
   // Load agents and conversations
   const loadAgents = async () => {
@@ -154,8 +156,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
         setActiveAgentID(res.conversation.agent_id);
       }
       if (res.messages) {
-        setMessages(
-          res.messages.map((m) => {
+        const mapped: ChatMessage[] = res.messages.map((m) => {
             let toolCalls: ToolCallTrace[] = [];
             if (m.tool_calls_json && m.tool_calls_json !== 'null' && m.tool_calls_json !== '[]') {
               try {
@@ -194,8 +195,20 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
               }),
               toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
             };
-          })
-        );
+          });
+        const agentID = res.conversation?.agent_id || activeAgentID;
+        let hydrated = mapped;
+        try {
+          const pending = await api.listApprovals('pending');
+          hydrated = attachPendingApprovalToMessages(mapped, pending.approvals || [], agentID);
+        } catch {
+          hydrated = mapped;
+        }
+        if (hydrated.some((message) => message.pendingApproval)) {
+          waitingForResumeRef.current = true;
+          setLoading(true);
+        }
+        setMessages(hydrated);
       } else {
         setMessages([]);
       }
@@ -385,6 +398,53 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
   loadingRef.current = loading;
   const activeConvIDRef = useRef(activeConvID);
   activeConvIDRef.current = activeConvID;
+
+  useEffect(() => {
+    const onDecided = async (event: Event) => {
+      if (!waitingForResumeRef.current) return;
+      const convID = activeConvIDRef.current;
+      waitingForResumeRef.current = false;
+      if (!isPersistedChatSession(convID)) {
+        setLoading(false);
+        return;
+      }
+      const approved = Boolean((event as CustomEvent<{ approved?: boolean }>).detail?.approved);
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        try {
+          const res = await api.getConversation(convID);
+          if (!res.messages?.length) continue;
+          const last = res.messages[res.messages.length - 1];
+          if (approved && last.role === 'assistant' && last.content && !last.content.startsWith('Execution error:')) {
+            await selectConversation(convID);
+            break;
+          }
+          if (!approved) {
+            setMessages((prev) =>
+              prev.map((message) =>
+                message.pendingApproval
+                  ? {
+                      ...message,
+                      pendingApproval: undefined,
+                      thought: undefined,
+                      toolCalls: (message.toolCalls || []).map((call) =>
+                        call.status === 'awaiting_approval' ? { ...call, status: 'rejected' } : call
+                      ),
+                    }
+                  : message
+              )
+            );
+            break;
+          }
+        } catch {
+          break;
+        }
+      }
+      setLoading(false);
+    };
+    window.addEventListener('actonos:approval-decided', onDecided);
+    return () => window.removeEventListener('actonos:approval-decided', onDecided);
+  }, []);
 
   useEffect(() => {
     if (selectedAgentID) {
@@ -726,97 +786,21 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
                 });
               }
 
-              if (currentEvent === 'thought' && parsed.thought) {
+              currentAssistantMsg = applyChatStreamEvent(
+                currentAssistantMsg,
+                currentEvent,
+                parsed as Record<string, unknown>
+              );
+              if (currentEvent === 'approval_required') {
+                const toolName =
+                  (typeof parsed.tool === 'string' && parsed.tool) ||
+                  currentAssistantMsg.pendingApproval?.tool_name ||
+                  '';
                 currentAssistantMsg = {
                   ...currentAssistantMsg,
-                  thought: parsed.thought,
+                  thought: t('waitingApproval', { tool: toolName }),
                 };
-              } else if (currentEvent === 'reasoning' && parsed.reasoning) {
-                const segs = [...(currentAssistantMsg.segments || [])];
-                const last = segs[segs.length - 1];
-                if (last && last.type === 'reasoning') {
-                  segs[segs.length - 1] = { ...last, text: last.text + parsed.reasoning };
-                } else {
-                  segs.push({ type: 'reasoning', text: parsed.reasoning });
-                }
-                currentAssistantMsg = {
-                  ...currentAssistantMsg,
-                  reasoning: (currentAssistantMsg.reasoning ?? '') + parsed.reasoning,
-                  segments: segs,
-                };
-              } else if (currentEvent === 'token' && parsed.content) {
-                const segs = [...(currentAssistantMsg.segments || [])];
-                const last = segs[segs.length - 1];
-                if (last && last.type === 'content') {
-                  segs[segs.length - 1] = { ...last, text: last.text + parsed.content };
-                } else {
-                  segs.push({ type: 'content', text: parsed.content });
-                }
-                currentAssistantMsg = {
-                  ...currentAssistantMsg,
-                  content: currentAssistantMsg.content + parsed.content,
-                  thought: undefined,
-                  segments: segs,
-                };
-              } else if (currentEvent === 'token_reset') {
-                const segs = (currentAssistantMsg.segments || []).filter(
-                  (s) => s.type === 'reasoning'
-                );
-                currentAssistantMsg = {
-                  ...currentAssistantMsg,
-                  content: '',
-                  segments: segs,
-                };
-              } else if (currentEvent === 'tool_call') {
-                const newToolCall: ToolCallTrace = {
-                  tool: parsed.tool,
-                  args: parsed.args,
-                  status: 'running',
-                };
-                currentAssistantMsg = {
-                  ...currentAssistantMsg,
-                  toolCalls: [...(currentAssistantMsg.toolCalls || []), newToolCall],
-                };
-              } else if (currentEvent === 'tool_result') {
-                currentAssistantMsg = {
-                  ...currentAssistantMsg,
-                  toolCalls: (currentAssistantMsg.toolCalls || []).map((tc) =>
-                    tc.tool === parsed.tool
-                      ? {
-                          ...tc,
-                          result: parsed.result,
-                          status: parsed.status,
-                          latency_ms: parsed.latency_ms,
-                        }
-                      : tc
-                  ),
-                };
-              } else if (currentEvent === 'audit' && parsed.audit_log) {
-                currentAssistantMsg = {
-                  ...currentAssistantMsg,
-                  auditLogs: [...(currentAssistantMsg.auditLogs || []), parsed.audit_log],
-                };
-              } else if (currentEvent === 'done') {
-                currentAssistantMsg = {
-                  ...currentAssistantMsg,
-                  content:
-                    currentAssistantMsg.content ||
-                    parsed.content ||
-                    (currentAssistantMsg.toolCalls?.length
-                      ? 'Completed operations successfully.'
-                      : ''),
-                  model: parsed.model,
-                  tokens_used: parsed.tokens_used,
-                  thought: undefined,
-                  finalized: true,
-                };
-              } else if (currentEvent === 'error') {
-                currentAssistantMsg = {
-                  ...currentAssistantMsg,
-                  content: currentAssistantMsg.content + `\n\nError: ${parsed.error}`,
-                  thought: undefined,
-                  finalized: true,
-                };
+                waitingForResumeRef.current = false;
               }
 
               setMessages((prev) =>
@@ -836,8 +820,8 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
       if ((err as { name?: string })?.name === 'AbortError') {
         currentAssistantMsg = {
           ...currentAssistantMsg,
-          thought: undefined,
-          finalized: true,
+          thought: currentAssistantMsg.pendingApproval ? currentAssistantMsg.thought : undefined,
+          finalized: !currentAssistantMsg.pendingApproval,
         };
         setMessages((prev) =>
           prev.map((m) => (m.id === assistantMsgId ? { ...currentAssistantMsg } : m))
@@ -856,8 +840,13 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
         );
       }
     } finally {
-      setLoading(false);
       activeStreamAbortController.current = null;
+      if (currentAssistantMsg.pendingApproval) {
+        waitingForResumeRef.current = true;
+      } else {
+        waitingForResumeRef.current = false;
+        setLoading(false);
+      }
     }
   };
 

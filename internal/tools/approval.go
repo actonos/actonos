@@ -39,6 +39,7 @@ type ApprovalRequest struct {
 	DecidedAt   *time.Time      `json:"decided_at,omitempty"`
 	DecidedBy   string          `json:"decided_by,omitempty"`
 	TaskID      string          `json:"task_id,omitempty"`
+	Source      string          `json:"source,omitempty"`
 
 	// created is true only when Request() actually inserted a brand-new row,
 	// as opposed to returning an already-pending approval for the same exact
@@ -182,11 +183,13 @@ func (m *ApprovalManager) Request(ctx context.Context, traceID, agentID, toolNam
 		traceID = newTraceID()
 	}
 	taskID := TaskIDFromContext(ctx)
+	source := ExecutionSourceFromContext(ctx)
 	var existing ApprovalRequest
 	var inputText string
 	err := m.db.QueryRowContext(ctx, `
 		SELECT id, trace_id, agent_id, tool_name, risk_level, action_hash, input_json,
-		       status, COALESCE(reason, ''), requested_at, expires_at, COALESCE(task_id, '')
+		       status, COALESCE(reason, ''), requested_at, expires_at, COALESCE(task_id, ''),
+		       COALESCE(source, '')
 		FROM approvals
 		WHERE action_hash = ? AND status = 'pending' AND expires_at > ?
 		ORDER BY requested_at DESC LIMIT 1
@@ -194,6 +197,7 @@ func (m *ApprovalManager) Request(ctx context.Context, traceID, agentID, toolNam
 		&existing.ID, &existing.TraceID, &existing.AgentID, &existing.ToolName,
 		&existing.RiskLevel, &existing.ActionHash, &inputText, &existing.Status,
 		&existing.Reason, &existing.RequestedAt, &existing.ExpiresAt, &existing.TaskID,
+		&existing.Source,
 	)
 	if err == nil {
 		existing.Input = json.RawMessage(inputText)
@@ -216,15 +220,16 @@ func (m *ApprovalManager) Request(ctx context.Context, traceID, agentID, toolNam
 		RequestedAt: now,
 		ExpiresAt:   now.Add(m.ttl),
 		TaskID:      taskID,
+		Source:      source,
 		created:     true,
 	}
 	_, err = m.db.ExecContext(ctx, `
 		INSERT INTO approvals (
 			id, trace_id, agent_id, tool_name, risk_level, action_hash, input_json,
-			status, requested_at, expires_at, task_id
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			status, requested_at, expires_at, task_id, source
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, request.ID, request.TraceID, request.AgentID, request.ToolName, request.RiskLevel,
-		request.ActionHash, string(request.Input), request.Status, request.RequestedAt, request.ExpiresAt, request.TaskID)
+		request.ActionHash, string(request.Input), request.Status, request.RequestedAt, request.ExpiresAt, request.TaskID, request.Source)
 	if err != nil {
 		return nil, fmt.Errorf("creating approval request: %w", err)
 	}
@@ -245,7 +250,7 @@ func (m *ApprovalManager) List(ctx context.Context, status string, limit int) ([
 	query := `
 		SELECT id, trace_id, agent_id, tool_name, risk_level, action_hash, input_json,
 		       status, COALESCE(reason, ''), requested_at, expires_at, decided_at, COALESCE(decided_by, ''),
-		       COALESCE(task_id, '')
+		       COALESCE(task_id, ''), COALESCE(source, '')
 		FROM approvals`
 	args := []any{}
 	if status != "" && status != "all" {
@@ -270,6 +275,7 @@ func (m *ApprovalManager) List(ctx context.Context, status string, limit int) ([
 			&item.ID, &item.TraceID, &item.AgentID, &item.ToolName, &item.RiskLevel,
 			&item.ActionHash, &inputText, &item.Status, &item.Reason,
 			&item.RequestedAt, &item.ExpiresAt, &decidedAt, &item.DecidedBy, &item.TaskID,
+			&item.Source,
 		); err != nil {
 			return nil, fmt.Errorf("scanning approval: %w", err)
 		}
@@ -348,12 +354,13 @@ func (m *ApprovalManager) Get(ctx context.Context, id string) (*ApprovalRequest,
 	err := m.db.QueryRowContext(ctx, `
 		SELECT id, trace_id, agent_id, tool_name, risk_level, action_hash, input_json,
 		       status, COALESCE(reason, ''), requested_at, expires_at, decided_at, COALESCE(decided_by, ''),
-		       COALESCE(task_id, '')
+		       COALESCE(task_id, ''), COALESCE(source, '')
 		FROM approvals WHERE id = ?
 	`, id).Scan(
 		&item.ID, &item.TraceID, &item.AgentID, &item.ToolName, &item.RiskLevel,
 		&item.ActionHash, &inputText, &item.Status, &item.Reason,
 		&item.RequestedAt, &item.ExpiresAt, &decidedAt, &item.DecidedBy, &item.TaskID,
+		&item.Source,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("loading approval: %w", err)

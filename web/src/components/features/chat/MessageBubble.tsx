@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { MarkdownContent } from '@/components/chat/MarkdownContent';
 import type { ChatMessage } from '@/pages/Chat/chatTypes';
 import { TraceDisclosure } from './TraceDisclosure';
+import { ChatApprovalCard } from './ChatApprovalCard';
 
 function cleanReasoning(text: string): string {
   return text
@@ -113,6 +114,9 @@ export function MessageBubble({
               <Activity className="h-4 w-4 shrink-0 animate-spin text-hi-yellow" aria-hidden="true" />
               <span className="line-clamp-2 leading-tight">{message.thought}</span>
             </div>
+          )}
+          {message.pendingApproval && message.pendingApproval.status !== 'approved' && message.pendingApproval.status !== 'rejected' && (
+            <ChatApprovalCard approval={message.pendingApproval} />
           )}
 
         {isUser ? (

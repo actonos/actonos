@@ -51,7 +51,11 @@ export function TraceDisclosure({
               <div key={`${call.tool}-${index}`} className="space-y-1 rounded-xl border border-onyx/5 bg-soft-meadow p-2 text-[11px]">
                 <div className="flex items-center justify-between font-semibold text-deep-ink">
                   <span className="flex items-center gap-1.5"><FileCode className="h-3.5 w-3.5 text-hi-yellow" />{call.tool}</span>
-                  {call.latency_ms !== undefined && <span>{t('milliseconds', { value: call.latency_ms })}</span>}
+                  <span className="flex items-center gap-2">
+                    {call.status === 'awaiting_approval' && <span>{t('toolAwaitingApproval')}</span>}
+                    {call.status === 'rejected' && <span>{t('toolRejected')}</span>}
+                    {call.latency_ms !== undefined && <span>{t('milliseconds', { value: call.latency_ms })}</span>}
+                  </span>
                 </div>
                 {call.args != null && <div className="break-words text-[10px]">{JSON.stringify(call.args)}</div>}
                 {call.result && <div className="max-h-24 overflow-y-auto whitespace-pre-wrap rounded bg-canvas p-1.5 text-[10px] text-deep-ink">{call.result}</div>}

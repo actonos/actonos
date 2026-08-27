@@ -44,6 +44,13 @@ func (s *Server) handleApproveAction(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if s.engine != nil && s.engine.NotifyApprovalDecision(item.ID, true, item.Reason) {
+		s.respondJSON(w, http.StatusOK, map[string]any{
+			"approval": item,
+			"status":   "continued",
+		})
+		return
+	}
 	if s.toolReg == nil {
 		s.failApproval(w, r, item.ID, "TOOLS_NOT_ENABLED", "tool registry is not configured")
 		return
@@ -138,6 +145,9 @@ func (s *Server) handleApproveAction(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleRejectAction(w http.ResponseWriter, r *http.Request) {
 	item, ok := s.decideApproval(w, r, "rejected")
 	if ok {
+		if s.engine != nil {
+			_ = s.engine.NotifyApprovalDecision(item.ID, false, item.Reason)
+		}
 		if s.heartbeat != nil {
 			s.heartbeat.TriggerWakeup()
 		}

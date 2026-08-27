@@ -377,6 +377,7 @@ export interface ApprovalRequest {
   decided_at?: string;
   decided_by?: string;
   task_id?: string;
+  source?: string;
 }
 
 export interface ApprovalRequiredResult {
@@ -396,6 +397,15 @@ export function isApprovalRequired<T>(
     result.status === 'approval_required' &&
     'approval' in result
   );
+}
+
+export function isChatSourcedApproval(approval: ApprovalRequest): boolean {
+  const source = approval.source ?? '';
+  return source === 'chat' || source === 'stream';
+}
+
+export function isModalEligibleApproval(approval: ApprovalRequest): boolean {
+  return !isChatSourcedApproval(approval);
 }
 
 export type AgentRunStatus =

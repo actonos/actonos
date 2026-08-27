@@ -1,3 +1,5 @@
+import type { ApprovalRequest } from '@/lib/types';
+
 export interface AuditLogItem {
   timestamp: string;
   agent_id: string;
@@ -11,6 +13,7 @@ export interface AuditLogItem {
 
 export interface ToolCallTrace {
   tool: string;
+  toolCallId?: string;
   args?: unknown;
   result?: string;
   status?: string;
@@ -53,6 +56,7 @@ export interface ChatMessage {
   finalized?: boolean;
   toolCalls?: ToolCallTrace[];
   auditLogs?: AuditLogItem[];
+  pendingApproval?: ApprovalRequest;
 }
 
 export function formatRelativeTime(dateStr: string | undefined, locale: string): string {

@@ -4,12 +4,14 @@ import type { ApprovalRequest, DontAskAgain } from '@/lib/types';
 export function ApprovalDecisionBar({
   approval,
   deciding,
+  canReject = true,
   labels,
   onReject,
   onApprove,
 }: {
   approval: ApprovalRequest;
   deciding: boolean;
+  canReject?: boolean;
   labels: {
     reject: string;
     approve: string;
@@ -28,7 +30,7 @@ export function ApprovalDecisionBar({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
-        <Button variant="ghost" disabled={deciding} onClick={onReject}>
+        <Button variant="ghost" disabled={deciding || !canReject} onClick={onReject}>
           {labels.reject}
         </Button>
         <Button variant="primary" disabled={deciding} onClick={() => onApprove()}>

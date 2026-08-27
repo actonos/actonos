@@ -745,6 +745,13 @@ Common termination reasons include `goal_completed`, `approval_required`,
 and `infrastructure_failure`. Approving a paused autonomous run resumes the same
 run from its persisted checkpoint.
 
+Chat SSE (`POST /api/agents/{agentID}/chat` with `stream: true`) emits
+`event: approval_required` (with the durable approval payload and
+`source=stream`) when a tool is paused. The stream stays open until the
+operator decides; it does not emit `event: error` for that pause. Chat UI
+renders Approve/Reject in the assistant bubble. Heartbeat and mission pauses
+still use the global approval overlay.
+
 ### Administrative mutations
 
 Workspace write/upload/delete/mkdir, skill creation, WASM upload, Tool Hub

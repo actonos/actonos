@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/actonos/actonos/internal/tools"
 )
 
 const (
@@ -34,24 +36,15 @@ var (
 	ErrHourlyTokenQuota = errors.New("agent hourly token quota exhausted")
 )
 
-type executionSourceKey struct{}
-
 // WithExecutionSource tags ctx so approval policy and run records use a real origin
 // instead of inferring it from prompt text.
 func WithExecutionSource(ctx context.Context, source string) context.Context {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	return context.WithValue(ctx, executionSourceKey{}, source)
+	return tools.WithExecutionSource(ctx, source)
 }
 
 // ExecutionSource returns the tagged origin or "".
 func ExecutionSource(ctx context.Context) string {
-	if ctx == nil {
-		return ""
-	}
-	source, _ := ctx.Value(executionSourceKey{}).(string)
-	return source
+	return tools.ExecutionSourceFromContext(ctx)
 }
 
 // IsCannedOrEmptyCompletion reports whether content is empty or the legacy canned

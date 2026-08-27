@@ -68,7 +68,8 @@ type RunCheckpoint struct {
 	Messages    []llm.Message `json:"messages"`
 	Iteration   int           `json:"iteration"`
 	Usage       llm.Usage     `json:"usage"`
-	PendingTool llm.ToolCall  `json:"pending_tool"`
+	PendingTool    llm.ToolCall `json:"pending_tool"`
+	ConversationID string       `json:"conversation_id,omitempty"`
 }
 
 // RunStore persists checkpoints and append-only run events.

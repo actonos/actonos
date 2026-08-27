@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"log/slog"
+	"strings"
 
 	"github.com/actonos/actonos/internal/memory"
 )
@@ -12,7 +13,19 @@ type skillCatalogContextKey struct{}
 
 // WithConversationContext scopes semantic retrieval to the active conversation.
 func WithConversationContext(ctx context.Context, conversationID string) context.Context {
+	if strings.TrimSpace(conversationID) == "" {
+		return ctx
+	}
 	return context.WithValue(ctx, conversationContextKey{}, conversationID)
+}
+
+// ConversationIDFromContext returns the active conversation id, if any.
+func ConversationIDFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	id, _ := ctx.Value(conversationContextKey{}).(string)
+	return strings.TrimSpace(id)
 }
 
 // WithSkillCatalog attaches enabled skills so cognitive, planner, and mission

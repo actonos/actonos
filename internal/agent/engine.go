@@ -16,6 +16,7 @@ import (
 	"github.com/actonos/actonos/internal/llm"
 	"github.com/actonos/actonos/internal/memory"
 	"github.com/actonos/actonos/internal/tools"
+	"github.com/google/uuid"
 )
 
 // Engine orchestrates the ReAct cognitive loop for agents.
@@ -39,6 +40,7 @@ type Engine struct {
 	dataDir          string
 	workspaceDir     string
 	inFlight         *inFlightRegistry
+	approvalWaiters  *approvalWaiters
 }
 
 // NewEngine creates an Engine instance.
@@ -54,8 +56,9 @@ func NewEngine(
 		llm:            llmRouter,
 		memory:         mem,
 		verifier:       NewVerifier(),
-		contextManager: NewContextManager(128000),
-		inFlight:       newInFlightRegistry(),
+		contextManager:  NewContextManager(128000),
+		inFlight:        newInFlightRegistry(),
+		approvalWaiters: newApprovalWaiters(),
 	}
 }
 
@@ -830,6 +833,7 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 		return nil, err
 	}
 	source := sourceFromContextOrMessage(ctx, userMessage, "stream")
+	ctx = WithExecutionSource(ctx, source)
 	if err := e.checkBudget(ctx, agent, source); err != nil {
 		eventChan <- AgentStreamEvent{Type: EventStreamError, Error: err.Error()}
 		return nil, err
@@ -1073,30 +1077,70 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 			resultStr := ""
 			statusStr := "success"
 			if execErr != nil {
-				statusStr = "error"
-				resultStr = fmt.Sprintf("Error executing tool %s: %v", toolName, execErr)
-				if toolResult != nil && toolResult.Content != "" && toolResult.Content != resultStr {
-					resultStr = fmt.Sprintf("%s\n%s", resultStr, toolResult.Content)
-				}
-				consecutiveFailures++
 				var approvalErr *tools.ApprovalRequiredError
 				if errors.As(execErr, &approvalErr) {
-					// Persist the in-flight tool-call block (assistant + results produced
-					// so far) so ResumeApproved sees a well-formed transcript.
 					checkpointMessages := append(append([]llm.Message{}, messages...), assistantMsg)
 					checkpointMessages = append(checkpointMessages, toolMessages...)
 					e.saveApprovalCheckpoint(ctx, run, agentID, userMessage, source, checkpointMessages, iterationsCompleted, totalUsage, tc)
+					e.finishRun(ctx, run, RunApprovalPending, "approval_required", iterationsCompleted, totalUsage)
+					approval := approvalErr.Approval
+					waitCh := e.approvalWaiters.register(approval.ID)
 					eventChan <- AgentStreamEvent{
 						Type: EventStreamAudit,
 						AuditLog: &AuditLogEntry{
 							Timestamp: time.Now().UTC(), AgentID: agentID,
 							Action: "approval_required", ToolName: toolName, Status: "pending",
-							Verification: approvalErr.Approval.ID,
+							Verification: approval.ID,
 						},
 					}
-					e.finishRun(ctx, run, RunApprovalPending, "approval_required", iterationsCompleted, totalUsage)
-					eventChan <- AgentStreamEvent{Type: EventStreamError, Error: execErr.Error()}
-					return nil, execErr
+					eventChan <- AgentStreamEvent{
+						Type: EventStreamApprovalRequired, Tool: toolName, ToolCallID: tc.ID,
+						Args: toolArgs, Status: "awaiting_approval", Approval: &approval,
+					}
+					eventChan <- AgentStreamEvent{
+						Type: EventStreamToolResult, Tool: toolName, ToolCallID: tc.ID,
+						Result: "awaiting human approval", Status: "awaiting_approval",
+					}
+					eventChan <- AgentStreamEvent{
+						Type:    EventStreamThought,
+						Thought: fmt.Sprintf("Waiting for operator approval of '%s'...", toolName),
+					}
+					decision, waitErr := waitOnApproval(ctx, waitCh)
+					e.approvalWaiters.unregister(approval.ID)
+					if waitErr != nil {
+						return nil, execErr
+					}
+					if !decision.Approved {
+						statusStr = "rejected"
+						reason := strings.TrimSpace(decision.Reason)
+						if reason == "" {
+							resultStr = fmt.Sprintf("Operator rejected tool %s", toolName)
+						} else {
+							resultStr = fmt.Sprintf("Operator rejected tool %s: %s", toolName, reason)
+						}
+						consecutiveFailures++
+					} else {
+						e.finishRun(ctx, run, RunRunning, "", iterationsCompleted, totalUsage)
+						approvedCtx := tools.WithApprovalID(ctx, approval.ID)
+						t0 = time.Now()
+						toolResult, execErr = e.tools.Execute(approvedCtx, agentID, toolName, tc.Function.Arguments)
+						latency = time.Since(t0).Milliseconds()
+						if execErr != nil {
+							statusStr = "error"
+							resultStr = fmt.Sprintf("Error executing tool %s: %v", toolName, execErr)
+							consecutiveFailures++
+						} else if toolResult != nil {
+							resultStr = toolResult.Content
+							consecutiveFailures = 0
+						}
+					}
+				} else {
+					statusStr = "error"
+					resultStr = fmt.Sprintf("Error executing tool %s: %v", toolName, execErr)
+					if toolResult != nil && toolResult.Content != "" && toolResult.Content != resultStr {
+						resultStr = fmt.Sprintf("%s\n%s", resultStr, toolResult.Content)
+					}
+					consecutiveFailures++
 				}
 			} else if toolResult != nil {
 				resultStr = toolResult.Content
@@ -1417,6 +1461,7 @@ func (e *Engine) ResumeApproved(ctx context.Context, approval tools.ApprovalRequ
 				response = drainResp
 			}
 			e.syncMissionAfterResume(execCtx, checkpoint, response)
+			e.persistConversationReply(execCtx, checkpoint.ConversationID, checkpoint.AgentID, response)
 
 			return response, nil
 		}
@@ -1530,8 +1575,37 @@ func (e *Engine) saveApprovalCheckpoint(
 	_ = e.runStore.SaveCheckpoint(ctx, RunCheckpoint{
 		RunID: run.ID, TraceID: run.TraceID, AgentID: agentID, TaskID: taskID, Goal: goal,
 		Source: source, Messages: messages, Iteration: iteration,
-		Usage: usage, PendingTool: pending,
+		Usage: usage, PendingTool: pending, ConversationID: ConversationIDFromContext(ctx),
 	})
+}
+
+func (e *Engine) persistConversationReply(ctx context.Context, convID, agentID string, resp *llm.Response) {
+	if e == nil || e.memory == nil || resp == nil {
+		return
+	}
+	convID = strings.TrimSpace(convID)
+	if convID == "" {
+		return
+	}
+	content := strings.TrimSpace(resp.Content)
+	if content == "" {
+		return
+	}
+	toolCallsJSON := ""
+	if len(resp.ToolCalls) > 0 {
+		encoded, err := json.Marshal(resp.ToolCalls)
+		if err == nil {
+			toolCallsJSON = string(encoded)
+		}
+	}
+	now := time.Now().UTC()
+	_, _ = e.memory.DB().SQLDB().ExecContext(ctx, `
+		INSERT INTO messages (id, conversation_id, agent_id, role, content, tool_calls_json, created_at)
+		VALUES (?, ?, ?, 'assistant', ?, ?, ?)
+	`, "msg_"+uuid.NewString(), convID, agentID, content, toolCallsJSON, now)
+	_, _ = e.memory.DB().SQLDB().ExecContext(ctx, `
+		UPDATE conversations SET updated_at = ? WHERE id = ?
+	`, now, convID)
 }
 
 func addUsage(total, current llm.Usage) llm.Usage {

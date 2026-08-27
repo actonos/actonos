@@ -448,6 +448,30 @@ func TestActionHashSurvivesJSONRoundTrip(t *testing.T) {
 // TestApprovalValidatesAfterMarshalRoundTrip reproduces the exact failing path:
 // request an approval, round-trip the pending arguments the way the run
 // checkpoint does, then validate the approved action.
+func TestApprovalRequestStampsExecutionSource(t *testing.T) {
+	db, err := memory.Open(filepath.Join(t.TempDir(), "approvals-source.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	manager := NewApprovalManager(db.SQLDB())
+	ctx := WithExecutionSource(context.Background(), "stream")
+	item, err := manager.Request(ctx, "trace-src", "agent_system_core", "native_file_write", "High", json.RawMessage(`{"path":"a.txt","content":"x"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if item.Source != "stream" {
+		t.Fatalf("source = %q, want stream", item.Source)
+	}
+	loaded, err := manager.Get(context.Background(), item.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Source != "stream" {
+		t.Fatalf("loaded source = %q, want stream", loaded.Source)
+	}
+}
+
 func TestApprovalValidatesAfterMarshalRoundTrip(t *testing.T) {
 	db, err := memory.Open(filepath.Join(t.TempDir(), "approvals-roundtrip.db"))
 	if err != nil {

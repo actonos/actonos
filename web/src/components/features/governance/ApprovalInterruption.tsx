@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/lib/api';
-import type { ApprovalRequest, DontAskAgain } from '@/lib/types';
+import { isModalEligibleApproval, type ApprovalRequest, type DontAskAgain } from '@/lib/types';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { useToast } from '@/components/ui/Toast';
@@ -19,12 +19,17 @@ export function ApprovalInterruption() {
   const { snapshot } = useRealtime();
 
   useEffect(() => {
-    setApproval((current) => current || snapshot?.approvals?.[0] || null);
+    setApproval((current) => {
+      if (current && isModalEligibleApproval(current)) return current;
+      return snapshot?.approvals?.find(isModalEligibleApproval) || null;
+    });
   }, [snapshot?.approvals]);
 
   useEffect(() => {
     const handleApprovalRequired = (event: Event) => {
-      setApproval((event as CustomEvent<ApprovalRequest>).detail);
+      const next = (event as CustomEvent<ApprovalRequest>).detail;
+      if (!next || !isModalEligibleApproval(next)) return;
+      setApproval(next);
     };
     window.addEventListener('actonos:approval-required', handleApprovalRequired);
     return () => {
@@ -132,6 +137,7 @@ export function ApprovalInterruption() {
         <ApprovalDecisionBar
           approval={approval}
           deciding={deciding}
+          canReject={Boolean(feedback.trim())}
           labels={{
             reject: t('approval.reject'),
             approve: t('approval.approve'),
