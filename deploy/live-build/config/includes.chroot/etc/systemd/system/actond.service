@@ -9,6 +9,8 @@ Type=simple
 User=acton
 Group=acton
 WorkingDirectory=/data
+Delegate=yes
+
 
 # Ensure /data hierarchy and permissions exist before starting (runs with root privileges via '+' prefix)
 ExecStartPre=+/bin/mkdir -p /data

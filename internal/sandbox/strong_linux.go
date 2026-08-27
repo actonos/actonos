@@ -5,6 +5,9 @@ package sandbox
 import "os/exec"
 
 func strongSandboxAvailable() bool {
+	if isContainerEnvironment() {
+		return false
+	}
 	_, err := exec.LookPath("bwrap")
 	return err == nil
 }
@@ -12,3 +15,4 @@ func strongSandboxAvailable() bool {
 func newStrongSandbox() Sandbox {
 	return NewBubblewrapSandbox()
 }
+

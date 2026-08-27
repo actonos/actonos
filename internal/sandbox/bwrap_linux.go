@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -89,7 +90,9 @@ func (s *BubblewrapSandbox) Execute(ctx context.Context, req CommandRequest) (*C
 		_, _ = cmd.Process.Wait()
 		return nil, err
 	}
-	defer cleanupCgroup(cgroupPath)
+	if cgroupPath != "" {
+		defer cleanupCgroup(cgroupPath)
+	}
 	err = cmd.Wait()
 	duration := time.Since(startTime)
 
@@ -111,6 +114,45 @@ func (s *BubblewrapSandbox) Execute(ctx context.Context, req CommandRequest) (*C
 	return result, nil
 }
 
+// findCgroupV2Base locates a writable cgroup v2 base directory.
+func findCgroupV2Base() (string, error) {
+	// 1. Explicit override via ACTONOS_CGROUP_BASE
+	if custom := os.Getenv("ACTONOS_CGROUP_BASE"); custom != "" {
+		if stat, err := os.Stat(custom); err == nil && stat.IsDir() {
+			return custom, nil
+		}
+	}
+
+	// 2. Discover current process cgroup from /proc/self/cgroup (e.g. systemd slice or user slice)
+	if data, err := os.ReadFile("/proc/self/cgroup"); err == nil {
+		lines := strings.Split(string(data), "\n")
+		for _, line := range lines {
+			parts := strings.SplitN(line, ":", 3)
+			if len(parts) == 3 && (parts[0] == "0" || parts[1] == "") {
+				rel := strings.TrimSpace(parts[2])
+				if rel != "" && rel != "/" {
+					candidate := filepath.Join("/sys/fs/cgroup", strings.TrimPrefix(rel, "/"))
+					if stat, err := os.Stat(candidate); err == nil && stat.IsDir() {
+						testFile := filepath.Join(candidate, fmt.Sprintf(".acton_probe_%d", os.Getpid()))
+						if err := os.WriteFile(testFile, []byte("1"), 0644); err == nil {
+							_ = os.Remove(testFile)
+							return candidate, nil
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 3. Fallback to root /sys/fs/cgroup
+	root := "/sys/fs/cgroup"
+	if _, err := os.Stat(filepath.Join(root, "cgroup.controllers")); err != nil {
+		return "", fmt.Errorf("cgroup v2 is not mounted or cgroup.controllers missing at %s: %w", root, err)
+	}
+
+	return root, nil
+}
+
 func attachCgroup(pid int, req CommandRequest) (string, error) {
 	if req.MaxMemoryMB <= 0 {
 		req.MaxMemoryMB = 512
@@ -118,14 +160,23 @@ func attachCgroup(pid int, req CommandRequest) (string, error) {
 	if req.MaxProcesses <= 0 {
 		req.MaxProcesses = 30
 	}
-	base := "/sys/fs/cgroup"
-	if _, err := os.Stat(filepath.Join(base, "cgroup.controllers")); err != nil {
+
+	base, err := findCgroupV2Base()
+	if err != nil {
+		if os.Getenv("ACTONOS_CGROUP_OPTIONAL") == "1" || os.Getenv("ACTONOS_ALLOW_INSECURE_EXEC") == "1" {
+			return "", nil
+		}
 		return "", fmt.Errorf("cgroup v2 is required for bare-metal sandboxing: %w", err)
 	}
+
 	group := filepath.Join(base, fmt.Sprintf("actonos-%d", pid))
 	if err := os.Mkdir(group, 0755); err != nil {
-		return "", fmt.Errorf("creating execution cgroup: %w", err)
+		if os.Getenv("ACTONOS_CGROUP_OPTIONAL") == "1" || os.Getenv("ACTONOS_ALLOW_INSECURE_EXEC") == "1" {
+			return "", nil
+		}
+		return "", fmt.Errorf("creating execution cgroup in %s: %w (ensure /sys/fs/cgroup is writable or set Delegate=yes in systemd)", base, err)
 	}
+
 	writes := map[string]string{
 		"memory.max":   strconv.FormatInt(int64(req.MaxMemoryMB)*1024*1024, 10),
 		"pids.max":     strconv.Itoa(req.MaxProcesses),
@@ -134,16 +185,23 @@ func attachCgroup(pid int, req CommandRequest) (string, error) {
 	}
 	for name, value := range writes {
 		if err := os.WriteFile(filepath.Join(group, name), []byte(value), 0644); err != nil {
-			cleanupCgroup(group)
-			return "", fmt.Errorf("configuring cgroup %s: %w", name, err)
+			if name == "cgroup.procs" {
+				cleanupCgroup(group)
+				if os.Getenv("ACTONOS_CGROUP_OPTIONAL") == "1" || os.Getenv("ACTONOS_ALLOW_INSECURE_EXEC") == "1" {
+					return "", nil
+				}
+				return "", fmt.Errorf("attaching process to cgroup %s: %w", name, err)
+			}
+			// Non-critical limit write errors can be tolerated if parent subtree doesn't expose controller
 		}
 	}
 	return group, nil
 }
 
 func cleanupCgroup(group string) {
-	if group == "" || filepath.Dir(group) != "/sys/fs/cgroup" || filepath.Base(group)[:8] != "actonos-" {
+	if group == "" || !strings.HasPrefix(filepath.Base(group), "actonos-") {
 		return
 	}
 	_ = os.Remove(group)
 }
+

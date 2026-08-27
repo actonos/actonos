@@ -85,13 +85,27 @@ func (s *SubshellSandbox) Execute(ctx context.Context, req CommandRequest) (*Com
 	return result, nil
 }
 
+// isContainerEnvironment checks if ActonOS is running inside a Docker/OCI container or forced docker mode.
+func isContainerEnvironment() bool {
+	if os.Getenv("RUNTIME_MODE") == "docker" {
+		return true
+	}
+	for _, marker := range []string{"/.dockerenv", "/run/.containerenv"} {
+		if _, err := os.Stat(marker); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
 // AutoDetectSandbox selects Bubblewrap on Linux if available, or Subshell runner for container / dev.
 func AutoDetectSandbox() Sandbox {
+	if isContainerEnvironment() || os.Getenv("ACTONOS_ALLOW_INSECURE_EXEC") == "1" {
+		return NewSubshellSandbox()
+	}
 	if strongSandboxAvailable() {
 		return newStrongSandbox()
 	}
-	if os.Getenv("RUNTIME_MODE") == "docker" || os.Getenv("ACTONOS_ALLOW_INSECURE_EXEC") == "1" {
-		return NewSubshellSandbox()
-	}
 	return &unavailableSandbox{}
 }
+

@@ -90,8 +90,18 @@ func TestAutoDetectSandboxAllowsExplicitDevelopmentOverride(t *testing.T) {
 	}
 }
 
+func TestAutoDetectSandboxDockerEnvironment(t *testing.T) {
+	t.Setenv("RUNTIME_MODE", "docker")
+	t.Setenv("ACTONOS_ALLOW_INSECURE_EXEC", "")
+	sb := AutoDetectSandbox()
+	if sb.Name() != "subshell" {
+		t.Fatalf("expected docker environment to select subshell, got %s", sb.Name())
+	}
+}
+
 func isWindows() bool {
 	return strings.Contains(strings.ToLower(runtimeGOOS()), "windows")
 }
 
 var runtimeGOOS = func() string { return runtime.GOOS }
+
