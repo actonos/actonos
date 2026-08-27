@@ -41,6 +41,9 @@ func NewTailscaleManager(dataDir, hostname, authKey string) *TailscaleManager {
 	}
 	if authKey == "" {
 		authKey = os.Getenv("TAILSCALE_AUTHKEY")
+		if authKey == "" {
+			authKey = os.Getenv("TAILSCALE_AUTH_KEY")
+		}
 	}
 
 	stateDir := filepath.Join(dataDir, "config", "tsnet")
@@ -77,22 +80,6 @@ func (m *TailscaleManager) Start(ctx context.Context) error {
 
 	m.server = srv
 	m.started = true
-
-	go func() {
-		ln, err := srv.Listen("tcp", ":443")
-		if err != nil {
-			slog.Warn("tsnet listen failed; mesh listener not active", "error", err)
-			return
-		}
-		m.mu.Lock()
-		m.started = true
-		m.mu.Unlock()
-		slog.Info("embedded tailscale tsnet listener active", "addr", ln.Addr().String())
-		go func() {
-			<-ctx.Done()
-			_ = ln.Close()
-		}()
-	}()
 
 	slog.Info("embedded tailscale tsnet server initialized",
 		"hostname", m.hostname,

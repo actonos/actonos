@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -486,6 +487,33 @@ func main() {
 			os.Exit(1)
 		}
 	}()
+
+	// Serve Web UI & REST API on embedded Tailscale mesh node if active
+	if tailscaleMgr != nil {
+		for _, port := range []string{":80", ":8080"} {
+			port := port
+			go func() {
+				ln, err := tailscaleMgr.Listen("tcp", port)
+				if err != nil {
+					slog.Debug("tailscale mesh listener not started", "port", port, "error", err)
+					return
+				}
+				slog.Info("ActonOS Web UI & REST API listening on Tailscale mesh", "port", port)
+				tsSrv := &http.Server{
+					Handler:           apiServer.Router(),
+					ReadHeaderTimeout: 30 * time.Second,
+					IdleTimeout:       120 * time.Second,
+				}
+				go func() {
+					<-ctx.Done()
+					_ = tsSrv.Close()
+				}()
+				if err := tsSrv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, net.ErrClosed) {
+					slog.Debug("tailscale mesh http server closed", "port", port, "error", err)
+				}
+			}()
+		}
+	}
 
 	// Publish System Boot Event
 	eventBus.Publish(bus.NewEvent(bus.EventSystemBoot, "kernel", map[string]any{
