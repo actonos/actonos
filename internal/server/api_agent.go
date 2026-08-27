@@ -164,6 +164,82 @@ func (s *Server) handleStopAgent(w http.ResponseWriter, r *http.Request) {
 	s.respondJSON(w, http.StatusOK, map[string]any{"status": "stopped", "agent_id": agentID})
 }
 
+const completedOperationsFallback = "Completed requested operations successfully."
+
+func (s *Server) flushChatSSE(w http.ResponseWriter, flusher http.Flusher, writeSSE *bool, event string, payload map[string]any) {
+	if writeSSE == nil || !*writeSSE {
+		return
+	}
+	dataBytes, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, string(dataBytes)); err != nil {
+		*writeSSE = false
+		return
+	}
+	flusher.Flush()
+}
+
+func resolveStreamedAssistantContent(tokenBuf, doneContent, responseContent string, toolCalls []llm.ToolCall) string {
+	for _, candidate := range []string{responseContent, doneContent, tokenBuf} {
+		if text := strings.TrimSpace(candidate); text != "" {
+			return text
+		}
+	}
+	if len(toolCalls) > 0 {
+		return completedOperationsFallback
+	}
+	return ""
+}
+
+func (s *Server) persistChatAssistantMessage(convID, agentID, content string, toolCalls []llm.ToolCall) {
+	if s.memory == nil || strings.TrimSpace(convID) == "" {
+		return
+	}
+	content = strings.TrimSpace(content)
+	if content == "" {
+		if len(toolCalls) == 0 {
+			return
+		}
+		content = completedOperationsFallback
+	}
+	toolCallsJSON := ""
+	if len(toolCalls) > 0 {
+		encoded, err := json.Marshal(toolCalls)
+		if err == nil {
+			toolCallsJSON = string(encoded)
+		}
+	}
+	now := time.Now().UTC()
+	_, _ = s.memory.DB().SQLDB().ExecContext(context.Background(), `
+		INSERT INTO messages (id, conversation_id, agent_id, role, content, tool_calls_json, created_at)
+		VALUES (?, ?, ?, 'assistant', ?, ?, ?)
+	`, "msg_"+uuid.NewString(), convID, agentID, content, toolCallsJSON, now)
+	_, _ = s.memory.DB().SQLDB().ExecContext(context.Background(), `
+		UPDATE conversations SET updated_at = ? WHERE id = ?
+	`, now, convID)
+}
+
+func (s *Server) persistStreamedAssistantIfNeeded(
+	convID, agentID, tokenBuf, doneContent string,
+	toolCalls []llm.ToolCall,
+	resp *llm.Response,
+	err error,
+) {
+	if err == nil && resp != nil && (strings.TrimSpace(resp.Content) != "" || len(resp.ToolCalls) > 0) {
+		return
+	}
+	content := resolveStreamedAssistantContent(tokenBuf, doneContent, "", toolCalls)
+	if content == "" && err != nil {
+		var approvalErr *tools.ApprovalRequiredError
+		if !errors.As(err, &approvalErr) {
+			content = fmt.Sprintf("Execution error: %v", err)
+		}
+	}
+	s.persistChatAssistantMessage(convID, agentID, content, toolCalls)
+}
+
 func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	agentID := chi.URLParam(r, "agentID")
 	if agentID == "" || agentID == "default" {
@@ -290,15 +366,23 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 
 		eventChan := make(chan agent.AgentStreamEvent, 64)
+		type streamResult struct {
+			response *llm.Response
+			err      error
+		}
+		resultCh := make(chan streamResult, 1)
 		go func() {
 			chatCtx := agent.WithExecutionSource(agent.WithConversationContext(r.Context(), convID), "stream")
-			_, _ = s.engine.ExecuteStepStreamWithHistory(chatCtx, agentID, req.Message, history, eventChan)
+			response, err := s.engine.ExecuteStepStreamWithHistory(chatCtx, agentID, req.Message, history, eventChan)
+			resultCh <- streamResult{response: response, err: err}
 		}()
 
 		var finalContent strings.Builder
 		var allToolCalls []llm.ToolCall
 		var finalModel string
 		var finalTokens int
+		var doneContent string
+		writeSSE := true
 
 		keepalive := time.NewTicker(15 * time.Second)
 		defer keepalive.Stop()
@@ -312,43 +396,45 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 					break streamLoop
 				}
 			case <-keepalive.C:
-				fmt.Fprintf(w, ": keepalive\n\n")
-				flusher.Flush()
+				if writeSSE {
+					if _, err := fmt.Fprintf(w, ": keepalive\n\n"); err != nil {
+						writeSSE = false
+					} else {
+						flusher.Flush()
+					}
+				}
 				continue
 			case <-r.Context().Done():
-				return
+				// Keep draining so the engine can finish and persist, even if the
+				// browser refreshed or the proxy dropped the SSE socket.
+				writeSSE = false
+				continue
 			}
 			ev.ConversationID = convID
 			ev.Title = convTitle
 
 			switch ev.Type {
 			case agent.EventStreamThought:
-				dataBytes, _ := json.Marshal(map[string]any{
+				s.flushChatSSE(w, flusher, &writeSSE, "thought", map[string]any{
 					"conversation_id": convID,
 					"title":           convTitle,
 					"thought":         ev.Thought,
 				})
-				fmt.Fprintf(w, "event: thought\ndata: %s\n\n", string(dataBytes))
-				flusher.Flush()
 
 			case agent.EventStreamReasoning:
-				dataBytes, _ := json.Marshal(map[string]any{
+				s.flushChatSSE(w, flusher, &writeSSE, "reasoning", map[string]any{
 					"conversation_id": convID,
 					"title":           convTitle,
 					"reasoning":       ev.Reasoning,
 				})
-				fmt.Fprintf(w, "event: reasoning\ndata: %s\n\n", string(dataBytes))
-				flusher.Flush()
 
 			case agent.EventStreamToken:
 				finalContent.WriteString(ev.Content)
-				dataBytes, _ := json.Marshal(map[string]any{
+				s.flushChatSSE(w, flusher, &writeSSE, "token", map[string]any{
 					"conversation_id": convID,
 					"title":           convTitle,
 					"content":         ev.Content,
 				})
-				fmt.Fprintf(w, "event: token\ndata: %s\n\n", string(dataBytes))
-				flusher.Flush()
 
 			case agent.EventStreamToolCall:
 				allToolCalls = append(allToolCalls, llm.ToolCall{
@@ -358,18 +444,16 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 						Name: ev.Tool,
 					},
 				})
-				dataBytes, _ := json.Marshal(map[string]any{
+				s.flushChatSSE(w, flusher, &writeSSE, "tool_call", map[string]any{
 					"conversation_id": convID,
 					"title":           convTitle,
 					"tool":            ev.Tool,
 					"tool_call_id":    ev.ToolCallID,
 					"args":            ev.Args,
 				})
-				fmt.Fprintf(w, "event: tool_call\ndata: %s\n\n", string(dataBytes))
-				flusher.Flush()
 
 			case agent.EventStreamToolResult:
-				dataBytes, _ := json.Marshal(map[string]any{
+				s.flushChatSSE(w, flusher, &writeSSE, "tool_result", map[string]any{
 					"conversation_id": convID,
 					"title":           convTitle,
 					"tool":            ev.Tool,
@@ -378,30 +462,24 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 					"status":          ev.Status,
 					"latency_ms":      ev.LatencyMs,
 				})
-				fmt.Fprintf(w, "event: tool_result\ndata: %s\n\n", string(dataBytes))
-				flusher.Flush()
 
 			case agent.EventStreamTokenReset:
 				// The iteration turned out to be a tool-calling turn: its prose was
 				// preamble, not the answer. Drop it here too so the persisted message
 				// does not mix preamble into the final content.
 				finalContent.Reset()
-				dataBytes, _ := json.Marshal(map[string]any{
+				s.flushChatSSE(w, flusher, &writeSSE, "token_reset", map[string]any{
 					"conversation_id": convID,
 					"title":           convTitle,
 				})
-				fmt.Fprintf(w, "event: token_reset\ndata: %s\n\n", string(dataBytes))
-				flusher.Flush()
 
 			case agent.EventStreamAudit:
 				if ev.AuditLog != nil {
-					dataBytes, _ := json.Marshal(map[string]any{
+					s.flushChatSSE(w, flusher, &writeSSE, "audit", map[string]any{
 						"conversation_id": convID,
 						"title":           convTitle,
 						"audit_log":       ev.AuditLog,
 					})
-					fmt.Fprintf(w, "event: audit\ndata: %s\n\n", string(dataBytes))
-					flusher.Flush()
 				}
 
 			case agent.EventStreamDone:
@@ -411,7 +489,10 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 				if ev.Usage != nil {
 					finalTokens = ev.Usage.TotalTokens
 				}
-				dataBytes, _ := json.Marshal(map[string]any{
+				if ev.Content != "" {
+					doneContent = ev.Content
+				}
+				s.flushChatSSE(w, flusher, &writeSSE, "done", map[string]any{
 					"conversation_id": convID,
 					"title":           convTitle,
 					"content":         ev.Content,
@@ -419,20 +500,16 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 					"model":           finalModel,
 					"timestamp":       time.Now().UTC(),
 				})
-				fmt.Fprintf(w, "event: done\ndata: %s\n\n", string(dataBytes))
-				flusher.Flush()
 
 			case agent.EventStreamError:
-				dataBytes, _ := json.Marshal(map[string]any{
+				s.flushChatSSE(w, flusher, &writeSSE, "error", map[string]any{
 					"conversation_id": convID,
 					"title":           convTitle,
 					"error":           ev.Error,
 				})
-				fmt.Fprintf(w, "event: error\ndata: %s\n\n", string(dataBytes))
-				flusher.Flush()
 
 			case agent.EventStreamApprovalRequired:
-				dataBytes, _ := json.Marshal(map[string]any{
+				s.flushChatSSE(w, flusher, &writeSSE, "approval_required", map[string]any{
 					"conversation_id": convID,
 					"title":           convTitle,
 					"tool":            ev.Tool,
@@ -441,21 +518,11 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 					"status":          ev.Status,
 					"approval":        ev.Approval,
 				})
-				fmt.Fprintf(w, "event: approval_required\ndata: %s\n\n", string(dataBytes))
-				flusher.Flush()
 			}
 		}
 
-		// Persist assistant message into database
-		if s.memory != nil && finalContent.Len() > 0 {
-			asstMsgID := "msg_" + uuid.New().String()
-			toolCallsJSON, _ := json.Marshal(allToolCalls)
-			_, _ = s.memory.DB().SQLDB().ExecContext(
-				r.Context(),
-				`INSERT INTO messages (id, conversation_id, agent_id, role, content, tool_calls_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-				asstMsgID, convID, agentID, "assistant", finalContent.String(), string(toolCallsJSON), time.Now().UTC(),
-			)
-		}
+		result := <-resultCh
+		s.persistStreamedAssistantIfNeeded(convID, agentID, finalContent.String(), doneContent, allToolCalls, result.response, result.err)
 		return
 	}
 
@@ -467,15 +534,8 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Persist assistant message
-	if s.memory != nil && resp != nil {
-		asstMsgID := "msg_" + uuid.New().String()
-		toolCallsJSON, _ := json.Marshal(resp.ToolCalls)
-		_, _ = s.memory.DB().SQLDB().ExecContext(
-			r.Context(),
-			`INSERT INTO messages (id, conversation_id, agent_id, role, content, tool_calls_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			asstMsgID, convID, agentID, "assistant", resp.Content, string(toolCallsJSON), time.Now().UTC(),
-		)
+	if resp != nil {
+		s.persistChatAssistantMessage(convID, agentID, resp.Content, resp.ToolCalls)
 	}
 
 	s.respondJSON(w, http.StatusOK, map[string]any{
@@ -835,6 +895,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}()
 	keepalive := time.NewTicker(15 * time.Second)
 	defer keepalive.Stop()
+	writeSSE := true
 eventLoop:
 	for {
 		select {
@@ -844,48 +905,38 @@ eventLoop:
 			}
 			event.ConversationID = convID
 			event.Title = title
-			payload, err := json.Marshal(event)
-			if err != nil {
-				continue
+			if writeSSE {
+				payload, err := json.Marshal(event)
+				if err != nil {
+					continue
+				}
+				if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event.Type, payload); err != nil {
+					writeSSE = false
+				} else {
+					flusher.Flush()
+				}
 			}
-			_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event.Type, payload)
-			flusher.Flush()
 		case <-keepalive.C:
-			_, _ = fmt.Fprintf(w, ": keepalive\n\n")
-			flusher.Flush()
+			if writeSSE {
+				if _, err := fmt.Fprintf(w, ": keepalive\n\n"); err != nil {
+					writeSSE = false
+				} else {
+					flusher.Flush()
+				}
+			}
 		case <-r.Context().Done():
-			return
+			writeSSE = false
 		}
 	}
 	result := <-resultCh
-	if s.memory != nil {
-		var content string
-		var toolCallsJSON string
-		if result.err == nil && result.response != nil {
-			content = result.response.Content
-			if strings.TrimSpace(content) == "" {
-				content = "Completed requested operations successfully."
-			}
-			if len(result.response.ToolCalls) > 0 {
-				toolCalls, _ := json.Marshal(result.response.ToolCalls)
-				toolCallsJSON = string(toolCalls)
-			}
-		} else if result.err != nil {
-			var approvalErr *tools.ApprovalRequiredError
-			if !errors.As(result.err, &approvalErr) {
-				content = fmt.Sprintf("Execution error: %v", result.err)
-			}
-		}
-		if content != "" {
-			_, _ = s.memory.DB().SQLDB().ExecContext(context.Background(), `
-				INSERT INTO messages (id, conversation_id, agent_id, role, content, tool_calls_json, created_at)
-				VALUES (?, ?, ?, 'assistant', ?, ?, ?)
-			`, "msg_"+uuid.NewString(), convID, agentID, content, toolCallsJSON, time.Now().UTC())
-			_, _ = s.memory.DB().SQLDB().ExecContext(context.Background(), `
-				UPDATE conversations SET updated_at = ? WHERE id = ?
-			`, time.Now().UTC(), convID)
-		}
+	var doneContent string
+	var tokenBuf string
+	var streamedTools []llm.ToolCall
+	if result.response != nil {
+		doneContent = result.response.Content
+		streamedTools = result.response.ToolCalls
 	}
+	s.persistStreamedAssistantIfNeeded(convID, agentID, tokenBuf, doneContent, streamedTools, result.response, result.err)
 }
 
 func (s *Server) handleListAllCronHistory(w http.ResponseWriter, r *http.Request) {

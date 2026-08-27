@@ -51,11 +51,11 @@ func NewEngine(
 	mem *memory.HybridEngine,
 ) *Engine {
 	return &Engine{
-		agentMgr:       agentMgr,
-		bus:            eventBus,
-		llm:            llmRouter,
-		memory:         mem,
-		verifier:       NewVerifier(),
+		agentMgr:        agentMgr,
+		bus:             eventBus,
+		llm:             llmRouter,
+		memory:          mem,
+		verifier:        NewVerifier(),
 		contextManager:  NewContextManager(128000),
 		inFlight:        newInFlightRegistry(),
 		approvalWaiters: newApprovalWaiters(),
@@ -1279,6 +1279,7 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 		Model:   finalResp.Model,
 		Usage:   &finalResp.Usage,
 	}
+	e.persistConversationReply(context.Background(), ConversationIDFromContext(ctx), agentID, finalResp)
 	e.finishRun(ctx, run, RunCompleted, "goal_completed", iterationsCompleted, totalUsage)
 
 	return finalResp, nil
@@ -1579,7 +1580,7 @@ func (e *Engine) saveApprovalCheckpoint(
 	})
 }
 
-func (e *Engine) persistConversationReply(ctx context.Context, convID, agentID string, resp *llm.Response) {
+func (e *Engine) persistConversationReply(_ context.Context, convID, agentID string, resp *llm.Response) {
 	if e == nil || e.memory == nil || resp == nil {
 		return
 	}
@@ -1589,7 +1590,10 @@ func (e *Engine) persistConversationReply(ctx context.Context, convID, agentID s
 	}
 	content := strings.TrimSpace(resp.Content)
 	if content == "" {
-		return
+		if len(resp.ToolCalls) == 0 {
+			return
+		}
+		content = "Completed requested operations successfully."
 	}
 	toolCallsJSON := ""
 	if len(resp.ToolCalls) > 0 {
@@ -1599,11 +1603,12 @@ func (e *Engine) persistConversationReply(ctx context.Context, convID, agentID s
 		}
 	}
 	now := time.Now().UTC()
-	_, _ = e.memory.DB().SQLDB().ExecContext(ctx, `
+	persistCtx := context.Background()
+	_, _ = e.memory.DB().SQLDB().ExecContext(persistCtx, `
 		INSERT INTO messages (id, conversation_id, agent_id, role, content, tool_calls_json, created_at)
 		VALUES (?, ?, ?, 'assistant', ?, ?, ?)
 	`, "msg_"+uuid.NewString(), convID, agentID, content, toolCallsJSON, now)
-	_, _ = e.memory.DB().SQLDB().ExecContext(ctx, `
+	_, _ = e.memory.DB().SQLDB().ExecContext(persistCtx, `
 		UPDATE conversations SET updated_at = ? WHERE id = ?
 	`, now, convID)
 }

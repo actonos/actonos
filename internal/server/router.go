@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/actonos/actonos/internal/agent"
@@ -243,6 +244,33 @@ func (s *Server) securityHeadersMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+func isLongLivedHTTPPath(path string) bool {
+	switch {
+	case strings.Contains(path, "/chat"):
+		return true
+	case strings.HasSuffix(path, "/realtime"):
+		return true
+	case strings.Contains(path, "/terminal/"):
+		return true
+	default:
+		return false
+	}
+}
+
+func timeoutExceptLongLived(timeout time.Duration) func(http.Handler) http.Handler {
+	timed := middleware.Timeout(timeout)
+	return func(next http.Handler) http.Handler {
+		limited := timed(next)
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if isLongLivedHTTPPath(r.URL.Path) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			limited.ServeHTTP(w, r)
+		})
+	}
+}
+
 func (s *Server) setupRoutes() {
 	r := chi.NewRouter()
 
@@ -251,7 +279,7 @@ func (s *Server) setupRoutes() {
 	r.Use(middleware.RealIP)
 	r.Use(s.securityHeadersMiddleware)
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(10 * time.Minute))
+	r.Use(timeoutExceptLongLived(10 * time.Minute))
 
 	// CORS for development and cross-origin Web UI
 	r.Use(cors.Handler(cors.Options{
