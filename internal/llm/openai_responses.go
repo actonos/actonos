@@ -31,17 +31,22 @@ type openAIReasoning struct {
 	Summary string `json:"summary,omitempty"`
 }
 
-type openAIResponseItem struct {
-	ID      string          `json:"id,omitempty"`
-	Type    string          `json:"type,omitempty"`
-	Status  string          `json:"status,omitempty"`
-	Role    string          `json:"role,omitempty"`
-	Content string          `json:"content,omitempty"`
-	CallID  string          `json:"call_id,omitempty"`
-	Name    string          `json:"name,omitempty"`
-	Args    string          `json:"arguments,omitempty"`
-	Output  string          `json:"output,omitempty"`
-	Summary json.RawMessage `json:"summary,omitempty"`
+type openAIMessageItem struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type openAIFunctionCallItem struct {
+	Type      string `json:"type"`
+	CallID    string `json:"call_id"`
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
+}
+
+type openAIFunctionCallOutputItem struct {
+	Type   string `json:"type"`
+	CallID string `json:"call_id"`
+	Output string `json:"output"` // Mandatory for function_call_output in OpenAI Responses API; never omitempty
 }
 
 type openAIResponseTool struct {
@@ -65,13 +70,28 @@ type openAIResponsesResponse struct {
 	} `json:"error,omitempty"`
 }
 
-func marshalResponseItem(item openAIResponseItem) json.RawMessage {
-	raw, _ := json.Marshal(item)
-	return raw
+func appendMessageItem(request *openAIResponsesRequest, role, content string) {
+	raw, _ := json.Marshal(openAIMessageItem{Role: role, Content: content})
+	request.Input = append(request.Input, raw)
 }
 
-func appendResponseItem(request *openAIResponsesRequest, item openAIResponseItem) {
-	request.Input = append(request.Input, marshalResponseItem(item))
+func appendFunctionCallItem(request *openAIResponsesRequest, callID, name string, args json.RawMessage) {
+	raw, _ := json.Marshal(openAIFunctionCallItem{
+		Type:      "function_call",
+		CallID:    callID,
+		Name:      name,
+		Arguments: normalizeToolArguments(args),
+	})
+	request.Input = append(request.Input, raw)
+}
+
+func appendFunctionCallOutputItem(request *openAIResponsesRequest, callID, output string) {
+	raw, _ := json.Marshal(openAIFunctionCallOutputItem{
+		Type:   "function_call_output",
+		CallID: callID,
+		Output: output,
+	})
+	request.Input = append(request.Input, raw)
 }
 
 func toOpenAIResponsesRequest(messages []Message, model string, opts CompletionOptions, stream bool) openAIResponsesRequest {
@@ -111,9 +131,7 @@ func toOpenAIResponsesRequest(messages []Message, model string, opts CompletionO
 			if message.ToolCallID == "" {
 				continue
 			}
-			appendResponseItem(&request, openAIResponseItem{
-				Type: "function_call_output", CallID: message.ToolCallID, Output: message.Content,
-			})
+			appendFunctionCallOutputItem(&request, message.ToolCallID, message.Content)
 		case RoleAssistant:
 			for _, item := range message.ProviderItems {
 				var metadata struct {
@@ -124,18 +142,16 @@ func toOpenAIResponsesRequest(messages []Message, model string, opts CompletionO
 				}
 			}
 			if message.Content != "" {
-				appendResponseItem(&request, openAIResponseItem{Role: string(RoleAssistant), Content: message.Content})
+				appendMessageItem(&request, string(RoleAssistant), message.Content)
 			}
 			for _, call := range message.ToolCalls {
 				if call.ID == "" || call.Function.Name == "" {
 					continue
 				}
-				appendResponseItem(&request, openAIResponseItem{
-					Type: "function_call", CallID: call.ID, Name: call.Function.Name, Args: normalizeToolArguments(call.Function.Arguments),
-				})
+				appendFunctionCallItem(&request, call.ID, call.Function.Name, call.Function.Arguments)
 			}
 		default:
-			appendResponseItem(&request, openAIResponseItem{Role: string(message.Role), Content: message.Content})
+			appendMessageItem(&request, string(message.Role), message.Content)
 		}
 	}
 	return request

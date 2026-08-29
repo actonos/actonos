@@ -9,18 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **A1. Proactive Anomaly Engine (`internal/agent/proactive.go`, `/api/ops/anomalies*`)**:
+- **A1. Proactive Anomaly Engine & Operations UI (`internal/agent/proactive.go`, `/api/ops/anomalies*`)**:
   - Continuous 7-probe system diagnostic scanning during idle heartbeat cycles (Disk usage, Certificate/token expiry, Overdue embedding queue, Degraded MCP servers, Stalled tasks, High token consumption >80%, Inbound message queue backlog).
-  - Autonomous mission suggestions (`AutoTaskPayload`) and event-driven operator notifications (`anomaly:detected`).
-- **A2. Risk-Based Approval Auto-Resolution (`internal/tools/risk.go`, `internal/tools/approval.go`)**:
-  - Granular classification (`RiskTierLow`, `RiskTierMedium`, `RiskTierHigh`) with safety blacklist (exec, delete, restart, ota, vault, cron) guaranteeing dangerous operations never auto-approve.
-  - Background timeout sweeper with audit logging and event dispatch.
+  - Operations tab with interactive Proactive Anomaly card, manual scan triggers, configuration modal (`ProactiveConfigModal.tsx`), and automated one-click mission generation (`AutoTaskPayload`).
+- **A2. Risk-Based Governance & Visual Approvals (`internal/tools/risk.go`, `internal/tools/approval.go`)**:
+  - Granular 3-tier classification (`RiskTierLow`, `RiskTierMedium`, `RiskTierHigh`) with safety blacklist (exec, delete, restart, ota, vault, cron) guaranteeing dangerous operations never auto-approve.
+  - Interactive approval interruptions and approval cards in Chat and Operations with animated countdown indicators, risk level badges, and tool call parameter inspection.
 - **A3. Concurrent Burst Pulse for DAG Execution (`internal/agent/planner.go`, `internal/agent/engine.go`)**:
   - Multi-step readiness resolution (`ReadySteps`) and bounded concurrent execution of independent DAG steps in parallel Goroutines.
+  - Per-agent burst concurrency slider and badges in Agent Studio and Agent Cards (`max_concurrent_runs`).
 - **A4. Structured Standing Directives & Automated Outcome Assertion (`internal/agent/directive_verifier.go`, `internal/agent/tasks.go`)**:
-  - Schema-driven directives with deterministic assertion rules (`file_exists`, `file_contains`, `dir_not_empty`, `http_status`).
-- **A5. ReflectionEngine Self-Review & Insights (`internal/agent/reflection.go`, `/api/agents/{agentID}/insights*`)**:
-  - Automated 24h run analysis and tool reliability evaluation generating self-improvement proposals, persistent SQLite logging (`self_improvement_proposals`), and human-readable insights in `/data/agents/{agent_id}/INSIGHTS.md`.
+  - Schema-driven directives with deterministic assertion rules (`file_exists`, `file_contains`, `dir_not_empty`, `http_status`) and validation feedback in Agent Studio.
+- **A5. ReflectionEngine Self-Review & Insights Hub (`internal/agent/reflection.go`, `/api/agents/{agentID}/insights*`)**:
+  - Automated 24h run telemetry and tool reliability evaluation generating self-improvement proposals, persistent SQLite logging (`self_improvement_proposals`), and human-readable insights in `/data/agents/{agent_id}/INSIGHTS.md`.
+  - Dedicated Agent Insights modal (`AgentInsightsModal.tsx`) with accept/reject proposal workflow, tool success rates, and direct prompt improvements.
+
+### Fixed
+
+- **Model Output Sanitization & Glitch Suppression**:
+  - Automatically strip `functions.` prefixes and map aliases in `NormalizeToolName` (`internal/tools/registry.go` and `internal/llm/sanitize.go`).
+  - Extracted `to=functions.<name>` and `{"tool_uses": [...]}` embedded JSON tool call structures from models (Qwen, Hermes, DeepSeek).
+  - Suppressed real-time SSE streaming of markup tags, token loop keywords, and raw JSON wrappers during generation.
+- **Autonomous Mission Resilience & Plan Deadlock Recovery**:
+  - Categorized temporary resource limits (`agent hourly token quota exhausted`, rate limits `429`/`503`, network timeouts, context cancellations) as transient errors via `isTransientExecutionError`, maintaining step status in `StepStatusPending` with notices instead of marking them permanently `failed` or tripping missions into `blocked` state.
+  - Operator Task Reset: Updating a task to `progress: 0` or moving status to `pending`/`in_progress` automatically reopens all or failed steps in the persisted `plan_json` (`ReopenAllSteps()`, `ReopenFailedSteps()`), reset `FailCount = 0` and `StalledCycles = 0`, and clears the in-memory stall tracker.
+- **Agent Process Run Resilience (Elimination of Stuck 'running' Runs)**:
+  - Ensured `finishRun` executes SQLite state updates using an independent context (`context.WithTimeout(context.Background(), 5*time.Second)`), preventing canceled or timed-out turn contexts from dropping terminal status updates.
+  - Added guaranteed `defer` run finalizer across `ExecuteStepWithHistory` and `ExecuteStepStreamWithHistory` to ensure no run is left in `RunRunning` upon exit, error, timeout, or panic.
+  - Added background stale run reaper (`ReclaimStaleRuns` in `RunStore` & `Engine`) automatically cleaning up runs older than 10 minutes in `running` status during `ListFiltered` API calls and periodic `HeartbeatDaemon.RunPulse` sweeps.
 
 ## [1.0.3]
 

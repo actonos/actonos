@@ -90,7 +90,12 @@ Where:
 
 ### C. ReAct Execution Loop
 
-Agents run a bounded ReAct loop (tool use + observation) with cascade failover, circuit-breaking, and durable run records. High-level goals are decomposed into a persisted DAG; the heartbeat executes **one dependency-ready step per pulse**.
+Agents run a bounded ReAct loop (tool use + observation) with cascade failover, circuit-breaking, guaranteed run lifecycle finalization, and durable process records in SQLite. High-level goals are decomposed into a persisted DAG; the engine supports **Concurrent Burst DAG Execution** (evaluating and executing all independent ready steps in parallel Goroutines up to `max_concurrent_runs`).
+
+- **Transient Error Classification (`isTransientExecutionError`)**: Hourly token quota exhaustion, HTTP 429/503 rate limits, network timeouts, and context cancellations keep steps in `StepStatusPending` with transient notices, preventing premature step failures or false mission stalls.
+- **Operator Plan Reset & Deadlock Recovery**: Resetting mission progress to `0%` or unblocking status (`pending`/`in_progress`) automatically reopens all or failed steps in persisted `plan_json` (`ReopenAllSteps()`, `ReopenFailedSteps()`), resets `FailCount` / `StalledCycles`, and clears in-memory stall trackers.
+- **Guaranteed Run Finalization**: Every execution turn registers a deferred finalizer using an independent context (`context.WithTimeout(context.Background(), 5*time.Second)`), guaranteeing `agent_runs` rows are cleanly marked terminal (`completed`, `cancelled`, `failed`) and never left stuck in `running`.
+- **Background Stale Run Reaper (`ReclaimStaleRuns`)**: Runs in `running` status older than 10 minutes without updates are automatically swept and cancelled during `ListFiltered` API queries and heartbeat pulses.
 
 ### D. Calibrated Hybrid Retrieval (Sigmoid-Normalized Fusion)
 
@@ -435,6 +440,35 @@ Further context:
 - **Unified Delegation Kernel**: Swarm sub-tasks are routed through the same Engine
   whenever available, inheriting durable runs, context budgets, approvals, tools,
   verification, and termination guards.
+
+### D. Proactive Anomaly Engine & Idle Diagnostics
+
+The Proactive Engine runs lightweight, continuous health scans during idle heartbeat cycles across 7 specialized diagnostic probes:
+1. **Disk Storage Probe**: Monitors free space across root and `/data` partitions (>85% warning, >95% critical).
+2. **TLS / OAuth Token Expiry Probe**: Scans certificates and provider access tokens approaching expiration (<5 days).
+3. **Overdue Semantic Embedding Queue**: Flags backlogged RAG vector ingestion jobs.
+4. **Degraded MCP / WASM Servers**: Probes MCP stdio/SSE endpoints and WASM runtime status.
+5. **Stalled Tasks**: Detects non-progressing autonomous tasks stuck for multiple cycles.
+6. **High Token / Budget Consumption**: Identifies agents exceeding 80% of hourly or monthly limits.
+7. **Inbound Message Queue Backlog**: Tracks unprocessed inbound channel events.
+
+When anomalies are detected, the system can automatically suggest or launch remediating autonomous missions (`AutoTaskPayload`) and broadcast `anomaly:detected` events.
+
+### E. Risk-Based Governance & Automated Approval Engine
+
+The governance layer classifies every tool invocation into one of three risk tiers:
+- **Low Risk**: Read-only workspace queries, memory retrievals, and safe status inspections.
+- **Medium Risk**: Local scratch file writes, safe formatting, and minor state adjustments.
+- **High Risk**: System bash command executions, file deletions, service restarts, OTA updates, and vault mutations.
+
+**Safety Blacklist Guarantee**: High-risk operations and safety-blacklisted capabilities (`exec`, `delete`, `restart`, `ota`, `vault`, `cron`) **never** auto-resolve. For eligible non-blacklisted actions, operators can configure automated approval rules with configurable countdown timers and full audit logging.
+
+### F. ReflectionEngine Self-Review & Autonomous Insights
+
+The Reflection Engine continuously evaluates 24-hour agent execution telemetry:
+- **Tool Reliability Metrics**: Aggregates invocation success/error rates per tool.
+- **Self-Improvement Proposals**: Detects recurring failure patterns and automatically synthesizes prompt enhancements or tool permission adjustments.
+- **Durable Insights Repository**: Proposals are logged in SQLite (`self_improvement_proposals`) and rendered in human-readable `/data/agents/{agent_id}/INSIGHTS.md` with an interactive operator review workflow (Accept / Reject).
 
 ---
 

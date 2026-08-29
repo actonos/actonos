@@ -19,6 +19,10 @@
 - [Plugins (WasmLoader)](#plugins-wasmloader)
 - [Vault Secrets](#vault-secrets)
 - [Workspace File Manager](#workspace-file-manager)
+- [Autonomous Missions & Tasks](#autonomous-missions--tasks)
+- [Human Approvals & Agent Runs](#human-approvals--agent-runs)
+- [Operations & Proactive Anomaly Engine](#operations--proactive-anomaly-engine)
+- [Agent Self-Improvement & Insights](#agent-self-improvement--insights)
 - [Error Format](#error-format)
 
 ---
@@ -997,6 +1001,63 @@ Manually triggers embedding re-indexing for a file.
 
 ### `GET /api/workspace/chunks`
 Fetches the semantic text chunks and embedding metadata generated for a workspace file. Query params: `path`.
+
+---
+
+## Autonomous Missions & Tasks
+
+### `GET /api/tasks`
+List autonomous mission tasks from the durable SQLite backlog. Query params: `status` (`pending`, `in_progress`, `completed`, `blocked`, `cancelled`), `assigned_agent_id`, `priority` (`P0`, `P1`, `P2`, `P3`), `limit`.
+
+### `POST /api/tasks`
+Create a new autonomous mission task with optional DAG plan decomposition and standing directives.
+
+**Request:**
+```json
+{
+  "title": "Automated Security Audit",
+  "description": "Scan workspace dependencies and report high-severity vulnerabilities",
+  "assigned_agent_id": "agent_system_core",
+  "priority": "P1",
+  "target_channel": "telegram"
+}
+```
+
+### `GET /api/tasks/{id}`
+Retrieve a specific mission task including its execution log and structured plan DAG (`plan_json`).
+
+### `PUT /api/tasks/{id}`
+Update task details, priority, progress, or status.
+> **Self-Healing Note**: Resetting `progress` to `0` or moving `status` from `blocked`/`failed`/`cancelled` to `pending`/`in_progress` automatically reopens all or failed DAG steps in `plan_json`, resets `FailCount = 0` and `StalledCycles = 0`, and clears the in-memory stall detector.
+
+### `DELETE /api/tasks/{id}`
+Delete a mission task from the backlog.
+
+---
+
+## Human Approvals & Agent Runs
+
+### `GET /api/approvals`
+List pending and resolved tool approval requests. Query params: `agent_id`, `status` (`pending`, `approved`, `rejected`, `auto_resolved`, `timeout`).
+
+### `POST /api/approvals/{id}/approve`
+Approve a pending tool execution. Resumes the waiting agent turn.
+
+### `POST /api/approvals/{id}/reject`
+Reject a pending tool execution with an optional operator reason.
+
+### `GET /api/runs`
+List durable agent process turns and executions. Query params: `agent_id`, `status` (`running`, `completed`, `failed`, `cancelled`, `blocked`, `approval_pending`), `source`, `limit`.
+> **Note**: Stale runs in `running` status older than 10 minutes are automatically reclaimed as `cancelled` upon retrieval.
+
+### `GET /api/runs/{id}`
+Get full details, token usage breakdown, duration, and checkpoint data for a specific run.
+
+### `POST /api/runs/{id}/cancel`
+Interrupt an in-flight execution turn and mark the durable run `cancelled`.
+
+### `GET /api/runs/{id}/events`
+List granular step-by-step observation and tool execution events for a run.
 
 ---
 

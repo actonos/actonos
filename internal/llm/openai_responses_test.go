@@ -79,8 +79,42 @@ func TestOpenAIResponsesCompleteContinuesToolOutput(t *testing.T) {
 	call := items[0].(map[string]any)
 	functionCall := items[1].(map[string]any)
 	output := items[2].(map[string]any)
-	if call["type"] != "reasoning" || functionCall["type"] != "function_call" || output["type"] != "function_call_output" || output["call_id"] != "call-1" {
+	if call["type"] != "reasoning" || functionCall["type"] != "function_call" || output["type"] != "function_call_output" || output["call_id"] != "call-1" || output["output"] != "result" {
 		t.Fatalf("tool continuation lost correlation: %#v", items)
+	}
+}
+
+func TestOpenAIResponsesCompleteEmptyToolOutputRetainsOutputField(t *testing.T) {
+	var gotBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"model":"gpt-5","output_text":"done","usage":{"input_tokens":2,"output_tokens":1,"total_tokens":3}}`))
+	}))
+	defer server.Close()
+	provider := NewOpenAIProvider("", "gpt-5", server.URL+"/v1")
+	provider.UseResponsesAPI = true
+	_, err := provider.Complete(context.Background(), []Message{
+		{Role: RoleAssistant, ToolCalls: []ToolCall{{ID: "call-empty", Type: "function", Function: FunctionCall{Name: "exec", Arguments: json.RawMessage(`{}`)}}}},
+		{Role: RoleTool, ToolCallID: "call-empty", Content: ""},
+	}, CompletionOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items, ok := gotBody["input"].([]any)
+	if !ok || len(items) != 2 {
+		t.Fatalf("unexpected input items: %#v", gotBody["input"])
+	}
+	output := items[1].(map[string]any)
+	if output["type"] != "function_call_output" || output["call_id"] != "call-empty" {
+		t.Fatalf("unexpected output item: %#v", output)
+	}
+	val, exists := output["output"]
+	if !exists {
+		t.Fatal("expected 'output' field to be present even when empty string, but was missing!")
+	}
+	if val != "" {
+		t.Fatalf("expected empty string output, got %#v", val)
 	}
 }
 
