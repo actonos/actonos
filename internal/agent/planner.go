@@ -36,7 +36,7 @@ type PlanStep struct {
 	Title        string   `json:"title,omitempty"`
 	Description  string   `json:"description"`
 	Acceptance   string   `json:"acceptance,omitempty"`
-	AgentRole    string   `json:"agent_role"` // "code", "data", "report", "general" or specific agent_id
+	AgentRole    string   `json:"agent_role"`       // "code", "data", "report", "general" or specific agent_id
 	Kind         string   `json:"kind,omitempty"`   // produce | research | verify
 	Atomic       bool     `json:"atomic,omitempty"` // whole goal is this single step
 	Dependencies []string `json:"dependencies"`
@@ -268,6 +268,59 @@ func isApprovalPauseResult(result string) bool {
 		strings.Contains(result, "approval_id=")
 }
 
+// ReopenAllSteps resets all steps in the plan to pending, clearing their previous results.
+func (p *TaskPlan) ReopenAllSteps() {
+	if p == nil {
+		return
+	}
+	for i := range p.Steps {
+		p.Steps[i].Status = StepStatusPending
+		p.Steps[i].Result = ""
+	}
+}
+
+// ReopenFailedSteps resets any non-approval failed steps back to pending
+// so the plan can continue execution after the user unblocks or retries the task.
+func (p *TaskPlan) ReopenFailedSteps() bool {
+	if p == nil {
+		return false
+	}
+	changed := false
+	for i := range p.Steps {
+		step := &p.Steps[i]
+		if step.Status == StepStatusFailed && !isApprovalPauseResult(step.Result) {
+			step.Status = StepStatusPending
+			changed = true
+		}
+	}
+	return changed
+}
+
+// isTransientExecutionError reports whether a task/step execution failure was caused by
+// a temporary limit (token quota exhausted, rate limit, timeout, context cancel) rather
+// than a fatal permanent bug, allowing the runtime to retry automatically.
+func isTransientExecutionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	errStr := strings.ToLower(err.Error())
+	return strings.Contains(errStr, "token quota exhausted") ||
+		strings.Contains(errStr, "rate limit") ||
+		strings.Contains(errStr, "too many requests") ||
+		strings.Contains(errStr, "429") ||
+		strings.Contains(errStr, "503") ||
+		strings.Contains(errStr, "502") ||
+		strings.Contains(errStr, "overloaded") ||
+		strings.Contains(errStr, "connection reset") ||
+		strings.Contains(errStr, "connection refused") ||
+		strings.Contains(errStr, "timeout") ||
+		strings.Contains(errStr, "deadline exceeded") ||
+		strings.Contains(errStr, "LLM providers in cascade failed")
+}
+
 // reopenApprovalFailedSteps turns approval-shaped failures back into pending
 // work so a mission that was marked failed when a tool paused for approval
 // can continue after the operator decides.
@@ -344,8 +397,8 @@ func (p *Planner) ExecutePlan(ctx context.Context, plan *TaskPlan, stepExecutor 
 	return nil
 }
 
-// NextReadyStep returns the first pending step whose dependencies are completed.
-func (p *Planner) NextReadyStep(plan *TaskPlan) (*PlanStep, error) {
+// ReadySteps returns all pending steps whose dependencies are completed.
+func (p *Planner) ReadySteps(plan *TaskPlan) ([]*PlanStep, error) {
 	if plan == nil || len(plan.Steps) == 0 {
 		return nil, nil
 	}
@@ -355,23 +408,33 @@ func (p *Planner) NextReadyStep(plan *TaskPlan) (*PlanStep, error) {
 			completed[step.ID] = true
 		}
 	}
+	var ready []*PlanStep
 	for i := range plan.Steps {
 		step := &plan.Steps[i]
 		if step.Status != "pending" && step.Status != "" {
 			continue
 		}
-		ready := true
+		isReady := true
 		for _, depID := range step.Dependencies {
 			if !completed[depID] {
-				ready = false
+				isReady = false
 				break
 			}
 		}
-		if ready {
-			return step, nil
+		if isReady {
+			ready = append(ready, step)
 		}
 	}
-	return nil, nil
+	return ready, nil
+}
+
+// NextReadyStep returns the first pending step whose dependencies are completed.
+func (p *Planner) NextReadyStep(plan *TaskPlan) (*PlanStep, error) {
+	steps, err := p.ReadySteps(plan)
+	if err != nil || len(steps) == 0 {
+		return nil, err
+	}
+	return steps[0], nil
 }
 
 // HasReadyStep reports whether a pending step can run now.

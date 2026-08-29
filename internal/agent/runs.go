@@ -278,6 +278,9 @@ type RunListFilter struct {
 
 // ListFiltered returns runs matching optional agent/status/source filters.
 func (s *RunStore) ListFiltered(ctx context.Context, filter RunListFilter) ([]AgentRun, error) {
+	if s != nil && s.db != nil {
+		_, _ = s.ReclaimStaleRuns(ctx, 10*time.Minute)
+	}
 	if filter.Limit <= 0 || filter.Limit > 200 {
 		filter.Limit = 100
 	}
@@ -380,6 +383,27 @@ func (s *RunStore) ReclaimOrphans(ctx context.Context) (int, error) {
 	`, RunBlocked, "process_restart_reclaim", now, now, RunRunning)
 	if err != nil {
 		return 0, fmt.Errorf("reclaiming orphan agent runs: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
+}
+
+// ReclaimStaleRuns marks runs that have been in running status for longer than maxAge as cancelled.
+func (s *RunStore) ReclaimStaleRuns(ctx context.Context, maxAge time.Duration) (int, error) {
+	if s == nil || s.db == nil {
+		return 0, nil
+	}
+	if maxAge <= 0 {
+		maxAge = 10 * time.Minute
+	}
+	cutoff := time.Now().UTC().Add(-maxAge)
+	now := time.Now().UTC()
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE agent_runs SET status = ?, termination_reason = ?, updated_at = ?, completed_at = ?
+		WHERE status = ? AND updated_at < ?
+	`, RunCancelled, "stale_timeout_reclaimed", now, now, RunRunning, cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("reclaiming stale agent runs: %w", err)
 	}
 	n, _ := res.RowsAffected()
 	return int(n), nil

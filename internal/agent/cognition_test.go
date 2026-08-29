@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -74,6 +75,66 @@ func TestReopenApprovalFailedSteps(t *testing.T) {
 	}
 	if PlanStepIDFromPrompt(BuildPlanStepPrompt("task_2", "goal", "do it", "general", "")) != "task_2" {
 		t.Fatal("step id not extracted from plan-step prompt")
+	}
+}
+
+func TestTaskPlan_ReopenAllStepsAndFailedSteps(t *testing.T) {
+	plan := &TaskPlan{Steps: []PlanStep{
+		{ID: "s1", Status: "completed", Result: "done s1"},
+		{ID: "s2", Status: StepStatusFailed, Result: "agent hourly token quota exhausted: limit 50000 reached"},
+		{ID: "s3", Status: StepStatusInProgress, Result: ""},
+		{ID: "s4", Status: StepStatusPaused, Result: "paused"},
+	}}
+
+	// ReopenFailedSteps should reopen s2 while keeping s1 completed and s4 paused
+	if !plan.ReopenFailedSteps() {
+		t.Fatal("expected ReopenFailedSteps to return true")
+	}
+	if plan.StepStatus("s1") != "completed" {
+		t.Errorf("s1 should remain completed, got %s", plan.StepStatus("s1"))
+	}
+	if plan.StepStatus("s2") != StepStatusPending {
+		t.Errorf("s2 should be pending, got %s", plan.StepStatus("s2"))
+	}
+	if plan.StepStatus("s4") != StepStatusPaused {
+		t.Errorf("s4 should remain paused, got %s", plan.StepStatus("s4"))
+	}
+
+	// ReopenAllSteps should reset all steps including s1
+	plan.ReopenAllSteps()
+	for _, step := range plan.Steps {
+		if step.Status != StepStatusPending {
+			t.Errorf("expected step %s to be pending, got %s", step.ID, step.Status)
+		}
+		if step.Result != "" {
+			t.Errorf("expected step %s result to be cleared, got %s", step.ID, step.Result)
+		}
+	}
+}
+
+func TestIsTransientExecutionError(t *testing.T) {
+	cases := []struct {
+		errStr   string
+		expected bool
+	}{
+		{"agent hourly token quota exhausted: 50000/50000 tokens", true},
+		{"429 Too Many Requests: rate limit exceeded", true},
+		{"context deadline exceeded", true},
+		{"503 Service Unavailable: overloaded", true},
+		{"connection refused: endpoint offline", true},
+		{"tool execution error: file not found", false},
+		{"syntax error in script", false},
+	}
+
+	for _, c := range cases {
+		var err error
+		if c.errStr != "" {
+			err = errors.New(c.errStr)
+		}
+		got := isTransientExecutionError(err)
+		if got != c.expected {
+			t.Errorf("isTransientExecutionError(%q) = %v; want %v", c.errStr, got, c.expected)
+		}
 	}
 }
 

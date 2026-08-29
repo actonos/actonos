@@ -19,6 +19,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { IconButton } from '@/components/ui/IconButton';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { readHashParams, setHashParam } from '@/lib/url-state';
+import { ProactiveAnomaliesCard } from './components/ProactiveAnomaliesCard';
 
 function percent(value: number) {
   return `${Math.max(0, Math.min(100, value)).toFixed(0)}%`;
@@ -224,6 +225,11 @@ export function OperationsPage() {
             </Card>
           );
         })}
+      </div>
+
+      {/* Proactive Health & Anomalies Component */}
+      <div className={`${view === 'overview' ? 'block' : 'hidden'} mb-6`}>
+        <ProactiveAnomaliesCard onMissionCreated={refreshTasks} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">

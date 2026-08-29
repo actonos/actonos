@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"testing"
+	"time"
 
 	"github.com/actonos/actonos/internal/llm"
 	_ "modernc.org/sqlite"
@@ -115,5 +116,50 @@ func TestRunStoreMissingCheckpoint(t *testing.T) {
 	}
 	if _, _, err := store.LoadCheckpointByTrace(ctx, run.TraceID); err == nil {
 		t.Fatal("expected missing checkpoint error")
+	}
+}
+
+func TestRunStore_ReclaimStaleRuns(t *testing.T) {
+	ctx := context.Background()
+	store := newRunStoreForTest(t)
+
+	run1, err := store.Start(ctx, "trace-old", "agent-1", "stuck task", "heartbeat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	run2, err := store.Start(ctx, "trace-new", "agent-1", "recent task", "heartbeat")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Artificially age run1 by 20 minutes
+	_, err = store.db.Exec(`UPDATE agent_runs SET updated_at = datetime('now', '-20 minutes') WHERE id = ?`, run1.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Reclaim stale runs older than 10 minutes
+	reclaimed, err := store.ReclaimStaleRuns(ctx, 10*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reclaimed != 1 {
+		t.Fatalf("expected 1 reclaimed stale run, got %d", reclaimed)
+	}
+
+	r1, err := store.Get(ctx, run1.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r1.Status != RunCancelled || r1.TerminationReason != "stale_timeout_reclaimed" {
+		t.Errorf("expected run1 to be cancelled as stale, got %+v", r1)
+	}
+
+	r2, err := store.Get(ctx, run2.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r2.Status != RunRunning {
+		t.Errorf("expected run2 to remain running, got %+v", r2)
 	}
 }

@@ -24,6 +24,7 @@ import {
   Cpu,
   Wrench,
   ShieldCheck,
+  Brain,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { AgentManifest } from '@/lib/types';
@@ -31,6 +32,7 @@ import type { NavTab } from '@/components/layout/Sidebar';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { AgentInsightsModal } from './components/AgentInsightsModal';
 
 export interface AgentsPageProps {
   onOpenChat: (agentID: string) => void;
@@ -49,6 +51,7 @@ export function AgentsPage({
   const { success, error, info } = useToast();
   const [agents, setAgents] = useState<AgentManifest[]>([]);
   const [deletingAgentId, setDeletingAgentId] = useState<string | null>(null);
+  const [insightsAgent, setInsightsAgent] = useState<AgentManifest | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<AgentFilter>('all');
@@ -430,6 +433,13 @@ export function AgentsPage({
                             <Button
                               variant="ghost"
                               size="sm"
+                              icon={<Brain className="w-3.5 h-3.5 text-deep-ink" />}
+                              onClick={() => setInsightsAgent(agent)}
+                              title={t('insights.buttonLabel')}
+                            />
+                            <Button
+                              variant="ghost"
+                              size="sm"
                               icon={<Sliders className="w-3.5 h-3.5" />}
                               onClick={() => onEditAgent(agent.agent_id)}
                               title={t('list.openStudio')}
@@ -476,6 +486,13 @@ export function AgentsPage({
         description={t('list.deleteDescription', { agent: deletingAgentId })}
         confirmLabel={t('list.delete')}
         variant="danger"
+      />
+
+      {/* Agent Self-Improvement Insights Modal */}
+      <AgentInsightsModal
+        isOpen={insightsAgent !== null}
+        onClose={() => setInsightsAgent(null)}
+        agent={insightsAgent}
       />
     </div>
   );

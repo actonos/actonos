@@ -858,6 +858,35 @@ Operations exposes overview, feed, runtime, and cost views over the single
 shared realtime provider. Hash route resolution strips page-local query state,
 so deep links such as `#/operations?view=runtime` survive reload.
 
+## 13. Autonomous Ungovernance & Proactive Self-Driving Engine
+
+ActonOS incorporates autonomous ungovernance and proactive self-driving capabilities to minimize operator intervention while strictly upholding deterministic safety boundaries:
+
+1. **Proactive Anomaly Engine (`internal/agent/proactive.go`)**:
+   - Executes 7 system health probes continuously during idle heartbeat cycles (Disk capacity & freezing, Certificate/token expiry, Overdue embedding indexing queue, MCP server connectivity degradation, Stalled missions, Monthly token budget quota > 80%, Inbound queue backlog).
+   - Generates structured anomalies with automated mission suggestions (`AutoTaskPayload`) and event-driven operator notices (`anomaly:detected`).
+
+2. **Risk-Based Approval Auto-Resolution (`internal/tools/risk.go`, `internal/tools/approval.go`)**:
+   - Classifies requested tool operations into `RiskTierLow`, `RiskTierMedium`, and `RiskTierHigh`.
+   - Strictly enforces safety blacklists: dangerous operations (shell execution, workspace file deletion, daemon restart, OTA updates, Vault secret mutations, and cron automation changes) are flagged `RiskTierHigh` and can **never** be auto-resolved.
+   - Low-risk read-only or diagnostic operations are automatically resolved after `AutoApproveAfter` duration elapsed via background sweeper with audit logging and event dispatch.
+
+3. **Concurrent Burst Pulse for DAG Execution (`internal/agent/planner.go`, `internal/agent/engine.go`)**:
+   - Multi-step readiness resolution (`Planner.ReadySteps`) identifies independent dependency-free steps in the mission DAG.
+   - Executes up to 3 independent steps in concurrent goroutines within a single pulse, dynamically bounded by `agent.DelegationScope.MaxConcurrentRuns`.
+
+4. **Structured Standing Directives & Automated Outcome Assertion (`internal/agent/directive_verifier.go`, `internal/agent/tasks.go`)**:
+   - Schema-driven standing directives with automated deterministic outcome validation:
+     - `file_exists:<path>`
+     - `file_contains:<path>|<substring>`
+     - `dir_not_empty:<dirpath>`
+     - `http_status:<url>|<status_code>`
+   - Prevents hallucinated mission completion without empirical assertion.
+
+5. **Cognitive Reflection & Self-Review Engine (`internal/agent/reflection.go`)**:
+   - Analyzes execution runs, error events, and tool failure patterns over the preceding 24 hours.
+   - Distills actionable self-improvement proposals, writes persistent records to SQLite (`self_improvement_proposals`), appends human-readable insights to `/data/agents/{agent_id}/INSIGHTS.md`, and incorporates approved learnings into episodic memory.
+
 ## References
 
 1. [Model Context Protocol — GitHub](https://github.com/modelcontextprotocol)
@@ -867,3 +896,4 @@ so deep links such as `#/operations?view=runtime` survive reload.
 5. [wazero — Pure Go WASM Runtime](https://github.com/tetratelabs/wazero)
 6. [chromem-go — Embeddable Vector Database](https://github.com/philippgille/chromem-go)
 7. [modernc.org/sqlite — Pure Go SQLite](https://pkg.go.dev/modernc.org/sqlite)
+

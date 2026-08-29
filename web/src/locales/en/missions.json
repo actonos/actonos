@@ -131,7 +131,12 @@
     "label": "Missions sections",
     "tasks": "Missions & Backlog ({{count}})",
     "directives": "Standing Directives",
-    "audit": "Pulse Audit Ledger ({{count}})"
+    "audit": "Pulse Audit Ledger ({{count}})",
+    "governance": "Approvals & Runs ({{count}})"
+  },
+  "burst": {
+    "active": "Burst Concurrency",
+    "activeTooltip": "Executing independent DAG steps concurrently"
   },
   "filters": {
     "statusLabel": "Filter by status",
@@ -142,7 +147,8 @@
   "task": {
     "agent": "Agent:",
     "channel": "Channel:",
-    "stalled": "Stalled"
+    "stalled": "Stalled",
+    "burst": "Burst Mode"
   },
   "empty": {
     "title": "No Tasks Found",
@@ -163,7 +169,26 @@
       "thirty": "Every 30 minutes",
       "hour": "Every 1 hour"
     },
-    "channel": "Notification Target Channel"
+    "channel": "Notification Target Channel",
+    "modeStructured": "Structured Directives",
+    "modeRaw": "Raw Markdown Directives",
+    "addDirective": "Add Structured Directive",
+    "editDirective": "Edit Directive",
+    "newDirective": "New Structured Directive",
+    "directiveTitle": "Directive Title *",
+    "directiveDescription": "Description & Intent *",
+    "scheduleCron": "Cron Schedule (e.g. 0 9 * * *)",
+    "expectedOutcome": "Expected Outcome",
+    "expectedOutcomePlaceholder": "e.g. /data/workspace/reports/daily.md exists",
+    "verificationRule": "Verification Assertion Rule",
+    "verificationRulePlaceholder": "e.g. file_exists:/data/workspace/reports/daily.md",
+    "autoCreateMission": "Auto-create as Mission",
+    "autoCreateMissionDesc": "Automatically enqueue as a formal tracked autonomous mission when schedule triggers.",
+    "maxRuntimeMin": "Max Runtime (Minutes)",
+    "enabled": "Enabled",
+    "noStructuredDirectives": "No structured standing directives configured yet.",
+    "deleteDirective": "Delete Directive",
+    "deleteDirectiveConfirm": "Are you sure you want to remove this standing directive?"
   },
   "audit": {
     "title": "Cognitive Pulse Execution Ledger",

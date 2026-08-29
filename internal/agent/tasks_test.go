@@ -202,3 +202,81 @@ func TestTaskManagerDeleteCleansUpSessionHistory(t *testing.T) {
 		t.Fatalf("expected 0 conversations after task deletion, got %d", convCount)
 	}
 }
+
+func TestTaskManager_UpdateTask_ResetsStuckPlanSteps(t *testing.T) {
+	manager := newTaskManagerForTest(t)
+	ctx := context.Background()
+
+	task, err := manager.CreateTask(ctx, AutonomousTask{
+		Title:       "Stuck mission",
+		Description: "Task with failed quota steps",
+		Status:      "in_progress",
+		Progress:    30,
+		CreatedBy:   "user",
+		Plan: &TaskPlan{
+			Goal: "Complete mission",
+			Steps: []PlanStep{
+				{ID: "step_1", Status: "completed", Result: "Done 1"},
+				{ID: "step_2", Status: StepStatusFailed, Result: "agent hourly token quota exhausted: 50000/50000 tokens"},
+				{ID: "step_3", Status: StepStatusPending, Dependencies: []string{"step_2"}},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Task fails and gets blocked after failed cycles
+	task.Status = "blocked"
+	task.FailCount = 3
+	task.StalledCycles = 3
+	if err := manager.UpdateTask(ctx, *task); err != nil {
+		t.Fatal(err)
+	}
+
+	// Operator resets status to "pending" (with progress intact)
+	task.Status = "pending"
+	task.Plan = nil // simulate UI which sends task without plan object
+	if err := manager.UpdateTask(ctx, *task); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify plan steps were automatically healed in SQLite:
+	// step_2 must be reopened to "pending", FailCount & StalledCycles reset to 0
+	got, err := manager.GetTask(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.FailCount != 0 {
+		t.Errorf("expected FailCount to be 0, got %d", got.FailCount)
+	}
+	if got.StalledCycles != 0 {
+		t.Errorf("expected StalledCycles to be 0, got %d", got.StalledCycles)
+	}
+	if got.Plan == nil {
+		t.Fatal("expected plan to not be nil")
+	}
+	if got.Plan.StepStatus("step_1") != "completed" {
+		t.Errorf("expected step_1 to remain completed, got %s", got.Plan.StepStatus("step_1"))
+	}
+	if got.Plan.StepStatus("step_2") != StepStatusPending {
+		t.Errorf("expected step_2 to be reopened to pending, got %s", got.Plan.StepStatus("step_2"))
+	}
+	if !got.Plan.HasReadyStep() {
+		t.Error("expected plan to now have ready steps")
+	}
+
+	// Operator resets progress to 0
+	got.Progress = 0
+	got.Plan = nil
+	if err := manager.UpdateTask(ctx, *got); err != nil {
+		t.Fatal(err)
+	}
+	got, err = manager.GetTask(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Plan.StepStatus("step_1") != StepStatusPending {
+		t.Errorf("expected step_1 to be reset to pending when progress=0, got %s", got.Plan.StepStatus("step_1"))
+	}
+}

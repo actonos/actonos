@@ -36,13 +36,28 @@ type AutonomousTask struct {
 	FailCount       int        `json:"fail_count,omitempty"`
 }
 
+// StructuredDirective defines an autonomous standing directive with structured fields and verification.
+type StructuredDirective struct {
+	ID                string `json:"id"`
+	Title             string `json:"title"`
+	Description       string `json:"description"`
+	Priority          string `json:"priority"` // "p0_critical", "p1_high", "p2_normal", "p3_low"
+	Schedule          string `json:"schedule,omitempty"` // Cron expression e.g. "0 9 * * *"
+	ExpectedOutcome   string `json:"expected_outcome,omitempty"`
+	Verification      string `json:"verification,omitempty"` // e.g. "file_exists:/data/workspace/reports/seo.md"
+	AutoCreateMission bool   `json:"auto_create_mission"`
+	MaxRuntimeMin     int    `json:"max_runtime_min,omitempty"`
+	Enabled           bool   `json:"enabled"`
+}
+
 // HeartbeatConfig defines standing rules and pulse parameters for the autonomous daemon.
 type HeartbeatConfig struct {
-	Enabled         bool   `json:"enabled"`
-	IntervalMinutes int    `json:"interval_minutes"`
-	Directives      string `json:"directives"`
-	TargetChannel   string `json:"target_channel"`
-	TargetAccountID string `json:"target_account_id"`
+	Enabled              bool                  `json:"enabled"`
+	IntervalMinutes      int                   `json:"interval_minutes"`
+	Directives           string                `json:"directives"`
+	StructuredDirectives []StructuredDirective `json:"structured_directives,omitempty"`
+	TargetChannel        string                `json:"target_channel"`
+	TargetAccountID      string                `json:"target_account_id"`
 
 	// AckMaxChars bounds how much extra commentary may accompany HEARTBEAT_OK
 	// before a reply is treated as a real alert rather than a silent
@@ -272,16 +287,49 @@ func (tm *TaskManager) UpdateTask(ctx context.Context, t AutonomousTask) error {
 		t.Progress = 100
 	}
 
+	var oldStatus string
+	var oldProgress int
+	var oldPlanJSON string
+	_ = tm.db.QueryRowContext(ctx, `SELECT status, progress, COALESCE(plan_json, '') FROM autonomous_tasks WHERE id = ?`, t.ID).Scan(&oldStatus, &oldProgress, &oldPlanJSON)
+
+	isOperatorReset := (oldProgress > 0 && t.Progress == 0) ||
+		((oldStatus == "blocked" || oldStatus == "failed" || oldStatus == "cancelled") && (t.Status == "pending" || t.Status == "in_progress"))
+
+	// When an operator resets a task (progress rewound to 0 or status set back to pending/in_progress from blocked/failed):
+	if isOperatorReset {
+		t.FailCount = 0
+		t.StalledCycles = 0
+	}
+
 	planJSON := ""
 	if t.Plan != nil {
+		if oldProgress > 0 && t.Progress == 0 {
+			t.Plan.ReopenAllSteps()
+		} else if isOperatorReset {
+			t.Plan.ReopenFailedSteps()
+		}
 		if encoded, marshalErr := json.Marshal(t.Plan); marshalErr == nil {
 			planJSON = string(encoded)
 		}
 	} else {
-		// A nil Plan means "leave the durable DAG alone", not "erase it".
-		// Heartbeat status/progress writes used to clobber plan_json with ""
-		// and force the next pulse to re-decompose and re-run step 1.
-		_ = tm.db.QueryRowContext(ctx, `SELECT COALESCE(plan_json, '') FROM autonomous_tasks WHERE id = ?`, t.ID).Scan(&planJSON)
+		planJSON = oldPlanJSON
+		if strings.TrimSpace(planJSON) != "" && isOperatorReset {
+			var loadedPlan TaskPlan
+			if json.Unmarshal([]byte(planJSON), &loadedPlan) == nil && len(loadedPlan.Steps) > 0 {
+				if oldProgress > 0 && t.Progress == 0 {
+					loadedPlan.ReopenAllSteps()
+					if encoded, marshalErr := json.Marshal(&loadedPlan); marshalErr == nil {
+						planJSON = string(encoded)
+					}
+				} else if isOperatorReset {
+					if loadedPlan.ReopenFailedSteps() {
+						if encoded, marshalErr := json.Marshal(&loadedPlan); marshalErr == nil {
+							planJSON = string(encoded)
+						}
+					}
+				}
+			}
+		}
 	}
 	query := `
 	UPDATE autonomous_tasks SET

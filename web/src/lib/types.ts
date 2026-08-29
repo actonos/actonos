@@ -36,10 +36,27 @@ export interface TriggerRule {
   expression?: string;
 }
 
+export interface StructuredDirective {
+  id: string;
+  title: string;
+  description?: string;
+  intent?: string;
+  priority?: 'p0_critical' | 'p1_high' | 'p2_normal' | 'p3_low';
+  schedule?: string;
+  expected_outcome?: string;
+  verification?: string;
+  verify_rule?: string;
+  auto_create_mission: boolean;
+  max_runtime_min?: number;
+  cadence?: string;
+  enabled: boolean;
+}
+
 export interface AgentHeartbeatConfig {
   enabled: boolean;
   interval_minutes?: number;
   directives?: string;
+  structured_directives?: StructuredDirective[];
   target_channel?: string;
   target_account_id?: string;
   active_hours_start?: string;
@@ -312,6 +329,25 @@ export interface CronExecutionRecord {
 export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'blocked' | 'cancelled';
 export type TaskPriority = 'p0_critical' | 'p1_high' | 'p2_normal' | 'p3_low';
 
+export interface PlanStep {
+  id: string;
+  title?: string;
+  description: string;
+  acceptance?: string;
+  agent_role: string;
+  kind?: 'produce' | 'research' | 'verify' | string;
+  atomic?: boolean;
+  dependencies: string[];
+  status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'paused';
+  result?: string;
+}
+
+export interface TaskPlan {
+  goal: string;
+  steps: PlanStep[];
+  created_at: string;
+}
+
 export interface AutonomousTask {
   id: string;
   title: string;
@@ -328,6 +364,7 @@ export interface AutonomousTask {
   created_at: string;
   updated_at: string;
   completed_at?: string;
+  plan?: TaskPlan;
   stalled_cycles?: number;
   fail_count?: number;
 }
@@ -336,6 +373,7 @@ export interface HeartbeatConfigData {
   enabled: boolean;
   interval_minutes: number;
   directives: string;
+  structured_directives?: StructuredDirective[];
   target_channel: string;
   target_account_id: string;
   auto_delegate?: boolean;
@@ -368,6 +406,9 @@ export interface ApprovalRequest {
   agent_id: string;
   tool_name: string;
   risk_level: 'Low' | 'Medium' | 'High';
+  risk_tier?: 'low' | 'medium' | 'high';
+  auto_approve_after?: string;
+  auto_approve_scope?: string;
   action_hash: string;
   input: Record<string, unknown>;
   status: ApprovalStatus;
@@ -680,4 +721,35 @@ export interface VaultSecretMeta {
   is_provider?: boolean;
 }
 
+export interface SystemAnomaly {
+  id: string;
+  kind: string;
+  severity: 'info' | 'warning' | 'critical';
+  title: string;
+  description: string;
+  suggested_action: string;
+  auto_task_payload?: AutonomousTask;
+  detected_at: string;
+  status: 'active' | 'resolved' | 'ignored';
+  resolved_at?: string;
+}
 
+export interface ProactiveConfig {
+  enabled: boolean;
+  scan_interval_minutes: number;
+  auto_create_tasks: boolean;
+  disk_threshold_percent: number;
+  global_kill_switch: boolean;
+}
+
+export interface SelfImprovementProposal {
+  id: string;
+  agent_id: string;
+  category: 'tool_reliability' | 'prompt_clarity' | 'task_failure' | 'performance';
+  title: string;
+  observation: string;
+  suggestion: string;
+  status: 'pending' | 'applied' | 'dismissed';
+  created_at: string;
+  applied_at?: string;
+}

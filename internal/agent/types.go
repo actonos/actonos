@@ -49,14 +49,15 @@ const (
 
 // AgentHeartbeatConfig holds per-agent autonomous heartbeat directives and schedule parameters.
 type AgentHeartbeatConfig struct {
-	Enabled             bool   `json:"enabled"`
-	IntervalMinutes     int    `json:"interval_minutes,omitempty"`
-	Directives          string `json:"directives,omitempty"`
-	TargetChannel       string `json:"target_channel,omitempty"`
-	TargetAccountID     string `json:"target_account_id,omitempty"`
-	ActiveHoursStart    string `json:"active_hours_start,omitempty"`
-	ActiveHoursEnd      string `json:"active_hours_end,omitempty"`
-	ActiveHoursTimezone string `json:"active_hours_timezone,omitempty"`
+	Enabled              bool                  `json:"enabled"`
+	IntervalMinutes      int                   `json:"interval_minutes,omitempty"`
+	Directives           string                `json:"directives,omitempty"`
+	StructuredDirectives []StructuredDirective `json:"structured_directives,omitempty"`
+	TargetChannel        string                `json:"target_channel,omitempty"`
+	TargetAccountID      string                `json:"target_account_id,omitempty"`
+	ActiveHoursStart     string                `json:"active_hours_start,omitempty"`
+	ActiveHoursEnd       string                `json:"active_hours_end,omitempty"`
+	ActiveHoursTimezone  string                `json:"active_hours_timezone,omitempty"`
 }
 
 // AgentManifest contains the complete declaration and configuration of an agent.

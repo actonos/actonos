@@ -44,6 +44,10 @@
 | `POST` | `/api/agents/{agentID}/start` | `handleStartAgent` | `api_agent.go` |
 | `POST` | `/api/agents/{agentID}/stop` | `handleStopAgent` | `api_agent.go` |
 | `POST` | `/api/agents/{agentID}/chat` | `handleChat` | `api_agent.go` |
+| `GET` | `/api/agents/{agentID}/insights` | `handleListAgentInsights` | `api_agent.go` |
+| `POST` | `/api/agents/{agentID}/insights/{insightID}/apply` | `handleApplyAgentInsight` | `api_agent.go` |
+| `POST` | `/api/agents/{agentID}/insights/{insightID}/dismiss` | `handleDismissAgentInsight` | `api_agent.go` |
+| `POST` | `/api/agents/{agentID}/insights/self-review` | `handleTriggerSelfReview` | `api_agent.go` |
 
 #### Soul & Memory (global + per-agent)
 
@@ -165,6 +169,16 @@
 | `GET` | `/api/tasks/{id}` | `handleGetTask` | `api_tasks.go` |
 | `PUT` | `/api/tasks/{id}` | `handleUpdateTask` | `api_tasks.go` |
 | `DELETE` | `/api/tasks/{id}` | `handleDeleteTask` | `api_tasks.go` |
+
+#### Operations & Proactive Anomaly Engine
+
+| Method | Path | Handler | File |
+|:---|:---|:---|:---|
+| `GET` | `/api/ops/anomalies` | `handleListAnomalies` | `api_anomalies.go` |
+| `POST` | `/api/ops/anomalies/{id}/act` | `handleActOnAnomaly` | `api_anomalies.go` |
+| `POST` | `/api/ops/anomalies/scan` | `handleTriggerAnomalyScan` | `api_anomalies.go` |
+| `GET` | `/api/ops/anomalies/config` | `handleGetProactiveConfig` | `api_anomalies.go` |
+| `PUT` | `/api/ops/anomalies/config` | `handleUpdateProactiveConfig` | `api_anomalies.go` |
 
 #### Heartbeat Coordinator & Pulse
 

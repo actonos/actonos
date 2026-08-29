@@ -130,8 +130,13 @@
   "tabs": {
     "label": "Các phần nhiệm vụ",
     "tasks": "Nhiệm vụ & tồn đọng ({{count}})",
-    "directives": "Chỉ thị Tự hành Thường trực",
-    "audit": "Sổ cái kiểm tra xung ({{count}})"
+    "directives": "Chỉ thị Thường trực",
+    "audit": "Sổ cái kiểm tra xung ({{count}})",
+    "governance": "Phê duyệt & Phiên chạy ({{count}})"
+  },
+  "burst": {
+    "active": "Xung Đột phá (Burst)",
+    "activeTooltip": "Đang thực thi đồng thời các bước DAG độc lập"
   },
   "filters": {
     "statusLabel": "Lọc theo trạng thái",
@@ -142,7 +147,8 @@
   "task": {
     "agent": "Agent:",
     "channel": "Kênh:",
-    "stalled": "Bị kẹt"
+    "stalled": "Bị kẹt",
+    "burst": "Chế độ Burst"
   },
   "empty": {
     "title": "Không tìm thấy nhiệm vụ nào",
@@ -155,7 +161,7 @@
     "save": "Lưu chỉ thị",
     "instructions": "Nội dung Chỉ thị Tự hành",
     "placeholder": "- Định kỳ kiểm tra tính toàn vẹn của cơ sở dữ liệu và lưu trữ cục bộ\n- Nếu mọi thứ đều bình thường, hãy trả lời HEARTBEAT_OK",
-    "interval": "Thời gian",
+    "interval": "Chu kỳ xung",
     "intervals": {
       "one": "Cứ sau 1 phút (Tần số cao)",
       "five": "Cứ sau 5 phút (Tiêu chuẩn được đề xuất)",
@@ -163,7 +169,26 @@
       "thirty": "Cứ sau 30 phút",
       "hour": "Cứ sau 1 giờ"
     },
-    "channel": "Kênh mục tiêu thông báo"
+    "channel": "Kênh mục tiêu thông báo",
+    "modeStructured": "Chỉ thị Có Cấu trúc",
+    "modeRaw": "Chỉ thị Markdown Tự do",
+    "addDirective": "Thêm Chỉ thị Có Cấu trúc",
+    "editDirective": "Sửa Chỉ thị",
+    "newDirective": "Tạo Chỉ thị Mới",
+    "directiveTitle": "Tiêu đề Chỉ thị *",
+    "directiveDescription": "Mô tả & Mục tiêu *",
+    "scheduleCron": "Lịch chạy Cron (VD: 0 9 * * *)",
+    "expectedOutcome": "Kết quả kỳ vọng",
+    "expectedOutcomePlaceholder": "VD: /data/workspace/reports/daily.md được tạo",
+    "verificationRule": "Quy tắc Tự động Xác minh",
+    "verificationRulePlaceholder": "VD: file_exists:/data/workspace/reports/daily.md",
+    "autoCreateMission": "Tự động tạo Mission",
+    "autoCreateMissionDesc": "Tự động đưa thành một Mission chính thức khi đến lịch kích hoạt.",
+    "maxRuntimeMin": "Thời gian chạy tối đa (Phút)",
+    "enabled": "Kích hoạt",
+    "noStructuredDirectives": "Chưa có chỉ thị thường trực có cấu trúc nào.",
+    "deleteDirective": "Xóa Chỉ thị",
+    "deleteDirectiveConfirm": "Bạn có chắc muốn xóa chỉ thị thường trực này?"
   },
   "audit": {
     "title": "Sổ cái thực thi xung nhận thức",

@@ -335,5 +335,32 @@
   "emptyState": {
     "title": "No Agents found",
     "description": "Create your first agent."
+  },
+  "insights": {
+    "title": "Autonomous Self-Improvement Insights",
+    "subtitle": "Bottlenecks, error patterns, and learned proposals derived from past 24h runs.",
+    "buttonLabel": "Self-Improvement Insights",
+    "badgeCount": "{{count}} Proposals",
+    "runSelfReview": "Run Self-Review",
+    "runningReview": "Analyzing 24h Run Traces...",
+    "reviewSuccess": "Self-review complete. Generated {{count}} proposal(s).",
+    "reviewFailed": "Self-review failed to run.",
+    "noInsights": "No pending self-improvement proposals.",
+    "apply": "Apply Learning",
+    "dismiss": "Dismiss",
+    "statusPending": "Pending Review",
+    "statusApplied": "Applied to Memory",
+    "statusDismissed": "Dismissed",
+    "observation": "Observation",
+    "suggestion": "Recommendation",
+    "appliedSuccess": "Proposal applied and memorized by the agent.",
+    "dismissedSuccess": "Proposal dismissed.",
+    "close": "Close",
+    "categories": {
+      "tool_reliability": "Tool Reliability",
+      "prompt_clarity": "Prompt Clarity",
+      "task_failure": "Failure Pattern",
+      "performance": "Performance & Cost"
+    }
   }
 }

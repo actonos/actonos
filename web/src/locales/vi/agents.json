@@ -335,5 +335,32 @@
   "emptyState": {
     "title": "Không có Agent nào",
     "description": "Tạo Agent mới ngay."
+  },
+  "insights": {
+    "title": "Gợi ý Tự Hoàn Thiện Tự Động",
+    "subtitle": "Phát hiện điểm nghẽn, mẫu lỗi và bài học đúc kết từ các phiên thực thi trong 24 giờ qua.",
+    "buttonLabel": "Đề xuất Tự Hoàn Thiện",
+    "badgeCount": "{{count}} Đề xuất",
+    "runSelfReview": "Chạy tự đánh giá",
+    "runningReview": "Đang phân tích nhật ký chạy 24h qua...",
+    "reviewSuccess": "Đã tự đánh giá xong. Tạo được {{count}} đề xuất mới.",
+    "reviewFailed": "Không thể chạy tiến trình tự đánh giá.",
+    "noInsights": "Không có đề xuất tự hoàn thiện nào đang chờ.",
+    "apply": "Áp dụng vào bộ nhớ",
+    "dismiss": "Bỏ qua",
+    "statusPending": "Chờ duyệt",
+    "statusApplied": "Đã ghi nhớ",
+    "statusDismissed": "Đã bỏ qua",
+    "observation": "Quan sát thấy",
+    "suggestion": "Khuyến nghị cải thiện",
+    "appliedSuccess": "Đã áp dụng đề xuất và ghi nhớ vào hồ sơ Agent.",
+    "dismissedSuccess": "Đã bỏ qua đề xuất.",
+    "close": "Đóng",
+    "categories": {
+      "tool_reliability": "Độ tin cậy công cụ",
+      "prompt_clarity": "Độ rõ của chỉ thị",
+      "task_failure": "Mẫu lỗi lặp lại",
+      "performance": "Hiệu năng & Chi phí"
+    }
   }
 }

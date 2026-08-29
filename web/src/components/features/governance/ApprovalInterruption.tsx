@@ -108,6 +108,11 @@ export function ApprovalInterruption() {
     }
   };
 
+  const riskTier = approval.risk_tier || (approval.risk_level?.toLowerCase() === 'high' ? 'high' : approval.risk_level?.toLowerCase() === 'medium' ? 'medium' : 'low');
+  const riskTone = riskTier === 'high' ? 'stopped' : riskTier === 'medium' ? 'warning' : 'success';
+  const autoApproveSec = typeof approval.auto_approve_after === 'number' ? approval.auto_approve_after : parseInt(String(approval.auto_approve_after || 0), 10);
+  const autoApproveHours = autoApproveSec > 0 ? (autoApproveSec / 3600).toFixed(1).replace(/\.0$/, '') : null;
+
   return (
     <div className="fixed inset-0 z-[100] bg-deep-ink/55 backdrop-blur-sm flex items-center justify-center p-4">
       <Card
@@ -117,7 +122,22 @@ export function ApprovalInterruption() {
         aria-labelledby="approval-interruption-title"
         className="w-full max-w-2xl p-6 bg-canvas border-2 border-deep-ink"
       >
-        <Badge variant="stopped">{approval.risk_level}</Badge>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={riskTone}>
+            {riskTier.toUpperCase()} {t('approval.riskTier')}
+          </Badge>
+          <Badge variant="neutral">{approval.risk_level}</Badge>
+          {autoApproveHours ? (
+            <span className="text-[11px] font-mono text-slate bg-soft-meadow px-2 py-0.5 rounded-full border border-onyx/10">
+              ⏱ {t('approval.autoApproveIn', { time: `${autoApproveHours}h` })}
+            </span>
+          ) : riskTier === 'high' ? (
+            <span className="text-[11px] font-mono text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
+              🛡 {t('approval.manualReviewRequired')}
+            </span>
+          ) : null}
+        </div>
+
         <h2 id="approval-interruption-title" className="font-serif text-heading mt-3 font-bold">{t('approval.title')}</h2>
         <p className="text-body-sm text-slate mt-1">
           {t('approval.description', { tool: approval.tool_name, agent: approval.agent_id })}

@@ -39,6 +39,7 @@ import { AgentHeartbeatSection } from '@/components/features/agents/AgentHeartbe
 import { AgentTextSection } from '@/components/features/agents/AgentTextSection';
 import { AgentMemorySection } from '@/components/features/agents/AgentMemorySection';
 import { AgentReviewSection } from '@/components/features/agents/AgentReviewSection';
+import { AgentInsightsModal } from './components/AgentInsightsModal';
 
 export interface AgentStudioPageProps {
   agentID: string; // 'new' or existing agent ID like 'agent_system_core'
@@ -74,6 +75,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
   const [activeTab, setActiveTab] = useState<StudioTab>('prompt');
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
+  const [isInsightsOpen, setIsInsightsOpen] = useState(false);
   const [refreshingMemory, setRefreshingMemory] = useState(false);
   const [clearingMemory, setClearingMemory] = useState(false);
   const baselineRef = useRef('');
@@ -464,14 +466,25 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
 
           <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-center">
             {!isNew && (
-              <Button
-                variant="ghost"
-                size="sm"
-                icon={<MessageSquare className="w-3.5 h-3.5" />}
-                onClick={() => onOpenChat(agentID)}
-              >
-                {t('studio.launch')}
-              </Button>
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<Brain className="w-3.5 h-3.5 text-deep-ink" />}
+                  onClick={() => setIsInsightsOpen(true)}
+                  title={t('insights.buttonLabel')}
+                >
+                  {t('insights.buttonLabel')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<MessageSquare className="w-3.5 h-3.5" />}
+                  onClick={() => onOpenChat(agentID)}
+                >
+                  {t('studio.launch')}
+                </Button>
+              </>
             )}
             <Button
               variant="primary"
@@ -1394,6 +1407,35 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
           </Card>
         )}
       </PageContainer>
+
+      {!isNew && (
+        <AgentInsightsModal
+          isOpen={isInsightsOpen}
+          onClose={() => setIsInsightsOpen(false)}
+          agent={{
+            agent_id: agentID,
+            name: name || agentID,
+            description,
+            avatar_icon: avatarIcon,
+            status,
+            is_system: isSystem,
+            model_config: {
+              primary_model: primaryModel,
+              fallback_model: fallbackModel,
+              reasoning_effort: reasoningEffort,
+              max_tokens: maxTokens,
+            },
+            system_instructions: systemInstructions,
+            authorized_tools: authorizedTools,
+            listen_channels: selectedChannels,
+            delegation_scope: {
+              max_monthly_budget_usd: Number(maxBudget) || 50,
+              allowed_workspace_paths: [],
+              require_human_approval_level: approvalLevel,
+            },
+          }}
+        />
+      )}
     </div>
   );
 }

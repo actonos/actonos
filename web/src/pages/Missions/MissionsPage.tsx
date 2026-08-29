@@ -21,12 +21,14 @@ import {
   Sparkles,
   MessageSquare,
   Eye,
+  Zap,
 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { api } from '@/lib/api';
 import type { AgentRun, ApprovalRequest, AutonomousTask, DontAskAgain, HeartbeatConfigData, HeartbeatRun, TaskPriority, TaskStatus } from '@/lib/types';
 import { ApprovalDecisionBar } from '@/components/features/governance/ApprovalDecisionBar';
 import { TaskModal } from './components/TaskModal';
+import { StructuredDirectivesTab } from './components/StructuredDirectivesTab';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { readHashParams, setHashParam } from '@/lib/url-state';
@@ -39,9 +41,9 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
   const { t } = useTranslation('missions');
   const { success, error, info } = useToast();
 
-  const [activeTab, setActiveTab] = useState<'tasks' | 'audit' | 'governance'>(() => {
+  const [activeTab, setActiveTab] = useState<'tasks' | 'directives' | 'audit' | 'governance'>(() => {
     const value = readHashParams().get('view');
-    return value === 'audit' || value === 'governance' ? value : 'tasks';
+    return value === 'directives' || value === 'audit' || value === 'governance' ? value : 'tasks';
   });
   const [tasks, setTasks] = useState<AutonomousTask[]>([]);
   const [heartbeatConfig, setHeartbeatConfig] = useState<HeartbeatConfigData>({
@@ -53,6 +55,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
     auto_delegate: true,
     zero_noise: true,
   });
+  const [savingConfig, setSavingConfig] = useState(false);
   const [heartbeatRuns, setHeartbeatRuns] = useState<HeartbeatRun[]>([]);
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
   const [agentRuns, setAgentRuns] = useState<AgentRun[]>([]);
@@ -68,9 +71,20 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [selectedRunDetail, setSelectedRunDetail] = useState<AgentRun | null>(null);
 
-  const changeTab = (tab: 'tasks' | 'audit' | 'governance') => {
+  const changeTab = (tab: 'tasks' | 'directives' | 'audit' | 'governance') => {
     setActiveTab(tab);
     setHashParam('view', tab === 'tasks' ? undefined : tab);
+  };
+
+  const handleSaveHeartbeatConfig = async (updated: Partial<HeartbeatConfigData>) => {
+    setSavingConfig(true);
+    try {
+      const nextConfig = { ...heartbeatConfig, ...updated };
+      await api.saveHeartbeatConfig(nextConfig);
+      setHeartbeatConfig(nextConfig);
+    } finally {
+      setSavingConfig(false);
+    }
   };
 
   const loadData = async (isBackground = false) => {
@@ -322,8 +336,9 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
           className="mb-6 w-fit"
           options={[
             { value: 'tasks', label: t('tabs.tasks', { count: tasks.length }) },
+            { value: 'directives', label: t('tabs.directives') },
             { value: 'audit', label: t('tabs.audit', { count: heartbeatRuns.length }) },
-            { value: 'governance', label: t('governance.tab', { count: approvals.length }) },
+            { value: 'governance', label: t('tabs.governance', { count: approvals.length }) },
           ]}
         />
 
@@ -382,12 +397,21 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                     className="p-5 border border-onyx/10 bg-canvas/95 hover:border-onyx/25 transition-all shadow-xs space-y-3"
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2.5 min-w-0">
                         {getPriorityBadge(tItem.priority)}
                         <h3 className="font-serif text-heading-sm font-semibold text-deep-ink truncate">
                           {tItem.title}
                         </h3>
                         {getStatusPill(tItem.status)}
+                        {tItem.plan?.steps && tItem.plan.steps.length > 1 && tItem.status === 'in_progress' && (
+                          <span
+                            className="flex items-center gap-1 text-[10px] font-mono font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200"
+                            title={t('burst.activeTooltip')}
+                          >
+                            <Zap className="w-3 h-3 text-amber-600 animate-pulse" />
+                            {t('task.burst')} ({tItem.plan.steps.filter((s: import('@/lib/types').PlanStep) => s.status === 'in_progress').length || tItem.plan.steps.length} steps)
+                          </span>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-1.5 self-end sm:self-auto shrink-0">
@@ -505,7 +529,16 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
           </div>
         )}
 
-        {/* TAB 2: Pulse Audit Ledger */}
+        {/* TAB 2: Structured Standing Directives */}
+        {activeTab === 'directives' && (
+          <StructuredDirectivesTab
+            config={heartbeatConfig}
+            onSaveConfig={handleSaveHeartbeatConfig}
+            saving={savingConfig}
+          />
+        )}
+
+        {/* TAB 3: Pulse Audit Ledger */}
         {activeTab === 'audit' && (
           <div className="space-y-4">
             <Card className="p-6 border border-onyx/10 bg-canvas space-y-4">
@@ -582,32 +615,49 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
               <p className="text-caption text-slate">{t('governance.approvalsDescription')}</p>
               {approvals.length === 0 ? (
                 <p className="p-6 text-center text-caption text-slate">{t('governance.noApprovals')}</p>
-              ) : approvals.map((approval) => (
-                <div key={approval.id} className="p-4 rounded-[24px] border border-onyx/10 bg-soft-meadow space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-mono text-body-sm font-semibold text-deep-ink truncate">{approval.tool_name}</p>
-                      <p className="text-caption text-slate">{approval.agent_id} · {approval.risk_level}</p>
+              ) : approvals.map((approval) => {
+                const tier = approval.risk_tier || (approval.risk_level?.toLowerCase() === 'high' ? 'high' : approval.risk_level?.toLowerCase() === 'medium' ? 'medium' : 'low');
+                const tierTone = tier === 'high' ? 'stopped' : tier === 'medium' ? 'warning' : 'success';
+                const autoSec = typeof approval.auto_approve_after === 'number' ? approval.auto_approve_after : parseInt(String(approval.auto_approve_after || 0), 10);
+                const autoHours = autoSec > 0 ? (autoSec / 3600).toFixed(1).replace(/\.0$/, '') : null;
+
+                return (
+                  <div key={approval.id} className="p-4 rounded-[24px] border border-onyx/10 bg-soft-meadow space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-mono text-body-sm font-semibold text-deep-ink truncate">{approval.tool_name}</p>
+                          <Badge variant={tierTone}>{tier.toUpperCase()}</Badge>
+                        </div>
+                        <p className="text-caption text-slate">{approval.agent_id} · {approval.risk_level}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {autoHours && (
+                          <span className="text-[10px] font-mono text-slate bg-canvas px-2 py-0.5 rounded-full border border-onyx/10">
+                            ⏱ Auto {autoHours}h
+                          </span>
+                        )}
+                        <Badge variant="stopped">{t('governance.pending')}</Badge>
+                      </div>
                     </div>
-                    <Badge variant="stopped">{t('governance.pending')}</Badge>
+                    <pre className="max-h-32 overflow-auto rounded-2xl bg-canvas p-3 text-[11px] text-slate">
+                      {JSON.stringify(approval.input, null, 2)}
+                    </pre>
+                    <ApprovalDecisionBar
+                      approval={approval}
+                      deciding={false}
+                      labels={{
+                        reject: t('governance.reject'),
+                        approve: t('governance.approve'),
+                        dontAskTask: t('governance.dontAskTask'),
+                        dontAskToday: t('governance.dontAskToday'),
+                      }}
+                      onReject={() => handleApproval(approval, false)}
+                      onApprove={(dontAskAgain) => handleApproval(approval, true, dontAskAgain)}
+                    />
                   </div>
-                  <pre className="max-h-32 overflow-auto rounded-2xl bg-canvas p-3 text-[11px] text-slate">
-                    {JSON.stringify(approval.input, null, 2)}
-                  </pre>
-                  <ApprovalDecisionBar
-                    approval={approval}
-                    deciding={false}
-                    labels={{
-                      reject: t('governance.reject'),
-                      approve: t('governance.approve'),
-                      dontAskTask: t('governance.dontAskTask'),
-                      dontAskToday: t('governance.dontAskToday'),
-                    }}
-                    onReject={() => handleApproval(approval, false)}
-                    onApprove={(dontAskAgain) => handleApproval(approval, true, dontAskAgain)}
-                  />
-                </div>
-              ))}
+                );
+              })}
             </Card>
             <Card className="p-6 border border-onyx/10 bg-canvas space-y-4">
               <h3 className="font-serif text-heading-sm text-deep-ink">{t('governance.runsTitle')}</h3>

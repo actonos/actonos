@@ -401,6 +401,13 @@ func (r *ToolRegistry) Unregister(name string) {
 func NormalizeToolName(name string) string {
 	clean := strings.TrimSpace(name)
 	lower := strings.ToLower(clean)
+	for _, prefix := range []string{"functions.", "function.", "tools.", "tool."} {
+		if strings.HasPrefix(lower, prefix) {
+			clean = clean[len(prefix):]
+			lower = lower[len(prefix):]
+			break
+		}
+	}
 	switch lower {
 	case "websearch", "web_search", "google_search", "search", "browse", "web":
 		return "native_web_search"
@@ -428,8 +435,8 @@ func NormalizeToolName(name string) string {
 		return "native_workspace_delete"
 	case "task_enqueue", "enqueue_task", "enqueue_mission", "create_task", "create_mission", "native_task_create":
 		return "native_task_enqueue"
-	case "subshell", "bash", "sh", "exec", "powershell", "terminal", "run_command", "shell":
-		return "native_subshell"
+	case "subshell", "bash", "sh", "exec", "powershell", "terminal", "run_command", "shell", "native_subshell":
+		return "native_exec"
 	case "browser", "browser_open", "web_browser":
 		return "native_browser"
 	case "view_skill", "read_skill":

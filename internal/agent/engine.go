@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/actonos/actonos/internal/bus"
@@ -95,6 +96,14 @@ func (e *Engine) ReclaimOrphanRuns(ctx context.Context) (int, error) {
 		return 0, nil
 	}
 	return e.runStore.ReclaimOrphans(ctx)
+}
+
+// ReclaimStaleRuns marks runs in running status older than maxAge as cancelled.
+func (e *Engine) ReclaimStaleRuns(ctx context.Context, maxAge time.Duration) (int, error) {
+	if e.runStore == nil {
+		return 0, nil
+	}
+	return e.runStore.ReclaimStaleRuns(ctx, maxAge)
 }
 
 // SetRunStore attaches durable run and event persistence.
@@ -277,7 +286,7 @@ func (e *Engine) ExecuteAutonomousGoal(ctx context.Context, agentID, goal string
 				readyID = ready.ID
 			}
 		}
-		resp, nextPlan, stepErr := e.ExecuteNextPlanStep(ctx, agentID, goal, plan, history)
+		resp, nextPlan, stepErr := e.ExecuteBurstPlanSteps(ctx, agentID, goal, plan, history)
 		if nextPlan != nil {
 			plan = nextPlan
 			e.writeTaskPlan(ctx, task, plan)
@@ -317,6 +326,147 @@ func (e *Engine) ExecuteAutonomousGoal(ctx context.Context, agentID, goal string
 		sameStepRetries = 0
 	}
 	return last, nil
+}
+
+// ExecuteBurstPlanSteps runs ready plan steps, executing up to 3 independent steps concurrently if multiple steps are ready.
+func (e *Engine) ExecuteBurstPlanSteps(ctx context.Context, agentID, goal string, plan *TaskPlan, history []llm.Message) (*llm.Response, *TaskPlan, error) {
+	if e.planner == nil {
+		resp, err := e.ExecuteStepWithHistory(ctx, agentID, goal, history)
+		return resp, plan, err
+	}
+	ctx = e.withSkillCatalogForID(ctx, agentID)
+	if plan == nil || len(plan.Steps) == 0 {
+		agents, err := e.agentMgr.List(ctx)
+		if err != nil {
+			return nil, plan, fmt.Errorf("listing agents for planning: %w", err)
+		}
+		var modelCascade []string
+		if agent, getErr := e.agentMgr.Get(ctx, agentID); getErr == nil && agent != nil {
+			if agent.ModelConfig.PrimaryModel != "" {
+				modelCascade = append(modelCascade, agent.ModelConfig.PrimaryModel)
+			}
+			if agent.ModelConfig.FallbackModel != "" {
+				modelCascade = append(modelCascade, agent.ModelConfig.FallbackModel)
+			}
+		}
+		built, err := e.planner.DecomposeGoal(ctx, goal, agents, modelCascade...)
+		if err != nil {
+			return nil, plan, fmt.Errorf("decomposing autonomous goal: %w", err)
+		}
+		plan = built
+		e.persistTaskPlan(ctx, plan)
+	}
+
+	readySteps, err := e.planner.ReadySteps(plan)
+	if err != nil {
+		return nil, plan, err
+	}
+	if len(readySteps) == 0 && plan.reopenApprovalFailedSteps() {
+		e.persistTaskPlan(ctx, plan)
+		readySteps, err = e.planner.ReadySteps(plan)
+		if err != nil {
+			return nil, plan, err
+		}
+	}
+	if len(readySteps) == 0 {
+		if plan.AllStepsCompleted() {
+			return &llm.Response{Content: plan.CompletionSummary()}, plan, nil
+		}
+		return &llm.Response{Content: "Plan cannot advance; remaining steps are blocked on unfinished or failed dependencies."}, plan, nil
+	}
+
+	if len(readySteps) == 1 {
+		return e.ExecuteNextPlanStep(ctx, agentID, goal, plan, history)
+	}
+
+	maxBurstConcurrency := 3
+	if e.agentMgr != nil {
+		if ag, err := e.agentMgr.Get(ctx, agentID); err == nil && ag != nil && ag.DelegationScope.MaxConcurrentRuns > 0 {
+			maxBurstConcurrency = ag.DelegationScope.MaxConcurrentRuns
+		}
+	}
+	numToRun := len(readySteps)
+	if numToRun > maxBurstConcurrency {
+		numToRun = maxBurstConcurrency
+	}
+	if numToRun <= 1 {
+		return e.ExecuteNextPlanStep(ctx, agentID, goal, plan, history)
+	}
+	batch := readySteps[:numToRun]
+
+	type stepExecResult struct {
+		step    *PlanStep
+		resp    *llm.Response
+		content string
+		err     error
+	}
+
+	results := make([]stepExecResult, len(batch))
+	var wg sync.WaitGroup
+
+	for idx, s := range batch {
+		wg.Add(1)
+		go func(i int, st *PlanStep) {
+			defer wg.Done()
+			r, cont, stErr := e.executeIndividualPlanStep(ctx, agentID, goal, st, history)
+			results[i] = stepExecResult{
+				step:    st,
+				resp:    r,
+				content: cont,
+				err:     stErr,
+			}
+		}(idx, s)
+	}
+	wg.Wait()
+
+	var firstErr error
+	var totalTokens int
+	var combinedContent strings.Builder
+
+	for _, res := range results {
+		if res.resp != nil {
+			totalTokens += res.resp.Usage.TotalTokens
+			if res.resp.Content != "" {
+				if combinedContent.Len() > 0 {
+					combinedContent.WriteString("\n\n")
+				}
+				combinedContent.WriteString(fmt.Sprintf("[%s]: %s", res.step.ID, res.resp.Content))
+			}
+		}
+
+		if res.err != nil {
+			var approvalErr *tools.ApprovalRequiredError
+			if errors.As(res.err, &approvalErr) {
+				plan.MarkStep(res.step.ID, StepStatusPaused, approvalPausedMarker+" "+res.err.Error())
+				if firstErr == nil {
+					firstErr = res.err
+				}
+			} else if isTransientExecutionError(res.err) {
+				plan.MarkStep(res.step.ID, StepStatusPending, "Transient error (will retry): "+res.err.Error())
+				if firstErr == nil {
+					firstErr = res.err
+				}
+			} else {
+				plan.MarkStep(res.step.ID, StepStatusFailed, res.err.Error())
+				if firstErr == nil {
+					firstErr = res.err
+				}
+			}
+			continue
+		}
+
+		if res.content != "" {
+			plan.MarkStep(res.step.ID, "completed", res.content)
+		}
+	}
+
+	e.persistTaskPlan(ctx, plan)
+
+	combinedResp := &llm.Response{
+		Content: combinedContent.String(),
+		Usage:   llm.Usage{TotalTokens: totalTokens},
+	}
+	return combinedResp, plan, firstErr
 }
 
 // ExecuteNextPlanStep decomposes (once) and runs the next dependency-ready step.
@@ -365,6 +515,35 @@ func (e *Engine) ExecuteNextPlanStep(ctx context.Context, agentID, goal string, 
 		// Deadlocked or failed dependencies: do not re-run the entire goal.
 		return &llm.Response{Content: "Plan cannot advance; remaining steps are blocked on unfinished or failed dependencies."}, plan, nil
 	}
+
+	resp, content, execErr := e.executeIndividualPlanStep(ctx, agentID, goal, step, history)
+	if execErr != nil {
+		var approvalErr *tools.ApprovalRequiredError
+		if errors.As(execErr, &approvalErr) {
+			plan.MarkStep(step.ID, StepStatusPaused, approvalPausedMarker+" "+execErr.Error())
+			e.persistTaskPlan(ctx, plan)
+			return resp, plan, execErr
+		}
+		if isTransientExecutionError(execErr) {
+			plan.MarkStep(step.ID, StepStatusPending, "Transient error (will retry): "+execErr.Error())
+			e.persistTaskPlan(ctx, plan)
+			return resp, plan, execErr
+		}
+		plan.MarkStep(step.ID, StepStatusFailed, execErr.Error())
+		e.persistTaskPlan(ctx, plan)
+		return resp, plan, execErr
+	}
+	if content == "" {
+		// Leave the step pending so drain/next pulse retries it instead of rubber-stamping.
+		e.persistTaskPlan(ctx, plan)
+		return resp, plan, nil
+	}
+	plan.MarkStep(step.ID, "completed", content)
+	e.persistTaskPlan(ctx, plan)
+	return resp, plan, nil
+}
+
+func (e *Engine) executeIndividualPlanStep(ctx context.Context, agentID, goal string, step *PlanStep, history []llm.Message) (*llm.Response, string, error) {
 	execAgentID := agentID
 	if step.AgentRole != "" && step.AgentRole != "general" && e.agentMgr != nil {
 		if _, lookupErr := e.agentMgr.Get(ctx, step.AgentRole); lookupErr == nil {
@@ -386,11 +565,9 @@ func (e *Engine) ExecuteNextPlanStep(ctx context.Context, agentID, goal string, 
 			if spawnErr == nil {
 				select {
 				case <-ctx.Done():
-					return nil, plan, ctx.Err()
+					return nil, "", ctx.Err()
 				case result := <-resultCh:
-					plan.MarkStep(step.ID, "completed", result.Output)
-					e.persistTaskPlan(ctx, plan)
-					return &llm.Response{Content: result.Output, Usage: llm.Usage{TotalTokens: result.TokensUsed}}, plan, nil
+					return &llm.Response{Content: result.Output, Usage: llm.Usage{TotalTokens: result.TokensUsed}}, result.Output, nil
 				}
 			}
 		}
@@ -402,29 +579,16 @@ func (e *Engine) ExecuteNextPlanStep(ctx context.Context, agentID, goal string, 
 	prompt := BuildPlanStepPrompt(step.ID, goal, stepBrief, step.AgentRole, step.Acceptance, SkillCatalogFrom(ctx)...)
 	resp, execErr := e.ExecuteStepWithHistory(ctx, execAgentID, prompt, history)
 	if execErr != nil {
-		var approvalErr *tools.ApprovalRequiredError
-		if errors.As(execErr, &approvalErr) {
-			plan.MarkStep(step.ID, StepStatusPaused, approvalPausedMarker+" "+execErr.Error())
-			e.persistTaskPlan(ctx, plan)
-			return resp, plan, execErr
-		}
-		plan.MarkStep(step.ID, StepStatusFailed, execErr.Error())
-		e.persistTaskPlan(ctx, plan)
-		return resp, plan, execErr
+		return resp, "", execErr
 	}
 	content := ""
 	if resp != nil {
 		content = resp.Content
 	}
 	if !planStepShouldComplete(step, content, resp) {
-		// Leave the step pending so drain/next pulse retries it instead of
-		// rubber-stamping a "if you want I can continue" wrap-up.
-		e.persistTaskPlan(ctx, plan)
-		return resp, plan, nil
+		return resp, "", nil
 	}
-	plan.MarkStep(step.ID, "completed", content)
-	e.persistTaskPlan(ctx, plan)
-	return resp, plan, nil
+	return resp, content, nil
 }
 
 func planStepShouldComplete(step *PlanStep, content string, resp *llm.Response) bool {
@@ -482,9 +646,31 @@ func (e *Engine) writeTaskPlan(ctx context.Context, task *AutonomousTask, plan *
 
 // ExecuteStepWithHistory runs a cognitive iteration of the ReAct state machine with short-term dialogue history.
 func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, userMessage string, history []llm.Message) (finalResp *llm.Response, err error) {
+	var run *AgentRun
+	var iterationsCompleted int
+	var totalUsage llm.Usage
+
 	defer func() {
 		if rec := recover(); rec != nil {
 			err = recoverAsError(agentID, rec)
+			if run != nil {
+				e.finishRun(context.Background(), run, RunFailed, "panic: "+fmt.Sprint(rec), iterationsCompleted, totalUsage)
+			}
+		} else if run != nil && (run.Status == RunRunning || run.Status == "") {
+			if err != nil {
+				var approvalErr *tools.ApprovalRequiredError
+				if errors.As(err, &approvalErr) {
+					// approval pending was already recorded
+					return
+				}
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					e.finishRun(context.Background(), run, RunCancelled, "timeout_or_cancelled", iterationsCompleted, totalUsage)
+				} else {
+					e.finishRun(context.Background(), run, RunFailed, err.Error(), iterationsCompleted, totalUsage)
+				}
+			} else {
+				e.finishRun(context.Background(), run, RunCompleted, "goal_completed", iterationsCompleted, totalUsage)
+			}
 		}
 	}()
 	ctx, cancelTurn := resolveTurnTimeout(ctx, DefaultTurnTimeout)
@@ -516,7 +702,7 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 
 	traceID := generateTraceID()
 	ctx = tools.WithTraceID(ctx, traceID)
-	run := e.startRun(ctx, traceID, agentID, userMessage, source)
+	run = e.startRun(ctx, traceID, agentID, userMessage, source)
 	runID := traceID
 	if run != nil {
 		runID = run.ID
@@ -574,13 +760,13 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 	}
 	startTime := time.Now()
 	var allExecutedToolCalls []llm.ToolCall
-	totalUsage := llm.Usage{}
+	totalUsage = llm.Usage{}
 	maxIterations := 20
 	consecutiveFailures := 0
 	lastObservation := ""
 	repeatedObservations := 0
 	converged := false
-	iterationsCompleted := 0
+	iterationsCompleted = 0
 
 	for iter := 0; iter < maxIterations; iter++ {
 		if err := ctx.Err(); err != nil {
@@ -816,8 +1002,36 @@ func (e *Engine) ExecuteStepStream(ctx context.Context, agentID string, userMess
 }
 
 // ExecuteStepStreamWithHistory runs a streaming cognitive iteration with dialogue history.
-func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID string, userMessage string, history []llm.Message, eventChan chan<- AgentStreamEvent) (*llm.Response, error) {
+func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID string, userMessage string, history []llm.Message, eventChan chan<- AgentStreamEvent) (finalResp *llm.Response, err error) {
 	defer close(eventChan)
+
+	var run *AgentRun
+	var iterationsCompleted int
+	var totalUsage llm.Usage
+
+	defer func() {
+		if rec := recover(); rec != nil {
+			err = recoverAsError(agentID, rec)
+			if run != nil {
+				e.finishRun(context.Background(), run, RunFailed, "panic: "+fmt.Sprint(rec), iterationsCompleted, totalUsage)
+			}
+		} else if run != nil && (run.Status == RunRunning || run.Status == "") {
+			if err != nil {
+				var approvalErr *tools.ApprovalRequiredError
+				if errors.As(err, &approvalErr) {
+					// approval pending was already recorded
+					return
+				}
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					e.finishRun(context.Background(), run, RunCancelled, "timeout_or_cancelled", iterationsCompleted, totalUsage)
+				} else {
+					e.finishRun(context.Background(), run, RunFailed, err.Error(), iterationsCompleted, totalUsage)
+				}
+			} else {
+				e.finishRun(context.Background(), run, RunCompleted, "goal_completed", iterationsCompleted, totalUsage)
+			}
+		}
+	}()
 
 	startTime := time.Now()
 
@@ -850,7 +1064,7 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 
 	traceID := generateTraceID()
 	ctx = tools.WithTraceID(ctx, traceID)
-	run := e.startRun(ctx, traceID, agentID, userMessage, source)
+	run = e.startRun(ctx, traceID, agentID, userMessage, source)
 
 	eventChan <- AgentStreamEvent{
 		Type:    EventStreamThought,
@@ -925,12 +1139,11 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 		opts.Tools = e.tools.ToLLMToolDefinitions(authorizedTools, tools.DeniedTools(ctx)...)
 	}
 
-	var finalResp *llm.Response
 	var allExecutedToolCalls []llm.ToolCall
-	totalUsage := llm.Usage{}
+	totalUsage = llm.Usage{}
 	maxIterations := 20
 	converged := false
-	iterationsCompleted := 0
+	iterationsCompleted = 0
 	consecutiveFailures := 0
 	lastObservation := ""
 	repeatedObservations := 0
@@ -1950,7 +2163,7 @@ func isInsideMarkupTag(accumulated string) bool {
 		}
 	}
 
-	// 3. Bare JSON tool call in progress: e.g. `{"command":` or `{"path":` or `{"name":"native_`
+	// 3. Bare JSON tool call in progress: e.g. `{"command":` or `{"path":` or `{"name":"native_` or `{"tool_uses":`
 	trimmed := strings.TrimSpace(accumulated)
 	lastBrace := strings.LastIndex(trimmed, "{")
 	if lastBrace != -1 {
@@ -1961,10 +2174,22 @@ func isInsideMarkupTag(accumulated string) bool {
 				strings.Contains(fragment, `"path"`) ||
 				strings.Contains(fragment, `"native_`) ||
 				strings.Contains(fragment, `"tool"`) ||
-				strings.Contains(fragment, `"arguments"`) {
+				strings.Contains(fragment, `"arguments"`) ||
+				strings.Contains(fragment, `"tool_uses"`) ||
+				strings.Contains(fragment, `"recipient_name"`) {
 				return true
 			}
 		}
+	}
+
+	// 4. Qwen / Hermes / local tool call token leak: `to=functions.` or `<|action_`
+	lowerAccum := strings.ToLower(accumulated)
+	if strings.Contains(lowerAccum, "to=functions.") ||
+		strings.Contains(lowerAccum, "to=function.") ||
+		strings.Contains(lowerAccum, "recipient_name") ||
+		strings.Contains(lowerAccum, `"tool_uses"`) ||
+		strings.Contains(lowerAccum, "<|action_") {
+		return true
 	}
 
 	return false

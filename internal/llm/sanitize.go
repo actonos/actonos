@@ -181,6 +181,13 @@ func ExtractThinkingContent(content string, existingReasoning string) (string, s
 func NormalizeToolName(name string) string {
 	clean := strings.TrimSpace(name)
 	lower := strings.ToLower(clean)
+	for _, prefix := range []string{"functions.", "function.", "tools.", "tool."} {
+		if strings.HasPrefix(lower, prefix) {
+			clean = clean[len(prefix):]
+			lower = lower[len(prefix):]
+			break
+		}
+	}
 	switch lower {
 	case "websearch", "web_search", "google_search", "search", "browse", "web":
 		return "native_web_search"
@@ -198,8 +205,8 @@ func NormalizeToolName(name string) string {
 		return "native_file_copy"
 	case "deletefile", "delete_file", "remove_file", "file_delete", "rm", "native_file_delete":
 		return "native_file_delete"
-	case "subshell", "bash", "sh", "exec", "powershell", "terminal", "run_command", "shell":
-		return "native_subshell"
+	case "subshell", "bash", "sh", "exec", "powershell", "terminal", "run_command", "shell", "native_subshell":
+		return "native_exec"
 	case "browser", "browser_open", "web_browser":
 		return "native_browser"
 	case "view_skill", "read_skill":
@@ -403,7 +410,26 @@ func ExtractEmbeddedToolCalls(content string) (string, []ToolCall) {
 		}
 	}
 
-	// 6. Bare JSON tool calls (e.g. {"command":"..."}, {"path":"...", "content":"..."}, {"name":"native_..."})
+	// 6. Qwen / Hermes / ChatGLM format: `to=functions.<name>:\n{...}` or `To=functions.<name> ... {...}`
+	toFuncRe := regexp.MustCompile(`(?i)(?:to|recipient_name)\s*=\s*(?:functions\.)?([a-zA-Z0-9_-]+)[^\{]*(\{[\s\S]*?\})`)
+	for _, match := range toFuncRe.FindAllStringSubmatch(content, -1) {
+		if len(match) > 2 {
+			toolName := NormalizeToolName(match[1])
+			argsStr := strings.TrimSpace(match[2])
+			randBytes := make([]byte, 4)
+			_, _ = rand.Read(randBytes)
+			calls = append(calls, ToolCall{
+				ID:   "call_" + hex.EncodeToString(randBytes),
+				Type: "function",
+				Function: FunctionCall{
+					Name:      toolName,
+					Arguments: json.RawMessage(argsStr),
+				},
+			})
+		}
+	}
+
+	// 7. Bare JSON tool calls (e.g. {"tool_uses": [...]}, {"command":"..."}, {"path":"...", "content":"..."}, {"name":"native_..."})
 	if len(calls) == 0 {
 		cleanedAfterJSON, bareJSONCalls := findAndExtractBareJSONToolCalls(cleaned)
 		if len(bareJSONCalls) > 0 {
@@ -412,11 +438,15 @@ func ExtractEmbeddedToolCalls(content string) (string, []ToolCall) {
 		}
 	}
 
-	// Clean all DSML / tool_call / invoke / markdown blocks from content
+	// Clean all DSML / tool_call / invoke / markdown blocks / to=functions leaks from content
 	cleanBlockRe := regexp.MustCompile(`(?s)<[|｜]{1,2}DSML[|｜]{1,2}tool_calls>.*?</[|｜]{1,2}DSML[|｜]{1,2}tool_calls>|<[|｜]{1,2}tool call begin[|｜]{1,2}>.*?<[|｜]{1,2}tool call end[|｜]{1,2}>|<[|｜]{1,2}tool calls[|｜]{1,2}>.*?</[|｜]{1,2}tool calls[|｜]{1,2}>|<tool_call>.*?</tool_call>|<function_call>.*?</function_call>|<function=[^>]+>.*?</function>|` + "```(?:tool_call|function_call|tool)[\\s\\S]*?```")
 	cleaned = cleanBlockRe.ReplaceAllString(cleaned, "")
 	cleanSingleTagRe := regexp.MustCompile(`(?s)</?[|｜]{1,2}[^>]*>|</?(?:tool_call|function_call|invoke|parameter)[^>]*>`)
 	cleaned = cleanSingleTagRe.ReplaceAllString(cleaned, "")
+	cleanToRe := regexp.MustCompile(`(?i)(?:to|recipient_name)\s*=\s*(?:functions\.)?[a-zA-Z0-9_-]+[^\n\r\{]*\{[\s\S]*?\}`)
+	cleaned = cleanToRe.ReplaceAllString(cleaned, "")
+	cleanGarbageToRe := regexp.MustCompile(`(?i)(?:to|recipient_name)\s*=\s*(?:functions\.)?[^\n\r]*`)
+	cleaned = cleanGarbageToRe.ReplaceAllString(cleaned, "")
 	cleaned = strings.TrimSpace(cleaned)
 
 	return cleaned, calls
@@ -466,62 +496,107 @@ func findAndExtractBareJSONToolCalls(content string) (string, []ToolCall) {
 					candidate := content[startIdx : i+1]
 					var obj map[string]any
 					if err := json.Unmarshal([]byte(candidate), &obj); err == nil && len(obj) > 0 {
-						toolName := ""
-						argsJSON := candidate
+						// 1. Check for {"tool_uses": [{"recipient_name": "functions.native_exec", "parameters": {...}}]}
+						if toolUses, ok := obj["tool_uses"].([]any); ok && len(toolUses) > 0 {
+							for _, item := range toolUses {
+								if uMap, ok := item.(map[string]any); ok {
+									tName := ""
+									if r, ok := uMap["recipient_name"].(string); ok && r != "" {
+										tName = r
+									} else if n, ok := uMap["name"].(string); ok && n != "" {
+										tName = n
+									} else if t, ok := uMap["tool"].(string); ok && t != "" {
+										tName = t
+									}
+									if tName != "" {
+										tName = NormalizeToolName(tName)
+										var uArgs any = uMap["parameters"]
+										if uArgs == nil {
+											uArgs = uMap["arguments"]
+										}
+										if uArgs == nil {
+											uArgs = uMap["args"]
+										}
+										var argsBytes []byte
+										if uArgs != nil {
+											argsBytes, _ = json.Marshal(uArgs)
+										} else {
+											argsBytes = []byte("{}")
+										}
+										randBytes := make([]byte, 4)
+										_, _ = rand.Read(randBytes)
+										calls = append(calls, ToolCall{
+											ID:   "call_" + hex.EncodeToString(randBytes),
+											Type: "function",
+											Function: FunctionCall{
+												Name:      tName,
+												Arguments: json.RawMessage(argsBytes),
+											},
+										})
+									}
+								}
+							}
+							if len(calls) > 0 {
+								removeRanges = append(removeRanges, [2]int{startIdx, i + 1})
+							}
+						} else {
+							toolName := ""
+							argsJSON := candidate
 
-						// Explicit tool name
-						if t, ok := obj["name"].(string); ok && t != "" {
-							toolName = NormalizeToolName(t)
-							if args, ok := obj["arguments"]; ok {
-								if b, err := json.Marshal(args); err == nil {
-									argsJSON = string(b)
+							// Explicit tool name
+							if t, ok := obj["name"].(string); ok && t != "" {
+								toolName = NormalizeToolName(t)
+								if args, ok := obj["arguments"]; ok {
+									if b, err := json.Marshal(args); err == nil {
+										argsJSON = string(b)
+									}
+								} else if args, ok := obj["parameters"]; ok {
+									if b, err := json.Marshal(args); err == nil {
+										argsJSON = string(b)
+									}
 								}
-							} else if args, ok := obj["parameters"]; ok {
-								if b, err := json.Marshal(args); err == nil {
-									argsJSON = string(b)
+							} else if t, ok := obj["tool"].(string); ok && t != "" {
+								toolName = NormalizeToolName(t)
+								if args, ok := obj["arguments"]; ok {
+									if b, err := json.Marshal(args); err == nil {
+										argsJSON = string(b)
+									}
+								} else if args, ok := obj["args"]; ok {
+									if b, err := json.Marshal(args); err == nil {
+										argsJSON = string(b)
+									}
+								}
+							} else if _, hasCmd := obj["command"]; hasCmd {
+								toolName = "native_exec"
+							} else if _, hasPath := obj["path"]; hasPath {
+								if _, hasContent := obj["content"]; hasContent {
+									toolName = "native_file_write"
+								} else if _, hasOld := obj["old_string"]; hasOld {
+									toolName = "native_file_edit"
+								} else if _, hasQuery := obj["query"]; hasQuery {
+									toolName = "native_file_search"
+								} else if _, hasPattern := obj["pattern"]; hasPattern {
+									toolName = "native_file_search"
+								} else if _, hasStart := obj["start_line"]; hasStart {
+									toolName = "native_file_read"
+								} else if _, hasLines := obj["line_numbers"]; hasLines {
+									toolName = "native_file_read"
 								}
 							}
-						} else if t, ok := obj["tool"].(string); ok && t != "" {
-							toolName = NormalizeToolName(t)
-							if args, ok := obj["arguments"]; ok {
-								if b, err := json.Marshal(args); err == nil {
-									argsJSON = string(b)
-								}
-							} else if args, ok := obj["args"]; ok {
-								if b, err := json.Marshal(args); err == nil {
-									argsJSON = string(b)
-								}
-							}
-						} else if _, hasCmd := obj["command"]; hasCmd {
-							toolName = "native_exec"
-						} else if _, hasPath := obj["path"]; hasPath {
-							if _, hasContent := obj["content"]; hasContent {
-								toolName = "native_file_write"
-							} else if _, hasOld := obj["old_string"]; hasOld {
-								toolName = "native_file_edit"
-							} else if _, hasQuery := obj["query"]; hasQuery {
-								toolName = "native_file_search"
-							} else if _, hasPattern := obj["pattern"]; hasPattern {
-								toolName = "native_file_search"
-							} else if _, hasStart := obj["start_line"]; hasStart {
-								toolName = "native_file_read"
-							} else if _, hasLines := obj["line_numbers"]; hasLines {
-								toolName = "native_file_read"
-							}
-						}
 
-						if toolName != "" {
-							randBytes := make([]byte, 4)
-							_, _ = rand.Read(randBytes)
-							calls = append(calls, ToolCall{
-								ID:   "call_" + hex.EncodeToString(randBytes),
-								Type: "function",
-								Function: FunctionCall{
-									Name:      toolName,
-									Arguments: json.RawMessage(argsJSON),
-								},
-							})
-							removeRanges = append(removeRanges, [2]int{startIdx, i + 1})
+							if toolName != "" {
+								randBytes := make([]byte, 4)
+								_, _ = rand.Read(randBytes)
+								calls = append(calls, ToolCall{
+									ID:   "call_" + hex.EncodeToString(randBytes),
+									Type: "function",
+									Function: FunctionCall{
+										Name:      toolName,
+										Arguments: json.RawMessage(argsJSON),
+									},
+								})
+								removeRanges = append(removeRanges, [2]int{startIdx, i + 1})
+							}
 						}
 					}
 					startIdx = -1

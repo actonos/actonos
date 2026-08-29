@@ -5,6 +5,23 @@ All notable changes to ActonOS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **A1. Proactive Anomaly Engine (`internal/agent/proactive.go`, `/api/ops/anomalies*`)**:
+  - Continuous 7-probe system diagnostic scanning during idle heartbeat cycles (Disk usage, Certificate/token expiry, Overdue embedding queue, Degraded MCP servers, Stalled tasks, High token consumption >80%, Inbound message queue backlog).
+  - Autonomous mission suggestions (`AutoTaskPayload`) and event-driven operator notifications (`anomaly:detected`).
+- **A2. Risk-Based Approval Auto-Resolution (`internal/tools/risk.go`, `internal/tools/approval.go`)**:
+  - Granular classification (`RiskTierLow`, `RiskTierMedium`, `RiskTierHigh`) with safety blacklist (exec, delete, restart, ota, vault, cron) guaranteeing dangerous operations never auto-approve.
+  - Background timeout sweeper with audit logging and event dispatch.
+- **A3. Concurrent Burst Pulse for DAG Execution (`internal/agent/planner.go`, `internal/agent/engine.go`)**:
+  - Multi-step readiness resolution (`ReadySteps`) and bounded concurrent execution of independent DAG steps in parallel Goroutines.
+- **A4. Structured Standing Directives & Automated Outcome Assertion (`internal/agent/directive_verifier.go`, `internal/agent/tasks.go`)**:
+  - Schema-driven directives with deterministic assertion rules (`file_exists`, `file_contains`, `dir_not_empty`, `http_status`).
+- **A5. ReflectionEngine Self-Review & Insights (`internal/agent/reflection.go`, `/api/agents/{agentID}/insights*`)**:
+  - Automated 24h run analysis and tool reliability evaluation generating self-improvement proposals, persistent SQLite logging (`self_improvement_proposals`), and human-readable insights in `/data/agents/{agent_id}/INSIGHTS.md`.
+
 ## [1.0.3]
 
 ### Fixed

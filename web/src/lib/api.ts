@@ -681,4 +681,50 @@ export const api = {
     fetchJSON<MutationResult<{ status: string; id: string }>>(`/plugins/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     }),
+
+  // Operations & Proactive Anomaly Engine
+  listAnomalies: (status?: string, severity?: string, limit?: number) => {
+    const query = new URLSearchParams();
+    if (status && status !== 'all') query.set('status', status);
+    if (severity && severity !== 'all') query.set('severity', severity);
+    if (limit) query.set('limit', String(limit));
+    const qStr = query.toString() ? `?${query.toString()}` : '';
+    return fetchJSON<{ anomalies: import('./types').SystemAnomaly[]; count: number }>(`/ops/anomalies${qStr}`);
+  },
+  actOnAnomaly: (id: string, action: 'auto_task' | 'resolve' | 'ignore') =>
+    fetchJSON<{ status: string; action: string; created_task?: import('./types').AutonomousTask }>(`/ops/anomalies/${encodeURIComponent(id)}/act`, {
+      method: 'POST',
+      body: JSON.stringify({ action }),
+    }),
+  triggerAnomalyScan: () =>
+    fetchJSON<{ status: string; anomalies: import('./types').SystemAnomaly[]; count: number }>('/ops/anomalies/scan', {
+      method: 'POST',
+    }),
+  getProactiveConfig: () =>
+    fetchJSON<import('./types').ProactiveConfig>('/ops/anomalies/config'),
+  updateProactiveConfig: (cfg: Partial<import('./types').ProactiveConfig>) =>
+    fetchJSON<import('./types').ProactiveConfig>('/ops/anomalies/config', {
+      method: 'PUT',
+      body: JSON.stringify(cfg),
+    }),
+
+  // Agent Self-Review & Insights
+  listAgentInsights: (agentID: string, status?: string) => {
+    const query = new URLSearchParams();
+    if (status && status !== 'all') query.set('status', status);
+    const qStr = query.toString() ? `?${query.toString()}` : '';
+    return fetchJSON<{ proposals: import('./types').SelfImprovementProposal[]; count: number }>(`/agents/${encodeURIComponent(agentID)}/insights${qStr}`);
+  },
+  applyAgentInsight: (agentID: string, insightID: string) =>
+    fetchJSON<{ status: string; insight_id: string }>(`/agents/${encodeURIComponent(agentID)}/insights/${encodeURIComponent(insightID)}/apply`, {
+      method: 'POST',
+    }),
+  dismissAgentInsight: (agentID: string, insightID: string) =>
+    fetchJSON<{ status: string; insight_id: string }>(`/agents/${encodeURIComponent(agentID)}/insights/${encodeURIComponent(insightID)}/dismiss`, {
+      method: 'POST',
+    }),
+  triggerSelfReview: (agentID: string) =>
+    fetchJSON<{ status: string; proposals: import('./types').SelfImprovementProposal[]; count: number }>(`/agents/${encodeURIComponent(agentID)}/insights/self-review`, {
+      method: 'POST',
+    }),
 };

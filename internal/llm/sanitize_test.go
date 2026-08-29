@@ -253,3 +253,37 @@ func TestExtractEmbeddedToolCalls_BareJSONSnippets(t *testing.T) {
 		t.Errorf("expected empty cleaned prose, got %q", cleaned)
 	}
 }
+
+func TestExtractEmbeddedToolCalls_QwenHermesToolUses(t *testing.T) {
+	raw := `{"tool_uses":[{"recipient_name":"functions.native_exec","parameters":{"command":"ls -la","cwd":"agents/agent_system_core"}}]} `
+
+	cleaned, calls := ExtractEmbeddedToolCalls(raw)
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 extracted call from tool_uses, got %d", len(calls))
+	}
+	if calls[0].Function.Name != "native_exec" {
+		t.Errorf("expected native_exec, got %q", calls[0].Function.Name)
+	}
+	if !strings.Contains(string(calls[0].Function.Arguments), `"command":"ls -la"`) {
+		t.Errorf("expected arguments to contain command, got %s", string(calls[0].Function.Arguments))
+	}
+	if cleaned != "" {
+		t.Errorf("expected empty cleaned prose, got %q", cleaned)
+	}
+}
+
+func TestExtractEmbeddedToolCalls_UserReportedGlitchPattern(t *testing.T) {
+	raw := `To=functions.native_exec 平台开号 ՞նչto=functions.native_exec  彩神争霸的json  天天中彩票未to=functions.native_exec  彩神争霸是 հարկեto=functions.native_exec  彩神争霸的json  彩神争霸邀请码to=functions.native_exec  大发官网  玩彩神争霸{"tool_uses":[{"recipient_name":"functions.native_exec","parameters":{"command":"echo hello","cwd":"agents/"}}]}`
+
+	cleaned, calls := ExtractEmbeddedToolCalls(raw)
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 extracted call, got %d", len(calls))
+	}
+	if calls[0].Function.Name != "native_exec" {
+		t.Errorf("expected native_exec, got %q", calls[0].Function.Name)
+	}
+	if strings.Contains(cleaned, "彩神争霸") || strings.Contains(cleaned, "to=functions.") {
+		t.Errorf("expected cleaned prose to strip gambling spam and tool tags, got %q", cleaned)
+	}
+}
+

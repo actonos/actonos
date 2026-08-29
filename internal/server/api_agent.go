@@ -975,3 +975,87 @@ func (s *Server) handleGetCronJobHistory(w http.ResponseWriter, r *http.Request)
 	}
 	s.respondJSON(w, http.StatusOK, history)
 }
+
+// GET /api/agents/{agentID}/insights
+func (s *Server) handleListAgentInsights(w http.ResponseWriter, r *http.Request) {
+	if s.reflectionEngine == nil {
+		s.respondJSON(w, http.StatusOK, map[string]any{
+			"proposals": []agent.SelfImprovementProposal{},
+			"count":     0,
+		})
+		return
+	}
+
+	agentID := chi.URLParam(r, "agentID")
+	status := r.URL.Query().Get("status")
+
+	items, err := s.reflectionEngine.ListProposals(r.Context(), agentID, status)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "INSIGHTS_QUERY_FAILED", err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]any{
+		"proposals": items,
+		"count":     len(items),
+	})
+}
+
+// POST /api/agents/{agentID}/insights/{insightID}/apply
+func (s *Server) handleApplyAgentInsight(w http.ResponseWriter, r *http.Request) {
+	if s.reflectionEngine == nil {
+		s.respondError(w, http.StatusServiceUnavailable, "REFLECTION_UNAVAILABLE", "reflection engine is not initialized")
+		return
+	}
+
+	insightID := chi.URLParam(r, "insightID")
+	if err := s.reflectionEngine.ApplyProposal(r.Context(), insightID); err != nil {
+		s.respondError(w, http.StatusInternalServerError, "APPLY_INSIGHT_FAILED", err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]string{
+		"status":     "applied",
+		"insight_id": insightID,
+	})
+}
+
+// POST /api/agents/{agentID}/insights/{insightID}/dismiss
+func (s *Server) handleDismissAgentInsight(w http.ResponseWriter, r *http.Request) {
+	if s.reflectionEngine == nil {
+		s.respondError(w, http.StatusServiceUnavailable, "REFLECTION_UNAVAILABLE", "reflection engine is not initialized")
+		return
+	}
+
+	insightID := chi.URLParam(r, "insightID")
+	if err := s.reflectionEngine.DismissProposal(r.Context(), insightID); err != nil {
+		s.respondError(w, http.StatusInternalServerError, "DISMISS_INSIGHT_FAILED", err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]string{
+		"status":     "dismissed",
+		"insight_id": insightID,
+	})
+}
+
+// POST /api/agents/{agentID}/insights/self-review
+func (s *Server) handleTriggerSelfReview(w http.ResponseWriter, r *http.Request) {
+	if s.reflectionEngine == nil {
+		s.respondError(w, http.StatusServiceUnavailable, "REFLECTION_UNAVAILABLE", "reflection engine is not initialized")
+		return
+	}
+
+	agentID := chi.URLParam(r, "agentID")
+	proposals, err := s.reflectionEngine.RunSelfReviewCycle(r.Context(), agentID)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "SELF_REVIEW_FAILED", err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]any{
+		"status":    "self_review_completed",
+		"proposals": proposals,
+		"count":     len(proposals),
+	})
+}

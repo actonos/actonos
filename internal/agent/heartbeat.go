@@ -67,7 +67,8 @@ type HeartbeatDaemon struct {
 	running        bool
 	stallTracker   map[string]taskStallState
 	lastAgentPulse map[string]time.Time
-	cronSched *CronScheduler
+	cronSched      *CronScheduler
+	proactiveEngine *ProactiveEngine
 }
 
 // taskStallState tracks in-memory (non-persisted) consecutive-cycle progress
@@ -111,6 +112,13 @@ func NewHeartbeatDaemon(
 		stallTracker:   make(map[string]taskStallState),
 		lastAgentPulse: make(map[string]time.Time),
 	}
+}
+
+// SetProactiveEngine attaches the proactive anomaly detection engine.
+func (h *HeartbeatDaemon) SetProactiveEngine(pe *ProactiveEngine) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.proactiveEngine = pe
 }
 
 // SetCronScheduler attaches cron quota inspection so pulses may create jobs within a cap.
@@ -378,6 +386,10 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) (run *Hea
 	_, _ = rand.Read(b)
 	run.ID = "hb_" + hex.EncodeToString(b)
 
+	if h.engine != nil {
+		_, _ = h.engine.ReclaimStaleRuns(ctx, 10*time.Minute)
+	}
+
 	// Cheap classifier: only spend tokens when there is runnable work.
 	// Blocked / approval-paused missions stay visible and must not burn a
 	// completion call inventing a retry — even if standing directives exist.
@@ -389,6 +401,13 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) (run *Hea
 			return run
 		}
 		if !hasActionableHeartbeatDirectives(standingDirectives) {
+			h.mu.RLock()
+			pe := h.proactiveEngine
+			h.mu.RUnlock()
+			if pe != nil {
+				_, _ = pe.Scan(ctx)
+			}
+
 			run.Status = "ok"
 			run.Summary = "System nominal. Zero tasks pending. No actionable heartbeat directives."
 			h.recordRun(*run)
@@ -489,6 +508,15 @@ func (h *HeartbeatDaemon) checkCycle(ctx context.Context, manual bool) (run *Hea
 				run.Status = "approval_required"
 				run.Summary = fmt.Sprintf("Mission '%s' paused: operator approval required for '%s'.", activeTask.Title, approvalErr.Approval.ToolName)
 				activeTask.ExecutionLog = fmt.Sprintf("Paused: operator approval required for tool '%s'.", approvalErr.Approval.ToolName)
+				h.persistMissionTask(ctx, activeTask)
+				h.recordRun(*run)
+				return run
+			}
+			if isTransientExecutionError(execErr) {
+				run.Status = "action_taken"
+				run.Summary = fmt.Sprintf("Mission '%s' temporarily paused on rate/token limit: %v (will retry on next pulse)", activeTask.Title, execErr)
+				slog.Info("heartbeat task encountered transient error; will retry automatically", "task_id", activeTask.ID, "error", execErr)
+				activeTask.ExecutionLog = run.Summary
 				h.persistMissionTask(ctx, activeTask)
 				h.recordRun(*run)
 				return run
@@ -1127,7 +1155,7 @@ func (h *HeartbeatDaemon) trackTaskStall(taskID, status string, progress int) (e
 	}
 
 	state := h.stallTracker[taskID]
-	if progress > state.lastProgress {
+	if progress == 0 || progress > state.lastProgress {
 		state = taskStallState{lastProgress: progress}
 	} else {
 		state.stalledCycles++

@@ -1000,6 +1000,47 @@ Fetches the semantic text chunks and embedding metadata generated for a workspac
 
 ---
 
+## Operations & Proactive Anomaly Engine
+
+### `GET /api/ops/anomalies`
+List detected proactive system anomalies and automated health risks. Query params: `status` (`active`, `resolved`, `ignored`, `all`), `severity` (`info`, `warning`, `critical`), `limit`.
+
+### `POST /api/ops/anomalies/{id}/act`
+Apply an operator action on a detected anomaly.
+**Request Body**:
+```json
+{
+  "action": "auto_task" // "auto_task", "resolve", "ignore"
+}
+```
+
+### `POST /api/ops/anomalies/scan`
+Trigger an immediate proactive anomaly scan across all 7 health probes (disk, certificates, embedding queue, MCP servers, stalled missions, token budget, inbound backlog).
+
+### `GET /api/ops/anomalies/config`
+Retrieve current proactive detection engine configuration.
+
+### `PUT /api/ops/anomalies/config`
+Update proactive detection engine configuration.
+
+---
+
+## Agent Self-Improvement & Insights
+
+### `GET /api/agents/{agentID}/insights`
+List self-improvement proposals generated from 24h run analysis and tool reliability evaluation for a given agent. Query params: `status` (`pending`, `applied`, `dismissed`, `all`).
+
+### `POST /api/agents/{agentID}/insights/{insightID}/apply`
+Mark proposal as applied and save the distilled learning into the agent's durable episodic memory diary.
+
+### `POST /api/agents/{agentID}/insights/{insightID}/dismiss`
+Dismiss a proposal.
+
+### `POST /api/agents/{agentID}/insights/self-review`
+Trigger an immediate self-review cycle for the specified agent.
+
+---
+
 ## Error Format
 
 All error responses adhere to the standard envelope:

@@ -318,9 +318,41 @@ func main() {
 	}
 	if approvalMgr != nil {
 		heartbeatDaemon.SetApprovalManager(approvalMgr)
+		approvalMgr.SetEventBus(eventBus)
+		approvalMgr.SetAuditLogger(auditLogger)
+		approvalMgr.StartSweeper(ctx, 30*time.Second)
+		defer approvalMgr.StopSweeper()
 	}
 	heartbeatDaemon.SetSessionManager(sessionMgr)
 	heartbeatDaemon.SetCronScheduler(cronSched)
+
+	// Initialize Proactive Anomaly Engine
+	proactiveEngine := agent.NewProactiveEngine(db.SQLDB(), *dataDir, taskMgr, eventBus)
+	if mcpHost != nil {
+		proactiveEngine.SetMCPChecker(func(ctx context.Context) ([]string, error) {
+			servers, err := mcpHost.ListServers(ctx)
+			if err != nil {
+				return nil, err
+			}
+			var failing []string
+			for _, s := range servers {
+				if s.Enabled && (!s.Connected || s.LastError != "") {
+					failing = append(failing, s.ID)
+				}
+			}
+			return failing, nil
+		})
+	}
+	if tokenTracker != nil {
+		proactiveEngine.SetTokenBudgetChecker(func(ctx context.Context) (int64, int64, error) {
+			summary, err := tokenTracker.GetSummary(ctx)
+			if err != nil {
+				return 0, 0, err
+			}
+			return int64(summary.TotalTokens), 10000000, nil
+		})
+	}
+	heartbeatDaemon.SetProactiveEngine(proactiveEngine)
 	heartbeatDaemon.Start(ctx)
 	defer heartbeatDaemon.Stop()
 
@@ -433,6 +465,8 @@ func main() {
 		CronScheduler:       cronSched,
 		HeartbeatDaemon:     heartbeatDaemon,
 		TaskManager:         taskMgr,
+		ProactiveEngine:     proactiveEngine,
+		ReflectionEngine:    reflectionEngine,
 		TokenTracker:        tokenTracker,
 		ProfileManager:      profileMgr,
 		LLMRouter:           llmRouter,

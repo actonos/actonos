@@ -67,6 +67,8 @@ type Server struct {
 	buildTime        string
 	ota              *system.OTAEngine
 	realtime         *realtimeHub
+	proactiveEngine  *agent.ProactiveEngine
+	reflectionEngine *agent.ReflectionEngine
 	allowMissingAuth bool
 }
 
@@ -78,6 +80,8 @@ type Config struct {
 	CronScheduler       *agent.CronScheduler
 	HeartbeatDaemon     *agent.HeartbeatDaemon
 	TaskManager         *agent.TaskManager
+	ProactiveEngine     *agent.ProactiveEngine
+	ReflectionEngine    *agent.ReflectionEngine
 	TokenTracker        *memory.TokenTracker
 	ProfileManager      *agent.UserProfileManager
 	LLMRouter           *llm.ModelCascadeRouter
@@ -196,6 +200,8 @@ func NewServer(cfg Config) *Server {
 		gitCommit:        gitCommit,
 		buildTime:        buildTime,
 		ota:              cfg.OTAEngine,
+		proactiveEngine:  cfg.ProactiveEngine,
+		reflectionEngine: cfg.ReflectionEngine,
 		allowMissingAuth: cfg.DisableAuthForTest,
 	}
 	if s.ota == nil {
@@ -215,6 +221,9 @@ func NewServer(cfg Config) *Server {
 	}
 	if s.heartbeat != nil && s.approvalMgr != nil {
 		s.heartbeat.SetApprovalManager(s.approvalMgr)
+	}
+	if s.heartbeat != nil && s.proactiveEngine != nil {
+		s.heartbeat.SetProactiveEngine(s.proactiveEngine)
 	}
 	if s.toolReg != nil && s.channelMgr != nil {
 		s.toolReg.SetChannelSender(plugin.ChannelToolSender(s.channelMgr))
@@ -341,6 +350,10 @@ func (s *Server) setupRoutes() {
 					r.Post("/stop", s.handleStopAgent)
 					r.Post("/chat", s.handleChat)
 					r.Post("/chat/stream", s.handleChatStream)
+					r.Get("/insights", s.handleListAgentInsights)
+					r.Post("/insights/{insightID}/apply", s.handleApplyAgentInsight)
+					r.Post("/insights/{insightID}/dismiss", s.handleDismissAgentInsight)
+					r.Post("/insights/self-review", s.handleTriggerSelfReview)
 				})
 			})
 
@@ -469,6 +482,15 @@ func (s *Server) setupRoutes() {
 				r.Get("/{id}", s.handleGetTask)
 				r.Put("/{id}", s.handleUpdateTask)
 				r.Delete("/{id}", s.handleDeleteTask)
+			})
+
+			// Operations & Proactive Anomaly Engine
+			r.Route("/ops", func(r chi.Router) {
+				r.Get("/anomalies", s.handleListAnomalies)
+				r.Post("/anomalies/{id}/act", s.handleActOnAnomaly)
+				r.Post("/anomalies/scan", s.handleTriggerAnomalyScan)
+				r.Get("/anomalies/config", s.handleGetProactiveConfig)
+				r.Put("/anomalies/config", s.handleUpdateProactiveConfig)
 			})
 
 			// Autonomous Heartbeat Coordinator
