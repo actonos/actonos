@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.3]
+
 ### Added
 
 - **A1. Proactive Anomaly Engine & Operations UI (`internal/agent/proactive.go`, `/api/ops/anomalies*`)**:
@@ -26,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Vitest created `node_modules` folder outside of the `web` folder
 - **Model Output Sanitization & Glitch Suppression**:
   - Automatically strip `functions.` prefixes and map aliases in `NormalizeToolName` (`internal/tools/registry.go` and `internal/llm/sanitize.go`).
   - Extracted `to=functions.<name>` and `{"tool_uses": [...]}` embedded JSON tool call structures from models (Qwen, Hermes, DeepSeek).
@@ -37,12 +40,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Ensured `finishRun` executes SQLite state updates using an independent context (`context.WithTimeout(context.Background(), 5*time.Second)`), preventing canceled or timed-out turn contexts from dropping terminal status updates.
   - Added guaranteed `defer` run finalizer across `ExecuteStepWithHistory` and `ExecuteStepStreamWithHistory` to ensure no run is left in `RunRunning` upon exit, error, timeout, or panic.
   - Added background stale run reaper (`ReclaimStaleRuns` in `RunStore` & `Engine`) automatically cleaning up runs older than 10 minutes in `running` status during `ListFiltered` API calls and periodic `HeartbeatDaemon.RunPulse` sweeps.
-
-## [1.0.3]
-
-### Fixed
-
-- Vitest created `node_modules` folder outside of the `web` folder
 
 ## [1.0.2] - 2026-08-27
 
