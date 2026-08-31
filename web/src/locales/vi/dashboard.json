@@ -141,7 +141,7 @@
     "degradedStatus": "Hiệu Năng Suy Giảm",
     "criticalStatus": "Cần Can Thiệp Ngay",
     "anomaliesDetected": "{{count}} bất thường chủ động cần sự giám sát của vận hành viên.",
-    "nominalDescription": "Đàn Agent tự chủ, Tầng Ký Ức Đa Tầng và Nhịp Đập OpenClaw 24/7 đang vận hành tối ưu.",
+    "nominalDescription": "Đàn Agent tự chủ, Tầng Ký Ức Đa Tầng và Nhịp Đập 24/7 đang vận hành tối ưu.",
     "missionControl": "Trung Tâm Nhiệm Vụ",
     "auditLogs": "Sổ Cái Kiểm Toán"
   },

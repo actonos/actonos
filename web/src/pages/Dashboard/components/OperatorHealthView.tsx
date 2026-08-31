@@ -117,22 +117,20 @@ export function OperatorHealthView({
       <Card className="p-6 border border-onyx/10 bg-canvas/95 shadow-xs relative overflow-hidden">
         {/* Subtle accent backdrop */}
         <div
-          className={`absolute top-0 right-0 w-64 h-64 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none opacity-20 ${
-            isHealthy ? 'bg-emerald-500' : isDegraded ? 'bg-amber-500' : 'bg-accent-coral'
-          }`}
+          className={`absolute top-0 right-0 w-64 h-64 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none opacity-20 ${isHealthy ? 'bg-emerald-500' : isDegraded ? 'bg-amber-500' : 'bg-accent-coral'
+            }`}
         />
 
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
           {/* Health Score Gauge */}
           <div className="flex items-center gap-5">
             <div
-              className={`w-18 h-18 rounded-2xl flex flex-col items-center justify-center border text-center shadow-xs shrink-0 ${
-                isHealthy
-                  ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-700'
-                  : isDegraded
+              className={`w-18 h-18 rounded-2xl flex flex-col items-center justify-center border text-center shadow-xs shrink-0 ${isHealthy
+                ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-700'
+                : isDegraded
                   ? 'bg-amber-500/10 border-amber-500/25 text-amber-700'
                   : 'bg-accent-coral/10 border-accent-coral/25 text-accent-coral'
-              }`}
+                }`}
             >
               <span className="text-2xl font-bold font-serif leading-none">{healthScore}</span>
               <span className="text-[10px] font-mono tracking-wider font-semibold uppercase mt-0.5">/ 100</span>
@@ -144,8 +142,8 @@ export function OperatorHealthView({
                   {isHealthy
                     ? t('operator.nominalStatus', 'Operator Nominal')
                     : isDegraded
-                    ? t('operator.degradedStatus', 'System Degraded')
-                    : t('operator.criticalStatus', 'Action Required')}
+                      ? t('operator.degradedStatus', 'System Degraded')
+                      : t('operator.criticalStatus', 'Action Required')}
                 </h3>
                 <Badge
                   variant={isHealthy ? 'active' : isDegraded ? 'stopped' : 'accent'}
@@ -157,7 +155,7 @@ export function OperatorHealthView({
               <p className="text-body-sm text-slate mt-1 max-w-xl">
                 {activeAnomalies.length > 0
                   ? t('operator.anomaliesDetected', '{{count}} proactive anomalies require operator oversight.', { count: activeAnomalies.length })
-                  : t('operator.nominalDescription', 'Autonomous Swarm, Memory Layer, and OpenClaw 24/7 Heartbeat operating at peak efficiency.')}
+                  : t('operator.nominalDescription', 'Autonomous Swarm, Memory Layer, and 24/7 Heartbeat operating at peak efficiency.')}
               </p>
             </div>
           </div>
@@ -252,7 +250,7 @@ export function OperatorHealthView({
         {/* Heartbeat 24/7 Status */}
         <Card className="p-4 border border-onyx/10 bg-canvas/90 shadow-xs flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-caption font-semibold text-slate uppercase">{t('vitals.openclaw', 'OpenClaw Pulse')}</span>
+            <span className="text-caption font-semibold text-slate uppercase">{t('vitals.pulse', 'Heartbeat Pulse')}</span>
             <div className="font-serif text-heading-sm font-bold text-deep-ink flex items-center gap-2">
               <span className={`w-2.5 h-2.5 rounded-full ${heartbeatConfig?.enabled ? 'bg-emerald-500 animate-pulse' : 'bg-slate'}`} />
               {heartbeatConfig?.enabled ? `${heartbeatConfig.interval_minutes}m interval` : 'Disabled'}
