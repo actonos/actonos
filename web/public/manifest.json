@@ -1,0 +1,62 @@
+{
+  "name": "ActonOS — AI Agent Operating System",
+  "short_name": "ActonOS",
+  "description": "Autonomous Extensible AI Agent Operating System Kernel",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0d12",
+  "theme_color": "#0a0d12",
+  "categories": ["productivity", "utilities", "developer"],
+  "icons": [
+    {
+      "src": "/actonos_icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/actonos_logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/actonos_icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Chat with Agents",
+      "short_name": "Chat",
+      "description": "Start a live conversation with an ActonOS agent",
+      "url": "#/chat",
+      "icons": [{ "src": "/actonos_icon.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Mission Control",
+      "short_name": "Missions",
+      "description": "View autonomous task execution and approvals",
+      "url": "#/missions",
+      "icons": [{ "src": "/actonos_icon.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "System Dashboard",
+      "short_name": "Dashboard",
+      "description": "Monitor system metrics and agent telemetry",
+      "url": "#/dashboard",
+      "icons": [{ "src": "/actonos_icon.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Notifications",
+      "short_name": "Alerts",
+      "description": "View unread operational notifications",
+      "url": "#/notifications",
+      "icons": [{ "src": "/actonos_icon.png", "sizes": "192x192" }]
+    }
+  ]
+}

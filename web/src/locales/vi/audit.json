@@ -8,7 +8,17 @@
   "verifiedSuccessDesc": "Tất cả các hàm băm khối SHA-256 và liên kết theo thời gian đều nguyên vẹn, không bị can thiệp.",
   "verifyFailed": "Xác minh chuỗi băm thất bại",
   "exportLogs": "Xuất file JSON",
+  "exportCSV": "Xuất file CSV",
+  "liveTail": "Xem Trực Tiếp (Live Tail)",
+  "liveTailActive": "Trực Tiếp: BẬT",
   "refresh": "Làm mới",
+  "presets": {
+    "label": "Mẫu Lọc Nhanh",
+    "all": "Tất Cả Nhật Ký",
+    "critical": "Rủi Ro Cao",
+    "failures": "Bị Chặn / Thất Bại",
+    "slow": "Độ Trễ Cao (>1s)"
+  },
   "stats": {
     "totalEvents": "Tổng số sự kiện",
     "highRisk": "Hành động rủi ro cao",

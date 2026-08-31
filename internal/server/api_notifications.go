@@ -240,3 +240,67 @@ func (s *Server) handleTestPushNotification(w http.ResponseWriter, r *http.Reque
 		"notification": notif,
 	})
 }
+
+func (s *Server) handleGetNotificationPreferences(w http.ResponseWriter, r *http.Request) {
+	if s.notifMgr == nil {
+		s.respondJSON(w, http.StatusOK, system.NotificationPreferences{
+			QuietHoursEnabled:  false,
+			QuietHoursStart:    "22:00",
+			QuietHoursEnd:      "07:00",
+			QuietHoursTimezone: "UTC",
+			DailyDigestEnabled: false,
+			DailyDigestTime:    "08:00",
+			MinPushSeverity:    "info",
+		})
+		return
+	}
+
+	prefs, err := s.notifMgr.GetPreferences(r.Context())
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "GET_PREFERENCES_FAILED", err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, prefs)
+}
+
+func (s *Server) handleSaveNotificationPreferences(w http.ResponseWriter, r *http.Request) {
+	if s.notifMgr == nil {
+		s.respondError(w, http.StatusServiceUnavailable, "NOTIF_MANAGER_NOT_READY", "notification manager unavailable")
+		return
+	}
+
+	var prefs system.NotificationPreferences
+	if err := s.decodeJSON(r, &prefs); err != nil {
+		s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
+
+	if err := s.notifMgr.SavePreferences(r.Context(), prefs); err != nil {
+		s.respondError(w, http.StatusInternalServerError, "SAVE_PREFERENCES_FAILED", err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]any{
+		"status":      "ok",
+		"preferences": prefs,
+	})
+}
+
+func (s *Server) handleTriggerDailyDigest(w http.ResponseWriter, r *http.Request) {
+	if s.notifMgr == nil {
+		s.respondError(w, http.StatusServiceUnavailable, "NOTIF_MANAGER_NOT_READY", "notification manager unavailable")
+		return
+	}
+
+	digestNotif, err := s.notifMgr.GenerateDailyDigest(r.Context())
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "DIGEST_FAILED", err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]any{
+		"status":       "ok",
+		"notification": digestNotif,
+	})
+}

@@ -135,5 +135,28 @@
   "storage": {
     "detail": "SQLite: {{sqlite}} MB • Vectơ: {{vectors}} MB",
     "total": "Bộ nhớ: {{value}} MB"
+  },
+  "operator": {
+    "nominalStatus": "Hệ Thống Chuẩn Xác (Nominal)",
+    "degradedStatus": "Hiệu Năng Suy Giảm",
+    "criticalStatus": "Cần Can Thiệp Ngay",
+    "anomaliesDetected": "{{count}} bất thường chủ động cần sự giám sát của vận hành viên.",
+    "nominalDescription": "Đàn Agent tự chủ, Tầng Ký Ức Đa Tầng và Nhịp Đập OpenClaw 24/7 đang vận hành tối ưu.",
+    "missionControl": "Trung Tâm Nhiệm Vụ",
+    "auditLogs": "Sổ Cái Kiểm Toán"
+  },
+  "vitals": {
+    "openclaw": "Xung Nhịp OpenClaw",
+    "llmHealth": "Mạng Lưới Mô Hình LLM",
+    "hostMemory": "RAM & CPU Máy Chủ",
+    "agentFleet": "Đội Ngũ Agent"
+  },
+  "anomalies": {
+    "title": "Bất Thường Hệ Thống Chủ Động",
+    "autoFix": "Tự Động Tạo Task Sửa Lỗi",
+    "dismiss": "Bỏ Qua",
+    "actedTitle": "Đã Xử Lý Bất Thường",
+    "autoTaskCreated": "Nhiệm vụ tự chủ chẩn đoán đã được khởi tạo.",
+    "resolved": "Bất thường đã được đánh dấu là đã giải quyết."
   }
 }

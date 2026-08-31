@@ -18,7 +18,6 @@ import {
   HardDrive,
   Key,
   DownloadCloud,
-  Download,
   CheckCircle2,
   XCircle,
   Activity,
@@ -38,6 +37,7 @@ import {
   type WifiNetwork,
   type OTAStatus,
 } from '@/lib/api';
+import { BackupRestoreSection } from './components/BackupRestoreSection';
 import { isApprovalRequired, type SystemMetrics, type TailscaleStatus, type LLMProviderInfo } from '@/lib/types';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
@@ -1017,23 +1017,6 @@ export function SettingsPage() {
                     <div>{t('maintenance.total')} <strong className="text-deep-ink">{t('maintenance.megabytes', { value: (storageInfo.total_bytes / (1024 * 1024)).toFixed(2) })}</strong></div>
                   </div>
                 )}
-
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  icon={<Download className="w-3.5 h-3.5" />}
-                  onClick={async () => {
-                    try {
-                      await api.downloadBackup();
-                      success('Backup Exported', 'ActonOS state database snapshot downloaded.');
-                    } catch (err) {
-                      error('Backup Failed', getErrorMessage(err));
-                    }
-                  }}
-                  className="w-full justify-center"
-                >
-                  {t('maintenance.download')}
-                </Button>
               </Card>
 
               {/* OTA Update */}
@@ -1091,6 +1074,11 @@ export function SettingsPage() {
                   ) : null}
                 </div>
               </Card>
+            </div>
+
+            {/* Disaster Recovery, Backup & Restore Section */}
+            <div className="pt-2">
+              <BackupRestoreSection />
             </div>
           </div>
         )}

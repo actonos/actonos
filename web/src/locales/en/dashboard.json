@@ -135,5 +135,28 @@
   "storage": {
     "detail": "SQLite: {{sqlite}} MB • Vectors: {{vectors}} MB",
     "total": "Storage: {{value}} MB"
+  },
+  "operator": {
+    "nominalStatus": "Operator Nominal",
+    "degradedStatus": "System Degraded",
+    "criticalStatus": "Action Required",
+    "anomaliesDetected": "{{count}} proactive anomalies require operator oversight.",
+    "nominalDescription": "Autonomous Swarm, Memory Layer, and OpenClaw 24/7 Heartbeat operating at peak efficiency.",
+    "missionControl": "Mission Control",
+    "auditLogs": "Audit Ledger"
+  },
+  "vitals": {
+    "openclaw": "OpenClaw Pulse",
+    "llmHealth": "LLM Provider Mesh",
+    "hostMemory": "Host RAM & CPU",
+    "agentFleet": "Agent Fleet"
+  },
+  "anomalies": {
+    "title": "Proactive System Anomalies",
+    "autoFix": "Auto-Fix Task",
+    "dismiss": "Dismiss",
+    "actedTitle": "Anomaly Handled",
+    "autoTaskCreated": "Autonomous diagnostic task spawned.",
+    "resolved": "Anomaly marked as resolved."
   }
 }

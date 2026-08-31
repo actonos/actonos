@@ -28,11 +28,12 @@ import {
   HeartPulse,
 } from 'lucide-react';
 import { api, type DashboardSummaryData } from '@/lib/api';
-import type { TokenUsageSummary, HeartbeatRun, HealthReport } from '@/lib/types';
+import type { TokenUsageSummary, HeartbeatRun, HealthReport, SystemAnomaly } from '@/lib/types';
 import type { NavTab } from '@/components/layout/Sidebar';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { QuickStartPanel } from '@/components/features/dashboard/QuickStartPanel';
 import { SystemHealthStrip } from '@/components/features/dashboard/SystemHealthStrip';
+import { OperatorHealthView } from './components/OperatorHealthView';
 
 export interface DashboardPageProps {
   onNavigateTab: (tab: NavTab) => void;
@@ -47,6 +48,7 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
   const [tokenStats, setTokenStats] = useState<TokenUsageSummary | null>(null);
   const [heartbeatRuns, setHeartbeatRuns] = useState<HeartbeatRun[]>([]);
   const [health, setHealth] = useState<HealthReport | null>(null);
+  const [anomalies, setAnomalies] = useState<SystemAnomaly[]>([]);
   const [loading, setLoading] = useState(true);
 
   // QuickStart Checklist State stored in localStorage
@@ -66,11 +68,12 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
   const loadSummary = async () => {
     try {
       setLoading(true);
-      const [summary, tokens, hb, supervisor] = await Promise.allSettled([
+      const [summary, tokens, hb, supervisor, anomRes] = await Promise.allSettled([
         api.getDashboardSummary(),
         api.getTokenUsage(),
         api.getHeartbeatHistory(),
         api.getHealth(),
+        api.listAnomalies(),
       ]);
 
       if (summary.status === 'fulfilled') {
@@ -92,6 +95,9 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
       }
       if (supervisor.status === 'fulfilled') {
         setHealth(supervisor.value);
+      }
+      if (anomRes.status === 'fulfilled') {
+        setAnomalies(anomRes.value.anomalies || []);
       }
     } catch (err) {
       error('Failed to load dashboard summary', getErrorMessage(err));
@@ -168,6 +174,18 @@ export function DashboardPage({ onNavigateTab, onOpenChat, onEditAgent }: Dashbo
             onNavigate={onNavigateTab}
           />
         )}
+
+        {/* Operator Health & Anomaly Command Banner */}
+        <div className="mb-8">
+          <OperatorHealthView
+            metrics={data?.metrics}
+            anomalies={anomalies}
+            agentsCount={data?.agents_count || 0}
+            agentsActive={data?.agents_active || 0}
+            onNavigateTab={onNavigateTab}
+            onRefresh={loadSummary}
+          />
+        </div>
 
         <SystemHealthStrip data={data} health={health} />
 

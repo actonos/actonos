@@ -27,6 +27,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 30 comprehensive standardized benchmark tasks across coding, planning, tool usage, memory retrieval, safety policy, and Vietnamese language.
   - 3-tier automated grading engine (deterministic assertion checker, outcome verifier, and LLM-as-a-judge rubric).
   - Standalone CLI runner with P50/P95 latency, pass rate, false completion rate, and token cost reporting wired into GitHub Actions.
+- **D1. Mobile-First PWA & Responsive Navigation Overhaul (`web/public/manifest.json`, `MobileBottomNav.tsx`, `PWAInstallBanner.tsx`)**:
+  - Standalone Web App Manifest with full mobile icons, theme color, display standalone, and cover viewport support.
+  - Sticky glassmorphic mobile navigation bar with real-time unread alerts and pending approval badges.
+  - Smart PWA installation banner supporting both native `beforeinstallprompt` (Chrome/Android) and iOS Safari "Add to Home Screen" instructions.
+- **D2. Mission Timeline & DAG Gantt Trace Inspector (`MissionTimelineView.tsx`, `MissionsPage.tsx`)**:
+  - Interactive unified pulse timeline visualizing continuous autonomous heartbeat cycles and agent runs.
+  - Visual DAG Gantt step status bar showing completed, in-progress, pending, and failed step execution.
+  - Click-through inspection modal with full JSON payloads, W3C trace IDs, and single-click Markdown execution report generation.
+- **D3. Agent Templates Marketplace (`internal/agent/templates.go`, `TemplateGalleryModal.tsx`, `AgentStudioPage.tsx`)**:
+  - 15+ built-in production agent templates across 5 categories (Development, Operations, Productivity, Security & Compliance, Analysis & Intelligence).
+  - Categorized template gallery modal with live search, tool allowlist previews, and one-click clone preload into Agent Studio.
+- **D4. Disaster Recovery, Backup & Restore System (`internal/system/backup.go`, `BackupRestoreSection.tsx`, `SettingsPage.tsx`)**:
+  - Transactional snapshot backup bundles (`.actonbak` format) leveraging SQLite `VACUUM INTO` and SHA-256 integrity verification.
+  - Automated safety pre-restore snapshot generation before applying restored databases or archives.
+  - Dual-gate factory reset workflow with confirmation token `RESET-ACTONOS`.
+- **D5. Audit Log Explorer & Search Engine (`internal/system/audit.go`, `AuditLogsPage.tsx`)**:
+  - Multi-criteria database search engine supporting full-text query, agent ID, risk level, execution status, tool name, and time range.
+  - Real-time Live Tail mode with 3s silent auto-polling, quick filter presets (High-Risk Only, Failures, High Latency >1s), and streaming CSV/JSON export.
+- **D6. Operator Health Dashboard (`OperatorHealthView.tsx`, `DashboardPage.tsx`)**:
+  - High-level 0-100 system health gauge computing real-time vitality across active anomalies, provider circuit breakers, and host resource telemetry.
+  - 4-card vitals strip (OpenClaw Heartbeat, LLM Provider Mesh, RAM/CPU load, Agent Fleet).
+  - Proactive system anomaly banner with one-click autonomous diagnostic task creation.
+- **D7. Smart Notifications & Fatigue Reduction (`internal/system/notifications.go`, `NotificationPreferencesModal.tsx`, `NotificationsPage.tsx`)**:
+  - Configurable Quiet Hours schedule with 400+ IANA timezone support, muting non-critical push notifications during focus/sleep hours.
+  - Automated 24-hour Daily Executive Digest aggregating task completions, failures, and token expenditure into a single morning briefing.
+  - Minimum push notification severity filter (`info`, `warning`, `critical`).
 
 ## [1.0.3]
 

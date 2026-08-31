@@ -16,6 +16,8 @@ import { ModelProvider } from '@/components/providers/ModelProvider';
 import { SplashScreen } from '@/components/ui/SplashScreen';
 import { TopProgressBar } from '@/components/ui/TopProgressBar';
 import { CommandPalette } from '@/components/features/search/CommandPalette';
+import { MobileBottomNav } from '@/components/layout/MobileBottomNav';
+import { PWAInstallBanner } from '@/components/ui/PWAInstallBanner';
 
 const DashboardPage = lazy(() => import('@/pages/Dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })));
 const AgentsPage = lazy(() => import('@/pages/Agents/AgentsPage').then((m) => ({ default: m.AgentsPage })));
@@ -203,6 +205,7 @@ export function App() {
               <ActionProgressProvider>
                 <div className="min-h-screen bg-canvas text-deep-ink selection:bg-hi-yellow selection:text-deep-ink font-sans flex">
                   <TopProgressBar isLoading={isNavigating} />
+                  <PWAInstallBanner />
                   <ApprovalInterruption />
                   <ActionProgressToast />
                   <CommandPalette
@@ -239,7 +242,7 @@ export function App() {
                     />
 
                     {/* Page Views */}
-                    <main className="flex-1 w-full pb-12">
+                    <main className="flex-1 w-full pb-20 lg:pb-12">
                       <ErrorBoundary>
                         <Suspense fallback={<div className="m-8 h-8 w-8 animate-spin rounded-full border-2 border-deep-ink border-t-transparent" />}>
                           {activeTab === 'dashboard' && (
@@ -294,6 +297,13 @@ export function App() {
                         </Suspense>
                       </ErrorBoundary>
                     </main>
+
+                    {/* Mobile Bottom Navigation Bar (< lg screens) */}
+                    <MobileBottomNav
+                      activeTab={activeTab}
+                      onSelectTab={navigateTab}
+                      onOpenSidebar={() => setMobileOpen(true)}
+                    />
                   </div>
                 </div>
               </ActionProgressProvider>

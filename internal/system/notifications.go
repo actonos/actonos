@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -28,6 +29,17 @@ type Notification struct {
 	Link      string    `json:"link"`     // e.g. "/missions", "/audit-logs", "/settings"
 	IsRead    bool      `json:"is_read"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+// NotificationPreferences defines rules for quiet hours, daily digests, and push routing.
+type NotificationPreferences struct {
+	QuietHoursEnabled  bool   `json:"quiet_hours_enabled"`
+	QuietHoursStart    string `json:"quiet_hours_start"`
+	QuietHoursEnd      string `json:"quiet_hours_end"`
+	QuietHoursTimezone string `json:"quiet_hours_timezone"`
+	DailyDigestEnabled bool   `json:"daily_digest_enabled"`
+	DailyDigestTime    string `json:"daily_digest_time"`
+	MinPushSeverity    string `json:"min_push_severity"` // "critical", "warning", "info"
 }
 
 // PushSubscription represents a Web Push API subscription from a browser Service Worker.
@@ -103,6 +115,18 @@ func (nm *NotificationManager) initDB() error {
 	CREATE TABLE IF NOT EXISTS system_settings (
 		key TEXT PRIMARY KEY,
 		value TEXT NOT NULL,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS notification_preferences (
+		id INTEGER PRIMARY KEY CHECK (id = 1),
+		quiet_hours_enabled BOOLEAN DEFAULT 0,
+		quiet_hours_start TEXT DEFAULT '22:00',
+		quiet_hours_end TEXT DEFAULT '07:00',
+		quiet_hours_timezone TEXT DEFAULT 'UTC',
+		daily_digest_enabled BOOLEAN DEFAULT 0,
+		daily_digest_time TEXT DEFAULT '08:00',
+		min_push_severity TEXT DEFAULT 'info',
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	`
@@ -300,8 +324,21 @@ func (nm *NotificationManager) Create(ctx context.Context, notif Notification) (
 
 	nm.mu.Unlock()
 
-	// Dispatch Web Push to Service Workers in background goroutine
-	go nm.SendPushToAll(context.Background(), notif)
+	// Dispatch Web Push to Service Workers in background goroutine with quiet hours check
+	go func(n Notification) {
+		prefs, _ := nm.GetPreferences(context.Background())
+		if nm.InQuietHours(time.Now().UTC(), prefs) && n.Type != "approval" && n.Type != "error" {
+			// Skip immediate intrusive push alert during quiet hours
+			return
+		}
+		if prefs.MinPushSeverity == "critical" && n.Type != "approval" && n.Type != "error" {
+			return
+		}
+		if prefs.MinPushSeverity == "warning" && n.Type != "approval" && n.Type != "error" && n.Type != "warning" {
+			return
+		}
+		nm.SendPushToAll(context.Background(), n)
+	}(notif)
 
 	return &notif, nil
 }
@@ -695,4 +732,156 @@ func (nm *NotificationManager) Stop() {
 		close(nm.stopCh)
 	}
 	slog.Info("notification manager stopped")
+}
+
+// GetPreferences retrieves the current notification preferences.
+func (nm *NotificationManager) GetPreferences(ctx context.Context) (NotificationPreferences, error) {
+	prefs := NotificationPreferences{
+		QuietHoursEnabled:  false,
+		QuietHoursStart:    "22:00",
+		QuietHoursEnd:      "07:00",
+		QuietHoursTimezone: "UTC",
+		DailyDigestEnabled: false,
+		DailyDigestTime:    "08:00",
+		MinPushSeverity:    "info",
+	}
+
+	if nm.db == nil {
+		return prefs, nil
+	}
+
+	row := nm.db.QueryRowContext(ctx, `
+		SELECT quiet_hours_enabled, quiet_hours_start, quiet_hours_end, quiet_hours_timezone,
+		       daily_digest_enabled, daily_digest_time, min_push_severity
+		FROM notification_preferences WHERE id = 1
+	`)
+	err := row.Scan(
+		&prefs.QuietHoursEnabled, &prefs.QuietHoursStart, &prefs.QuietHoursEnd, &prefs.QuietHoursTimezone,
+		&prefs.DailyDigestEnabled, &prefs.DailyDigestTime, &prefs.MinPushSeverity,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return prefs, nil
+	}
+	return prefs, err
+}
+
+// SavePreferences persists the notification preferences.
+func (nm *NotificationManager) SavePreferences(ctx context.Context, prefs NotificationPreferences) error {
+	if nm.db == nil {
+		return nil
+	}
+
+	if prefs.QuietHoursStart == "" {
+		prefs.QuietHoursStart = "22:00"
+	}
+	if prefs.QuietHoursEnd == "" {
+		prefs.QuietHoursEnd = "07:00"
+	}
+	if prefs.DailyDigestTime == "" {
+		prefs.DailyDigestTime = "08:00"
+	}
+	if prefs.MinPushSeverity == "" {
+		prefs.MinPushSeverity = "info"
+	}
+
+	query := `
+	INSERT INTO notification_preferences (id, quiet_hours_enabled, quiet_hours_start, quiet_hours_end, quiet_hours_timezone, daily_digest_enabled, daily_digest_time, min_push_severity, updated_at)
+	VALUES (1, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+	ON CONFLICT(id) DO UPDATE SET
+		quiet_hours_enabled = excluded.quiet_hours_enabled,
+		quiet_hours_start = excluded.quiet_hours_start,
+		quiet_hours_end = excluded.quiet_hours_end,
+		quiet_hours_timezone = excluded.quiet_hours_timezone,
+		daily_digest_enabled = excluded.daily_digest_enabled,
+		daily_digest_time = excluded.daily_digest_time,
+		min_push_severity = excluded.min_push_severity,
+		updated_at = CURRENT_TIMESTAMP;
+	`
+	_, err := nm.db.ExecContext(ctx, query,
+		prefs.QuietHoursEnabled, prefs.QuietHoursStart, prefs.QuietHoursEnd, prefs.QuietHoursTimezone,
+		prefs.DailyDigestEnabled, prefs.DailyDigestTime, prefs.MinPushSeverity,
+	)
+	return err
+}
+
+// InQuietHours returns true if the specified time falls within the configured quiet hours.
+func (nm *NotificationManager) InQuietHours(t time.Time, prefs NotificationPreferences) bool {
+	if !prefs.QuietHoursEnabled || prefs.QuietHoursStart == "" || prefs.QuietHoursEnd == "" {
+		return false
+	}
+
+	loc := time.UTC
+	if prefs.QuietHoursTimezone != "" {
+		if l, err := time.LoadLocation(prefs.QuietHoursTimezone); err == nil {
+			loc = l
+		}
+	}
+	localT := t.In(loc)
+
+	parseHHMM := func(s string) (int, int) {
+		var h, m int
+		_, _ = fmt.Sscanf(strings.TrimSpace(s), "%d:%d", &h, &m)
+		return h, m
+	}
+
+	startH, startM := parseHHMM(prefs.QuietHoursStart)
+	endH, endM := parseHHMM(prefs.QuietHoursEnd)
+
+	curMinutes := localT.Hour()*60 + localT.Minute()
+	startMinutes := startH*60 + startM
+	endMinutes := endH*60 + endM
+
+	if startMinutes <= endMinutes {
+		return curMinutes >= startMinutes && curMinutes < endMinutes
+	}
+	// Wraps around midnight (e.g. 22:00 -> 07:00)
+	return curMinutes >= startMinutes || curMinutes < endMinutes
+}
+
+// GenerateDailyDigest aggregates recent unread notifications into a single morning digest.
+func (nm *NotificationManager) GenerateDailyDigest(ctx context.Context) (*Notification, error) {
+	if nm.db == nil {
+		return nil, errors.New("database is not configured")
+	}
+
+	rows, err := nm.db.QueryContext(ctx, `
+		SELECT type, category, COUNT(*)
+		FROM notifications
+		WHERE created_at >= datetime('now', '-24 hours')
+		GROUP BY type, category
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var summaryParts []string
+	totalCount := 0
+	for rows.Next() {
+		var nType, nCat string
+		var count int
+		if err := rows.Scan(&nType, &nCat, &count); err == nil {
+			totalCount += count
+			summaryParts = append(summaryParts, fmt.Sprintf("%d %s (%s)", count, nType, nCat))
+		}
+	}
+
+	if totalCount == 0 {
+		return nm.Create(ctx, Notification{
+			Title:    "Daily Digest: All Clear",
+			Message:  "ActonOS ran nominally over the past 24 hours with zero notable alerts.",
+			Type:     "info",
+			Category: "system",
+			Link:     "/notifications",
+		})
+	}
+
+	summaryMsg := fmt.Sprintf("ActonOS 24h Summary: %d notifications recorded [%s]. Review your operational feed.", totalCount, strings.Join(summaryParts, ", "))
+	return nm.Create(ctx, Notification{
+		Title:    "Daily Notification Digest",
+		Message:  summaryMsg,
+		Type:     "info",
+		Category: "system",
+		Link:     "/notifications",
+	})
 }

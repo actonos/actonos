@@ -53,5 +53,31 @@
     "permissionGranted": "Desktop notifications enabled successfully!",
     "testSent": "Test push notification dispatched!",
     "pushSubscribed": "Service Worker background push registered!"
+  },
+  "preferences": {
+    "btn": "Preferences",
+    "btnTitle": "Quiet Hours & Smart Preferences",
+    "modalTitle": "Smart Notifications & Fatigue Control",
+    "modalDesc": "Configure intelligent filtering, quiet hours push suppression, and automated 24-hour executive digest.",
+    "quietHoursTitle": "Quiet Hours Schedule",
+    "quietHoursDesc": "Mutes non-critical push alerts during focus/sleep hours.",
+    "quietStart": "Start Time",
+    "quietEnd": "End Time",
+    "timezone": "Timezone",
+    "dailyDigestTitle": "Daily Executive Digest",
+    "dailyDigestDesc": "Aggregates 24-hour task completions, failures, and token spend into 1 briefing.",
+    "digestTime": "Delivery Time",
+    "testDigest": "Generate Now",
+    "minSeverityTitle": "Minimum Push Notification Severity",
+    "minSeverityDesc": "Filters background Service Worker push alerts based on risk level.",
+    "severityInfo": "All (Info+)",
+    "severityWarning": "Warnings+",
+    "severityCritical": "Critical Only",
+    "saving": "Saving...",
+    "saveBtn": "Save Preferences",
+    "savedTitle": "Preferences Saved",
+    "savedDesc": "Smart notification routing and quiet hours schedule updated.",
+    "digestTriggered": "Daily Digest Generated",
+    "digestTriggeredDesc": "A 24-hour executive summary notification was added to your inbox."
   }
 }

@@ -18,6 +18,7 @@ import {
   ShieldCheck,
   Send,
   Zap,
+  Moon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/lib/api';
@@ -26,6 +27,7 @@ import { useRealtime } from '@/components/providers/RealtimeProvider';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { NotificationPreferencesModal } from './components/NotificationPreferencesModal';
 import type { NotificationItem, NotificationType } from '@/lib/types';
 import type { NavTab } from '@/components/layout/Sidebar';
 
@@ -48,6 +50,7 @@ export function NotificationsPage({ onNavigateTab }: NotificationsPageProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [showClearModal, setShowClearModal] = useState(false);
+  const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
   const [testingPush, setTestingPush] = useState(false);
   const [pushStatusMessage, setPushStatusMessage] = useState<string | null>(null);
   const [, startTransition] = useTransition();
@@ -227,6 +230,17 @@ export function NotificationsPage({ onNavigateTab }: NotificationsPageProps) {
                 </button>
               </div>
             ) : null}
+
+            {/* Smart Preferences & Quiet Hours Button */}
+            <button
+              type="button"
+              onClick={() => setIsPreferencesOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-soft-meadow hover:bg-canvas text-slate hover:text-deep-ink border border-onyx/10 text-caption font-sans font-medium transition-colors cursor-pointer"
+              title={t('preferences.btnTitle', 'Quiet Hours & Smart Preferences')}
+            >
+              <Moon className="w-3.5 h-3.5 text-deep-ink" />
+              <span>{t('preferences.btn', 'Preferences')}</span>
+            </button>
 
             {unreadCount > 0 && (
               <button
@@ -510,6 +524,13 @@ export function NotificationsPage({ onNavigateTab }: NotificationsPageProps) {
         variant="danger"
         onConfirm={handleClearAll}
         onClose={() => setShowClearModal(false)}
+      />
+
+      {/* Smart Notification Preferences Modal */}
+      <NotificationPreferencesModal
+        isOpen={isPreferencesOpen}
+        onClose={() => setIsPreferencesOpen(false)}
+        onPreferencesUpdated={loadNotifications}
       />
     </div>
   );

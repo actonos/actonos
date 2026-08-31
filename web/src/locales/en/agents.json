@@ -398,5 +398,20 @@
       "normal": "Normal (1.0x)",
       "low": "Low (0.5x)"
     }
+  },
+  "templates": {
+    "browseBtn": "Browse Templates",
+    "modalTitle": "Agent Templates Marketplace",
+    "modalDesc": "Choose a battle-tested template to instantly instantiate a specialized autonomous agent.",
+    "searchPlaceholder": "Search templates or tags...",
+    "useTemplate": "Use Template",
+    "categories": {
+      "all": "All Categories",
+      "dev": "Development",
+      "ops": "Operations & FinOps",
+      "prod": "Productivity & Support",
+      "sec": "Security & Audit",
+      "analysis": "Data & SEO"
+    }
   }
 }

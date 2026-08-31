@@ -2,13 +2,16 @@ package server
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -796,19 +799,94 @@ func (s *Server) handleTestAPIKey(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGetAuditLogs(w http.ResponseWriter, r *http.Request) {
 	if s.auditLogger == nil {
-		s.respondJSON(w, http.StatusOK, map[string]any{"entries": []any{}, "count": 0})
+		s.respondJSON(w, http.StatusOK, map[string]any{"entries": []any{}, "count": 0, "total": 0})
 		return
 	}
-	entries, err := s.auditLogger.ReadRecentEntries(100)
+
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	if limit <= 0 {
+		limit = 100
+	}
+
+	params := system.AuditSearchParams{
+		Query:     r.URL.Query().Get("q"),
+		AgentID:   r.URL.Query().Get("agent_id"),
+		RiskLevel: r.URL.Query().Get("risk_level"),
+		Status:    r.URL.Query().Get("status"),
+		ToolName:  r.URL.Query().Get("tool_name"),
+		From:      r.URL.Query().Get("from"),
+		To:        r.URL.Query().Get("to"),
+		Limit:     limit,
+		Offset:    offset,
+	}
+
+	entries, total, err := s.auditLogger.SearchEntries(params)
 	if err != nil {
-		s.respondJSON(w, http.StatusOK, map[string]any{"entries": []any{}, "count": 0})
+		s.respondJSON(w, http.StatusOK, map[string]any{"entries": []any{}, "count": 0, "total": 0})
 		return
 	}
 
 	s.respondJSON(w, http.StatusOK, map[string]any{
 		"entries": entries,
 		"count":   len(entries),
+		"total":   total,
 	})
+}
+
+func (s *Server) handleExportAuditLogs(w http.ResponseWriter, r *http.Request) {
+	if s.auditLogger == nil {
+		s.respondError(w, http.StatusServiceUnavailable, "AUDIT_NOT_CONFIGURED", "audit logger is not configured")
+		return
+	}
+
+	params := system.AuditSearchParams{
+		Query:     r.URL.Query().Get("q"),
+		AgentID:   r.URL.Query().Get("agent_id"),
+		RiskLevel: r.URL.Query().Get("risk_level"),
+		Status:    r.URL.Query().Get("status"),
+		ToolName:  r.URL.Query().Get("tool_name"),
+		From:      r.URL.Query().Get("from"),
+		To:        r.URL.Query().Get("to"),
+		Limit:     10000,
+		Offset:    0,
+	}
+
+	entries, _, err := s.auditLogger.SearchEntries(params)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "EXPORT_FAILED", err.Error())
+		return
+	}
+
+	format := strings.ToLower(r.URL.Query().Get("format"))
+	if format == "json" {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"actonos-audit-%s.json\"", time.Now().UTC().Format("20060102_150405")))
+		_ = json.NewEncoder(w).Encode(entries)
+		return
+	}
+
+	// Default CSV format
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"actonos-audit-%s.csv\"", time.Now().UTC().Format("20060102_150405")))
+
+	csvWriter := csv.NewWriter(w)
+	_ = csvWriter.Write([]string{"Timestamp", "TraceID", "AgentID", "ToolName", "RiskLevel", "LatencyMS", "Status", "Error", "EntryHash"})
+
+	for _, e := range entries {
+		_ = csvWriter.Write([]string{
+			e.Timestamp,
+			e.TraceID,
+			e.AgentID,
+			e.ToolName,
+			e.RiskLevel,
+			strconv.FormatInt(e.ExecutionTimeMS, 10),
+			e.Status,
+			e.Error,
+			e.EntryHash,
+		})
+	}
+	csvWriter.Flush()
 }
 
 func (s *Server) handleVerifyAuditChain(w http.ResponseWriter, r *http.Request) {
@@ -917,8 +995,27 @@ func (s *Server) embeddingdRequired() bool {
 }
 
 func (s *Server) handleGetBackup(w http.ResponseWriter, r *http.Request) {
+	backupID := strings.TrimSpace(r.URL.Query().Get("id"))
+	if backupID != "" {
+		if s.backupMgr == nil {
+			if s.memory != nil && s.memory.DB() != nil && s.memory.DB().SQLDB() != nil {
+				s.backupMgr, _ = system.NewBackupManager(s.dataDir, s.memory.DB().SQLDB(), s.version)
+			}
+		}
+		if s.backupMgr != nil {
+			data, manifest, err := s.backupMgr.GetBackupArchive(backupID)
+			if err == nil && manifest != nil {
+				w.Header().Set("Content-Type", "application/octet-stream")
+				w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", manifest.FileName))
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write(data)
+				return
+			}
+		}
+	}
+
 	if s.memory == nil || s.memory.DB() == nil || s.memory.DB().SQLDB() == nil {
-		s.respondError(w, http.StatusServiceUnavailable, "BACKUP_UNAVAILABLE", "database is not configured")
+		s.respondError(w, http.StatusServiceUnavailable, "DB_UNAVAILABLE", "database is not ready")
 		return
 	}
 	tempDir, err := os.MkdirTemp("", "actonos-backup-*")
@@ -945,6 +1042,181 @@ func (s *Server) handleGetBackup(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", "attachment; filename=\"actonos-backup.db\"")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(data)
+}
+
+type createBackupRequest struct {
+	IncludeWorkspace bool   `json:"include_workspace"`
+	Notes            string `json:"notes"`
+	Download         bool   `json:"download"`
+}
+
+func (s *Server) handleCreateBackup(w http.ResponseWriter, r *http.Request) {
+	if s.backupMgr == nil {
+		if s.memory != nil && s.memory.DB() != nil && s.memory.DB().SQLDB() != nil {
+			s.backupMgr, _ = system.NewBackupManager(s.dataDir, s.memory.DB().SQLDB(), s.version)
+		}
+	}
+	if s.backupMgr == nil {
+		s.respondError(w, http.StatusServiceUnavailable, "BACKUP_UNAVAILABLE", "backup manager is not configured")
+		return
+	}
+
+	var req createBackupRequest
+	_ = s.decodeJSON(r, &req)
+
+	manifest, _, err := s.backupMgr.CreateBackup(r.Context(), req.IncludeWorkspace, req.Notes)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "BACKUP_FAILED", err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]any{
+		"manifest": manifest,
+		"message":  "Backup created successfully",
+	})
+}
+
+func (s *Server) handleListBackups(w http.ResponseWriter, r *http.Request) {
+	if s.backupMgr == nil {
+		if s.memory != nil && s.memory.DB() != nil && s.memory.DB().SQLDB() != nil {
+			s.backupMgr, _ = system.NewBackupManager(s.dataDir, s.memory.DB().SQLDB(), s.version)
+		}
+	}
+	if s.backupMgr == nil {
+		s.respondJSON(w, http.StatusOK, map[string]any{"backups": []any{}, "count": 0})
+		return
+	}
+
+	backups, err := s.backupMgr.ListBackups()
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "LIST_BACKUPS_FAILED", err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]any{
+		"backups": backups,
+		"count":   len(backups),
+	})
+}
+
+func (s *Server) handleRestoreBackup(w http.ResponseWriter, r *http.Request) {
+	if s.backupMgr == nil {
+		if s.memory != nil && s.memory.DB() != nil && s.memory.DB().SQLDB() != nil {
+			s.backupMgr, _ = system.NewBackupManager(s.dataDir, s.memory.DB().SQLDB(), s.version)
+		}
+	}
+	if s.backupMgr == nil {
+		s.respondError(w, http.StatusServiceUnavailable, "BACKUP_UNAVAILABLE", "backup manager is not configured")
+		return
+	}
+
+	backupID := strings.TrimSpace(r.URL.Query().Get("id"))
+	if backupID == "" {
+		backupID = strings.TrimSpace(r.URL.Query().Get("backup_id"))
+	}
+
+	var archiveReader io.Reader = r.Body
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+		if err := r.ParseMultipartForm(64 << 20); err == nil {
+			file, _, fileErr := r.FormFile("backup_file")
+			if fileErr != nil {
+				file, _, fileErr = r.FormFile("backup")
+			}
+			if fileErr == nil {
+				defer file.Close()
+				archiveReader = file
+			}
+		}
+	} else if strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+		var body struct {
+			BackupID string `json:"backup_id"`
+		}
+		if err := s.decodeJSON(r, &body); err == nil && body.BackupID != "" {
+			backupID = body.BackupID
+		}
+	}
+
+	var manifest *system.BackupManifest
+	var err error
+
+	if backupID != "" {
+		manifest, err = s.backupMgr.RestoreBackupByID(r.Context(), backupID)
+	} else {
+		manifest, err = s.backupMgr.RestoreBackup(r.Context(), archiveReader)
+	}
+
+	if err != nil {
+		s.respondError(w, http.StatusBadRequest, "RESTORE_FAILED", err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]any{
+		"manifest": manifest,
+		"message":  "Database restored successfully",
+	})
+}
+
+func (s *Server) handleDeleteBackup(w http.ResponseWriter, r *http.Request) {
+	if s.backupMgr == nil {
+		if s.memory != nil && s.memory.DB() != nil && s.memory.DB().SQLDB() != nil {
+			s.backupMgr, _ = system.NewBackupManager(s.dataDir, s.memory.DB().SQLDB(), s.version)
+		}
+	}
+	if s.backupMgr == nil {
+		s.respondError(w, http.StatusServiceUnavailable, "BACKUP_UNAVAILABLE", "backup manager is not configured")
+		return
+	}
+
+	backupID := strings.TrimSpace(chi.URLParam(r, "id"))
+	if backupID == "" {
+		backupID = strings.TrimSpace(r.URL.Query().Get("id"))
+	}
+	if backupID == "" {
+		s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", "backup id is required")
+		return
+	}
+
+	if err := s.backupMgr.DeleteBackup(backupID); err != nil {
+		s.respondError(w, http.StatusInternalServerError, "DELETE_BACKUP_FAILED", err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]any{
+		"status":  "deleted",
+		"message": "Backup deleted successfully",
+	})
+}
+
+type factoryResetRequest struct {
+	ConfirmToken string `json:"confirm_token"`
+}
+
+func (s *Server) handleFactoryReset(w http.ResponseWriter, r *http.Request) {
+	if s.backupMgr == nil {
+		if s.memory != nil && s.memory.DB() != nil && s.memory.DB().SQLDB() != nil {
+			s.backupMgr, _ = system.NewBackupManager(s.dataDir, s.memory.DB().SQLDB(), s.version)
+		}
+	}
+	if s.backupMgr == nil {
+		s.respondError(w, http.StatusServiceUnavailable, "BACKUP_UNAVAILABLE", "backup manager is not configured")
+		return
+	}
+
+	var req factoryResetRequest
+	if err := s.decodeJSON(r, &req); err != nil {
+		s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
+
+	if err := s.backupMgr.FactoryReset(r.Context(), req.ConfirmToken); err != nil {
+		s.respondError(w, http.StatusForbidden, "FACTORY_RESET_FAILED", err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]any{
+		"status":  "reset_complete",
+		"message": "ActonOS database state has been factory reset.",
+	})
 }
 
 func (s *Server) handleGetTokenUsage(w http.ResponseWriter, r *http.Request) {

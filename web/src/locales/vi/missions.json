@@ -208,5 +208,15 @@
     "title": "Xóa nhiệm vụ",
     "description": "Bạn có chắc chắn muốn xóa nhiệm vụ này khỏi danh sách tồn đọng tự trị không?",
     "confirm": "Xóa nhiệm vụ"
+  },
+  "timeline": {
+    "filterByMission": "Tiêu điểm Nhiệm vụ",
+    "allMissions": "Tất cả Nhiệm vụ & Xung nhịp",
+    "exportReport": "Xuất Báo Cáo Markdown",
+    "dagProgressTitle": "Biểu đồ Luồng Bước DAG & Tiến Trình",
+    "stepsCompleted": "bước hoàn thành",
+    "pulseHistory": "Lịch Sử Xung Nhịp & Dấu Vết Thực Thi Tool",
+    "noEvents": "Chưa có sự kiện thực thi nào được ghi nhận cho lựa chọn này.",
+    "traceDetail": "Thanh Tra Dấu Vết Sự Kiện Thực Thi"
   }
 }

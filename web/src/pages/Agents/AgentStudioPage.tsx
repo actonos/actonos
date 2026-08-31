@@ -241,6 +241,34 @@ export function AgentStudioPage({
               setMemoryMD(memRes.memory_md);
             }
           } catch { }
+        } else {
+          // Initialize from template if user chose one from gallery
+          try {
+            const rawTemplate = sessionStorage.getItem('actonos_template_manifest');
+            if (rawTemplate) {
+              sessionStorage.removeItem('actonos_template_manifest');
+              const tmpl = JSON.parse(rawTemplate);
+              if (tmpl.name) setName(tmpl.name);
+              if (tmpl.agent_id) setIdSlug(tmpl.agent_id);
+              if (tmpl.description) setDescription(tmpl.description);
+              if (tmpl.avatar_icon) setAvatarIcon(tmpl.avatar_icon);
+              if (tmpl.system_instructions) setSystemInstructions(tmpl.system_instructions);
+              if (tmpl.authorized_tools) setAuthorizedTools(tmpl.authorized_tools);
+              if (tmpl.model_config?.primary_model) setPrimaryModel(tmpl.model_config.primary_model);
+              if (tmpl.model_config?.fallback_model) setFallbackModel(tmpl.model_config.fallback_model);
+              if (tmpl.model_config?.reasoning_effort) setReasoningEffort(tmpl.model_config.reasoning_effort as any);
+              if (tmpl.model_config?.max_tokens) setMaxTokens(tmpl.model_config.max_tokens);
+              if (tmpl.heartbeat_config) {
+                setHeartbeatEnabled(tmpl.heartbeat_config.enabled ?? false);
+                setHeartbeatDirectives(tmpl.heartbeat_config.directives || '');
+                setHeartbeatInterval(tmpl.heartbeat_config.interval_minutes || 60);
+              }
+              if (tmpl.delegation_scope) {
+                setMaxBudget(tmpl.delegation_scope.max_monthly_budget_usd ?? 20);
+                setApprovalLevel(tmpl.delegation_scope.require_human_approval_level || 'Low');
+              }
+            }
+          } catch {}
         }
       } catch (err) {
         error('Failed to load agent details', getErrorMessage(err));

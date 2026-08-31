@@ -39,7 +39,7 @@ export function ConfirmModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title}>
+    <Modal isOpen={isOpen} onClose={onClose} title={title} maxWidth="max-w-md">
       <div className="space-y-4">
         <div className="flex items-start gap-3.5 bg-soft-meadow p-4 rounded-[16px] border border-onyx/5">
           <div className="shrink-0 mt-0.5">

@@ -46,6 +46,30 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleListAgentTemplates(w http.ResponseWriter, r *http.Request) {
+	category := r.URL.Query().Get("category")
+	query := r.URL.Query().Get("q")
+	templates := agent.ListTemplates(category, query)
+	s.respondJSON(w, http.StatusOK, map[string]any{
+		"templates": templates,
+		"count":     len(templates),
+	})
+}
+
+func (s *Server) handleGetAgentTemplate(w http.ResponseWriter, r *http.Request) {
+	templateID := chi.URLParam(r, "templateID")
+	if templateID == "" {
+		s.respondError(w, http.StatusBadRequest, "INVALID_TEMPLATE_ID", "template ID is required")
+		return
+	}
+	tmpl, err := agent.GetTemplateByID(templateID)
+	if err != nil {
+		s.respondError(w, http.StatusNotFound, "TEMPLATE_NOT_FOUND", err.Error())
+		return
+	}
+	s.respondJSON(w, http.StatusOK, tmpl)
+}
+
 func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	var req createAgentRequest
 	if err := s.decodeJSON(r, &req); err != nil {

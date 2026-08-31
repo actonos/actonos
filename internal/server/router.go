@@ -48,6 +48,7 @@ type Server struct {
 	sysAuth          *auth.SystemAuthManager
 	bus              *bus.EventBus
 	auditLogger      *system.AuditLogger
+	backupMgr        *system.BackupManager
 	notifMgr         *system.NotificationManager
 	vault            *memory.Vault
 	pairingMgr       *channels.PairingManager
@@ -228,6 +229,9 @@ func NewServer(cfg Config) *Server {
 	if s.toolReg != nil && s.channelMgr != nil {
 		s.toolReg.SetChannelSender(plugin.ChannelToolSender(s.channelMgr))
 	}
+	if s.memory != nil && s.memory.DB() != nil && s.memory.DB().SQLDB() != nil {
+		s.backupMgr, _ = system.NewBackupManager(dataDir, s.memory.DB().SQLDB(), version)
+	}
 	if s.pluginHubMgr == nil && s.pluginsDir != "" {
 		s.pluginHubMgr = plugin.NewPluginRegistryManager(s.pluginsDir, s.pluginMgr, s.bus)
 	}
@@ -333,6 +337,8 @@ func (s *Server) setupRoutes() {
 			r.Route("/agents", func(r chi.Router) {
 				r.Get("/", s.handleListAgents)
 				r.Post("/", s.handleCreateAgent)
+				r.Get("/templates", s.handleListAgentTemplates)
+				r.Get("/templates/{templateID}", s.handleGetAgentTemplate)
 				r.Get("/cron", s.handleListCronJobs)
 				r.Post("/cron", s.handleSaveCronJob)
 				r.Post("/cron/{id}/run", s.handleRunCronJob)
@@ -513,6 +519,9 @@ func (s *Server) setupRoutes() {
 			r.Route("/notifications", func(r chi.Router) {
 				r.Get("/", s.handleListNotifications)
 				r.Get("/unread-count", s.handleGetUnreadNotificationsCount)
+				r.Get("/preferences", s.handleGetNotificationPreferences)
+				r.Put("/preferences", s.handleSaveNotificationPreferences)
+				r.Post("/digest/trigger", s.handleTriggerDailyDigest)
 				r.Post("/mark-read", s.handleMarkNotificationRead)
 				r.Delete("/", s.handleDeleteNotifications)
 				r.Get("/push/vapid-key", s.handleGetVAPIDPublicKey)
@@ -539,9 +548,16 @@ func (s *Server) setupRoutes() {
 				r.Post("/keys/test", s.handleTestAPIKey)
 				r.Get("/audit", s.handleGetAuditLogs)
 				r.Get("/audit/verify", s.handleVerifyAuditChain)
+				r.Get("/audit/export", s.handleExportAuditLogs)
 				r.Get("/storage", s.handleGetStorageInfo)
 				r.Get("/embedding", s.handleGetEmbeddingStatus)
 				r.Get("/backup", s.handleGetBackup)
+				r.Post("/backup", s.handleCreateBackup)
+				r.Delete("/backup", s.handleDeleteBackup)
+				r.Get("/backups", s.handleListBackups)
+				r.Delete("/backups/{id}", s.handleDeleteBackup)
+				r.Post("/restore", s.handleRestoreBackup)
+				r.Post("/factory-reset", s.handleFactoryReset)
 				r.Post("/ota/check", s.handleCheckOTA)
 				r.Get("/ota/status", s.handleOTAStatus)
 				r.Post("/ota/apply", s.handleApplyOTA)

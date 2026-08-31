@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -224,6 +225,118 @@ func splitLines(s string) []string {
 		lines = append(lines, s[start:])
 	}
 	return lines
+}
+
+// AuditSearchParams provides granular multi-criteria filtering for audit log entries.
+type AuditSearchParams struct {
+	Query     string `json:"query,omitempty"`
+	AgentID   string `json:"agent_id,omitempty"`
+	RiskLevel string `json:"risk_level,omitempty"`
+	Status    string `json:"status,omitempty"`
+	ToolName  string `json:"tool_name,omitempty"`
+	From      string `json:"from,omitempty"`
+	To        string `json:"to,omitempty"`
+	Limit     int    `json:"limit,omitempty"`
+	Offset    int    `json:"offset,omitempty"`
+}
+
+// SearchEntries filters and paginates through audit log entries.
+func (l *AuditLogger) SearchEntries(params AuditSearchParams) ([]AuditLogEntry, int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	data, err := os.ReadFile(l.logPath)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	lines := splitLines(string(data))
+	q := strings.TrimSpace(strings.ToLower(params.Query))
+	agentFilter := strings.TrimSpace(strings.ToLower(params.AgentID))
+	riskFilter := strings.TrimSpace(strings.ToLower(params.RiskLevel))
+	statusFilter := strings.TrimSpace(strings.ToLower(params.Status))
+	toolFilter := strings.TrimSpace(strings.ToLower(params.ToolName))
+
+	var fromTime, toTime time.Time
+	if params.From != "" {
+		fromTime, _ = time.Parse(time.RFC3339, params.From)
+	}
+	if params.To != "" {
+		toTime, _ = time.Parse(time.RFC3339, params.To)
+	}
+
+	var matched []AuditLogEntry
+
+	// Read in reverse chronological order (newest first)
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := lines[i]
+		if len(line) == 0 {
+			continue
+		}
+		var e AuditLogEntry
+		if err := json.Unmarshal([]byte(line), &e); err != nil {
+			continue
+		}
+
+		if agentFilter != "" && agentFilter != "all" && strings.ToLower(e.AgentID) != agentFilter {
+			continue
+		}
+		if riskFilter != "" && riskFilter != "all" && strings.ToLower(e.RiskLevel) != riskFilter {
+			continue
+		}
+		if statusFilter != "" && statusFilter != "all" && strings.ToLower(e.Status) != statusFilter {
+			continue
+		}
+		if toolFilter != "" && !strings.Contains(strings.ToLower(e.ToolName), toolFilter) {
+			continue
+		}
+
+		if !fromTime.IsZero() {
+			if entryTime, parseErr := time.Parse(time.RFC3339, e.Timestamp); parseErr == nil && entryTime.Before(fromTime) {
+				continue
+			}
+		}
+		if !toTime.IsZero() {
+			if entryTime, parseErr := time.Parse(time.RFC3339, e.Timestamp); parseErr == nil && entryTime.After(toTime) {
+				continue
+			}
+		}
+
+		if q != "" {
+			matchTool := strings.Contains(strings.ToLower(e.ToolName), q)
+			matchAgent := strings.Contains(strings.ToLower(e.AgentID), q)
+			matchTrace := strings.Contains(strings.ToLower(e.TraceID), q)
+			matchError := strings.Contains(strings.ToLower(e.Error), q)
+			matchRisk := strings.Contains(strings.ToLower(e.RiskLevel), q)
+			matchStatus := strings.Contains(strings.ToLower(e.Status), q)
+			if !matchTool && !matchAgent && !matchTrace && !matchError && !matchRisk && !matchStatus {
+				continue
+			}
+		}
+
+		matched = append(matched, e)
+	}
+
+	totalCount := len(matched)
+	offset := params.Offset
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > totalCount {
+		offset = totalCount
+	}
+
+	limit := params.Limit
+	if limit <= 0 {
+		limit = 100
+	}
+
+	end := offset + limit
+	if end > totalCount {
+		end = totalCount
+	}
+
+	return matched[offset:end], totalCount, nil
 }
 
 // Close closes the underlying audit log file.

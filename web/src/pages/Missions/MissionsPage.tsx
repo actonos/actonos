@@ -30,6 +30,7 @@ import type { AgentRun, ApprovalRequest, AutonomousTask, DontAskAgain, Heartbeat
 import { ApprovalDecisionBar } from '@/components/features/governance/ApprovalDecisionBar';
 import { TaskModal } from './components/TaskModal';
 import { StructuredDirectivesTab } from './components/StructuredDirectivesTab';
+import { MissionTimelineView } from './components/MissionTimelineView';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { readHashParams, setHashParam } from '@/lib/url-state';
@@ -42,9 +43,9 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
   const { t } = useTranslation('missions');
   const { success, error, info } = useToast();
 
-  const [activeTab, setActiveTab] = useState<'tasks' | 'directives' | 'audit' | 'governance'>(() => {
+  const [activeTab, setActiveTab] = useState<'tasks' | 'directives' | 'timeline' | 'audit' | 'governance'>(() => {
     const value = readHashParams().get('view');
-    return value === 'directives' || value === 'audit' || value === 'governance' ? value : 'tasks';
+    return value === 'directives' || value === 'timeline' || value === 'audit' || value === 'governance' ? value : 'tasks';
   });
   const [tasks, setTasks] = useState<AutonomousTask[]>([]);
   const [heartbeatConfig, setHeartbeatConfig] = useState<HeartbeatConfigData>({
@@ -72,7 +73,7 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [selectedRunDetail, setSelectedRunDetail] = useState<AgentRun | null>(null);
 
-  const changeTab = (tab: 'tasks' | 'directives' | 'audit' | 'governance') => {
+  const changeTab = (tab: 'tasks' | 'directives' | 'timeline' | 'audit' | 'governance') => {
     setActiveTab(tab);
     setHashParam('view', tab === 'tasks' ? undefined : tab);
   };
@@ -337,11 +338,22 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
           className="mb-6 w-fit"
           options={[
             { value: 'tasks', label: t('tabs.tasks', { count: tasks.length }) },
+            { value: 'timeline', label: t('tabs.timeline', 'Timeline & Gantt') },
             { value: 'directives', label: t('tabs.directives') },
             { value: 'audit', label: t('tabs.audit', { count: heartbeatRuns.length }) },
             { value: 'governance', label: t('tabs.governance', { count: approvals.length }) },
           ]}
         />
+
+        {/* TAB: Timeline & Execution Gantt */}
+        {activeTab === 'timeline' && (
+          <MissionTimelineView
+            tasks={tasks}
+            heartbeatRuns={heartbeatRuns}
+            agentRuns={agentRuns}
+            selectedTask={editingTask}
+          />
+        )}
 
         {/* TAB 1: Tasks & Backlog */}
         {activeTab === 'tasks' && (

@@ -91,5 +91,11 @@
     "description": "An unexpected error occurred in the application view. The system kernel remains safe.",
     "home": "Return Home",
     "reload": "Reload View"
+  },
+  "pwa": {
+    "title": "Install ActonOS App",
+    "subtitle": "Fast 24/7 mobile access & push alerts",
+    "install": "Install",
+    "iosGuide": "Tap Share icon then \"Add to Home Screen\""
   }
 }

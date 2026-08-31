@@ -252,7 +252,28 @@ Remove a provider key from Vault and clear its configured status.
 Test connectivity for a specific LLM provider API key.
 
 ### `GET /api/system/audit`
-Retrieve system audit log entries.
+Retrieve system audit log entries with optional multi-criteria filtering and full-text search.
+- Query parameters: `q` (full text search), `agent_id`, `risk_level` (low/medium/high), `status` (success/blocked/failed), `tool_name`, `from`, `to`, `limit` (default 100), `offset` (default 0).
+
+### `GET /api/system/audit/export`
+Stream audit ledger entries as either CSV (`format=csv`, default) or JSON (`format=json`).
+
+### `GET /api/system/audit/verify`
+Cryptographically verify SHA-256 hash chaining across all recorded audit entries to guarantee tamper-evidence.
+
+### `POST /api/system/backup`
+Create a transactional snapshot backup bundle (`.actonbak` format) with SQLite `VACUUM INTO` and SHA-256 checksum verification.
+- Request body: `{ "include_workspace": false, "notes": "Pre-upgrade backup", "download": false }`.
+- When `download: true`, streams the `.actonbak` file directly as `application/octet-stream`.
+
+### `GET /api/system/backups`
+List available local backup snapshot manifests with timestamp, size, agent/task counts, and SHA-256 checksums.
+
+### `POST /api/system/restore`
+Upload and restore a `.actonbak` or SQLite database snapshot. A pre-restore safety snapshot is automatically created before applying.
+
+### `POST /api/system/factory-reset`
+Safely reset system state (tasks, events, notifications, memory). Requires confirmation token `RESET-ACTONOS`.
 
 ### `GET /api/system/token-usage`
 Get aggregated token consumption metrics, USD cost estimations, model breakdown, agent breakdown, and 14-day daily trends.
@@ -317,6 +338,12 @@ Get high-level statistics for agents, active cron tasks, memory size, and channe
 
 ### `GET /api/agents`
 List all configured agents.
+
+### `GET /api/agents/templates`
+List curated production agent templates (15+ built-in templates across development, ops, productivity, security, and analysis). Supports `?category=` and `?q=` filtering.
+
+### `GET /api/agents/templates/{templateID}`
+Retrieve a specific agent template definition and pre-configured manifest.
 
 ### `POST /api/agents`
 Create a new agent manifest.

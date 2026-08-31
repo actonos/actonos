@@ -8,7 +8,17 @@
   "verifiedSuccessDesc": "All SHA-256 block hashes and chronological links are mathematically intact.",
   "verifyFailed": "Hash Chain Verification Failed",
   "exportLogs": "Export JSON",
+  "exportCSV": "Export CSV",
+  "liveTail": "Live Tail",
+  "liveTailActive": "Live Tail: ON",
   "refresh": "Refresh",
+  "presets": {
+    "label": "Presets",
+    "all": "All Logs",
+    "critical": "High-Risk Only",
+    "failures": "Blocked / Failures",
+    "slow": "High Latency (>1s)"
+  },
   "stats": {
     "totalEvents": "Total Recorded Events",
     "highRisk": "High-Risk Actions",

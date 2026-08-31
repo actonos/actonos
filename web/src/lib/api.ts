@@ -500,7 +500,28 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ provider, key, url, model }),
     }),
-  getAuditLogs: () => fetchJSON<{ entries: AuditLogItem[]; count: number }>('/system/audit'),
+  getAuditLogs: (params?: import('./types').AuditSearchParams) => {
+    const query = new URLSearchParams();
+    if (params?.query) query.set('q', params.query);
+    if (params?.agent_id && params.agent_id !== 'all') query.set('agent_id', params.agent_id);
+    if (params?.risk_level && params.risk_level !== 'all') query.set('risk_level', params.risk_level);
+    if (params?.status && params.status !== 'all') query.set('status', params.status);
+    if (params?.tool_name) query.set('tool_name', params.tool_name);
+    if (params?.from) query.set('from', params.from);
+    if (params?.to) query.set('to', params.to);
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.offset) query.set('offset', String(params.offset));
+    const qStr = query.toString() ? `?${query.toString()}` : '';
+    return fetchJSON<{ entries: AuditLogItem[]; count: number; total?: number }>(`/system/audit${qStr}`);
+  },
+  exportAuditLogsUrl: (format: 'csv' | 'json' = 'csv', params?: import('./types').AuditSearchParams) => {
+    const query = new URLSearchParams({ format });
+    if (params?.query) query.set('q', params.query);
+    if (params?.agent_id && params.agent_id !== 'all') query.set('agent_id', params.agent_id);
+    if (params?.risk_level && params.risk_level !== 'all') query.set('risk_level', params.risk_level);
+    if (params?.status && params.status !== 'all') query.set('status', params.status);
+    return `${API_BASE}/system/audit/export?${query.toString()}`;
+  },
   verifyAuditChain: () => fetchJSON<{ status: string; message: string }>('/system/audit/verify'),
   getStorageInfo: () => fetchJSON<StorageInfoData>('/system/storage'),
   getModelsCatalog: () => fetchJSON<CatalogResponse>('/models'),
@@ -515,6 +536,70 @@ export const api = {
   applyOTA: () => operationsApi.applyOTA(),
   rollbackOTA: () => operationsApi.rollbackOTA(),
   getAgentRun: (id: string) => operationsApi.getAgentRun(id),
+
+  // Disaster Recovery & Backup / Restore
+  createBackup: (options?: { include_workspace?: boolean; notes?: string; download?: boolean }) =>
+    fetchJSON<{ manifest: import('./types').BackupManifest; message: string }>('/system/backup', {
+      method: 'POST',
+      body: JSON.stringify(options || {}),
+    }),
+  listBackups: () =>
+    fetchJSON<{ backups: import('./types').BackupManifest[]; count: number }>('/system/backups'),
+  getBackupDownloadUrl: (id?: string) =>
+    id ? `/api/system/backup?id=${encodeURIComponent(id)}` : '/api/system/backup',
+  restoreBackup: async (target: File | Blob | { backup_id: string }) => {
+    if ('backup_id' in target && typeof target.backup_id === 'string') {
+      return fetchJSON<{ manifest: import('./types').BackupManifest; message: string }>('/system/restore', {
+        method: 'POST',
+        body: JSON.stringify({ backup_id: target.backup_id }),
+      });
+    }
+    const formData = new FormData();
+    formData.append('backup_file', target as File | Blob);
+    const response = await fetch(`${API_BASE}/system/restore`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: formData,
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || `Restore failed with HTTP ${response.status}`);
+    }
+    return response.json() as Promise<{ manifest: import('./types').BackupManifest; message: string }>;
+  },
+  deleteBackup: (id: string) =>
+    fetchJSON<{ status: string; message: string }>(`/system/backups/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+  factoryReset: (confirmToken: string) =>
+    fetchJSON<{ status: string; message: string }>('/system/factory-reset', {
+      method: 'POST',
+      body: JSON.stringify({ confirm_token: confirmToken }),
+    }),
+
+  // Agent Templates
+  listAgentTemplates: (category?: string, query?: string) => {
+    const searchParams = new URLSearchParams();
+    if (category && category !== 'all') searchParams.set('category', category);
+    if (query) searchParams.set('q', query);
+    const qStr = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    return fetchJSON<{ templates: import('./types').AgentTemplate[]; count: number }>(`/agents/templates${qStr}`);
+  },
+  getAgentTemplate: (id: string) =>
+    fetchJSON<import('./types').AgentTemplate>(`/agents/templates/${encodeURIComponent(id)}`),
+
+  // Smart Notifications Preferences & Digest
+  getNotificationPreferences: () =>
+    fetchJSON<import('./types').NotificationPreferences>('/notifications/preferences'),
+  saveNotificationPreferences: (prefs: import('./types').NotificationPreferences) =>
+    fetchJSON<{ status: string; preferences: import('./types').NotificationPreferences }>('/notifications/preferences', {
+      method: 'PUT',
+      body: JSON.stringify(prefs),
+    }),
+  triggerDailyDigest: () =>
+    fetchJSON<{ status: string; notification: import('./types').NotificationItem }>('/notifications/digest/trigger', {
+      method: 'POST',
+    }),
 
   // Chat Channels
   getChannels: () =>

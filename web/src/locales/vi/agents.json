@@ -398,5 +398,20 @@
       "normal": "Bình thường (1.0x)",
       "low": "Thấp (0.5x)"
     }
+  },
+  "templates": {
+    "browseBtn": "Khám Phá Mẫu Đại Lý",
+    "modalTitle": "Thị Trường Mẫu Đại Lý Tự Chủ",
+    "modalDesc": "Chọn mẫu đã được kiểm chứng để khởi tạo nhanh đại lý thông minh chuyên biệt.",
+    "searchPlaceholder": "Tìm kiếm mẫu theo tên hoặc thẻ tag...",
+    "useTemplate": "Sử Dụng Mẫu Này",
+    "categories": {
+      "all": "Tất Cả Danh Mục",
+      "dev": "Phát Triển Phần Mềm",
+      "ops": "Vận Hành & FinOps",
+      "prod": "Năng Suất & Hỗ Trợ",
+      "sec": "Bảo Mật & Kiểm Toán",
+      "analysis": "Dữ Liệu & SEO"
+    }
   }
 }

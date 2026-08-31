@@ -10,6 +10,25 @@ export interface ModalProps {
   closeLabel?: string;
 }
 
+const MAX_WIDTH_CLASSES: Record<string, string> = {
+  sm: 'max-w-sm',
+  md: 'max-w-md',
+  lg: 'max-w-lg',
+  xl: 'max-w-xl',
+  '2xl': 'max-w-2xl',
+  '3xl': 'max-w-3xl',
+  '4xl': 'max-w-4xl',
+  '5xl': 'max-w-5xl',
+  'max-w-sm': 'max-w-sm',
+  'max-w-md': 'max-w-md',
+  'max-w-lg': 'max-w-lg',
+  'max-w-xl': 'max-w-xl',
+  'max-w-2xl': 'max-w-2xl',
+  'max-w-3xl': 'max-w-3xl',
+  'max-w-4xl': 'max-w-4xl',
+  'max-w-5xl': 'max-w-5xl',
+};
+
 export function Modal({
   isOpen,
   onClose,
@@ -95,6 +114,8 @@ export function Modal({
 
   if (!isOpen) return null;
 
+  const normalizedMaxWidth = MAX_WIDTH_CLASSES[maxWidth] || (maxWidth.startsWith('max-w-') ? maxWidth : `max-w-${maxWidth}`);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop overlay */}
@@ -109,7 +130,7 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleID}
-        className={`relative w-full ${maxWidth} bg-canvas rounded-[24px] border border-soft-meadow p-6 md:p-8 max-h-[90vh] overflow-y-auto z-10`}
+        className={`relative w-full ${normalizedMaxWidth} bg-canvas rounded-[24px] border border-soft-meadow p-6 md:p-8 max-h-[90vh] overflow-y-auto z-10`}
       >
         <div className="flex items-center justify-between pb-4 mb-6 border-b border-soft-meadow">
           <h2 id={titleID} className="font-serif text-heading text-deep-ink">{title}</h2>

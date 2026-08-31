@@ -791,3 +791,51 @@ export interface ProviderHealthReport {
   consecutive_fails: number;
   task_stats?: Record<string, TaskKindStats>;
 }
+
+export interface AgentTemplate {
+  id: string;
+  name: string;
+  category: 'development' | 'operations' | 'productivity' | 'security' | 'analysis' | string;
+  description: string;
+  icon: string;
+  author: string;
+  version: string;
+  tags: string[];
+  manifest: AgentManifest;
+}
+
+export interface BackupManifest {
+  id: string;
+  created_at: string;
+  version: string;
+  checksum_sha256: string;
+  database_size_bytes: number;
+  archive_size_bytes: number;
+  include_workspace: boolean;
+  agents_count: number;
+  tasks_count: number;
+  notes?: string;
+  file_name?: string;
+}
+
+export interface NotificationPreferences {
+  quiet_hours_enabled: boolean;
+  quiet_hours_start: string;
+  quiet_hours_end: string;
+  quiet_hours_timezone: string;
+  daily_digest_enabled: boolean;
+  daily_digest_time: string;
+  min_push_severity: 'critical' | 'warning' | 'info';
+}
+
+export interface AuditSearchParams {
+  query?: string;
+  agent_id?: string;
+  risk_level?: string;
+  status?: string;
+  tool_name?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+  offset?: number;
+}

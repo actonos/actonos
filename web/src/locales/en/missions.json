@@ -208,5 +208,15 @@
     "title": "Delete Mission",
     "description": "Are you sure you want to remove this mission from the autonomous backlog?",
     "confirm": "Delete Mission"
+  },
+  "timeline": {
+    "filterByMission": "Focus Mission",
+    "allMissions": "All Missions & Pulses",
+    "exportReport": "Export Markdown Report",
+    "dagProgressTitle": "DAG Step Graph & Execution Flow",
+    "stepsCompleted": "steps completed",
+    "pulseHistory": "Heartbeat Pulses & Tool Execution Traces",
+    "noEvents": "No execution events recorded for this selection.",
+    "traceDetail": "Execution Event Trace Inspector"
   }
 }

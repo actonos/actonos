@@ -53,5 +53,31 @@
     "permissionGranted": "Đã kích hoạt thông báo trên trình duyệt thành công!",
     "testSent": "Đã gửi thông báo đẩy thử nghiệm!",
     "pushSubscribed": "Đã đăng ký thông báo ngầm qua Service Worker thành công!"
+  },
+  "preferences": {
+    "btn": "Tùy Chọn Thông Báo",
+    "btnTitle": "Giờ Yên Lặng & Tùy Chọn Thông Minh",
+    "modalTitle": "Thông Báo Thông Minh & Giảm Thiểu Mệt Mỏi",
+    "modalDesc": "Cấu hình bộ lọc thông minh, tắt đẩy thông báo trong giờ nghỉ ngơi và tổng hợp tóm tắt 24 giờ tự động.",
+    "quietHoursTitle": "Lịch Giờ Yên Lặng (Quiet Hours)",
+    "quietHoursDesc": "Tắt tiếng các thông báo không khẩn cấp trong thời gian tập trung hoặc ngủ.",
+    "quietStart": "Giờ Bắt Đầu",
+    "quietEnd": "Giờ Kết Thúc",
+    "timezone": "Múi Giờ",
+    "dailyDigestTitle": "Bản Tin Tổng Hợp Hàng Ngày",
+    "dailyDigestDesc": "Tổng hợp kết quả tác vụ, lỗi phát sinh và chi phí token trong 24 giờ vào 1 thông báo duy nhất.",
+    "digestTime": "Thời Điểm Gửi Tin",
+    "testDigest": "Tạo Ngay",
+    "minSeverityTitle": "Mức Độ Rủi Ro Tối Thiểu Để Đẩy Thông Báo",
+    "minSeverityDesc": "Lọc thông báo đẩy ngầm từ Service Worker theo mức độ quan trọng.",
+    "severityInfo": "Tất Cả (Info+)",
+    "severityWarning": "Cảnh Báo (Warning+)",
+    "severityCritical": "Chỉ Sự Cố Nghiêm Trọng",
+    "saving": "Đang lưu...",
+    "saveBtn": "Lưu Tùy Chọn",
+    "savedTitle": "Đã Lưu Tùy Chọn",
+    "savedDesc": "Lịch giờ yên lặng và định tuyến thông báo thông minh đã được cập nhật.",
+    "digestTriggered": "Đã Tạo Bản Tin Tổng Hợp",
+    "digestTriggeredDesc": "Một thông báo tóm tắt 24 giờ đã được thêm vào hộp thư của bạn."
   }
 }

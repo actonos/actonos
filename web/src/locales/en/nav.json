@@ -103,5 +103,8 @@
     "cpu": "CPU: {{value}}%",
     "ram": "RAM: {{value}} MB",
     "supervisor": "Supervisor: {{status}}"
+  },
+  "mobile": {
+    "menu": "Menu"
   }
 }

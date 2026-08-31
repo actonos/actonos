@@ -34,28 +34,44 @@ export function AuditLogsPage() {
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
   const [selectedLog, setSelectedLog] = useState<AuditLogItem | null>(null);
+  const [liveTail, setLiveTail] = useState(false);
 
   // Filters & Search
   const [riskFilter, setRiskFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'success' | 'blocked' | 'failed'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [quickPreset, setQuickPreset] = useState<'all' | 'critical' | 'failures' | 'slow'>('all');
   const [copiedTraceId, setCopiedTraceId] = useState<string | null>(null);
 
-  const fetchLogs = async () => {
-    setLoading(true);
+  const fetchLogs = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
-      const res = await api.getAuditLogs();
+      const res = await api.getAuditLogs({
+        query: searchQuery || undefined,
+        risk_level: riskFilter !== 'all' ? riskFilter : undefined,
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+        limit: 100,
+      });
       setLogs(res.entries || []);
     } catch (err) {
-      error('Failed to load audit logs', getErrorMessage(err));
+      if (!silent) error('Failed to load audit logs', getErrorMessage(err));
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchLogs();
-  }, []);
+  }, [riskFilter, statusFilter]);
+
+  // Live Tail Auto-polling
+  useEffect(() => {
+    if (!liveTail) return;
+    const interval = setInterval(() => {
+      fetchLogs(true);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [liveTail, riskFilter, statusFilter, searchQuery]);
 
   const handleVerifyChain = async () => {
     setVerifying(true);
@@ -72,22 +88,24 @@ export function AuditLogsPage() {
     }
   };
 
-  const handleExportLogs = () => {
-    try {
-      const jsonStr = JSON.stringify(logs, null, 2);
-      const blob = new Blob([jsonStr], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `actonos_audit_logs_${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      success('Logs Exported', 'Audit ledger downloaded as JSON.');
-    } catch (err) {
-      error('Export failed', getErrorMessage(err));
-    }
+  const handleExportCSV = () => {
+    const url = api.exportAuditLogsUrl('csv', {
+      query: searchQuery || undefined,
+      risk_level: riskFilter !== 'all' ? riskFilter : undefined,
+      status: statusFilter !== 'all' ? statusFilter : undefined,
+    });
+    window.open(url, '_blank');
+    success('Export Initiated', 'Audit CSV download started.');
+  };
+
+  const handleExportJSON = () => {
+    const url = api.exportAuditLogsUrl('json', {
+      query: searchQuery || undefined,
+      risk_level: riskFilter !== 'all' ? riskFilter : undefined,
+      status: statusFilter !== 'all' ? statusFilter : undefined,
+    });
+    window.open(url, '_blank');
+    success('Export Initiated', 'Audit JSON download started.');
   };
 
   const handleCopyTrace = (e: React.MouseEvent, traceId: string) => {
@@ -97,18 +115,29 @@ export function AuditLogsPage() {
     setTimeout(() => setCopiedTraceId(null), 2000);
   };
 
+  const handleApplyPreset = (preset: 'all' | 'critical' | 'failures' | 'slow') => {
+    setQuickPreset(preset);
+    if (preset === 'critical') {
+      setRiskFilter('high');
+      setStatusFilter('all');
+    } else if (preset === 'failures') {
+      setRiskFilter('all');
+      setStatusFilter('failed');
+    } else if (preset === 'slow') {
+      setRiskFilter('all');
+      setStatusFilter('all');
+    } else {
+      setRiskFilter('all');
+      setStatusFilter('all');
+    }
+  };
+
   // Filtered dataset
   const filteredLogs = useMemo(() => {
     return logs.filter((entry) => {
-      // Risk filter
-      if (riskFilter !== 'all' && entry.risk_level?.toLowerCase() !== riskFilter) {
+      if (quickPreset === 'slow' && (entry.execution_time_ms || 0) < 1000) {
         return false;
       }
-      // Status filter
-      if (statusFilter !== 'all' && entry.status?.toLowerCase() !== statusFilter) {
-        return false;
-      }
-      // Text search
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchTool = entry.tool_name?.toLowerCase().includes(q);
@@ -121,7 +150,7 @@ export function AuditLogsPage() {
       }
       return true;
     });
-  }, [logs, riskFilter, statusFilter, searchQuery]);
+  }, [logs, quickPreset, searchQuery]);
 
   // Statistics
   const stats = useMemo(() => {
@@ -138,15 +167,34 @@ export function AuditLogsPage() {
       {/* Page Header */}
       <PageHeader
         eyebrow={t('eyebrow', 'Governance & Security')}
-        title={t('title', 'Audit Logs')}
+        title={t('title', 'Audit Logs Explorer')}
         description={t('subtitle', 'Immutable, cryptographically-chained ledger of tool executions, permission gates, and system operations.')}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant={liveTail ? 'primary' : 'ghost'}
+              onClick={() => setLiveTail(!liveTail)}
+              size="sm"
+              icon={
+                <span className={`w-2 h-2 rounded-full ${liveTail ? 'bg-emerald-400 animate-ping' : 'bg-slate'}`} />
+              }
+            >
+              {liveTail ? t('liveTailActive', 'Live Tail: ON') : t('liveTail', 'Live Tail')}
+            </Button>
             <Button
               variant="ghost"
-              onClick={handleExportLogs}
+              onClick={handleExportCSV}
               disabled={logs.length === 0}
-              size='sm'
+              size="sm"
+              icon={<Download className="w-3.5 h-3.5" />}
+            >
+              {t('exportCSV', 'Export CSV')}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={handleExportJSON}
+              disabled={logs.length === 0}
+              size="sm"
               icon={<Download className="w-3.5 h-3.5" />}
             >
               {t('exportLogs', 'Export JSON')}
@@ -162,9 +210,9 @@ export function AuditLogsPage() {
             </Button>
             <Button
               variant="ghost"
-              onClick={fetchLogs}
+              onClick={() => fetchLogs()}
               disabled={loading}
-              size='sm'
+              size="sm"
               icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />}
             >
               {t('refresh', 'Refresh')}
@@ -219,6 +267,30 @@ export function AuditLogsPage() {
 
         {/* Filters & Search Toolbar */}
         <Card className="p-4 border border-onyx/10 bg-canvas/90 space-y-4">
+          {/* Quick Presets Bar */}
+          <div className="flex flex-wrap items-center gap-2 border-b border-onyx/10 pb-3">
+            <span className="text-caption font-semibold text-slate uppercase tracking-wider">{t('presets.label', 'Presets')}:</span>
+            {[
+              { id: 'all' as const, label: t('presets.all', 'All Logs') },
+              { id: 'critical' as const, label: t('presets.critical', 'High-Risk Only') },
+              { id: 'failures' as const, label: t('presets.failures', 'Blocked / Failures') },
+              { id: 'slow' as const, label: t('presets.slow', 'High Latency (>1s)') },
+            ].map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => handleApplyPreset(p.id)}
+                className={`px-3 py-1 rounded-full text-caption font-medium transition-colors cursor-pointer ${
+                  quickPreset === p.id
+                    ? 'bg-deep-ink text-white font-semibold shadow-2xs'
+                    : 'bg-soft-meadow text-deep-ink hover:bg-soft-meadow/80'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             {/* Filter Pills */}
             <div className="flex flex-wrap items-center gap-3">
@@ -229,7 +301,10 @@ export function AuditLogsPage() {
                   <button
                     key={r}
                     type="button"
-                    onClick={() => setRiskFilter(r)}
+                    onClick={() => {
+                      setRiskFilter(r);
+                      setQuickPreset('all');
+                    }}
                     className={`px-3 py-1 rounded-full text-caption font-medium capitalize cursor-pointer transition-colors ${riskFilter === r ? 'bg-deep-ink text-white font-semibold' : 'text-deep-ink hover:text-slate'
                       }`}
                   >

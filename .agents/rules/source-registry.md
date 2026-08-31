@@ -37,6 +37,8 @@
 | Method | Path | Handler | File |
 |:---|:---|:---|:---|
 | `GET` | `/api/agents` | `handleListAgents` | `api_agent.go` |
+| `GET` | `/api/agents/templates` | `handleListAgentTemplates` | `api_agent.go` |
+| `GET` | `/api/agents/templates/{templateID}` | `handleGetAgentTemplate` | `api_agent.go` |
 | `POST` | `/api/agents` | `handleCreateAgent` | `api_agent.go` |
 | `GET` | `/api/agents/{agentID}` | `handleGetAgent` | `api_agent.go` |
 | `PUT` | `/api/agents/{agentID}` | `handleUpdateAgent` | `api_agent.go` |
@@ -200,6 +202,9 @@
 |:---|:---|:---|:---|
 | `GET` | `/api/notifications` | `handleListNotifications` | `api_notifications.go` |
 | `GET` | `/api/notifications/unread-count` | `handleGetUnreadNotificationsCount` | `api_notifications.go` |
+| `GET` | `/api/notifications/preferences` | `handleGetNotificationPreferences` | `api_notifications.go` |
+| `PUT` | `/api/notifications/preferences` | `handleSaveNotificationPreferences` | `api_notifications.go` |
+| `POST` | `/api/notifications/digest/trigger` | `handleTriggerDailyDigest` | `api_notifications.go` |
 | `POST` | `/api/notifications/mark-read` | `handleMarkNotificationRead` | `api_notifications.go` |
 | `DELETE` | `/api/notifications` | `handleDeleteNotifications` | `api_notifications.go` |
 | `GET` | `/api/notifications/push/vapid-key` | `handleGetVAPIDPublicKey` | `api_notifications.go` |
@@ -225,8 +230,14 @@
 | `DELETE` | `/api/system/keys/{provider}` | `handleDeleteAPIKey` | `api_system.go` |
 | `POST` | `/api/system/keys/test` | `handleTestAPIKey` | `api_system.go` |
 | `GET` | `/api/system/audit` | `handleGetAuditLogs` | `api_system.go` |
+| `GET` | `/api/system/audit/export` | `handleExportAuditLogs` | `api_system.go` |
+| `GET` | `/api/system/audit/verify` | `handleVerifyAuditChain` | `api_system.go` |
 | `GET` | `/api/system/storage` | `handleGetStorageInfo` | `api_system.go` |
 | `GET` | `/api/system/backup` | `handleGetBackup` | `api_system.go` |
+| `POST` | `/api/system/backup` | `handleCreateBackup` | `api_system.go` |
+| `GET` | `/api/system/backups` | `handleListBackups` | `api_system.go` |
+| `POST` | `/api/system/restore` | `handleRestoreBackup` | `api_system.go` |
+| `POST` | `/api/system/factory-reset` | `handleFactoryReset` | `api_system.go` |
 | `POST` | `/api/system/ota/check` | `handleCheckOTA` | `api_system.go` |
 | `GET` | `/api/system/tailscale` | `handleGetTailscale` | `api_system.go` |
 | `GET` | `/api/system/wifi/scan` | `handleWifiScan` | `api_system.go` |

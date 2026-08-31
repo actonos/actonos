@@ -91,5 +91,11 @@
     "description": "Đã xảy ra lỗi không mong muốn trong chế độ xem ứng dụng. Kernel hệ thống vẫn an toàn.",
     "home": "Trở về nhà",
     "reload": "Tải lại Xem"
+  },
+  "pwa": {
+    "title": "Cài Đặt Ứng Dụng ActonOS",
+    "subtitle": "Truy cập nhanh 24/7 và nhận thông báo đẩy tức thì",
+    "install": "Cài Đặt",
+    "iosGuide": "Nhấn biểu tượng Chia sẻ rồi chọn \"Thêm vào Màn hình chính\""
   }
 }

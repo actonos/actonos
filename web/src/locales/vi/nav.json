@@ -103,5 +103,8 @@
     "cpu": "CPU: {{value}}%",
     "ram": "RAM: {{value}} MB",
     "supervisor": "Giám sát: {{status}}"
+  },
+  "mobile": {
+    "menu": "Menu"
   }
 }
