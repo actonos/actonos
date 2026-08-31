@@ -1,0 +1,11 @@
+{
+  "id": "task_13_large_observation_summarization",
+  "title": "Auto-summarize Massive 50KB Tool Output",
+  "domain": "tool_use",
+  "difficulty": "medium",
+  "language": "en",
+  "user_goal": "Process large web scrape dump and extract specific API token without context overflow",
+  "expected_kind": "research",
+  "available_tools": ["native_http_fetch"],
+  "expected_assertions": []
+}

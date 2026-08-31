@@ -98,7 +98,9 @@
     "openStudio": "Mở Agent Studio",
     "deleteTitle": "Xóa manifest agent",
     "deleteDescription": "Bạn có chắc chắn muốn xóa \"{{agent}}\" không? Thao tác này sẽ xóa vĩnh viễn trạng thái, ủy quyền công cụ và bảng kê khai thực thi khỏi ActonOS.",
-    "delete": "Xóa agent"
+    "delete": "Xóa agent",
+    "startAgent": "Khởi chạy agent",
+    "stopAgent": "Dừng agent"
   },
   "card": {
     "toolsCount": "{{count}} Công cụ",
@@ -361,6 +363,40 @@
       "prompt_clarity": "Độ rõ của chỉ thị",
       "task_failure": "Mẫu lỗi lặp lại",
       "performance": "Hiệu năng & Chi phí"
+    }
+  },
+  "memory": {
+    "buttonLabel": "Quản lý Bộ nhớ & Ký ức",
+    "modalTitle": "Quản lý Bộ nhớ Phân tầng & Ghim Ký ức",
+    "loadFailed": "Không thể tải danh sách ký ức",
+    "actionFailed": "Thao tác bộ nhớ thất bại",
+    "pinSuccess": "Đã ghim ký ức (Miễn trừ suy giảm Ebbinghaus)",
+    "unpinSuccess": "Đã bỏ ghim ký ức",
+    "importanceUpdated": "Đã cập nhật mức độ quan trọng",
+    "searchPlaceholder": "Tìm kiếm ký ức...",
+    "pinningNoticeTitle": "Bảo tồn Ký ức Ebbinghaus",
+    "pinningNoticeDesc": "Ký ức được Ghim hoặc thuộc nhóm critical sẽ hoàn toàn miễn nhiễm với sự suy giảm thời gian và không bao giờ bị xóa trong các chu kỳ phản chiếu.",
+    "emptyTitle": "Chưa có mẩu ký ức nào",
+    "emptyDesc": "Ký ức sẽ được tự động tích lũy và cập nhật qua các phiên hội thoại, nhiệm vụ tự chủ và chu kỳ phản chiếu.",
+    "pinned": "Đã ghim",
+    "unpin": "Bỏ ghim",
+    "pin": "Ghim",
+    "accessCount": "Truy cập",
+    "created": "Tạo lúc",
+    "lastAccessed": "Dùng gần nhất",
+    "layers": {
+      "all": "Tất cả các tầng",
+      "semantic": "Ngữ nghĩa (Semantic)",
+      "episodic": "Tập đoạn (Episodic)",
+      "procedural": "Thủ tục (Procedural)",
+      "user_profile": "Hồ sơ người dùng"
+    },
+    "tiers": {
+      "critical": "Sống còn (3.0x)",
+      "user_preference": "Sở thích (2.5x)",
+      "high": "Cao (1.5x)",
+      "normal": "Bình thường (1.0x)",
+      "low": "Thấp (0.5x)"
     }
   }
 }

@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-export type AgentStudioSection = 'prompt' | 'soul' | 'memory' | 'model' | 'tools' | 'channels' | 'heartbeat' | 'governance' | 'review';
+export type AgentStudioSection = 'prompt' | 'soul' | 'model' | 'tools' | 'channels' | 'heartbeat' | 'governance' | 'review';
 
 export function AgentStudioNav({
   value,
@@ -25,7 +25,6 @@ export function AgentStudioNav({
   const items: Array<{ value: AgentStudioSection; label: string }> = [
     { value: 'prompt', label: t('studio.tabs.instructions') },
     { value: 'soul', label: t('studio.tabs.soul') },
-    { value: 'memory', label: t('studio.tabs.memory') },
     { value: 'model', label: t('studio.tabs.model', { status: modelReady ? t('studio.ready') : t('studio.keyNeeded') }) },
     { value: 'tools', label: t('studio.tabs.tools', { value: allTools ? t('studio.allTools') : toolCount }) },
     { value: 'channels', label: t('studio.tabs.channels', { value: allChannels ? t('studio.all') : channelCount }) },

@@ -1,0 +1,11 @@
+{
+  "id": "task_26_procedural_memory_reuse",
+  "title": "Apply Learned Procedural Pattern for Safe Deployment",
+  "domain": "memory",
+  "difficulty": "medium",
+  "language": "en",
+  "user_goal": "Deploy staging service following procedural test-before-build pattern",
+  "expected_kind": "research",
+  "available_tools": [],
+  "expected_assertions": []
+}

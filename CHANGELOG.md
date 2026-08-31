@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **B1. Tier-3 Verification: Outcome Assertions & Grounding (`internal/agent/verifier_outcome.go`, `internal/agent/verifier.go`)**:
+  - Deterministic multi-type outcome assertion engine supporting 8 verification kinds (`file_exists`, `file_contains`, `json_schema`, `http_status`, `sql_count`, `shell_exit`, `dir_not_empty`, `llm_judge`).
+  - Integrated outcome assertions directly into `PlanStep` DAG execution and autonomous task completion validation, eliminating false completion claims.
+- **B2. Ebbinghaus Weighted Decay, Importance Tiers & Memory Pinning (`internal/memory/db.go`, `internal/memory/decay.go`, `internal/memory/hybrid.go`, `/api/agents/{agentID}/memories*`)**:
+  - SQLite schema migration adding `importance`, `pinned`, `user_pinned`, and `demoted_at` columns.
+  - Multi-tier memory retention rules (`critical`, `user_preference`, `high`, `normal`, `low`) ensuring pinned and critical user preferences are immune to deletion or temporal decay.
+  - CRUD API for memory listing, permanent pinning, and importance tier assignment.
+- **B3. Smart Cascade Router: Task-Kind & Cost/Latency Aware Routing (`internal/llm/router.go`, `/api/llm/health*`, `/api/llm/router/retune`)**:
+  - Per-task-kind telemetry tracking (`reasoning`, `coding`, `summarize`, `classify`, `extract`, `general`) with moving average p50/p95 latency and failure statistics.
+  - Dynamic cascade re-ordering based on pricing catalog to prioritize cost-effective models on lightweight extraction/classification workloads.
+  - Nightly and on-demand self-diagnostic health probe and router retune endpoints.
+- **B4. Tool Result Auto-Summarization & Provenance Snapshots (`internal/agent/context.go`, `internal/agent/engine.go`)**:
+  - Automatic summarization of oversized tool observations (>8,000 chars) retaining critical facts, paths, and identifiers.
+  - Full raw observation payloads persisted in `context_snapshots` with reference token links (`view_full:<run_id>:<snap_id>`).
+- **B5. Standardized Eval Suite & CI Regression Detection Gate (`evals/`, `.github/workflows/eval.yml`)**:
+  - 30 comprehensive standardized benchmark tasks across coding, planning, tool usage, memory retrieval, safety policy, and Vietnamese language.
+  - 3-tier automated grading engine (deterministic assertion checker, outcome verifier, and LLM-as-a-judge rubric).
+  - Standalone CLI runner with P50/P95 latency, pass rate, false completion rate, and token cost reporting wired into GitHub Actions.
+
 ## [1.0.3]
 
 ### Added

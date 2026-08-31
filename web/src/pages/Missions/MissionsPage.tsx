@@ -22,6 +22,7 @@ import {
   MessageSquare,
   Eye,
   Zap,
+  Clock,
 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { api } from '@/lib/api';
@@ -633,8 +634,8 @@ export function MissionsPage({ onOpenChat }: MissionsPageProps) {
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {autoHours && (
-                          <span className="text-[10px] font-mono text-slate bg-canvas px-2 py-0.5 rounded-full border border-onyx/10">
-                            ⏱ Auto {autoHours}h
+                          <span className="text-[10px] font-mono text-slate bg-canvas px-2 py-0.5 rounded-full border border-onyx/10 inline-flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-slate" /> Auto {autoHours}h
                           </span>
                         )}
                         <Badge variant="stopped">{t('governance.pending')}</Badge>

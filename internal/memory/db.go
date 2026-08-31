@@ -95,6 +95,10 @@ func (d *DB) migrate() error {
 		content TEXT NOT NULL,
 		metadata_json TEXT,
 		importance_weight REAL NOT NULL DEFAULT 1.0,
+		importance TEXT NOT NULL DEFAULT 'normal',
+		pinned INTEGER NOT NULL DEFAULT 0,
+		user_pinned INTEGER NOT NULL DEFAULT 0,
+		demoted_at TIMESTAMP,
 		last_accessed_at TIMESTAMP NOT NULL,
 		access_count INTEGER NOT NULL DEFAULT 0,
 		created_at TIMESTAMP NOT NULL
@@ -333,5 +337,10 @@ func (d *DB) migrate() error {
 	_, _ = d.db.ExecContext(ctx, "ALTER TABLE conversations ADD COLUMN is_pinned BOOLEAN NOT NULL DEFAULT 0")
 	_, _ = d.db.ExecContext(ctx, "ALTER TABLE conversations ADD COLUMN channel TEXT NOT NULL DEFAULT 'web'")
 	_, _ = d.db.ExecContext(ctx, "CREATE INDEX IF NOT EXISTS idx_conversations_pinned ON conversations(is_pinned, updated_at)")
+	_, _ = d.db.ExecContext(ctx, "ALTER TABLE memories ADD COLUMN importance TEXT NOT NULL DEFAULT 'normal'")
+	_, _ = d.db.ExecContext(ctx, "ALTER TABLE memories ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")
+	_, _ = d.db.ExecContext(ctx, "ALTER TABLE memories ADD COLUMN user_pinned INTEGER NOT NULL DEFAULT 0")
+	_, _ = d.db.ExecContext(ctx, "ALTER TABLE memories ADD COLUMN demoted_at TIMESTAMP")
+	_, _ = d.db.ExecContext(ctx, "CREATE INDEX IF NOT EXISTS idx_memories_importance ON memories(agent_id, importance, pinned)")
 	return err
 }

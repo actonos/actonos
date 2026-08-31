@@ -24,7 +24,7 @@ import {
   Check,
   Sparkles,
   Brain,
-  RefreshCw,
+  HardDrive,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { AgentManifest, ApprovalLevel, ToolInfo, LLMProviderInfo } from '@/lib/types';
@@ -37,9 +37,9 @@ import { AgentToolsSection } from '@/components/features/agents/AgentToolsSectio
 import { AgentChannelsSection } from '@/components/features/agents/AgentChannelsSection';
 import { AgentHeartbeatSection } from '@/components/features/agents/AgentHeartbeatSection';
 import { AgentTextSection } from '@/components/features/agents/AgentTextSection';
-import { AgentMemorySection } from '@/components/features/agents/AgentMemorySection';
 import { AgentReviewSection } from '@/components/features/agents/AgentReviewSection';
 import { AgentInsightsModal } from './components/AgentInsightsModal';
+import { MemoryManagerModal } from './components/MemoryManagerModal';
 
 export interface AgentStudioPageProps {
   agentID: string; // 'new' or existing agent ID like 'agent_system_core'
@@ -58,15 +58,16 @@ You combine high analytical competence (IQ), empathetic communication (EQ), and 
 - Decision & Action: Understand objectives, verify inputs, and evaluate outcomes critically before concluding.
 - Safety & Integrity: Never leak private keys, secrets, or sensitive configuration data.`;
 
-const ACTON_STANDARD_PROMPT = `You are a specialized autonomous AI agent operating within ActonOS.
+const ACTON_STANDARD_PROMPT = `ActonOS Operator Instructions:
+1. Always analyze requirements thoroughly before selecting tools.
+2. Maintain idempotency and clean error handling across all tool executions.
+3. Provide crisp, high-signal, well-formatted structured responses.`;
 
-- Role & Expertise: Embody your assigned role and responsibilities with precision, clarity, and domain expertise.
-- Execution Protocol: Clarify objectives and constraints before choosing tools. Use authorized tools purposefully.
-- Synthesis: Critically review tool execution observations and deliver polished, structured results directly.
-- Conversational Standard: Communicate naturally and contextually. Avoid robotic platitudes and dive straight into high-value solutions.
-- Safety Invariants: Safeguard credentials and confine file modifications strictly to authorized workspace paths.`;
-
-export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPageProps) {
+export function AgentStudioPage({
+  agentID,
+  onBack,
+  onOpenChat,
+}: AgentStudioPageProps) {
   const { t } = useTranslation('agents');
   const { success, error, info } = useToast();
   const { models: modelCatalog } = useModelCatalog();
@@ -76,8 +77,7 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [isInsightsOpen, setIsInsightsOpen] = useState(false);
-  const [refreshingMemory, setRefreshingMemory] = useState(false);
-  const [clearingMemory, setClearingMemory] = useState(false);
+  const [isMemoryOpen, setIsMemoryOpen] = useState(false);
   const baselineRef = useRef('');
   const [toolsList, setToolsList] = useState<ToolInfo[]>([]);
 
@@ -265,24 +265,6 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, [isDirty]);
-
-  const handleClearMemory = async () => {
-    if (!agentID || isNew) {
-      setMemoryMD('');
-      success(t('studio.memory.cleared'), t('studio.memory.clearedDescription'));
-      return;
-    }
-    setClearingMemory(true);
-    try {
-      await api.clearMemoryMD(agentID);
-      setMemoryMD('');
-      success(t('studio.memory.cleared'), t('studio.memory.clearedDescription'));
-    } catch (err) {
-      error(t('studio.memory.clearFailed'), getErrorMessage(err));
-    } finally {
-      setClearingMemory(false);
-    }
-  };
 
   const handleSave = async () => {
     if (validationErrors.length > 0) {
@@ -479,6 +461,15 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
                 <Button
                   variant="ghost"
                   size="sm"
+                  icon={<HardDrive className="w-3.5 h-3.5 text-deep-ink" />}
+                  onClick={() => setIsMemoryOpen(true)}
+                  title={t('memory.buttonLabel')}
+                >
+                  {t('memory.buttonLabel')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
                   icon={<MessageSquare className="w-3.5 h-3.5" />}
                   onClick={() => onOpenChat(agentID)}
                 >
@@ -625,15 +616,6 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
           </button>
           <button
             role="tab"
-            aria-selected={activeTab === 'memory'}
-            onClick={() => setActiveTab('memory')}
-            className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${activeTab === 'memory' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
-              }`}
-          >
-            {t('studio.tabs.memory')}
-          </button>
-          <button
-            role="tab"
             aria-selected={activeTab === 'model'}
             onClick={() => setActiveTab('model')}
             className={`px-4 py-1.5 rounded-full text-caption font-sans font-medium transition-all cursor-pointer whitespace-nowrap ${activeTab === 'model' ? 'bg-deep-ink text-white font-semibold shadow-xs' : 'text-deep-ink hover:text-slate'
@@ -773,83 +755,6 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
               <span>{t('studio.length', { count: soul.length })}</span>
               <span className="text-amber-700 font-semibold flex items-center gap-1">
                 <Sparkles className="w-3.5 h-3.5" /> {t('studio.soul.isolated')}
-              </span>
-            </div>
-          </Card>
-        )}
-
-        {activeTab === 'memory' && (
-          <AgentMemorySection
-            value={memoryMD}
-            refreshing={refreshingMemory}
-            clearing={clearingMemory}
-            onClear={handleClearMemory}
-            onRefresh={async () => {
-              if (!agentID || isNew) return;
-              setRefreshingMemory(true);
-              try {
-                const memory = await api.getMemoryMD(agentID);
-                setMemoryMD(memory.memory_md || '');
-                info(t('studio.memory.refreshed'), t('studio.memory.refreshedDescription'));
-              } catch (err) {
-                error(t('studio.memory.refreshFailed'), getErrorMessage(err));
-              } finally {
-                setRefreshingMemory(false);
-              }
-            }}
-          />
-        )}
-        {/* Legacy memory editor retained temporarily for source migration only. */}
-        {renderLegacyEditors && activeTab === 'memory' && (
-          <Card className="p-6 border border-onyx/10 bg-canvas/90 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-onyx/5">
-              <div>
-                <h3 className="font-serif text-heading-sm text-deep-ink flex items-center gap-2">
-                  <Brain className="w-5 h-5 text-indigo-600" />
-                  <span>{t('studio.memory.title')}</span>
-                </h3>
-                <p className="text-caption text-slate">
-                  {t('studio.memory.description')}
-                </p>
-              </div>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                icon={<RefreshCw className="w-3.5 h-3.5" />}
-                onClick={async () => {
-                  if (agentID && !isNew) {
-                    const m = await api.getMemoryMD(agentID).catch(() => null);
-                    if (m?.memory_md) setMemoryMD(m.memory_md);
-                    info(t('studio.memory.refreshed'), t('studio.memory.refreshedDescription'));
-                  }
-                }}
-              >
-                {t('studio.memory.refresh')}
-              </Button>
-            </div>
-
-            {memoryMD ? (
-              <textarea
-                rows={18}
-                value={memoryMD}
-                readOnly
-                className="w-full bg-soft-meadow/80 text-deep-ink p-4 rounded-2xl border border-onyx/10 font-mono text-body-sm leading-relaxed focus:outline-none"
-              />
-            ) : (
-              <div className="p-12 text-center bg-soft-meadow rounded-2xl border border-onyx/5">
-                <Brain className="w-10 h-10 text-slate/50 mx-auto mb-3" />
-                <h4 className="font-serif text-heading-sm text-deep-ink mb-1">{t('studio.memory.empty')}</h4>
-                <p className="font-sans text-caption text-slate max-w-md mx-auto">
-                  {t('studio.memory.emptyDescription')}
-                </p>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between text-caption font-mono text-slate">
-              <span>{t('studio.length', { count: memoryMD.length })}</span>
-              <span className="text-indigo-700 font-semibold flex items-center gap-1">
-                <Brain className="w-3.5 h-3.5" /> {t('studio.memory.longTerm')}
               </span>
             </div>
           </Card>
@@ -1409,32 +1314,61 @@ export function AgentStudioPage({ agentID, onBack, onOpenChat }: AgentStudioPage
       </PageContainer>
 
       {!isNew && (
-        <AgentInsightsModal
-          isOpen={isInsightsOpen}
-          onClose={() => setIsInsightsOpen(false)}
-          agent={{
-            agent_id: agentID,
-            name: name || agentID,
-            description,
-            avatar_icon: avatarIcon,
-            status,
-            is_system: isSystem,
-            model_config: {
-              primary_model: primaryModel,
-              fallback_model: fallbackModel,
-              reasoning_effort: reasoningEffort,
-              max_tokens: maxTokens,
-            },
-            system_instructions: systemInstructions,
-            authorized_tools: authorizedTools,
-            listen_channels: selectedChannels,
-            delegation_scope: {
-              max_monthly_budget_usd: Number(maxBudget) || 50,
-              allowed_workspace_paths: [],
-              require_human_approval_level: approvalLevel,
-            },
-          }}
-        />
+        <>
+          <AgentInsightsModal
+            isOpen={isInsightsOpen}
+            onClose={() => setIsInsightsOpen(false)}
+            agent={{
+              agent_id: agentID,
+              name: name || agentID,
+              description,
+              avatar_icon: avatarIcon,
+              status,
+              is_system: isSystem,
+              model_config: {
+                primary_model: primaryModel,
+                fallback_model: fallbackModel,
+                reasoning_effort: reasoningEffort,
+                max_tokens: maxTokens,
+              },
+              system_instructions: systemInstructions,
+              authorized_tools: authorizedTools,
+              listen_channels: selectedChannels,
+              delegation_scope: {
+                max_monthly_budget_usd: Number(maxBudget) || 50,
+                allowed_workspace_paths: [],
+                require_human_approval_level: approvalLevel,
+              },
+            }}
+          />
+
+          <MemoryManagerModal
+            isOpen={isMemoryOpen}
+            onClose={() => setIsMemoryOpen(false)}
+            agent={{
+              agent_id: agentID,
+              name: name || agentID,
+              description,
+              avatar_icon: avatarIcon,
+              status,
+              is_system: isSystem,
+              model_config: {
+                primary_model: primaryModel,
+                fallback_model: fallbackModel,
+                reasoning_effort: reasoningEffort,
+                max_tokens: maxTokens,
+              },
+              system_instructions: systemInstructions,
+              authorized_tools: authorizedTools,
+              listen_channels: selectedChannels,
+              delegation_scope: {
+                max_monthly_budget_usd: Number(maxBudget) || 50,
+                allowed_workspace_paths: [],
+                require_human_approval_level: approvalLevel,
+              },
+            }}
+          />
+        </>
       )}
     </div>
   );

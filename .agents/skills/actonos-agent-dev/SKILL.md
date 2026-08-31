@@ -18,12 +18,15 @@ internal/agent/
 ├── tasks.go             # Autonomous Task Backlog Manager with SQLite & bi-directional TASKS.md sync
 ├── cron_scheduler.go    # Scheduled autonomous task engine (cron expressions & anti-double-dispatch)
 ├── heartbeat.go         # Autonomous cognitive heartbeat pulse with session resume & zero-noise policy
+├── proactive.go         # 7-probe background anomaly detection & proactive health triaging
 ├── swarm.go             # Multi-agent swarm delegation via Goroutines & channels
-├── planner.go           # Dynamic task decomposition & multi-path tree search (LATS)
-├── verifier.go          # Two-tier deterministic static analysis & semantic verification
-├── reflection.go        # Async background learning, fact extraction, and memory update
+├── planner.go           # Dynamic DAG task decomposition, concurrent burst pulse & step assertions
+├── verifier.go          # Multi-tier verification coordinator
+├── verifier_outcome.go  # Tier-3 empirical outcome assertion grounding engine (8 assertion kinds)
+├── directive_verifier.go# Structured standing directive validation
+├── reflection.go        # Async background learning, self-review proposals, and memory retention
 ├── profile.go           # User persona, profile management, dynamic SOUL.md & MEMORY.md
-├── context.go           # Context window management, message sliding, and token pruning
+├── context.go           # Context window manager, token pruning & AutoSummarizeObservation (Context Shield)
 ├── types.go             # Manifests, delegation scopes, stream events, audit log types
 └── *_test.go            # Unit & integration test suites for all agent capabilities
 ```

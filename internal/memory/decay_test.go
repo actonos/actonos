@@ -94,3 +94,29 @@ func TestSigmoidMath(t *testing.T) {
 		t.Fatalf("sigmoid(-10) must be close to 0.0")
 	}
 }
+
+func TestTieredImportanceAndPinning(t *testing.T) {
+	cfg := DefaultDecayConfig()
+
+	// Critical tier should be protected from decay even after 180 days
+	scoreCriticalOld := CalculateTieredRetrievalScore(180*24*time.Hour, 1.0, ImportanceCritical, false, false, 0, 0.8, cfg)
+	scoreNormalOld := CalculateTieredRetrievalScore(180*24*time.Hour, 1.0, ImportanceNormal, false, false, 0, 0.8, cfg)
+	if scoreCriticalOld <= scoreNormalOld {
+		t.Fatalf("critical old memory score (%f) must be strictly higher than normal old memory (%f)", scoreCriticalOld, scoreNormalOld)
+	}
+
+	// Pinned memory should never decay
+	scorePinned := CalculateTieredRetrievalScore(365*24*time.Hour, 1.0, ImportanceNormal, true, false, 0, 0.5, cfg)
+	scoreUnpinned := CalculateTieredRetrievalScore(365*24*time.Hour, 1.0, ImportanceNormal, false, false, 0, 0.5, cfg)
+	if scorePinned <= scoreUnpinned {
+		t.Fatalf("pinned memory score (%f) must exceed unpinned old score (%f)", scorePinned, scoreUnpinned)
+	}
+
+	// Demoted memory should have reduced score
+	scoreNormal := CalculateTieredRetrievalScore(10*24*time.Hour, 1.0, ImportanceNormal, false, false, 0, 0.7, cfg)
+	scoreDemoted := CalculateTieredRetrievalScore(10*24*time.Hour, 1.0, ImportanceLow, false, true, 0, 0.7, cfg)
+	if scoreDemoted >= scoreNormal {
+		t.Fatalf("demoted memory score (%f) must be lower than normal score (%f)", scoreDemoted, scoreNormal)
+	}
+}
+

@@ -98,7 +98,9 @@
     "openStudio": "Open Agent Studio",
     "deleteTitle": "Delete agent manifest",
     "deleteDescription": "Are you sure you want to delete \"{{agent}}\"? This permanently removes its state, tool authorization, and execution manifests from ActonOS.",
-    "delete": "Delete agent"
+    "delete": "Delete agent",
+    "startAgent": "Start agent",
+    "stopAgent": "Stop agent"
   },
   "card": {
     "toolsCount": "{{count}} Tools",
@@ -361,6 +363,40 @@
       "prompt_clarity": "Prompt Clarity",
       "task_failure": "Failure Pattern",
       "performance": "Performance & Cost"
+    }
+  },
+  "memory": {
+    "buttonLabel": "Manage Memory & Importance",
+    "modalTitle": "Tiered Memory & Pinning Manager",
+    "loadFailed": "Failed to load memory records",
+    "actionFailed": "Memory operation failed",
+    "pinSuccess": "Memory pinned (Ebbinghaus decay immune)",
+    "unpinSuccess": "Memory unpinned",
+    "importanceUpdated": "Importance tier updated",
+    "searchPlaceholder": "Search memory records...",
+    "pinningNoticeTitle": "Ebbinghaus Protection",
+    "pinningNoticeDesc": "Pinned memories and critical items are mathematically immune to temporal decay and will never be pruned during reflection cycles.",
+    "emptyTitle": "No memory records found",
+    "emptyDesc": "Memories accumulate automatically from chat sessions, autonomous missions, and reflection cycles.",
+    "pinned": "Pinned",
+    "unpin": "Unpin",
+    "pin": "Pin",
+    "accessCount": "Accesses",
+    "created": "Created",
+    "lastAccessed": "Last used",
+    "layers": {
+      "all": "All Layers",
+      "semantic": "Semantic",
+      "episodic": "Episodic",
+      "procedural": "Procedural",
+      "user_profile": "User Profile"
+    },
+    "tiers": {
+      "critical": "Critical (3.0x)",
+      "user_preference": "Preference (2.5x)",
+      "high": "High (1.5x)",
+      "normal": "Normal (1.0x)",
+      "low": "Low (0.5x)"
     }
   }
 }

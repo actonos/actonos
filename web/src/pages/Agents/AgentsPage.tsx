@@ -25,6 +25,8 @@ import {
   Wrench,
   ShieldCheck,
   Brain,
+  HardDrive,
+  MoreVertical,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { AgentManifest } from '@/lib/types';
@@ -33,6 +35,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { AgentInsightsModal } from './components/AgentInsightsModal';
+import { MemoryManagerModal } from './components/MemoryManagerModal';
 
 export interface AgentsPageProps {
   onOpenChat: (agentID: string) => void;
@@ -52,6 +55,8 @@ export function AgentsPage({
   const [agents, setAgents] = useState<AgentManifest[]>([]);
   const [deletingAgentId, setDeletingAgentId] = useState<string | null>(null);
   const [insightsAgent, setInsightsAgent] = useState<AgentManifest | null>(null);
+  const [memoryAgent, setMemoryAgent] = useState<AgentManifest | null>(null);
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<AgentFilter>('all');
@@ -419,52 +424,125 @@ export function AgentsPage({
 
                         {/* Actions Column */}
                         <td className="py-4 px-5 align-middle text-right whitespace-nowrap">
-                          <div className="inline-flex items-center gap-1.5">
+                          <div className="relative inline-flex items-center gap-2">
                             <Button
                               variant="primary"
                               size="sm"
                               icon={<MessageSquare className="w-3.5 h-3.5" />}
                               onClick={() => onOpenChat(agent.agent_id)}
-                              className="px-3"
+                              className="px-3 shadow-xs"
                               title={t('list.launchChat')}
                             >
                               {t('list.chat')}
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              icon={<Brain className="w-3.5 h-3.5 text-deep-ink" />}
-                              onClick={() => setInsightsAgent(agent)}
-                              title={t('insights.buttonLabel')}
-                            />
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              icon={<Sliders className="w-3.5 h-3.5" />}
-                              onClick={() => onEditAgent(agent.agent_id)}
-                              title={t('list.openStudio')}
-                            />
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              icon={
-                                agent.status === 'active' ? (
-                                  <Square className="w-3.5 h-3.5 text-slate" />
-                                ) : (
-                                  <Play className="w-3.5 h-3.5 text-emerald-600" />
-                                )
-                              }
-                              onClick={() => handleToggleStatus(agent.agent_id, agent.status)}
-                              title={agent.status === 'active' ? 'Stop Agent' : 'Start Agent'}
-                            />
-                            <Button
-                              variant="danger"
-                              size="sm"
-                              icon={<Trash2 className="w-3.5 h-3.5" />}
-                              onClick={() => setDeletingAgentId(agent.agent_id)}
-                              disabled={isSystem}
-                              title={isSystem ? 'Cannot delete root system agent' : 'Delete agent'}
-                            />
+
+                            <div className="relative">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                icon={<MoreVertical className="w-4 h-4 text-deep-ink" />}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMenuOpenId(menuOpenId === agent.agent_id ? null : agent.agent_id);
+                                }}
+                                className="px-2 rounded-full"
+                                title={t('common.more', 'Tùy chọn')}
+                              />
+
+                              {menuOpenId === agent.agent_id && (
+                                <>
+                                  <div
+                                    className="fixed inset-0 z-30"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setMenuOpenId(null);
+                                    }}
+                                  />
+                                  <div className="absolute right-0 top-full mt-1.5 z-40 w-52 rounded-2xl bg-canvas border border-onyx/15 shadow-lg p-1.5 flex flex-col gap-0.5 text-left animate-in fade-in zoom-in-95 duration-100">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setMenuOpenId(null);
+                                        onEditAgent(agent.agent_id);
+                                      }}
+                                      className="flex items-center gap-2.5 w-full px-3 py-2 text-xs font-medium text-deep-ink rounded-xl hover:bg-soft-meadow transition-colors cursor-pointer text-left"
+                                    >
+                                      <Sliders className="w-3.5 h-3.5 text-slate shrink-0" />
+                                      <span>{t('list.openStudio')}</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setMenuOpenId(null);
+                                        setMemoryAgent(agent);
+                                      }}
+                                      className="flex items-center gap-2.5 w-full px-3 py-2 text-xs font-medium text-deep-ink rounded-xl hover:bg-soft-meadow transition-colors cursor-pointer text-left"
+                                    >
+                                      <HardDrive className="w-3.5 h-3.5 text-slate shrink-0" />
+                                      <span>{t('memory.buttonLabel', 'Quản lý Bộ nhớ & Ký ức')}</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setMenuOpenId(null);
+                                        setInsightsAgent(agent);
+                                      }}
+                                      className="flex items-center gap-2.5 w-full px-3 py-2 text-xs font-medium text-deep-ink rounded-xl hover:bg-soft-meadow transition-colors cursor-pointer text-left"
+                                    >
+                                      <Brain className="w-3.5 h-3.5 text-slate shrink-0" />
+                                      <span>{t('insights.buttonLabel')}</span>
+                                    </button>
+
+                                    <div className="h-px bg-onyx/10 my-1" />
+
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setMenuOpenId(null);
+                                        handleToggleStatus(agent.agent_id, agent.status);
+                                      }}
+                                      className="flex items-center gap-2.5 w-full px-3 py-2 text-xs font-medium text-deep-ink rounded-xl hover:bg-soft-meadow transition-colors cursor-pointer text-left"
+                                    >
+                                      {agent.status === 'active' ? (
+                                        <>
+                                          <Square className="w-3.5 h-3.5 text-slate shrink-0" />
+                                          <span>{t('list.stopAgent', 'Dừng hoạt động')}</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Play className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                          <span>{t('list.startAgent', 'Khởi chạy Agent')}</span>
+                                        </>
+                                      )}
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setMenuOpenId(null);
+                                        setDeletingAgentId(agent.agent_id);
+                                      }}
+                                      disabled={isSystem}
+                                      className={`flex items-center gap-2.5 w-full px-3 py-2 text-xs font-medium rounded-xl transition-colors text-left ${
+                                        isSystem
+                                          ? 'text-slate/40 cursor-not-allowed'
+                                          : 'text-red-600 hover:bg-red-500/10 cursor-pointer'
+                                      }`}
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                                      <span>{t('list.delete')}</span>
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </td>
                       </tr>
@@ -493,6 +571,13 @@ export function AgentsPage({
         isOpen={insightsAgent !== null}
         onClose={() => setInsightsAgent(null)}
         agent={insightsAgent}
+      />
+
+      {/* Agent Tiered Memory & Pinning Manager Modal */}
+      <MemoryManagerModal
+        isOpen={memoryAgent !== null}
+        onClose={() => setMemoryAgent(null)}
+        agent={memoryAgent}
       />
     </div>
   );

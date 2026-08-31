@@ -1,0 +1,17 @@
+{
+  "id": "task_01_code_fix_syntax",
+  "title": "Fix Go Syntax Error in Handler",
+  "domain": "coding",
+  "difficulty": "easy",
+  "language": "en",
+  "user_goal": "Inspect main.go and fix the syntax error on line 12",
+  "expected_kind": "produce",
+  "available_tools": ["native_file_read", "native_file_write"],
+  "expected_assertions": [
+    {
+      "kind": "file_exists",
+      "target": "main.go",
+      "critical": true
+    }
+  ]
+}

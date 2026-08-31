@@ -1,0 +1,17 @@
+{
+  "id": "task_25_multi_agent_swarm_dispatch",
+  "title": "Dispatch Subtasks to Specialized Coding and Report Agents",
+  "domain": "planning",
+  "difficulty": "hard",
+  "language": "en",
+  "user_goal": "Coordinate a swarm where dev agent builds microservice and doc agent writes API docs",
+  "expected_kind": "produce",
+  "available_tools": ["native_file_write"],
+  "expected_assertions": [
+    {
+      "kind": "file_exists",
+      "target": "api_docs.md",
+      "critical": true
+    }
+  ]
+}

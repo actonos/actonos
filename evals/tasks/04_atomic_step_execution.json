@@ -1,0 +1,11 @@
+{
+  "id": "task_04_atomic_step_execution",
+  "title": "Execute Atomic Diagnostic Goal in Single Iteration",
+  "domain": "planning",
+  "difficulty": "easy",
+  "language": "en",
+  "user_goal": "Check system uptime and kernel version",
+  "expected_kind": "research",
+  "available_tools": ["native_sysinfo"],
+  "expected_assertions": []
+}

@@ -1168,3 +1168,16 @@ func (s *Server) handleGetModelsCatalog(w http.ResponseWriter, r *http.Request) 
 	catalog := llm.GetCatalogResponse()
 	s.respondJSON(w, http.StatusOK, catalog)
 }
+
+func (s *Server) handleGetLLMHealth(w http.ResponseWriter, r *http.Request) {
+	if s.llmRouter == nil {
+		s.respondError(w, http.StatusServiceUnavailable, "LLM_ROUTER_UNAVAILABLE", "llm router is not initialized")
+		return
+	}
+	reports := s.llmRouter.GetHealthReport()
+	s.respondJSON(w, http.StatusOK, map[string]any{
+		"providers": reports,
+		"count":     len(reports),
+	})
+}
+

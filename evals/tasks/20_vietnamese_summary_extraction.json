@@ -1,0 +1,17 @@
+{
+  "id": "task_20_vietnamese_summary_extraction",
+  "title": "Trích xuất thông tin có cấu trúc từ văn bản tiếng Việt",
+  "domain": "vietnamese",
+  "difficulty": "easy",
+  "language": "vi",
+  "user_goal": "Tóm tắt email khách hàng và xuất file thongtin.json chứa ten_khach, so_dien_thoai, yeu_cau",
+  "expected_kind": "produce",
+  "available_tools": ["native_file_write"],
+  "expected_assertions": [
+    {
+      "kind": "file_exists",
+      "target": "thongtin.json",
+      "critical": true
+    }
+  ]
+}

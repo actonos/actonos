@@ -456,6 +456,20 @@ func TestDecayScore(t *testing.T) {
 }
 ```
 
+### Running Cognition & Reliability Benchmarks
+
+ActonOS includes a standardized 30+ task benchmark suite under `evals/` to prevent cognitive regressions across releases:
+
+```bash
+# 1. Run offline benchmark evaluation (used in CI/CD)
+./evals/run.sh
+# on Windows PowerShell:
+.\evals\run.ps1
+
+# 2. Run against a live model provider
+go run ./evals/runner/main.go --mode=live --model=anthropic/claude-sonnet-4.5 --output=eval_report.md --fail-under=90.0
+```
+
 ---
 
 ## Code Style & Linting

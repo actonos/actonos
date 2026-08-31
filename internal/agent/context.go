@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -56,6 +57,63 @@ func (c *ContextManager) PruneAndSnapshot(
 		) VALUES (?, ?, ?, ?, ?, ?)
 	`, "ctx_"+uuid.NewString(), runID, summary.String(), len(messages), len(pruned), time.Now().UTC())
 	return pruned
+}
+
+const MaxRawObservationChars = 8000
+
+// AutoSummarizeObservation checks if an observation exceeds the char threshold,
+// persists full raw content into context_snapshots, and returns a compacted summary with provenance.
+func (c *ContextManager) AutoSummarizeObservation(
+	ctx context.Context,
+	router *llm.ModelCascadeRouter,
+	runID string,
+	toolName string,
+	rawOutput string,
+) string {
+	if len(rawOutput) <= MaxRawObservationChars {
+		return rawOutput
+	}
+
+	snapID := "snap_obs_" + uuid.NewString()
+	if c.db != nil && runID != "" {
+		_, _ = c.db.ExecContext(ctx, `
+			INSERT INTO context_snapshots (
+				id, run_id, summary, source_message_count, retained_message_count, created_at
+			) VALUES (?, ?, ?, ?, ?, ?)
+		`, snapID, runID, rawOutput, 1, 1, time.Now().UTC())
+	}
+
+	// Try model summary if router is available with real provider
+	if router != nil && router.HasRealProvider() {
+		sumCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		prompt := fmt.Sprintf(
+			"Summarize this large output from tool %q concisely for an autonomous agent.\n"+
+				"Preserve all key factual details, numbers, errors, file paths, IDs, and actionable outcomes.\n"+
+				"Keep under 500 words.\n\nOUTPUT:\n%s",
+			toolName, rawOutput,
+		)
+		resp, err := router.CompleteWithCascade(sumCtx, nil, []llm.Message{
+			{Role: llm.RoleUser, Content: prompt},
+		}, llm.CompletionOptions{
+			TaskKind: llm.TaskKindSummarize,
+		})
+		if err == nil && resp != nil && strings.TrimSpace(resp.Content) != "" {
+			cleaned, _ := llm.ExtractThinkingContent(resp.Content, resp.ReasoningContent)
+			return fmt.Sprintf(
+				"[Observation Summary (Original: %d chars, summarized to %d chars)]\n%s\n\n[Full raw observation stored: view_full:%s:%s]",
+				len(rawOutput), len(cleaned), strings.TrimSpace(cleaned), runID, snapID,
+			)
+		}
+	}
+
+	// Deterministic fallback: preserve head and tail with structured truncation marker
+	head := rawOutput[:3000]
+	tail := rawOutput[len(rawOutput)-1500:]
+	return fmt.Sprintf(
+		"[Observation Truncated (Original: %d chars, retaining %d chars)]\n%s\n\n… [Middle content omitted to prevent context overflow] …\n\n%s\n\n[Full raw observation stored: view_full:%s:%s]",
+		len(rawOutput), len(head)+len(tail), head, tail, runID, snapID,
+	)
 }
 
 // NewContextManager creates a new ContextManager instance.

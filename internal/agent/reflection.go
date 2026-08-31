@@ -143,21 +143,38 @@ func (r *ReflectionEngine) RunReflectionCycle(ctx context.Context) {
 		return
 	}
 
-	// Keep the newest copy of identical episodic memories per agent.
+	// Keep the newest copy of identical episodic memories per agent unless pinned.
 	if _, err := db.ExecContext(ctx, `
 		DELETE FROM memories
 		WHERE rowid NOT IN (
 			SELECT MAX(rowid) FROM memories
 			WHERE layer = ? GROUP BY agent_id, content
-		) AND layer = ?
+		) AND layer = ? AND pinned = 0 AND user_pinned = 0
 	`, memory.LayerEpisodic, memory.LayerEpisodic); err != nil {
 		slog.Warn("memory reflection deduplication failed", "error", err)
 	}
-	// Remove stale, low-value episodes while preserving frequently accessed facts.
+
+	// 1. Demote low-importance items older than 14 days without access
+	demoteCutoff := time.Now().UTC().AddDate(0, 0, -14)
+	if _, err := db.ExecContext(ctx, `
+		UPDATE memories
+		SET demoted_at = CURRENT_TIMESTAMP
+		WHERE importance = 'low'
+		  AND pinned = 0 AND user_pinned = 0
+		  AND access_count = 0 AND created_at < ?
+		  AND demoted_at IS NULL
+	`, demoteCutoff); err != nil {
+		slog.Warn("memory reflection demotion failed", "error", err)
+	}
+
+	// 2. Remove stale, unprotected episodes (never delete pinned or critical/user_preference memories)
 	cutoff := time.Now().UTC().AddDate(0, -6, 0)
 	if _, err := db.ExecContext(ctx, `
 		DELETE FROM memories
-		WHERE layer = ? AND importance_weight < 0.35
+		WHERE layer = ?
+		  AND pinned = 0 AND user_pinned = 0
+		  AND importance NOT IN ('critical', 'user_preference')
+		  AND importance_weight < 0.35
 		  AND access_count = 0 AND created_at < ?
 	`, memory.LayerEpisodic, cutoff); err != nil {
 		slog.Warn("memory reflection retention cleanup failed", "error", err)

@@ -1,0 +1,11 @@
+{
+  "id": "task_15_cost_aware_routing",
+  "title": "Route Simple Extraction Task to Cost-Efficient Model",
+  "domain": "planning",
+  "difficulty": "medium",
+  "language": "en",
+  "user_goal": "Classify log level from string '[ERROR] connection timed out'",
+  "expected_kind": "research",
+  "available_tools": [],
+  "expected_assertions": []
+}

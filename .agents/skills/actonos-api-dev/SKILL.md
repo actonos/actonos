@@ -16,7 +16,7 @@ internal/server/
 ├── router.go             # Chi router setup, global & auth middlewares, route tree
 ├── api_auth.go           # Setup, login, logout, password change, auth status
 ├── api_dashboard.go      # Dashboard aggregate metrics & summaries
-├── api_agent.go          # Agent CRUD, start/stop, chat, soul, memory-md, cron
+├── api_agent.go          # Agent CRUD, start/stop, chat, soul, memory-md, memories (pin/importance), cron
 ├── api_tasks.go          # Autonomous Task matrix CRUD, Heartbeat config & manual pulse triggers
 ├── api_conversations.go  # Chat conversations and message history
 ├── api_plugins.go        # WASM plugin upload, enable/disable, logs, configuration & vault secrets
@@ -24,7 +24,7 @@ internal/server/
 ├── api_integrations.go   # Channel accounts, pairing codes, sender authorization
 ├── api_tools.go          # MCP servers, skills, tool execution, hub marketplace
 ├── api_workspace.go      # Workspace file browser, read/write/mkdir/upload
-├── api_system.go         # Metrics, token usage ledger history, keys, identity, HAL
+├── api_system.go         # Metrics, LLM health & retune, token usage ledger history, keys, identity, HAL
 ├── api_setup.go          # Legacy/standalone setup endpoints
 ├── layered_fs.go         # Layered filesystem (/data/overrides/ → go:embed fallback)
 ├── static.go             # Embedded static asset server

@@ -1,0 +1,11 @@
+{
+  "id": "task_12_context_sliding_window",
+  "title": "Compact Multi-turn History Under Token Budget",
+  "domain": "memory",
+  "difficulty": "medium",
+  "language": "en",
+  "user_goal": "Maintain system prompt and active goal across 25 conversational turns",
+  "expected_kind": "research",
+  "available_tools": [],
+  "expected_assertions": []
+}

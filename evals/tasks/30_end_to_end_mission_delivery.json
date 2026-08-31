@@ -1,0 +1,23 @@
+{
+  "id": "task_30_end_to_end_mission_delivery",
+  "title": "Autonomous End-to-End Mission Delivery with Outcome Verification",
+  "domain": "planning",
+  "difficulty": "hard",
+  "language": "en",
+  "user_goal": "Generate comprehensive security audit report in /data/workspace/security_audit.md",
+  "expected_kind": "produce",
+  "available_tools": ["native_file_write", "native_sysinfo"],
+  "expected_assertions": [
+    {
+      "kind": "file_exists",
+      "target": "security_audit.md",
+      "critical": true
+    },
+    {
+      "kind": "file_contains",
+      "target": "security_audit.md",
+      "expected": "Security Audit",
+      "critical": true
+    }
+  ]
+}

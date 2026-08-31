@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -30,13 +31,42 @@ func IsContextWindowError(err error) bool {
 		strings.Contains(text, "too many tokens")
 }
 
-// ModelCascadeRouter routes completion and embedding requests through an ordered cascade of providers.
+// TaskKindStats aggregates performance metrics per task type.
+type TaskKindStats struct {
+	TotalCalls int64 `json:"total_calls"`
+	Successes  int64 `json:"successes"`
+	Failures   int64 `json:"failures"`
+}
+
+// ProviderHealthReport summarizes operational health, latency, and reliability for a provider.
+type ProviderHealthReport struct {
+	ProviderID       string                   `json:"provider_id"`
+	Status           string                   `json:"status"` // "healthy", "degraded", "circuit_tripped"
+	TrippedUntil     *time.Time               `json:"tripped_until,omitempty"`
+	TotalCalls       int64                    `json:"total_calls"`
+	TotalFailures    int64                    `json:"total_failures"`
+	P50LatencyMs     int64                    `json:"p50_latency_ms"`
+	P95LatencyMs     int64                    `json:"p95_latency_ms"`
+	ConsecutiveFails int                      `json:"consecutive_fails"`
+	TaskStats        map[TaskKind]TaskKindStats `json:"task_stats,omitempty"`
+}
+
+// providerMetricsInternal holds volatile running metrics for a provider.
+type providerMetricsInternal struct {
+	totalCalls     int64
+	totalFailures  int64
+	latencySamples []int64 // Latencies in milliseconds (capped at last 50 samples)
+	taskStats      map[TaskKind]*TaskKindStats
+}
+
+// ModelCascadeRouter routes completion and embedding requests through an ordered, cost/latency-aware cascade.
 type ModelCascadeRouter struct {
 	mu           sync.RWMutex
 	providers    map[string]LLMProvider
 	defaultID    string
 	failures     map[string]int
 	trippedUntil map[string]time.Time
+	metrics      map[string]*providerMetricsInternal
 }
 
 // NewModelCascadeRouter creates a new router instance.
@@ -45,6 +75,7 @@ func NewModelCascadeRouter() *ModelCascadeRouter {
 		providers:    make(map[string]LLMProvider),
 		failures:     make(map[string]int),
 		trippedUntil: make(map[string]time.Time),
+		metrics:      make(map[string]*providerMetricsInternal),
 	}
 }
 
@@ -79,6 +110,11 @@ func (r *ModelCascadeRouter) RegisterProvider(id string, provider LLMProvider) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.providers[id] = provider
+	if _, ok := r.metrics[id]; !ok {
+		r.metrics[id] = &providerMetricsInternal{
+			taskStats: make(map[TaskKind]*TaskKindStats),
+		}
+	}
 	if r.defaultID == "" || (r.defaultID == "local-stub" && id != "local-stub") {
 		r.defaultID = id
 	}
@@ -118,8 +154,7 @@ func (r *ModelCascadeRouter) GetProvider(id string) (LLMProvider, error) {
 		}
 	}
 
-	// 4. If an explicit provider ID was requested (e.g. "anthropic/claude" or "openai") but not found,
-	// check if a default non-mock provider is available before resorting to anything else
+	// 4. Default non-mock fallback
 	if r.defaultID != "" && r.defaultID != "local-stub" {
 		if p, ok := r.providers[r.defaultID]; ok {
 			return p, nil
@@ -149,20 +184,53 @@ func (r *ModelCascadeRouter) providerTripped(id string) bool {
 	return ok && time.Now().Before(until)
 }
 
-func (r *ModelCascadeRouter) recordProviderResult(id string, failed bool) {
+func (r *ModelCascadeRouter) recordProviderResult(id string, kind TaskKind, duration time.Duration, failed bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	if r.failures == nil {
 		r.failures = make(map[string]int)
 	}
 	if r.trippedUntil == nil {
 		r.trippedUntil = make(map[string]time.Time)
 	}
+	if r.metrics == nil {
+		r.metrics = make(map[string]*providerMetricsInternal)
+	}
+
+	met, ok := r.metrics[id]
+	if !ok {
+		met = &providerMetricsInternal{taskStats: make(map[TaskKind]*TaskKindStats)}
+		r.metrics[id] = met
+	}
+
+	met.totalCalls++
+	if kind == "" {
+		kind = TaskKindGeneral
+	}
+	ts, ok := met.taskStats[kind]
+	if !ok {
+		ts = &TaskKindStats{}
+		met.taskStats[kind] = ts
+	}
+	ts.TotalCalls++
+
+	// Record latency sample
+	latMs := duration.Milliseconds()
+	met.latencySamples = append(met.latencySamples, latMs)
+	if len(met.latencySamples) > 50 {
+		met.latencySamples = met.latencySamples[len(met.latencySamples)-50:]
+	}
+
 	if !failed {
+		ts.Successes++
 		r.failures[id] = 0
 		delete(r.trippedUntil, id)
 		return
 	}
+
+	ts.Failures++
+	met.totalFailures++
 	r.failures[id]++
 	if r.failures[id] >= circuitBreakerThreshold {
 		r.trippedUntil[id] = time.Now().Add(circuitBreakerHold)
@@ -241,15 +309,20 @@ func (r *ModelCascadeRouter) CompleteWithCascade(
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
 			}
+			start := time.Now()
 			resp, err = provider.Complete(ctx, messages, callOpts)
+			dur := time.Since(start)
+
 			if err == nil {
-				r.recordProviderResult(target, false)
+				r.recordProviderResult(target, opts.TaskKind, dur, false)
 				if target != "" {
 					resp.Model = target
 				}
 				return resp, nil
 			}
 			lastErr = err
+			r.recordProviderResult(target, opts.TaskKind, dur, true)
+
 			if attempt+1 < cascadeRetriesPerProvider {
 				select {
 				case <-ctx.Done():
@@ -258,7 +331,6 @@ func (r *ModelCascadeRouter) CompleteWithCascade(
 				}
 			}
 		}
-		r.recordProviderResult(target, true)
 		slog.Warn("provider failed in cascade, attempting fallback",
 			"target", target,
 			"error", lastErr,
@@ -301,11 +373,14 @@ func (r *ModelCascadeRouter) StreamCompleteWithCascade(
 			callOpts.Model = target[strings.Index(target, "/")+1:]
 		}
 
+		start := time.Now()
 		ch, err := provider.StreamComplete(ctx, messages, callOpts)
 		if err == nil {
+			r.recordProviderResult(target, opts.TaskKind, time.Since(start), false)
 			return ch, nil
 		}
 
+		r.recordProviderResult(target, opts.TaskKind, time.Since(start), true)
 		slog.Warn("provider stream failed, attempting fallback",
 			"target", target,
 			"error", err,
@@ -331,4 +406,95 @@ func (r *ModelCascadeRouter) Embed(ctx context.Context, providerID string, texts
 	}
 
 	return provider.Embed(ctx, texts)
+}
+
+// GetHealthReport calculates p50/p95 latency and health state for all providers.
+func (r *ModelCascadeRouter) GetHealthReport() []ProviderHealthReport {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	reports := make([]ProviderHealthReport, 0, len(r.providers))
+	now := time.Now()
+
+	for id := range r.providers {
+		rep := ProviderHealthReport{
+			ProviderID: id,
+			Status:     "healthy",
+			TaskStats:  make(map[TaskKind]TaskKindStats),
+		}
+
+		if until, tripped := r.trippedUntil[id]; tripped && now.Before(until) {
+			rep.Status = "circuit_tripped"
+			tCopy := until
+			rep.TrippedUntil = &tCopy
+		} else if fails := r.failures[id]; fails > 0 {
+			rep.Status = "degraded"
+			rep.ConsecutiveFails = fails
+		}
+
+		if met, ok := r.metrics[id]; ok {
+			rep.TotalCalls = met.totalCalls
+			rep.TotalFailures = met.totalFailures
+
+			for k, v := range met.taskStats {
+				rep.TaskStats[k] = *v
+			}
+
+			if len(met.latencySamples) > 0 {
+				sorted := make([]int64, len(met.latencySamples))
+				copy(sorted, met.latencySamples)
+				sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+
+				p50Idx := len(sorted) / 2
+				p95Idx := int(float64(len(sorted)) * 0.95)
+				if p95Idx >= len(sorted) {
+					p95Idx = len(sorted) - 1
+				}
+				rep.P50LatencyMs = sorted[p50Idx]
+				rep.P95LatencyMs = sorted[p95Idx]
+			}
+		}
+
+		reports = append(reports, rep)
+	}
+
+	return reports
+}
+
+// RunSelfHealthProbe performs a lightweight diagnostic probe across registered providers.
+func (r *ModelCascadeRouter) RunSelfHealthProbe(ctx context.Context) map[string]error {
+	r.mu.RLock()
+	providerIDs := make([]string, 0, len(r.providers))
+	for id := range r.providers {
+		if id != "local-stub" {
+			providerIDs = append(providerIDs, id)
+		}
+	}
+	r.mu.RUnlock()
+
+	results := make(map[string]error)
+	testMsg := []Message{{Role: RoleUser, Content: "ping"}}
+
+	for _, id := range providerIDs {
+		p, err := r.GetProvider(id)
+		if err != nil {
+			results[id] = err
+			continue
+		}
+		pCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		start := time.Now()
+		_, probeErr := p.Complete(pCtx, testMsg, CompletionOptions{})
+		cancel()
+
+		dur := time.Since(start)
+		if probeErr != nil {
+			r.recordProviderResult(id, TaskKindGeneral, dur, true)
+			results[id] = probeErr
+		} else {
+			r.recordProviderResult(id, TaskKindGeneral, dur, false)
+			results[id] = nil
+		}
+	}
+
+	return results
 }

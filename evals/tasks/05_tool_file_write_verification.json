@@ -1,0 +1,23 @@
+{
+  "id": "task_05_tool_file_write_verification",
+  "title": "Write Configuration File and Verify Non-Empty",
+  "domain": "tool_use",
+  "difficulty": "easy",
+  "language": "en",
+  "user_goal": "Create config.yaml with database path and port 8080",
+  "expected_kind": "produce",
+  "available_tools": ["native_file_write"],
+  "expected_assertions": [
+    {
+      "kind": "file_exists",
+      "target": "config.yaml",
+      "critical": true
+    },
+    {
+      "kind": "file_contains",
+      "target": "config.yaml",
+      "expected": "8080",
+      "critical": true
+    }
+  ]
+}

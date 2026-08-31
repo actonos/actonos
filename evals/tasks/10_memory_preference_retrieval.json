@@ -1,0 +1,11 @@
+{
+  "id": "task_10_memory_preference_retrieval",
+  "title": "Retrieve User Preference from Episodic Memory",
+  "domain": "memory",
+  "difficulty": "medium",
+  "language": "en",
+  "user_goal": "What is the user's preferred communication style and theme?",
+  "expected_kind": "research",
+  "available_tools": [],
+  "expected_assertions": []
+}

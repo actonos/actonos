@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,6 +22,7 @@ var (
 // Verifier implements multi-tier deterministic and semantic verification.
 type Verifier struct {
 	forbiddenPatterns []string
+	outcomeVerifier   *OutcomeVerifier
 }
 
 // VerifyToolCommand parses a native_exec argument object before applying command policy.
@@ -51,7 +53,30 @@ func NewVerifier() *Verifier {
 			"chmod -R 777 /",
 			"chown -R root /",
 		},
+		outcomeVerifier: NewOutcomeVerifier(nil, nil),
 	}
+}
+
+// SetOutcomeDB configures the database handle for SQL outcome assertions.
+func (v *Verifier) SetOutcomeDB(db *sql.DB) {
+	if v.outcomeVerifier != nil {
+		v.outcomeVerifier.SetDB(db)
+	}
+}
+
+// SetOutcomeRouter configures the LLM cascade router for semantic/rubric assertions.
+func (v *Verifier) SetOutcomeRouter(router *llm.ModelCascadeRouter) {
+	if v.outcomeVerifier != nil {
+		v.outcomeVerifier.llmRouter = router
+	}
+}
+
+// VerifyOutcomeAssertions runs Tier-3 deterministic outcome validation.
+func (v *Verifier) VerifyOutcomeAssertions(ctx context.Context, dataDir string, assertions []OutcomeAssertion) (bool, []AssertionResult) {
+	if v.outcomeVerifier == nil {
+		v.outcomeVerifier = NewOutcomeVerifier(nil, nil)
+	}
+	return v.outcomeVerifier.VerifyAll(ctx, dataDir, assertions)
 }
 
 // VerifyPath ensures path is contained inside allowed workspace.

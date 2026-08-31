@@ -753,3 +753,41 @@ export interface SelfImprovementProposal {
   created_at: string;
   applied_at?: string;
 }
+
+export type MemoryImportanceTier = 'critical' | 'user_preference' | 'high' | 'normal' | 'low';
+export type MemoryLayer = 'working' | 'user_profile' | 'procedural' | 'episodic';
+
+export interface MemoryRecord {
+  id: string;
+  agent_id: string;
+  layer: MemoryLayer;
+  content: string;
+  metadata?: Record<string, any>;
+  importance_weight: number;
+  importance?: MemoryImportanceTier;
+  pinned?: boolean;
+  user_pinned?: boolean;
+  demoted_at?: string;
+  last_accessed_at: string;
+  access_count: number;
+  created_at: string;
+  score?: number;
+}
+
+export interface TaskKindStats {
+  total_calls: number;
+  successes: number;
+  failures: number;
+}
+
+export interface ProviderHealthReport {
+  provider_id: string;
+  status: 'healthy' | 'degraded' | 'circuit_tripped';
+  tripped_until?: string;
+  total_calls: number;
+  total_failures: number;
+  p50_latency_ms: number;
+  p95_latency_ms: number;
+  consecutive_fails: number;
+  task_stats?: Record<string, TaskKindStats>;
+}

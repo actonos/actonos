@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -132,3 +133,25 @@ func TestPruneMessagesIsStableAcrossRepeatedCalls(t *testing.T) {
 		assertPrunedPairing(t, current)
 	}
 }
+
+func TestAutoSummarizeObservation(t *testing.T) {
+	cm := NewContextManager(8192)
+
+	// Short output
+	short := "HTTP 200: All OK"
+	res := cm.AutoSummarizeObservation(context.Background(), nil, "run_1", "native_http_fetch", short)
+	if res != short {
+		t.Fatalf("expected short observation to remain unchanged, got %q", res)
+	}
+
+	// Large output (>8000 chars)
+	large := strings.Repeat("Extremely large log output with errors and data. ", 300) // ~15,000 chars
+	res = cm.AutoSummarizeObservation(context.Background(), nil, "run_2", "native_exec", large)
+	if len(res) >= len(large) {
+		t.Fatalf("expected compacted observation, got len=%d vs raw=%d", len(res), len(large))
+	}
+	if !strings.Contains(res, "Full raw observation stored: view_full:run_2:") {
+		t.Fatalf("expected provenance reference in observation summary, got %s", res)
+	}
+}
+

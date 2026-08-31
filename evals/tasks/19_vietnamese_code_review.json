@@ -1,0 +1,11 @@
+{
+  "id": "task_19_vietnamese_code_review",
+  "title": "Review mã nguồn và phát hiện lỗi bằng tiếng Việt",
+  "domain": "vietnamese",
+  "difficulty": "medium",
+  "language": "vi",
+  "user_goal": "Đọc file server.go và giải thích các điểm nghẽn concurrency",
+  "expected_kind": "research",
+  "available_tools": ["native_file_read"],
+  "expected_assertions": []
+}

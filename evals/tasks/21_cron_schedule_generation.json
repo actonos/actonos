@@ -1,0 +1,11 @@
+{
+  "id": "task_21_cron_schedule_generation",
+  "title": "Generate Standard 5-field Cron Expression",
+  "domain": "planning",
+  "difficulty": "easy",
+  "language": "en",
+  "user_goal": "Generate a cron job schedule to run every Monday at 9:00 AM",
+  "expected_kind": "research",
+  "available_tools": [],
+  "expected_assertions": []
+}

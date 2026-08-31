@@ -1,0 +1,11 @@
+{
+  "id": "task_06_tool_http_fetch_extract",
+  "title": "Fetch Remote Endpoint and Extract Version",
+  "domain": "tool_use",
+  "difficulty": "medium",
+  "language": "en",
+  "user_goal": "Fetch http://localhost:8080/api/health and extract the version string",
+  "expected_kind": "research",
+  "available_tools": ["native_http_fetch"],
+  "expected_assertions": []
+}

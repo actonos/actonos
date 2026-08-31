@@ -7,12 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/actonos/actonos/internal/agent"
 	"github.com/actonos/actonos/internal/channels"
 	"github.com/actonos/actonos/internal/llm"
+	"github.com/actonos/actonos/internal/memory"
 	"github.com/actonos/actonos/internal/tools"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -1059,3 +1061,104 @@ func (s *Server) handleTriggerSelfReview(w http.ResponseWriter, r *http.Request)
 		"count":     len(proposals),
 	})
 }
+
+// GET /api/agents/{agentID}/memories
+func (s *Server) handleListMemories(w http.ResponseWriter, r *http.Request) {
+	if s.memory == nil {
+		s.respondError(w, http.StatusServiceUnavailable, "MEMORY_UNAVAILABLE", "memory engine is not initialized")
+		return
+	}
+
+	agentID := chi.URLParam(r, "agentID")
+	layer := memory.MemoryLayer(r.URL.Query().Get("layer"))
+	limit := 50
+	if limStr := r.URL.Query().Get("limit"); limStr != "" {
+		if l, err := strconv.Atoi(limStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
+
+	mems, err := s.memory.ListMemories(r.Context(), agentID, layer, limit)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "LIST_MEMORIES_FAILED", err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]any{
+		"agent_id": agentID,
+		"memories": mems,
+		"count":    len(mems),
+	})
+}
+
+// POST /api/agents/{agentID}/memories/{memoryID}/pin
+func (s *Server) handlePinMemory(w http.ResponseWriter, r *http.Request) {
+	if s.memory == nil {
+		s.respondError(w, http.StatusServiceUnavailable, "MEMORY_UNAVAILABLE", "memory engine is not initialized")
+		return
+	}
+
+	memoryID := chi.URLParam(r, "memoryID")
+	if err := s.memory.PinMemory(r.Context(), memoryID, true); err != nil {
+		s.respondError(w, http.StatusInternalServerError, "PIN_MEMORY_FAILED", err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]string{
+		"status":    "pinned",
+		"memory_id": memoryID,
+	})
+}
+
+// DELETE /api/agents/{agentID}/memories/{memoryID}/pin
+func (s *Server) handleUnpinMemory(w http.ResponseWriter, r *http.Request) {
+	if s.memory == nil {
+		s.respondError(w, http.StatusServiceUnavailable, "MEMORY_UNAVAILABLE", "memory engine is not initialized")
+		return
+	}
+
+	memoryID := chi.URLParam(r, "memoryID")
+	if err := s.memory.UnpinMemory(r.Context(), memoryID); err != nil {
+		s.respondError(w, http.StatusInternalServerError, "UNPIN_MEMORY_FAILED", err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]string{
+		"status":    "unpinned",
+		"memory_id": memoryID,
+	})
+}
+
+// PUT /api/agents/{agentID}/memories/{memoryID}/importance
+func (s *Server) handleSetMemoryImportance(w http.ResponseWriter, r *http.Request) {
+	if s.memory == nil {
+		s.respondError(w, http.StatusServiceUnavailable, "MEMORY_UNAVAILABLE", "memory engine is not initialized")
+		return
+	}
+
+	memoryID := chi.URLParam(r, "memoryID")
+	var req struct {
+		Importance string `json:"importance"`
+	}
+	if err := s.decodeJSON(r, &req); err != nil {
+		s.respondError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
+
+	tier := memory.ImportanceTier(req.Importance)
+	if tier == "" {
+		tier = memory.ImportanceNormal
+	}
+
+	if err := s.memory.SetMemoryImportance(r.Context(), memoryID, tier); err != nil {
+		s.respondError(w, http.StatusInternalServerError, "UPDATE_IMPORTANCE_FAILED", err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]string{
+		"status":     "updated",
+		"memory_id":  memoryID,
+		"importance": string(tier),
+	})
+}
+

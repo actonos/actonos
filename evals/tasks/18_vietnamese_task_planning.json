@@ -1,0 +1,17 @@
+{
+  "id": "task_18_vietnamese_task_planning",
+  "title": "Phân rã mục tiêu tiếng Việt thành kế hoạch thực thi",
+  "domain": "vietnamese",
+  "difficulty": "medium",
+  "language": "vi",
+  "user_goal": "Tạo báo cáo doanh thu tuần trước và lưu vào file baocao.md",
+  "expected_kind": "produce",
+  "available_tools": ["native_file_write"],
+  "expected_assertions": [
+    {
+      "kind": "file_exists",
+      "target": "baocao.md",
+      "critical": true
+    }
+  ]
+}

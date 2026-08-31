@@ -74,24 +74,31 @@ the previous source generation remains searchable until all new vectors have
 been written. A missing helper does not stop `actond`; lexical FTS5 retrieval
 remains available while queued work retries with backoff.
 
-### B. Ebbinghaus Forgetting Curve Decay Model
+### B. Ebbinghaus Forgetting Curve Decay & Tiered Memory Pinning
 
 Each memory fragment's retrieval score is computed using:
 
 ```
-R(m, q, t) = α · D(t) · W(m) + β · CosSim(Embed(q), Embed(m))
+R(m, q, t) = α · D(t) · W_tier(m) + β · CosSim(Embed(q), Embed(m))
 ```
 
 Where:
-- `D(t) = e^(-Δt/λ)` — Temporal decay factor (Δt = time since last retrieval, λ = decay rate)
-- `W(m)` — Intrinsic importance weight assigned during extraction
-- `CosSim(...)` — Cosine similarity between query and memory embeddings
-- `α, β` — Normalized weights satisfying `α + β = 1`
+- `D(t) = e^(-Δt/λ)` — Temporal decay factor (Δt = time since last retrieval, λ = decay half-life)
+- `W_tier(m)` — Importance tier multiplier:
+  - `critical` (3.0x): Immutable core operating rules and security policies.
+  - `user_preference` (2.5x): User communication preferences, themes, and declared personal styles.
+  - `high` (1.5x): Verified procedural playbooks and frequently accessed architectural facts.
+  - `normal` (1.0x): Standard episodic conversational journals.
+  - `low` (0.5x): Ephemeral observations subject to rapid decay and reflection cleanup.
+- **Memory Pinning (`pinned=true` / `user_pinned=true`)**: Pinned memories completely bypass temporal decay (`D(t) = 1.0`) and are permanently protected from automated reflection pruning.
+- `CosSim(...)` — Cosine similarity between query and memory embeddings.
+- `α, β` — Normalized weights satisfying `α + β = 1`.
 
-### C. ReAct Execution Loop
+### C. ReAct Execution Loop & Context Shield
 
 Agents run a bounded ReAct loop (tool use + observation) with cascade failover, circuit-breaking, guaranteed run lifecycle finalization, and durable process records in SQLite. High-level goals are decomposed into a persisted DAG; the engine supports **Concurrent Burst DAG Execution** (evaluating and executing all independent ready steps in parallel Goroutines up to `max_concurrent_runs`).
 
+- **Context Shield & Observation Auto-Summarization (`AutoSummarizeObservation`)**: Oversized tool observations exceeding 8,000 characters (~2,000 tokens) are automatically summarized by `ContextManager`. The original full raw payload is securely persisted to SQLite `context_snapshots`, while the active ReAct conversation receives a compact summary retaining critical factual identifiers with a provenance retrieval token (`view_full:<run_id>:<snap_id>`).
 - **Transient Error Classification (`isTransientExecutionError`)**: Hourly token quota exhaustion, HTTP 429/503 rate limits, network timeouts, and context cancellations keep steps in `StepStatusPending` with transient notices, preventing premature step failures or false mission stalls.
 - **Operator Plan Reset & Deadlock Recovery**: Resetting mission progress to `0%` or unblocking status (`pending`/`in_progress`) automatically reopens all or failed steps in persisted `plan_json` (`ReopenAllSteps()`, `ReopenFailedSteps()`), resets `FailCount` / `StalledCycles`, and clears in-memory stall trackers.
 - **Guaranteed Run Finalization**: Every execution turn registers a deferred finalizer using an independent context (`context.WithTimeout(context.Background(), 5*time.Second)`), guaranteeing `agent_runs` rows are cleanly marked terminal (`completed`, `cancelled`, `failed`) and never left stuck in `running`.
@@ -101,12 +108,23 @@ Agents run a bounded ReAct loop (tool use + observation) with cascade failover, 
 
 Merges lexical search (SQLite FTS5) and semantic search (dense vector) scores using sigmoid normalization for optimal retrieval quality.
 
-### E. Deterministic Verification System
+### E. Deterministic Multi-Tier Verification System
 
-| Tier | Method | Behavior |
+ActonOS enforces a 3-tier verification pipeline guaranteeing zero false completions:
+
+| Tier | Engine / Method | Invariant & Grounding Behavior |
 |:---|:---|:---|
-| **Tier 1** | Static Analysis (Pure Go, ~0ms) | AST parsing (Shell/Python/JSON/SQL), path escape detection, schema validation. Blocks immediately on violation. |
-| **Tier 2** | Semantic Verification | Content consistency check against user profile and original request. Activated for language-logic tasks. |
+| **Tier 1: Static Analysis** | Pure Go AST & Lexer (~0ms) | Block dangerous bash constructs (`rm -rf /`, fork bombs), path traversal (`../`), SQL injection, and invalid JSON. |
+| **Tier 2: Semantic Consistency** | LLM-as-a-Judge Rubric | Content consistency checks against user soul persona and conversational requirements for open-ended generation. |
+| **Tier 3: Outcome Assertions** | `OutcomeVerifier` Grounding Engine | Evaluates real environmental side-effects across 8 assertion kinds before marking tasks completed: `file_exists`, `file_contains`, `json_schema`, `http_status`, `sql_count`, `shell_exit`, `dir_not_empty`, and `llm_judge`. |
+
+### F. Cascade Router & Model Fallback Resilience
+
+The `ModelCascadeRouter` ensures high availability and resilience across all cognitive agent operations:
+
+1. **Explicit Primary & Fallback Model**: Strictly respects the user-configured `PrimaryModel` and `FallbackModel` specified on each agent manifest.
+2. **Circuit-Breaker & Automatic Failover**: Automatically fails over to the next candidate in the cascade when experiencing `429 Rate Limit` or `5xx Server Errors`, with circuit-breaker protection isolating unhealthy providers.
+3. **Telemetry & Metrics**: Computes rolling P50/P95 latencies and tracks success/failure rates per provider and task kind (`GET /api/llm/health`).
 
 ---
 
@@ -919,7 +937,28 @@ ActonOS incorporates autonomous ungovernance and proactive self-driving capabili
 
 5. **Cognitive Reflection & Self-Review Engine (`internal/agent/reflection.go`)**:
    - Analyzes execution runs, error events, and tool failure patterns over the preceding 24 hours.
-   - Distills actionable self-improvement proposals, writes persistent records to SQLite (`self_improvement_proposals`), appends human-readable insights to `/data/agents/{agent_id}/INSIGHTS.md`, and incorporates approved learnings into episodic memory.
+   - Distills actionable self-improvement proposals, writes persistent records to SQLite (`self_improvement_proposals`), appends human-readable insights to `/data/agents/{agent_id}/INSIGHTS.md`, and incorporates approved learnings into episodic memory while guaranteeing pinned/critical memories are never pruned.
+
+## 14. Standardized Benchmark Evaluation & Regression Suite
+
+ActonOS features a built-in, standalone benchmark and evaluation harness in `evals/` designed to prevent cognitive regressions and guarantee execution reliability across releases:
+
+```text
+evals/
+├── tasks/          # 30+ standardized benchmark task JSON specifications
+├── graders/        # 3-tier task graders (false-completion, outcome verifier, rubric)
+├── runner/         # CLI benchmark orchestrator (p50/p95 latency, pass rate, cost)
+├── run.sh          # Linux/macOS benchmark execution wrapper
+├── run.ps1         # Windows benchmark execution wrapper
+└── README.md       # Benchmark documentation and replication guide
+```
+
+### Benchmark Metrics & Pass Criteria
+
+- **Pass Rate Gate**: Minimum **90.0%** overall pass rate enforced in GitHub Actions CI (`.github/workflows/eval.yml`).
+- **False Completion Rate**: Must remain **< 1.0%** (target: 0.0%) across all tasks requiring tangible artifact outputs.
+- **Latency Distribution**: Evaluates P50 and P95 turnaround latencies in milliseconds.
+- **Cost & Token Tracking**: Aggregates token consumption and calculates estimated USD cost per model.
 
 ## References
 
@@ -930,4 +969,5 @@ ActonOS incorporates autonomous ungovernance and proactive self-driving capabili
 5. [wazero — Pure Go WASM Runtime](https://github.com/tetratelabs/wazero)
 6. [chromem-go — Embeddable Vector Database](https://github.com/philippgille/chromem-go)
 7. [modernc.org/sqlite — Pure Go SQLite](https://pkg.go.dev/modernc.org/sqlite)
+
 

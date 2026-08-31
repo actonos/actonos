@@ -62,10 +62,23 @@ type ModelConfig struct {
 	TopP            float64 `json:"top_p,omitempty"`
 }
 
+// TaskKind indicates the domain/complexity of an LLM request for smart cascade routing.
+type TaskKind string
+
+const (
+	TaskKindReasoning TaskKind = "reasoning"
+	TaskKindCoding    TaskKind = "coding"
+	TaskKindSummarize TaskKind = "summarize"
+	TaskKindClassify  TaskKind = "classify"
+	TaskKindExtract   TaskKind = "extract"
+	TaskKindGeneral   TaskKind = "general"
+)
+
 // CompletionOptions configures a completion request.
 type CompletionOptions struct {
 	Model           string           `json:"model,omitempty"`
 	ReasoningEffort string           `json:"reasoning_effort,omitempty"`
+	TaskKind        TaskKind         `json:"task_kind,omitempty"`
 	MaxTokens       *int             `json:"max_tokens,omitempty"`
 	Tools           []ToolDefinition `json:"tools,omitempty"`
 	StopWords       []string         `json:"stop_words,omitempty"`

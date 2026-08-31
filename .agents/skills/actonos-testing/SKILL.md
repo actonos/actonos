@@ -19,6 +19,7 @@ Use this skill when writing or running tests for ActonOS.
 |:---|:---|:---|:---|
 | Unit Tests | `internal/**/*_test.go` | (none) | `make test-unit` |
 | Integration Tests | `*_os_test.go` / `*_integ_test.go` under `internal/` | `integration` | `make test-integ` |
+| Benchmark Eval Suite | `evals/` (30+ tasks) | (none) | `./evals/run.sh` / `.\evals\run.ps1` |
 | E2E / Smoke Tests | `web/tests/*.spec.ts` | (none) | `cd web && npm run test:e2e` |
 | Frontend Unit | `web/src/**/*.test.{ts,tsx}` | (none) | `cd web && npm test` |
 | Frontend Browser | `web/tests/*.spec.ts` | (none) | `cd web && npm run test:e2e` |
@@ -34,6 +35,14 @@ make test
 make test-unit
 # Equivalent to: CGO_ENABLED=0 go test -count=1 -coverprofile=build/coverage.out ./internal/...
 # then go run ./scripts/cover-gate.go build/coverage.out
+
+# Cognition & Reliability Benchmark Suite (30 tasks, CI gate)
+./evals/run.sh
+# on Windows PowerShell:
+.\evals\run.ps1
+
+# Live model benchmark evaluation
+go run ./evals/runner/main.go --mode=live --model=anthropic/claude-sonnet-4.5 --output=eval_report.md --fail-under=90.0
 
 # Integration tests
 make test-integ

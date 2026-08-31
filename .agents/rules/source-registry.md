@@ -57,8 +57,13 @@
 | `PUT` | `/api/agents/soul` | `handleSaveSoul` | `api_agent.go` |
 | `GET` | `/api/agents/memory-md` | `handleGetMemoryMD` | `api_agent.go` |
 | `GET` | `/api/agents/{agentID}/soul` | `handleGetSoul` | `api_agent.go` |
-| `PUT` | `/api/agents/{agentID}/soul` | `handleSaveSoul` | `api_agent.go` |
 | `GET` | `/api/agents/{agentID}/memory-md` | `handleGetMemoryMD` | `api_agent.go` |
+| `GET` | `/api/agents/{agentID}/memories` | `handleListMemories` | `api_agent.go` |
+| `POST` | `/api/agents/{agentID}/memories/{memoryID}/pin` | `handlePinMemory` | `api_agent.go` |
+| `DELETE` | `/api/agents/{agentID}/memories/{memoryID}/pin` | `handleUnpinMemory` | `api_agent.go` |
+| `PUT` | `/api/agents/{agentID}/memories/{memoryID}/importance` | `handleSetMemoryImportance` | `api_agent.go` |
+| `GET` | `/api/llm/health` | `handleGetLLMHealth` | `api_system.go` |
+| `POST` | `/api/llm/router/retune` | `handleRetuneLLMRouter` | `api_system.go` |
 
 #### Cron Jobs (under `/api/agents/cron` and alias `/api/cron`)
 
@@ -288,6 +293,7 @@
 | `pages/Plugins/PluginDetailModal.tsx` | `PluginDetailModal` | Plugin manifest, capabilities, config form, and secrets editor |
 | `pages/Plugins/PluginLogsModal.tsx` | `PluginLogsModal` | Live sandbox execution log stream for WASM plugin |
 | `pages/Plugins/PluginUploadModal.tsx` | `PluginUploadModal` | Upload and installation modal for `.actonpkg` package bundles |
+| `pages/Agents/components/MemoryManagerModal.tsx` | `MemoryManagerModal` | Tiered structured memory manager, Ebbinghaus decay bypass & pinning |
 | `ui/Modal.tsx` | `Modal` | Accessible dialog container |
 | `ui/ConfirmModal.tsx` | `ConfirmModal` | Confirmation dialog with actions |
 | `features/chat/ChatApprovalCard.tsx` | `ChatApprovalCard` | In-bubble approve/reject for chat tool pauses |

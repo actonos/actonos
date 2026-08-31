@@ -4,6 +4,9 @@ import type {
   ChannelAccount,
   HealthReport,
   LLMProviderInfo,
+  MemoryImportanceTier,
+  MemoryRecord,
+  ProviderHealthReport,
   ToolInfo,
   SystemMetrics,
   TailscaleStatus,
@@ -261,6 +264,33 @@ export const api = {
       method: 'DELETE',
     });
   },
+  listMemories: (agentID: string, options?: { layer?: string; limit?: number }) => {
+    const params = new URLSearchParams();
+    if (options?.layer) params.set('layer', options.layer);
+    if (options?.limit) params.set('limit', String(options.limit));
+    const qs = params.toString();
+    return fetchJSON<{ count: number; memories: MemoryRecord[] }>(`/agents/${agentID}/memories${qs ? `?${qs}` : ''}`);
+  },
+  pinMemory: (agentID: string, memoryID: string) =>
+    fetchJSON<{ status: string; memory_id: string; pinned: boolean; user_pinned: boolean }>(
+      `/agents/${agentID}/memories/${memoryID}/pin`,
+      { method: 'POST' }
+    ),
+  unpinMemory: (agentID: string, memoryID: string) =>
+    fetchJSON<{ status: string; memory_id: string; pinned: boolean; user_pinned: boolean }>(
+      `/agents/${agentID}/memories/${memoryID}/pin`,
+      { method: 'DELETE' }
+    ),
+  setMemoryImportance: (agentID: string, memoryID: string, importance: MemoryImportanceTier) =>
+    fetchJSON<{ status: string; memory_id: string; importance: MemoryImportanceTier }>(
+      `/agents/${agentID}/memories/${memoryID}/importance`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ importance }),
+      }
+    ),
+  getLLMHealth: () =>
+    fetchJSON<{ count: number; providers: ProviderHealthReport[] }>('/llm/health'),
   listCronJobs: () => fetchJSON<{ jobs: CronJobItem[]; count: number }>('/cron'),
   saveCronJob: (job: Partial<CronJobItem> & { target_channel?: string; target_account_id?: string; target_recipient?: string }) =>
     fetchJSON<{ status: string; job?: CronJobItem; job_id?: string }>('/cron', {

@@ -16,6 +16,40 @@ const (
 	DefaultBeta = 0.6
 )
 
+// ImportanceTier categorizes memories by durability and retrieval priority.
+type ImportanceTier string
+
+const (
+	ImportanceCritical       ImportanceTier = "critical"        // 3.0x multiplier, never decays/demoted
+	ImportanceUserPreference ImportanceTier = "user_preference" // 2.5x multiplier, never decays/demoted
+	ImportanceHigh           ImportanceTier = "high"            // 1.5x multiplier
+	ImportanceNormal         ImportanceTier = "normal"          // 1.0x multiplier
+	ImportanceLow            ImportanceTier = "low"             // 0.5x multiplier, candidate for demotion
+)
+
+// ImportanceTierMultiplier returns the base weight multiplier for an importance tier.
+func ImportanceTierMultiplier(tier ImportanceTier) float64 {
+	switch tier {
+	case ImportanceCritical:
+		return 3.0
+	case ImportanceUserPreference:
+		return 2.5
+	case ImportanceHigh:
+		return 1.5
+	case ImportanceNormal:
+		return 1.0
+	case ImportanceLow:
+		return 0.5
+	default:
+		return 1.0
+	}
+}
+
+// IsProtectedTier reports whether the given tier is immune to deletion and decay demotion.
+func IsProtectedTier(tier ImportanceTier) bool {
+	return tier == ImportanceCritical || tier == ImportanceUserPreference
+}
+
 // DecayConfig defines parameters for the Ebbinghaus Forgetting Curve.
 type DecayConfig struct {
 	LambdaHours float64 // Half-life stability in hours (λ)
@@ -57,6 +91,11 @@ func TemporalDecayFactor(elapsed time.Duration, lambdaHours float64, accessCount
 	return decay
 }
 
+// sigmoid normalizes an arbitrary value to (0, 1).
+func sigmoid(x float64) float64 {
+	return 1.0 / (1.0 + math.Exp(-x))
+}
+
 // CalculateRetrievalScore calculates the composite score:
 // R(m, q, t) = α * (D(t) * W(m)) + β * similarity
 func CalculateRetrievalScore(
@@ -66,8 +105,39 @@ func CalculateRetrievalScore(
 	similarity float64,
 	cfg DecayConfig,
 ) float64 {
+	return CalculateTieredRetrievalScore(elapsed, importanceWeight, ImportanceNormal, false, false, accessCount, similarity, cfg)
+}
+
+// CalculateTieredRetrievalScore computes composite ranking factoring in importance tier and pinning.
+func CalculateTieredRetrievalScore(
+	elapsed time.Duration,
+	importanceWeight float64,
+	tier ImportanceTier,
+	isPinned bool,
+	isDemoted bool,
+	accessCount int,
+	similarity float64,
+	cfg DecayConfig,
+) float64 {
 	if importanceWeight <= 0 {
 		importanceWeight = 1.0
+	}
+
+	tierMultiplier := ImportanceTierMultiplier(tier)
+	effectiveWeight := importanceWeight * tierMultiplier
+
+	// Pinned or protected memories do not suffer temporal decay
+	var decay float64
+	if isPinned || IsProtectedTier(tier) {
+		decay = 1.0
+		effectiveWeight = math.Max(effectiveWeight, 2.0)
+	} else {
+		decay = TemporalDecayFactor(elapsed, cfg.LambdaHours, accessCount)
+	}
+
+	// Demoted memories suffer penalty
+	if isDemoted {
+		decay *= 0.4
 	}
 
 	// Normalize alpha & beta to sum to 1.0
@@ -75,12 +145,9 @@ func CalculateRetrievalScore(
 	alpha := cfg.Alpha / totalWeight
 	beta := cfg.Beta / totalWeight
 
-	decay := TemporalDecayFactor(elapsed, cfg.LambdaHours, accessCount)
-	temporalScore := decay * importanceWeight
-
-	// Bound temporalScore to reasonable range [0, 2.0]
-	if temporalScore > 2.0 {
-		temporalScore = 2.0
+	temporalScore := decay * effectiveWeight
+	if temporalScore > 3.0 {
+		temporalScore = 3.0
 	}
 
 	// Bound similarity to [0, 1.0]
@@ -93,3 +160,4 @@ func CalculateRetrievalScore(
 	score := (alpha * temporalScore) + (beta * similarity)
 	return score
 }
+

@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/Badge';
 import { useToast } from '@/components/ui/Toast';
 import { useRealtime } from '@/components/providers/RealtimeProvider';
 import { ApprovalDecisionBar } from './ApprovalDecisionBar';
+import { Clock, ShieldAlert } from 'lucide-react';
 
 export function ApprovalInterruption() {
   const { t } = useTranslation('operations');
@@ -128,12 +129,14 @@ export function ApprovalInterruption() {
           </Badge>
           <Badge variant="neutral">{approval.risk_level}</Badge>
           {autoApproveHours ? (
-            <span className="text-[11px] font-mono text-slate bg-soft-meadow px-2 py-0.5 rounded-full border border-onyx/10">
-              ⏱ {t('approval.autoApproveIn', { time: `${autoApproveHours}h` })}
+            <span className="text-[11px] font-mono text-slate bg-soft-meadow px-2 py-0.5 rounded-full border border-onyx/10 inline-flex items-center gap-1">
+              <Clock className="w-3 h-3 text-slate" />
+              {t('approval.autoApproveIn', { time: `${autoApproveHours}h` })}
             </span>
           ) : riskTier === 'high' ? (
-            <span className="text-[11px] font-mono text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
-              🛡 {t('approval.manualReviewRequired')}
+            <span className="text-[11px] font-mono text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200 inline-flex items-center gap-1">
+              <ShieldAlert className="w-3 h-3 text-rose-700" />
+              {t('approval.manualReviewRequired')}
             </span>
           ) : null}
         </div>

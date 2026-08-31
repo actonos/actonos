@@ -1,0 +1,18 @@
+{
+  "id": "task_09_outcome_assertion_file_check",
+  "title": "Verify Generated Markdown Contains Required Section",
+  "domain": "tool_use",
+  "difficulty": "medium",
+  "language": "en",
+  "user_goal": "Write summary.md containing ## Executive Summary",
+  "expected_kind": "produce",
+  "available_tools": ["native_file_write"],
+  "expected_assertions": [
+    {
+      "kind": "file_contains",
+      "target": "summary.md",
+      "expected": "## Executive Summary",
+      "critical": true
+    }
+  ]
+}

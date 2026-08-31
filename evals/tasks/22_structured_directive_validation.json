@@ -1,0 +1,18 @@
+{
+  "id": "task_22_structured_directive_validation",
+  "title": "Validate Structured Standing Directive JSON",
+  "domain": "planning",
+  "difficulty": "medium",
+  "language": "en",
+  "user_goal": "Create a structured standing directive with priority P1 and verification file_exists rule",
+  "expected_kind": "produce",
+  "available_tools": ["native_file_write"],
+  "expected_assertions": [
+    {
+      "kind": "json_schema",
+      "target": "directive.json",
+      "expected": "id,title,priority",
+      "critical": true
+    }
+  ]
+}

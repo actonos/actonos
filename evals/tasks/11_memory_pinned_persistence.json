@@ -1,0 +1,11 @@
+{
+  "id": "task_11_memory_pinned_persistence",
+  "title": "Ensure Pinned Critical Knowledge Is Retained Over Time",
+  "domain": "memory",
+  "difficulty": "hard",
+  "language": "en",
+  "user_goal": "Recall the master encryption secret rotation policy pinned by user",
+  "expected_kind": "research",
+  "available_tools": [],
+  "expected_assertions": []
+}

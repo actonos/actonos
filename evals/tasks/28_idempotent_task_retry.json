@@ -1,0 +1,11 @@
+{
+  "id": "task_28_idempotent_task_retry",
+  "title": "Resume Failed Step Without Re-executing Completed Dependencies",
+  "domain": "planning",
+  "difficulty": "medium",
+  "language": "en",
+  "user_goal": "Resume 3-step DAG plan from Step 2 after network glitch resolved",
+  "expected_kind": "research",
+  "available_tools": [],
+  "expected_assertions": []
+}

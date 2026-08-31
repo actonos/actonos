@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"math"
 	"sort"
 	"sync"
 	"time"
@@ -31,6 +30,10 @@ type MemoryRecord struct {
 	Content          string         `json:"content"`
 	Metadata         map[string]any `json:"metadata,omitempty"`
 	ImportanceWeight float64        `json:"importance_weight"`
+	Importance       string         `json:"importance,omitempty"`
+	Pinned           bool           `json:"pinned,omitempty"`
+	UserPinned       bool           `json:"user_pinned,omitempty"`
+	DemotedAt        *time.Time     `json:"demoted_at,omitempty"`
 	LastAccessedAt   time.Time      `json:"last_accessed_at"`
 	AccessCount      int            `json:"access_count"`
 	CreatedAt        time.Time      `json:"created_at"`
@@ -62,7 +65,7 @@ func NewHybridEngine(db *DB, vectorStore *VectorStore, decayCfg *DecayConfig) *H
 	}
 }
 
-// StoreMemory stores a memory fragment into both relational/FTS5 and vector indices.
+// StoreMemory stores a memory fragment with standard default tier.
 func (h *HybridEngine) StoreMemory(
 	ctx context.Context,
 	agentID string,
@@ -72,8 +75,30 @@ func (h *HybridEngine) StoreMemory(
 	metadata map[string]any,
 	importanceWeight float64,
 ) (*MemoryRecord, error) {
+	tier := ImportanceNormal
+	if layer == LayerUserProfile {
+		tier = ImportanceUserPreference
+	}
+	return h.StoreMemoryWithOptions(ctx, agentID, layer, content, embedding, metadata, importanceWeight, tier, false)
+}
+
+// StoreMemoryWithOptions stores a memory fragment into both relational/FTS5 and vector indices with explicit tier and pinning.
+func (h *HybridEngine) StoreMemoryWithOptions(
+	ctx context.Context,
+	agentID string,
+	layer MemoryLayer,
+	content string,
+	embedding []float32,
+	metadata map[string]any,
+	importanceWeight float64,
+	importance ImportanceTier,
+	userPinned bool,
+) (*MemoryRecord, error) {
 	if importanceWeight <= 0 {
 		importanceWeight = 1.0
+	}
+	if importance == "" {
+		importance = ImportanceNormal
 	}
 
 	id := uuid.New().String()
@@ -84,17 +109,28 @@ func (h *HybridEngine) StoreMemory(
 		return nil, fmt.Errorf("marshalling metadata: %w", err)
 	}
 
+	pinnedInt := 0
+	userPinnedInt := 0
+	if userPinned || IsProtectedTier(importance) {
+		pinnedInt = 1
+	}
+	if userPinned {
+		userPinnedInt = 1
+	}
+
 	// 1. Insert into SQLite memories table
 	query := `
 		INSERT INTO memories (
 			id, agent_id, layer, content, metadata_json,
-			importance_weight, last_accessed_at, access_count, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			importance_weight, importance, pinned, user_pinned,
+			last_accessed_at, access_count, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	_, err = h.db.db.ExecContext(
 		ctx, query,
 		id, agentID, string(layer), content, string(metaJSON),
-		importanceWeight, now, 1, now,
+		importanceWeight, string(importance), pinnedInt, userPinnedInt,
+		now, 1, now,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("inserting memory to sqlite: %w", err)
@@ -127,6 +163,9 @@ func (h *HybridEngine) StoreMemory(
 		Content:          content,
 		Metadata:         metadata,
 		ImportanceWeight: importanceWeight,
+		Importance:       string(importance),
+		Pinned:           pinnedInt == 1,
+		UserPinned:       userPinnedInt == 1,
 		LastAccessedAt:   now,
 		AccessCount:      1,
 		CreatedAt:        now,
@@ -137,12 +176,7 @@ func (h *HybridEngine) StoreMemory(
 	return record, nil
 }
 
-// sigmoid normalizes an arbitrary value to (0, 1).
-func sigmoid(x float64) float64 {
-	return 1.0 / (1.0 + math.Exp(-x))
-}
-
-// Search retrieves memories by combining FTS5 lexical scores, vector similarities, and Ebbinghaus decay.
+// Search retrieves memories by combining FTS5 lexical scores, vector similarities, and Ebbinghaus decay with tiered weighting.
 func (h *HybridEngine) Search(
 	ctx context.Context,
 	agentID string,
@@ -236,7 +270,6 @@ func (h *HybridEngine) Search(
 
 		var combinedSim float64
 		if lexicalComponent > 0 && semanticComponent > 0 {
-			// Sigmoid fusion when both match
 			combinedSim = 0.5*lexicalComponent + 0.5*semanticComponent
 		} else if semanticComponent > 0 {
 			combinedSim = semanticComponent
@@ -245,9 +278,13 @@ func (h *HybridEngine) Search(
 		}
 
 		elapsed := now.Sub(rec.LastAccessedAt)
-		finalScore := CalculateRetrievalScore(
+		isDemoted := rec.DemotedAt != nil
+		finalScore := CalculateTieredRetrievalScore(
 			elapsed,
 			rec.ImportanceWeight,
+			ImportanceTier(rec.Importance),
+			rec.Pinned || rec.UserPinned,
+			isDemoted,
 			rec.AccessCount,
 			combinedSim,
 			h.decayCfg,
@@ -287,6 +324,107 @@ func (h *HybridEngine) TouchMemory(ctx context.Context, id string) error {
 	return err
 }
 
+// PinMemory marks a memory fragment as permanently pinned.
+func (h *HybridEngine) PinMemory(ctx context.Context, memoryID string, userPinned bool) error {
+	userInt := 0
+	if userPinned {
+		userInt = 1
+	}
+	query := `
+		UPDATE memories
+		SET pinned = 1, user_pinned = ?, demoted_at = NULL
+		WHERE id = ?
+	`
+	_, err := h.db.db.ExecContext(ctx, query, userInt, memoryID)
+	return err
+}
+
+// UnpinMemory removes the pinned status from a memory fragment.
+func (h *HybridEngine) UnpinMemory(ctx context.Context, memoryID string) error {
+	query := `
+		UPDATE memories
+		SET pinned = 0, user_pinned = 0
+		WHERE id = ?
+	`
+	_, err := h.db.db.ExecContext(ctx, query, memoryID)
+	return err
+}
+
+// SetMemoryImportance updates the importance tier of a memory record.
+func (h *HybridEngine) SetMemoryImportance(ctx context.Context, memoryID string, tier ImportanceTier) error {
+	pinnedInt := 0
+	if IsProtectedTier(tier) {
+		pinnedInt = 1
+	}
+	query := `
+		UPDATE memories
+		SET importance = ?, pinned = CASE WHEN ? = 1 THEN 1 ELSE pinned END
+		WHERE id = ?
+	`
+	_, err := h.db.db.ExecContext(ctx, query, string(tier), pinnedInt, memoryID)
+	return err
+}
+
+// ListMemories returns memories for an agent with optional filters.
+func (h *HybridEngine) ListMemories(ctx context.Context, agentID string, layer MemoryLayer, limit int) ([]MemoryRecord, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	query := `
+		SELECT id, agent_id, layer, content, metadata_json,
+		       importance_weight, COALESCE(importance, 'normal'),
+		       COALESCE(pinned, 0), COALESCE(user_pinned, 0), demoted_at,
+		       last_accessed_at, access_count, created_at
+		FROM memories
+		WHERE agent_id = ?
+	`
+	var args []any
+	args = append(args, agentID)
+
+	if layer != "" {
+		query += " AND layer = ?"
+		args = append(args, string(layer))
+	}
+	query += " ORDER BY pinned DESC, user_pinned DESC, last_accessed_at DESC LIMIT ?"
+	args = append(args, limit)
+
+	rows, err := h.db.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("listing memories: %w", err)
+	}
+	defer rows.Close()
+
+	var records []MemoryRecord
+	for rows.Next() {
+		var rec MemoryRecord
+		var metaJSON sql.NullString
+		var layerStr string
+		var pinnedInt, userPinnedInt int
+		var demotedAt sql.NullTime
+
+		if err := rows.Scan(
+			&rec.ID, &rec.AgentID, &layerStr, &rec.Content, &metaJSON,
+			&rec.ImportanceWeight, &rec.Importance,
+			&pinnedInt, &userPinnedInt, &demotedAt,
+			&rec.LastAccessedAt, &rec.AccessCount, &rec.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scanning memory row: %w", err)
+		}
+
+		rec.Layer = MemoryLayer(layerStr)
+		rec.Pinned = pinnedInt == 1
+		rec.UserPinned = userPinnedInt == 1
+		if demotedAt.Valid {
+			rec.DemotedAt = &demotedAt.Time
+		}
+		if metaJSON.Valid && metaJSON.String != "" {
+			_ = json.Unmarshal([]byte(metaJSON.String), &rec.Metadata)
+		}
+		records = append(records, rec)
+	}
+	return records, rows.Err()
+}
+
 func (h *HybridEngine) getMemoriesByIDs(ctx context.Context, ids []string) ([]MemoryRecord, error) {
 	if len(ids) == 0 {
 		return nil, nil
@@ -304,7 +442,9 @@ func (h *HybridEngine) getMemoriesByIDs(ctx context.Context, ids []string) ([]Me
 
 	query := fmt.Sprintf(`
 		SELECT id, agent_id, layer, content, metadata_json,
-		       importance_weight, last_accessed_at, access_count, created_at
+		       importance_weight, COALESCE(importance, 'normal'),
+		       COALESCE(pinned, 0), COALESCE(user_pinned, 0), demoted_at,
+		       last_accessed_at, access_count, created_at
 		FROM memories
 		WHERE id IN (%s)
 	`, placeholders)
@@ -320,15 +460,24 @@ func (h *HybridEngine) getMemoriesByIDs(ctx context.Context, ids []string) ([]Me
 		var rec MemoryRecord
 		var metaJSON sql.NullString
 		var layerStr string
+		var pinnedInt, userPinnedInt int
+		var demotedAt sql.NullTime
 
 		if err := rows.Scan(
 			&rec.ID, &rec.AgentID, &layerStr, &rec.Content, &metaJSON,
-			&rec.ImportanceWeight, &rec.LastAccessedAt, &rec.AccessCount, &rec.CreatedAt,
+			&rec.ImportanceWeight, &rec.Importance,
+			&pinnedInt, &userPinnedInt, &demotedAt,
+			&rec.LastAccessedAt, &rec.AccessCount, &rec.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scanning memory: %w", err)
 		}
 
 		rec.Layer = MemoryLayer(layerStr)
+		rec.Pinned = pinnedInt == 1
+		rec.UserPinned = userPinnedInt == 1
+		if demotedAt.Valid {
+			rec.DemotedAt = &demotedAt.Time
+		}
 		if metaJSON.Valid && metaJSON.String != "" {
 			_ = json.Unmarshal([]byte(metaJSON.String), &rec.Metadata)
 		}

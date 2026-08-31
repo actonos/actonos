@@ -1,0 +1,11 @@
+{
+  "id": "task_27_error_loop_detection",
+  "title": "Detect Repeated Failure Loop and Escalate",
+  "domain": "planning",
+  "difficulty": "medium",
+  "language": "en",
+  "user_goal": "Identify when tool fails 3 consecutive times with identical error and break loop",
+  "expected_kind": "research",
+  "available_tools": [],
+  "expected_assertions": []
+}

@@ -885,7 +885,15 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 				resultStr = toolResult.Content
 				consecutiveFailures = 0
 			}
-			resultStr = capToolObservation(resultStr)
+			if e.contextManager != nil {
+				runID := ""
+				if run != nil {
+					runID = run.ID
+				}
+				resultStr = e.contextManager.AutoSummarizeObservation(ctx, e.llm, runID, tc.Function.Name, resultStr)
+			} else {
+				resultStr = capToolObservation(resultStr)
+			}
 			if resultStr == lastObservation {
 				repeatedObservations++
 			} else {
@@ -1380,7 +1388,15 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 				resultStr = toolResult.Content
 				consecutiveFailures = 0
 			}
-			resultStr = capToolObservation(resultStr)
+			if e.contextManager != nil {
+				runID := ""
+				if run != nil {
+					runID = run.ID
+				}
+				resultStr = e.contextManager.AutoSummarizeObservation(ctx, e.llm, runID, tc.Function.Name, resultStr)
+			} else {
+				resultStr = capToolObservation(resultStr)
+			}
 			if resultStr == lastObservation {
 				repeatedObservations++
 			} else {

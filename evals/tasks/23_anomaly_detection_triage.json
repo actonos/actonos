@@ -1,0 +1,11 @@
+{
+  "id": "task_23_anomaly_detection_triage",
+  "title": "Triage Disk Usage Anomaly and Propose Action",
+  "domain": "planning",
+  "difficulty": "medium",
+  "language": "en",
+  "user_goal": "Evaluate system anomaly where disk usage is at 88% and propose cleanup plan",
+  "expected_kind": "research",
+  "available_tools": [],
+  "expected_assertions": []
+}

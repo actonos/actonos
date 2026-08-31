@@ -109,6 +109,67 @@ System health check. No authentication required.
 }
 ```
 
+### `GET /api/llm/health`
+Retrieve real-time operational health, p50/p95 latency metrics, circuit breaker states, and success/failure statistics per task-kind for all registered model providers.
+
+**Response:**
+```json
+{
+  "data": {
+    "count": 2,
+    "providers": [
+      {
+        "provider_id": "anthropic/claude-sonnet-4-6",
+        "status": "healthy",
+        "total_calls": 1420,
+        "total_failures": 3,
+        "p50_latency_ms": 420,
+        "p95_latency_ms": 1150,
+        "consecutive_fails": 0,
+        "task_stats": {
+          "reasoning": {
+            "total_calls": 620,
+            "successes": 619,
+            "failures": 1
+          },
+          "coding": {
+            "total_calls": 500,
+            "successes": 498,
+            "failures": 2
+          },
+          "summarize": {
+            "total_calls": 300,
+            "successes": 300,
+            "failures": 0
+          }
+        }
+      },
+      {
+        "provider_id": "google/gemini-2.5-flash",
+        "status": "healthy",
+        "total_calls": 890,
+        "total_failures": 0,
+        "p50_latency_ms": 180,
+        "p95_latency_ms": 320,
+        "consecutive_fails": 0,
+        "task_stats": {
+          "classify": {
+            "total_calls": 540,
+            "successes": 540,
+            "failures": 0
+          },
+          "extract": {
+            "total_calls": 350,
+            "successes": 350,
+            "failures": 0
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
 ### `GET /api/models`
 Retrieve the canonical catalog of all supported LLM models, provider specs, badges, and pricing tiers. Single source of truth for the entire system.
 
@@ -325,6 +386,96 @@ Get or save raw `SOUL.md` system personality prompt for an agent.
 
 ### `GET /api/agents/{agentID}/memory-md` | `DELETE /api/agents/{agentID}/memory-md`
 Inspect or clear long-term episodic reflections from `MEMORY.md`.
+
+### `GET /api/agents/{agentID}/memories`
+List structured memory records with optional `layer` (`episodic`, `semantic`, `procedural`) and `limit` (default: 50) query parameters.
+
+**Response:**
+```json
+{
+  "data": {
+    "count": 2,
+    "memories": [
+      {
+        "id": "mem_01J8A9...",
+        "agent_id": "research-assistant",
+        "layer": "semantic",
+        "content": "Operator prefers concise executive summaries in Vietnamese with bold key metrics.",
+        "importance": "user_preference",
+        "pinned": true,
+        "user_pinned": true,
+        "access_count": 12,
+        "last_accessed_at": "2026-08-31T02:00:00Z",
+        "created_at": "2026-08-20T10:00:00Z"
+      },
+      {
+        "id": "mem_01J8B1...",
+        "agent_id": "research-assistant",
+        "layer": "episodic",
+        "content": "Completed weekly arXiv digest task. Sent report to Telegram channel #research.",
+        "importance": "normal",
+        "pinned": false,
+        "user_pinned": false,
+        "access_count": 2,
+        "last_accessed_at": "2026-08-30T15:30:00Z",
+        "created_at": "2026-08-30T15:00:00Z"
+      }
+    ]
+  }
+}
+```
+
+### `POST /api/agents/{agentID}/memories/{memoryID}/pin`
+Pin a memory record. Pinned memories are mathematically immune to temporal Ebbinghaus decay and cannot be pruned by reflection retention cycles.
+
+**Response:**
+```json
+{
+  "data": {
+    "status": "pinned",
+    "memory_id": "mem_01J8A9...",
+    "pinned": true,
+    "user_pinned": true
+  }
+}
+```
+
+### `DELETE /api/agents/{agentID}/memories/{memoryID}/pin`
+Unpin a memory record, restoring standard tiered decay calculation.
+
+**Response:**
+```json
+{
+  "data": {
+    "status": "unpinned",
+    "memory_id": "mem_01J8A9...",
+    "pinned": false,
+    "user_pinned": false
+  }
+}
+```
+
+### `PUT /api/agents/{agentID}/memories/{memoryID}/importance`
+Update the importance tier of a memory record.
+
+**Request:**
+```json
+{
+  "importance": "critical"
+}
+```
+*Valid tiers: `critical` (3.0x), `user_preference` (2.5x), `high` (1.5x), `normal` (1.0x), `low` (0.5x).*
+
+**Response:**
+```json
+{
+  "data": {
+    "status": "updated",
+    "memory_id": "mem_01J8A9...",
+    "importance": "critical"
+  }
+}
+```
 
 ---
 

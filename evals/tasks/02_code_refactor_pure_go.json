@@ -1,0 +1,18 @@
+{
+  "id": "task_02_code_refactor_pure_go",
+  "title": "Refactor CGO SQLite to Pure Go modernc.org/sqlite",
+  "domain": "coding",
+  "difficulty": "medium",
+  "language": "en",
+  "user_goal": "Refactor database connection in db.go to ensure CGO_ENABLED=0 compatibility with modernc.org/sqlite",
+  "expected_kind": "produce",
+  "available_tools": ["native_file_read", "native_file_write"],
+  "expected_assertions": [
+    {
+      "kind": "file_contains",
+      "target": "db.go",
+      "expected": "modernc.org/sqlite",
+      "critical": true
+    }
+  ]
+}

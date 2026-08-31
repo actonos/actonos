@@ -39,9 +39,10 @@ type PlanStep struct {
 	AgentRole    string   `json:"agent_role"`       // "code", "data", "report", "general" or specific agent_id
 	Kind         string   `json:"kind,omitempty"`   // produce | research | verify
 	Atomic       bool     `json:"atomic,omitempty"` // whole goal is this single step
-	Dependencies []string `json:"dependencies"`
-	Status       string   `json:"status"` // pending | in_progress | completed | failed | paused
-	Result       string   `json:"result,omitempty"`
+	Dependencies      []string           `json:"dependencies"`
+	Status            string             `json:"status"` // pending | in_progress | completed | failed | paused
+	Result            string             `json:"result,omitempty"`
+	OutcomeAssertions []OutcomeAssertion `json:"outcome_assertions,omitempty"`
 }
 
 // TaskPlan represents an execution graph of subtasks for a high-level goal.

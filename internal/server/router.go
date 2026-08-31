@@ -325,6 +325,10 @@ func (s *Server) setupRoutes() {
 			r.Get("/realtime", s.handleRealtimeStream)
 			r.Get("/models", s.handleGetModelsCatalog)
 
+			r.Route("/llm", func(r chi.Router) {
+				r.Get("/health", s.handleGetLLMHealth)
+			})
+
 			// Agent Management, Soul & Cron
 			r.Route("/agents", func(r chi.Router) {
 				r.Get("/", s.handleListAgents)
@@ -346,6 +350,10 @@ func (s *Server) setupRoutes() {
 					r.Put("/soul", s.handleSaveSoul)
 					r.Get("/memory-md", s.handleGetMemoryMD)
 					r.Delete("/memory-md", s.handleClearMemoryMD)
+					r.Get("/memories", s.handleListMemories)
+					r.Post("/memories/{memoryID}/pin", s.handlePinMemory)
+					r.Delete("/memories/{memoryID}/pin", s.handleUnpinMemory)
+					r.Put("/memories/{memoryID}/importance", s.handleSetMemoryImportance)
 					r.Post("/start", s.handleStartAgent)
 					r.Post("/stop", s.handleStopAgent)
 					r.Post("/chat", s.handleChat)

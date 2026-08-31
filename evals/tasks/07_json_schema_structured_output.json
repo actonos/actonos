@@ -1,0 +1,18 @@
+{
+  "id": "task_07_json_schema_structured_output",
+  "title": "Generate Strict JSON Output Conforming to Schema",
+  "domain": "tool_use",
+  "difficulty": "medium",
+  "language": "en",
+  "user_goal": "Generate a JSON file manifest.json containing agent_id, name, and status='active'",
+  "expected_kind": "produce",
+  "available_tools": ["native_file_write"],
+  "expected_assertions": [
+    {
+      "kind": "json_schema",
+      "target": "manifest.json",
+      "expected": "agent_id,name,status",
+      "critical": true
+    }
+  ]
+}

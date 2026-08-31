@@ -1,0 +1,11 @@
+{
+  "id": "task_14_model_cascade_fallback",
+  "title": "Fallback Gracefully When Primary Provider Returns 429 Rate Limit",
+  "domain": "planning",
+  "difficulty": "medium",
+  "language": "en",
+  "user_goal": "Perform reasoning analysis when primary model is throttled",
+  "expected_kind": "research",
+  "available_tools": [],
+  "expected_assertions": []
+}

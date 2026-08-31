@@ -1,0 +1,52 @@
+name: Benchmark & Cognition Eval
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Target model ID to evaluate"
+        required: false
+        default: "anthropic/claude-sonnet-4.5"
+      mode:
+        description: "Evaluation mode (mock or live)"
+        required: false
+        default: "mock"
+
+permissions:
+  contents: read
+
+jobs:
+  eval:
+    name: Benchmark Evaluation Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify dependencies
+        run: go mod verify
+
+      - name: Run Benchmark Evaluation Suite
+        run: |
+          go run ./evals/runner/main.go \
+            --mode="${{ inputs.mode || 'mock' }}" \
+            --model="${{ inputs.model || 'anthropic/claude-sonnet-4.5' }}" \
+            --output=eval_report.md \
+            --fail-under=90.0
+
+      - name: Upload Eval Report Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-benchmark-report
+          path: eval_report.md
