@@ -28,6 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     rsync \
     python3 \
+    python-is-python3 \
     build-essential \
     gcc-aarch64-linux-gnu \
     && rm -rf /var/lib/apt/lists/*

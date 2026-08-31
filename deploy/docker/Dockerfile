@@ -62,7 +62,7 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates tzdata bubblewrap bash tini coreutils findutils procps \
     ripgrep jq sqlite3 tree curl wget git openssh-client tar gzip unzip \
-    python3 python3-pip python3-venv nodejs npm chromium fonts-noto fonts-noto-cjk \
+    python3 python3-pip python3-venv python-is-python3 nodejs npm chromium fonts-noto fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
 
 # Create pre-configured Python virtual environment for Agent runtime

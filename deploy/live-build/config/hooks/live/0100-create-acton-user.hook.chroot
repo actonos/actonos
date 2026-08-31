@@ -44,4 +44,10 @@ systemctl mask plymouth.service 2>/dev/null || true
 systemctl mask plymouth-quit.service 2>/dev/null || true
 systemctl mask plymouth-quit-wait.service 2>/dev/null || true
 
+# 6. Ensure 'python' symlink points to 'python3'
+if ! command -v python >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+    ln -sf "$(which python3)" /usr/local/bin/python
+fi
+
 echo "[ActonOS] Appliance console and services initialized successfully."
+
