@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [1.0.4] - 2026-08-31
+
 ### Added
 
 - **B1. Tier-3 Verification: Outcome Assertions & Grounding (`internal/agent/verifier_outcome.go`, `internal/agent/verifier.go`)**:
@@ -333,7 +336,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Apache 2.0 license
 
 <!-- Release links -->
-[Unreleased]: https://github.com/actonos/actonos/compare/v1.0.3...HEAD
+[Unreleased]: https://github.com/actonos/actonos/compare/v1.0.4...HEAD
+[1.0.4]: https://github.com/actonos/actonos/releases/tag/v1.0.4
 [1.0.3]: https://github.com/actonos/actonos/releases/tag/v1.0.3
 [1.0.3]: https://github.com/actonos/actonos/releases/tag/v1.0.3
 [1.0.2]: https://github.com/actonos/actonos/releases/tag/v1.0.2
