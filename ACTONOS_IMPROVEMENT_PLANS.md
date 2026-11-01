@@ -42,7 +42,7 @@
 
 **Việc còn mở:**
 
-1. Chạy eval `live` với khoá API thật để có baseline cho mục 8 (`ANTHROPIC_API_KEY=... go run ./evals/runner --mode=live --only=task_05`). Chế độ này đã được cài đặt và kiểm thử bằng provider giả, nhưng chưa từng chạy với model thật.
+1. Chạy eval `live` lặp lại (nhiều lần, nhiều model) để biết độ dao động và có baseline đáng tin; lần đầu: 29/30 với DeepSeek v4 flash.
 2. Playwright e2e: 37 test pass hai lần liên tiếp trên Linux cục bộ (đã sửa các lỗi thật và test lỗi thời, thêm baseline `*-linux.png`). Job CI vẫn để `continue-on-error` cho đến khi xanh trên runner GitHub, vì baseline ảnh được tạo ngoài CI.
 3. Tách tiếp các file còn lớn: `api_agent.go`, `server_test.go`, `embedding.go`, `workspace/store.go`.
 4. `web/src/components/features/chat/ChatSessionRail.tsx` không còn được import ở đâu (drawer "Sessions" đã bị thay bằng màn hình danh sách phiên); có thể xoá cùng các khoá locale `sessions`/`closeSessions`.
@@ -723,14 +723,21 @@ là nền cho mọi thứ khác tự tin hơn.
 |:---|:---:|:---:|
 | **Operator time/week** (ước lượng) | 5h | < 1h |
 | **Mission auto-completion rate** (không cần duyệt) | ? (đo baseline) | > 70% |
-| **False completion rate** (model tự báo xong) | ? (đo) | < 1% |
-| **Eval pass rate** (trên 30 task) | ? (đo) | ≥ baseline + 10% |
-| **Token cost per mission** (avg) | ? (đo) | -30% (cost-aware cascade) |
-| **P50 chat latency** | ? (đo) | -20% (latency-aware cascade) |
+| **False completion rate** (model tự báo xong) | 0% (1 lần chạy, xem ghi chú dưới bảng) | < 1% |
+| **Eval pass rate** (trên 30 task) | 96,7% (29/30, `deepseek/deepseek-v4-flash`) | ≥ baseline + 10% |
+| **Token cost per mission** (avg) | ~33 nghìn token / task eval (~$0,004) | -30% (cost-aware cascade) |
+| **P50 chat latency** | 5,5 giây (eval live, DeepSeek v4 flash) | -20% (latency-aware cascade) |
 | **Notification volume/ngày** (user nhận) | ? (đo) | -50% (digest + cooldown) |
 | **MTTR** (mean time to recover từ incident) | ? (đo) | -40% (anomaly engine) |
 | **Plugin install count** (community) | ? (đo) | ≥ 20 |
 | **Agent templates used** | 0 | ≥ 10 |
+
+> **Ghi chú về baseline eval (2026-11-01).** Số liệu lấy từ một lần chạy `--mode=live` với `deepseek/deepseek-v4-flash`
+> sau khi sửa lỗi harness. Bốn lần chạy liên tiếp cho 23, 24, 24 rồi 29/30; ba lần đầu bị kéo xuống bởi lỗi thật của
+> sản phẩm (DeepSeek `reasoning_content`) và lỗi của eval (thiếu file đầu vào, `max_tokens` quá thấp, grader quá thô),
+> đều đã sửa. Mỗi lần chạy dao động vài task, nên cần chạy lặp vài lần trước khi coi 96,7% là baseline ổn định.
+> Chỉ một model đã được đo; tác vụ không có assertion chỉ được chấm "câu trả lời không rỗng" cộng kiểm tra an toàn.
+> Task duy nhất fail (`task_16`) do model *thử chạy* `rm -rf /` rồi bị chính sách chặn; grader coi việc thử là vi phạm.
 
 ---
 
