@@ -150,3 +150,98 @@ func TestValidateOutboundURLRejectsMixedDNSAnswers(t *testing.T) {
 		t.Fatalf("expected ErrUnsafeURL, got %v", err)
 	}
 }
+
+// A symlink whose target does not exist yet is still a symlink: writing through
+// it would create the file at the target, outside the root.
+func TestResolvePathRejectsDanglingSymlinkEscape(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	target := filepath.Join(outside, "not-created-yet.txt")
+	if err := os.Symlink(target, filepath.Join(root, "dangling")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	got, err := ResolvePath(root, "dangling", true)
+	if !errors.Is(err, ErrPathEscape) {
+		t.Errorf("allowMissing=true: dangling symlink to %s must be rejected, got path=%q err=%v", target, got, err)
+	}
+	// Writing through a link in the middle of the path escapes just the same.
+	got, err = ResolvePath(root, filepath.Join("dangling", "nested", "file.txt"), true)
+	if !errors.Is(err, ErrPathEscape) {
+		t.Errorf("nested path beneath a dangling symlink must be rejected, got path=%q err=%v", got, err)
+	}
+	if _, err = ResolvePath(root, "dangling", false); err == nil {
+		t.Error("allowMissing=false must reject a dangling symlink")
+	}
+}
+
+func TestResolvePathSymlinkLoopTerminates(t *testing.T) {
+	root := t.TempDir()
+	a, b := filepath.Join(root, "a"), filepath.Join(root, "b")
+	if err := os.Symlink(b, a); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if err := os.Symlink(a, b); err != nil {
+		t.Fatal(err)
+	}
+	// Must return (an error or an in-root path), never hang or panic.
+	_, _ = ResolvePath(root, "a", true)
+	_, _ = ResolvePath(root, "a", false)
+}
+
+func TestResolvePathAllowsDanglingSymlinkInsideRoot(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Symlink(filepath.Join(root, "later.txt"), filepath.Join(root, "alias")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if _, err := ResolvePath(root, "alias", true); err != nil {
+		t.Fatalf("a dangling symlink that stays inside the root is harmless, got %v", err)
+	}
+}
+
+func TestFollowDanglingSymlink(t *testing.T) {
+	root := t.TempDir()
+	want, _ := filepath.EvalSymlinks(root)
+
+	if _, ok := followDanglingSymlink(filepath.Join(root, "missing")); ok {
+		t.Fatal("a nonexistent path is not a symlink")
+	}
+	regular := filepath.Join(root, "regular")
+	if err := os.WriteFile(regular, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := followDanglingSymlink(regular); ok {
+		t.Fatal("a regular file is not a symlink")
+	}
+
+	// Relative target resolves against the link's own directory.
+	if err := os.Symlink("later.txt", filepath.Join(root, "relative")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	got, ok := followDanglingSymlink(filepath.Join(root, "relative"))
+	if !ok || got != filepath.Join(want, "later.txt") {
+		t.Fatalf("relative link resolved to %q (ok=%v), want %q", got, ok, filepath.Join(want, "later.txt"))
+	}
+
+	// A chain of links is followed to its final, still-missing target.
+	if err := os.Symlink(filepath.Join(root, "relative"), filepath.Join(root, "hop2")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(root, "hop2"), filepath.Join(root, "hop1")); err != nil {
+		t.Fatal(err)
+	}
+	got, ok = followDanglingSymlink(filepath.Join(root, "hop1"))
+	if !ok || got != filepath.Join(want, "later.txt") {
+		t.Fatalf("chained links resolved to %q (ok=%v), want %q", got, ok, filepath.Join(want, "later.txt"))
+	}
+
+	// A loop is cut off after a bounded number of hops instead of spinning.
+	if err := os.Symlink(filepath.Join(root, "loop-b"), filepath.Join(root, "loop-a")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(root, "loop-a"), filepath.Join(root, "loop-b")); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := followDanglingSymlink(filepath.Join(root, "loop-a")); !ok {
+		t.Fatal("a loop is still a symlink; it must terminate and report ok")
+	}
+}

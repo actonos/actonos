@@ -47,6 +47,14 @@ func ResolvePathWithBase(allowedRoot, baseDir, requested string, allowMissing bo
 		}
 	} else if !allowMissing {
 		return "", fmt.Errorf("resolving requested path: %w", resolveErr)
+	} else if followed, ok := followDanglingSymlink(checkPath); ok {
+		// EvalSymlinks fails on a link whose target does not exist yet, but a write
+		// through it would still create the file at that target. Judge the target.
+		rel, relErr := filepath.Rel(checkPath, candidate)
+		if relErr != nil {
+			return "", fmt.Errorf("resolving requested path: %w", relErr)
+		}
+		candidate = filepath.Join(followed, rel)
 	}
 
 	rel, err := filepath.Rel(absAllowedRoot, candidate)
@@ -63,6 +71,34 @@ func ResolvePathWithBase(allowedRoot, baseDir, requested string, allowMissing bo
 // paths, lexical traversal, sibling-prefix confusion, and symlink escapes.
 func ResolvePath(root, requested string, allowMissing bool) (string, error) {
 	return ResolvePathWithBase(root, root, requested, allowMissing)
+}
+
+// maxSymlinkHops bounds link chains so a symlink loop cannot hang resolution.
+const maxSymlinkHops = 40
+
+// followDanglingSymlink returns the canonical location a symlink at path points
+// to even when that target does not exist. ok is false if path is not a symlink.
+func followDanglingSymlink(path string) (string, bool) {
+	info, err := os.Lstat(path)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		return "", false
+	}
+	current := path
+	for hops := 0; hops < maxSymlinkHops; hops++ {
+		info, err := os.Lstat(current)
+		if err != nil || info.Mode()&os.ModeSymlink == 0 {
+			break
+		}
+		target, err := os.Readlink(current)
+		if err != nil {
+			return "", false
+		}
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(filepath.Dir(current), target)
+		}
+		current = filepath.Clean(target)
+	}
+	return canonicalizePotentialPath(current), true
 }
 
 func canonicalizePotentialPath(path string) string {
