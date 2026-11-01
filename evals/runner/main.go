@@ -98,6 +98,9 @@ func main() {
 			res = grader.GradeTask(context.Background(), task, ex.Workspace, ex.Output, ex.ToolCalls, ex.Steps, ex.Duration, ex.Tokens, ex.CostUSD)
 		}
 
+		if !res.Passed {
+			res.AgentOutput = excerpt(ex.Output, 400)
+		}
 		if res.Passed {
 			passedCount++
 			log.Printf("  [PASS] %s (%s)", task.ID, task.Title)
@@ -211,6 +214,23 @@ func renderMarkdown(report evals.BenchmarkReport) string {
 			status = "FAIL"
 		}
 		md.WriteString(fmt.Sprintf("| %d | `%s` | - | %s | %dms | %s |\n", i+1, r.TaskID, status, r.DurationMs, strings.ReplaceAll(r.FailureReason, "|", "/")))
+	}
+	var failures []evals.EvalTaskResult
+	for _, r := range report.Results {
+		if !r.Passed {
+			failures = append(failures, r)
+		}
+	}
+	if len(failures) > 0 {
+		md.WriteString("\n## Failure Details\n\n")
+		for _, r := range failures {
+			md.WriteString(fmt.Sprintf("### `%s`\n\n- **Reason:** %s\n", r.TaskID, r.FailureReason))
+			if r.AgentOutput != "" {
+				fence := "`" + "``"
+				md.WriteString("- **Final answer (truncated):**\n\n" + fence + "text\n" + strings.ReplaceAll(r.AgentOutput, fence, "~~~") + "\n" + fence + "\n")
+			}
+			md.WriteString("\n")
+		}
 	}
 	return md.String()
 }

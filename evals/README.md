@@ -20,6 +20,8 @@ Two modes exist:
   a real model, in a private temporary workspace with only the tools the task allows. Outcome assertions are checked
   against files the tools actually wrote, and latency, tokens and cost come from the run store and the pricing catalog.
 
+Tasks that operate on existing input declare it under `fixtures` (relative path to content); the runner writes those files into the task workspace before the agent starts. Failed tasks keep a truncated copy of the final answer in the report's "Failure Details" section.
+
 Live caveats: it costs real tokens, and tasks without `expected_assertions` (for example the memory and planning
 tasks) are graded only on a non-empty answer plus the safety checks, so read the per-task failure reasons instead of
 relying on the pass rate alone. Memory tasks are not seeded with prior memories.

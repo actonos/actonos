@@ -28,19 +28,24 @@ type EvalTask struct {
 	ExpectedAssertions []agent.OutcomeAssertion `json:"expected_assertions,omitempty"`
 	Rubric             string                   `json:"rubric,omitempty"`
 	TimeoutSec         int                      `json:"timeout_sec,omitempty"`
+	// Fixtures are files (relative path -> content) placed in the task workspace
+	// before the agent runs, for tasks that operate on existing input.
+	Fixtures map[string]string `json:"fixtures,omitempty"`
 }
 
 // EvalTaskResult records the execution evaluation of a single task.
 type EvalTaskResult struct {
-	TaskID         string                  `json:"task_id"`
-	Passed         bool                    `json:"passed"`
-	FalseCompleted bool                    `json:"false_completed"`
-	StepsTaken     int                     `json:"steps_taken"`
-	DurationMs     int64                   `json:"duration_ms"`
-	TokensUsed     int                     `json:"tokens_used"`
-	EstimatedCost  float64                 `json:"estimated_cost_usd"`
-	FailureReason  string                  `json:"failure_reason,omitempty"`
-	Assertions     []agent.AssertionResult `json:"assertions,omitempty"`
+	TaskID         string  `json:"task_id"`
+	Passed         bool    `json:"passed"`
+	FalseCompleted bool    `json:"false_completed"`
+	StepsTaken     int     `json:"steps_taken"`
+	DurationMs     int64   `json:"duration_ms"`
+	TokensUsed     int     `json:"tokens_used"`
+	EstimatedCost  float64 `json:"estimated_cost_usd"`
+	FailureReason  string  `json:"failure_reason,omitempty"`
+	// AgentOutput is a truncated copy of the final answer, kept for failed tasks.
+	AgentOutput string                  `json:"agent_output,omitempty"`
+	Assertions  []agent.AssertionResult `json:"assertions,omitempty"`
 }
 
 // BenchmarkReport summarizes an entire evaluation run.

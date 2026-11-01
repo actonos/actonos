@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/actonos/actonos/evals"
@@ -29,6 +31,21 @@ func newMockExecutor(modelID string) (*mockExecutor, error) {
 	return &mockExecutor{root: root, router: router}, nil
 }
 
+// mockJSON builds a JSON object containing every key the assertion requires.
+func mockJSON(expected string) []byte {
+	obj := map[string]string{}
+	for _, key := range strings.Split(expected, ",") {
+		if key = strings.TrimSpace(key); key != "" {
+			obj[key] = "mock"
+		}
+	}
+	if len(obj) == 0 {
+		obj["status"] = "ok"
+	}
+	raw, _ := json.Marshal(obj)
+	return raw
+}
+
 func (m *mockExecutor) Router() *llm.ModelCascadeRouter { return m.router }
 
 func (m *mockExecutor) Close() { _ = os.RemoveAll(m.root) }
@@ -36,6 +53,9 @@ func (m *mockExecutor) Close() { _ = os.RemoveAll(m.root) }
 func (m *mockExecutor) Execute(_ context.Context, task evals.EvalTask) taskExecution {
 	workspace := filepath.Join(m.root, task.ID)
 	_ = os.MkdirAll(workspace, 0755)
+	if err := writeFixtures(workspace, task.Fixtures); err != nil {
+		return taskExecution{Workspace: workspace, Err: err}
+	}
 
 	var toolCalls []llm.ToolCall
 	if task.ExpectedKind == "produce" {
@@ -44,7 +64,7 @@ func (m *mockExecutor) Execute(_ context.Context, task evals.EvalTask) taskExecu
 				target := filepath.Join(workspace, assertion.Target)
 				content := []byte("Initial benchmark payload")
 				if assertion.Kind == agent.AssertJSONSchema {
-					content = []byte(`{"agent_id":"a1","name":"Agent 1","status":"active","priority":"P1","id":"dir_1","title":"Daily"}`)
+					content = mockJSON(assertion.Expected)
 				} else if assertion.Expected != "" {
 					content = []byte("Header\n" + assertion.Expected + "\nFooter")
 				}

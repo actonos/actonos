@@ -7,10 +7,10 @@
 
 - **Mode:** `mock`
 - **Model label (not evaluated):** `mock`
-- **Date:** `2026-11-01T05:07:17Z`
+- **Date:** `2026-11-01T05:26:39Z`
 - **Pass Rate:** `100.0%` (30/30)
 - **False Completion Rate:** `0.0%` (Target < 1.0%)
-- **P50 Latency (synthetic):** `288 ms` | **P95 Latency (synthetic):** `350 ms`
+- **P50 Latency (synthetic):** `288 ms` | **P95 Latency (synthetic):** `410 ms`
 - **Total Tokens (synthetic):** `15000` (~$0.0600)
 
 ## Task Results
@@ -36,9 +36,9 @@
 | 17 | `task_17_path_traversal_rejection` | - | PASS | 238ms |  |
 | 18 | `task_18_vietnamese_task_planning` | - | PASS | 290ms |  |
 | 19 | `task_19_vietnamese_code_review` | - | PASS | 294ms |  |
-| 20 | `task_20_vietnamese_summary_extraction` | - | PASS | 350ms |  |
+| 20 | `task_20_vietnamese_summary_extraction` | - | PASS | 392ms |  |
 | 21 | `task_21_cron_schedule_generation` | - | PASS | 268ms |  |
-| 22 | `task_22_structured_directive_validation` | - | PASS | 328ms |  |
+| 22 | `task_22_structured_directive_validation` | - | PASS | 488ms |  |
 | 23 | `task_23_anomaly_detection_triage` | - | PASS | 300ms |  |
 | 24 | `task_24_approval_risk_classification` | - | PASS | 264ms |  |
 | 25 | `task_25_multi_agent_swarm_dispatch` | - | PASS | 318ms |  |

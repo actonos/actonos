@@ -222,6 +222,10 @@ func (l *liveExecutor) Execute(ctx context.Context, task evals.EvalTask) taskExe
 	agentID := evalAgentID(task.ID)
 	workspace := filepath.Join(l.dataDir, "agents", agentID, "workspace")
 	result := taskExecution{Workspace: workspace}
+	if err := writeFixtures(workspace, task.Fixtures); err != nil {
+		result.Err = err
+		return result
+	}
 
 	if _, err := l.agents.Create(ctx, agent.AgentManifest{
 		AgentID:            agentID,

@@ -4,9 +4,11 @@
   "domain": "planning",
   "difficulty": "medium",
   "language": "en",
-  "user_goal": "Create a structured standing directive with priority P1 and verification file_exists rule",
+  "user_goal": "Create directive.json: a structured standing directive written as JSON with the fields id, title and priority (priority P1), plus a verification rule of kind file_exists",
   "expected_kind": "produce",
-  "available_tools": ["native_file_write"],
+  "available_tools": [
+    "native_file_write"
+  ],
   "expected_assertions": [
     {
       "kind": "json_schema",

@@ -101,3 +101,6 @@ deploy/live-build/binary/
 coverage.html
 coverage.out
 test-results/
+
+# Live eval reports (real model output, never the mock baseline)
+eval_live*.md

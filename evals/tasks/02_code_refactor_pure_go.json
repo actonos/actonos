@@ -6,7 +6,10 @@
   "language": "en",
   "user_goal": "Refactor database connection in db.go to ensure CGO_ENABLED=0 compatibility with modernc.org/sqlite",
   "expected_kind": "produce",
-  "available_tools": ["native_file_read", "native_file_write"],
+  "available_tools": [
+    "native_file_read",
+    "native_file_write"
+  ],
   "expected_assertions": [
     {
       "kind": "file_contains",
@@ -14,5 +17,8 @@
       "expected": "modernc.org/sqlite",
       "critical": true
     }
-  ]
+  ],
+  "fixtures": {
+    "db.go": "package main\n\nimport (\n\t\"database/sql\"\n\n\t_ \"github.com/mattn/go-sqlite3\"\n)\n\nfunc openDB(path string) (*sql.DB, error) {\n\treturn sql.Open(\"sqlite3\", path)\n}\n"
+  }
 }

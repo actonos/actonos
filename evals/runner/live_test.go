@@ -175,3 +175,57 @@ func TestRenderMarkdownLabelsMockAndLiveDifferently(t *testing.T) {
 		t.Fatalf("live report must not be labelled as mock:\n%s", live)
 	}
 }
+
+func TestLiveExecutorGivesTheAgentItsFixtureFiles(t *testing.T) {
+	const model = "test/fixer"
+	fixed := "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(greet(n))\n}\n"
+	provider := scriptedProvider(t, model,
+		toolCallReply(t, "native_file_read", map[string]any{"path": "main.go"}),
+		toolCallReply(t, "native_file_write", map[string]any{"path": "main.go", "content": fixed}),
+		&llm.Response{Content: "Fixed the missing parenthesis on line 12."},
+	)
+	executor, err := newLiveExecutorWithProvider(model, provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer executor.Close()
+
+	task := loadTasks(t)["task_01_code_fix_syntax"]
+	got := executor.Execute(context.Background(), task)
+	if got.Err != nil {
+		t.Fatalf("execution error: %v", got.Err)
+	}
+	if len(got.ToolCalls) < 2 || got.ToolCalls[0].Function.Name != "native_file_read" {
+		t.Fatalf("expected a read then a write, got %+v", got.ToolCalls)
+	}
+	// The fixture was placed before the run, so the read could succeed and the
+	// write replaced it.
+	written, err := os.ReadFile(filepath.Join(got.Workspace, "main.go"))
+	if err != nil || !strings.Contains(string(written), "fmt.Println(greet(n))") {
+		t.Fatalf("fixed file not written: %q err=%v", written, err)
+	}
+	res := newTestGrader(executor).GradeTask(context.Background(), task, got.Workspace, got.Output, got.ToolCalls, got.Steps, got.Duration, got.Tokens, got.CostUSD)
+	if !res.Passed {
+		t.Fatalf("a model that fixes the file should pass: %+v", res)
+	}
+}
+
+func TestLiveExecutorLeavesFixtureBrokenWhenModelDoesNothing(t *testing.T) {
+	const model = "test/idle"
+	provider := scriptedProvider(t, model, &llm.Response{Content: "Looks fine to me, nothing to change."})
+	executor, err := newLiveExecutorWithProvider(model, provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer executor.Close()
+
+	task := loadTasks(t)["task_01_code_fix_syntax"]
+	got := executor.Execute(context.Background(), task)
+	res := newTestGrader(executor).GradeTask(context.Background(), task, got.Workspace, got.Output, got.ToolCalls, got.Steps, got.Duration, got.Tokens, got.CostUSD)
+	if res.Passed {
+		t.Fatalf("leaving the syntax error in place must fail: %+v", res)
+	}
+	if !strings.Contains(res.FailureReason, "main.go") && !res.FalseCompleted {
+		t.Fatalf("expected an outcome failure, got %+v", res)
+	}
+}

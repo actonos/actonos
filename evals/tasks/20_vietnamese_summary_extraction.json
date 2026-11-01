@@ -4,14 +4,26 @@
   "domain": "vietnamese",
   "difficulty": "easy",
   "language": "vi",
-  "user_goal": "Tóm tắt email khách hàng và xuất file thongtin.json chứa ten_khach, so_dien_thoai, yeu_cau",
+  "user_goal": "Tóm tắt email khách hàng trong file email.txt và xuất file thongtin.json chứa ten_khach, so_dien_thoai, yeu_cau",
   "expected_kind": "produce",
-  "available_tools": ["native_file_write"],
+  "available_tools": [
+    "native_file_read",
+    "native_file_write"
+  ],
   "expected_assertions": [
     {
       "kind": "file_exists",
       "target": "thongtin.json",
       "critical": true
+    },
+    {
+      "kind": "json_schema",
+      "target": "thongtin.json",
+      "expected": "ten_khach,so_dien_thoai,yeu_cau",
+      "critical": true
     }
-  ]
+  ],
+  "fixtures": {
+    "email.txt": "Chào đội hỗ trợ,\n\nTôi là Nguyễn Văn An, số điện thoại 0912 345 678. Tôi muốn đổi gói dịch vụ từ Basic sang Pro và nhờ bên mình xuất hóa đơn VAT cho tháng này.\n\nCảm ơn,\nAn\n"
+  }
 }

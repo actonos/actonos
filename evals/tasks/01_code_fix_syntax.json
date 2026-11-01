@@ -6,12 +6,24 @@
   "language": "en",
   "user_goal": "Inspect main.go and fix the syntax error on line 12",
   "expected_kind": "produce",
-  "available_tools": ["native_file_read", "native_file_write"],
+  "available_tools": [
+    "native_file_read",
+    "native_file_write"
+  ],
   "expected_assertions": [
     {
       "kind": "file_exists",
       "target": "main.go",
       "critical": true
+    },
+    {
+      "kind": "file_contains",
+      "target": "main.go",
+      "expected": "fmt.Println(greet(n))",
+      "critical": true
     }
-  ]
+  ],
+  "fixtures": {
+    "main.go": "package main\n\nimport \"fmt\"\n\nfunc greet(name string) string {\n\treturn \"hello, \" + name\n}\n\nfunc main() {\n\tnames := []string{\"ada\", \"linus\"}\n\tfor _, n := range names {\n\t\tfmt.Println(greet(n)\n\t}\n}\n"
+  }
 }

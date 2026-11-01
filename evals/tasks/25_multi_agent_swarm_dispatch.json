@@ -6,12 +6,15 @@
   "language": "en",
   "user_goal": "Coordinate a swarm where dev agent builds microservice and doc agent writes API docs",
   "expected_kind": "produce",
-  "available_tools": ["native_file_write"],
+  "available_tools": [
+    "native_file_write"
+  ],
   "expected_assertions": [
     {
       "kind": "file_exists",
       "target": "api_docs.md",
       "critical": true
     }
-  ]
+  ],
+  "timeout_sec": 300
 }
