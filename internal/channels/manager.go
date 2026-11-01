@@ -261,5 +261,10 @@ func (m *ChannelManager) SendMessage(ctx context.Context, msg OutboundMessage) e
 	if len(errs) > 0 {
 		return fmt.Errorf("dispatch errors (%d succeeded): %s", dispatched, strings.Join(errs, "; "))
 	}
+	// An explicitly addressed channel with no adapter would otherwise "succeed"
+	// and silently drop the message. Broadcasts to "all" may legitimately find none.
+	if dispatched == 0 && targetChannel != "all" {
+		return fmt.Errorf("no adapter registered for channel %q", targetChannel)
+	}
 	return nil
 }
