@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [1.0.5] - 2026-11-01
+
 ### Added
 
 - **Mail & Calendar foundation (`internal/mailcal`, `/api/mailcal/*`, `web/src/pages/Mailcal`)**:
@@ -373,7 +376,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Apache 2.0 license
 
 <!-- Release links -->
-[Unreleased]: https://github.com/actonos/actonos/compare/v1.0.4...HEAD
+[Unreleased]: https://github.com/actonos/actonos/compare/v1.0.5...HEAD
+[1.0.5]: https://github.com/actonos/actonos/releases/tag/v1.0.5
 [1.0.4]: https://github.com/actonos/actonos/releases/tag/v1.0.4
 [1.0.3]: https://github.com/actonos/actonos/releases/tag/v1.0.3
 [1.0.3]: https://github.com/actonos/actonos/releases/tag/v1.0.3
