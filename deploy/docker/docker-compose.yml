@@ -20,6 +20,8 @@ services:
       - DATA_DIR=/data
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - ACTONOS_SECRET_KEY=${ACTONOS_SECRET_KEY:-}
+      # Optional: join your tailnet headlessly; the Web UI is then served at https://<hostname>.<tailnet>.ts.net
+      - TAILSCALE_AUTH_KEY=${TAILSCALE_AUTH_KEY:-}
       # Optional: AI Provider Keys (or configure via Web UI Settings)
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}

@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { mailcalApi } from '@/lib/api/mailcal';
+import { needsHttpsForSignIn } from '@/lib/secureOrigin';
 
 const KNOWN_HELP = ['google', 'microsoft'];
 
@@ -47,6 +48,7 @@ export function OAuthClientPanel({ provider }: { provider: string }) {
   const help = KNOWN_HELP.includes(provider) ? provider : 'generic';
   const redirect = `${window.location.origin}/api/mailcal/oauth/callback`;
   const showForm = configured === false || replacing;
+  const insecure = needsHttpsForSignIn(window.location.protocol, window.location.hostname);
 
   return (
     <fieldset className="flex flex-col gap-3 rounded-2xl border border-onyx/15 p-3">
@@ -55,6 +57,9 @@ export function OAuthClientPanel({ provider }: { provider: string }) {
       <p className="text-caption text-slate">
         {t('oauth.redirectHint')} <code className="break-all">{redirect}</code>
       </p>
+      {insecure && (
+        <p role="alert" className="text-body-sm text-status-danger">{t('oauth.httpsRequired')}</p>
+      )}
       {configured && !replacing && (
         <div className="flex items-center gap-2">
           <Badge variant="success">{t('oauth.client.configured')}</Badge>

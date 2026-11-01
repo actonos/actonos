@@ -309,7 +309,7 @@ High-risk admin actions (`admin_ota_apply` / `admin_ota_rollback`). Approval **e
 Fetch one durable run. 404 `RUN_NOT_FOUND` when missing.
 
 ### `GET /api/system/tailscale`
-Tailscale node status and peers.
+Tailscale node status and peers. `https_url` (`https://<host>.<tailnet>.ts.net`) is present once HTTPS certificates are enabled for the tailnet; that is the address to open ActonOS at for OAuth sign-in.
 
 ### `GET /api/system/wifi/scan` | `POST /api/system/wifi/connect`
 Scan Wi-Fi access points and connect (Bare-metal mode).
@@ -1474,7 +1474,7 @@ Rule proposals (`?status=pending`). Agents can only create proposals (`native_ma
 Audit trail (`?account=&verdict=&phase=&limit=`). Holds ids and hashes, never message text.
 
 ### `POST /api/mailcal/accounts/{id}/oauth/start`
-Starts the sign-in for an account whose plugin signs users in through ActonOS. Returns `{auth_url, redirect_uri}` and sets a short-lived `HttpOnly`, `SameSite=Lax` cookie that only the browser which started the flow holds. Register `redirect_uri` as an allowed redirect in the provider's console. `412 OAUTH_CLIENT_MISSING` when no client id is stored.
+Starts the sign-in for an account whose plugin signs users in through ActonOS. Returns `{auth_url, redirect_uri}` and sets a short-lived `HttpOnly`, `SameSite=Lax` cookie that only the browser which started the flow holds. Register `redirect_uri` as an allowed redirect in the provider's console. `412 OAUTH_CLIENT_MISSING` when no client id is stored. `400 OAUTH_HTTPS_REQUIRED` when the request came over plain HTTP from anywhere but this machine (providers reject http redirect addresses); the message names the Tailscale HTTPS address when one exists.
 
 ### `GET /api/mailcal/oauth/callback`
 **Public** (the browser arrives from another site, so the `SameSite=Strict` session cookie is not sent). Protected by a single-use `state`, PKCE (S256) and the nonce cookie. Always answers `302` to `/#/mailcal?oauth=ok|denied|state|no_refresh_token|failed`; provider data never appears in the URL.

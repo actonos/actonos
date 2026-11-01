@@ -227,7 +227,8 @@
       "state": "The sign-in request expired or did not start from this browser. Try again.",
       "no_refresh_token": "The provider did not allow lasting access. Remove this app from your account's security page, then sign in again.",
       "failed": "The sign-in failed. Check the client id and secret, then try again."
-    }
+    },
+    "httpsRequired": "Providers only accept https redirect addresses, so sign-in cannot work from this page. Open ActonOS over HTTPS first (with Tailscale: https://<machine>.<tailnet>.ts.net)."
   },
   "reconnect": {
     "generic": "This account needs to sign in again.",

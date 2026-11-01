@@ -157,7 +157,23 @@ make docker-multiarch
 | `ACTONOS_REQUIRE_SIGNED_PLUGINS` | unset | Set to `1` to reject unsigned `.actonpkg` installs (`acton-plugin pack` omits signatures by default) |
 | `ACTONOS_ALLOW_UNSIGNED_PLUGINS` | unset | Set to `1` to allow unsigned installs even when signed plugins are required |
 | `TAILSCALE_AUTH_KEY` | — | Tailscale auth key for headless setup |
+| `ACTON_TAILSCALE_HTTPS` | `1` | Serve the Web UI over HTTPS on the tailnet (`:443`, certificate for `<host>.<tailnet>.ts.net`); `0` turns it off |
 | `TZ` | `UTC` | Timezone for cron schedules and logs |
+
+---
+
+## HTTPS over Tailscale (needed for OAuth sign-in)
+
+Google, Microsoft and other OAuth providers only accept `https://` redirect addresses (plain `http://` works only for `localhost`), so accounts that sign in with OAuth (Gmail, Google Calendar, Microsoft 365) cannot be connected while you browse ActonOS over `http://192.168.x.x:8080`. The embedded Tailscale node can serve the Web UI over HTTPS with a real certificate and no open ports:
+
+1. In the Tailscale admin console turn on **MagicDNS** and **HTTPS Certificates** (DNS page).
+2. Run ActonOS with Tailscale enabled (the default; give headless machines `TAILSCALE_AUTH_KEY`). Keep `/data/config/tsnet` on the data volume so the node identity survives restarts.
+3. Open `https://<hostname>.<tailnet>.ts.net` from a device on the tailnet. The exact address is in the dashboard's Tailscale card (`https_url`) and in the startup log line `listening on Tailscale HTTPS`. The first request may take a few seconds while the certificate is issued.
+4. Register `https://<hostname>.<tailnet>.ts.net/api/mailcal/oauth/callback` as the redirect address of your OAuth client and sign in **from that same address** (the sign-in cookie is bound to the host).
+
+If the log says the HTTPS listener did not start, HTTPS Certificates or MagicDNS is not enabled for the tailnet. `ACTON_TAILSCALE_HTTPS=0` disables the listener. Plain HTTP on `:80` and `:8080` over the tailnet and on the local port stays available.
+
+Providers also vet the host of a redirect address: Microsoft accepts any https host; check that Google's console accepts the `ts.net` domain for your client type, and use a custom domain behind a reverse proxy (`docker-compose.caddy.yml`) if it does not.
 
 ---
 

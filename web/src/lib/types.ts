@@ -204,6 +204,8 @@ export interface TailscaleStatus {
   hostname: string;
   peers_count: number;
   auth_key_set: boolean;
+  /** https://<host>.<tailnet>.ts.net once HTTPS certificates are enabled for the tailnet. */
+  https_url?: string;
 }
 
 

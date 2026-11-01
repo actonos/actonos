@@ -227,7 +227,8 @@
       "state": "Yêu cầu đăng nhập đã hết hạn hoặc không bắt đầu từ trình duyệt này. Hãy thử lại.",
       "no_refresh_token": "Nhà cung cấp không cấp quyền truy cập lâu dài. Hãy gỡ ứng dụng này khỏi trang bảo mật tài khoản của bạn rồi đăng nhập lại.",
       "failed": "Đăng nhập thất bại. Kiểm tra client id và secret rồi thử lại."
-    }
+    },
+    "httpsRequired": "Nhà cung cấp chỉ chấp nhận địa chỉ chuyển hướng https nên không thể đăng nhập từ trang này. Hãy mở ActonOS qua HTTPS trước (với Tailscale: https://<máy>.<tailnet>.ts.net)."
   },
   "reconnect": {
     "generic": "Tài khoản này cần đăng nhập lại.",
