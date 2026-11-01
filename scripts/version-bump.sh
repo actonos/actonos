@@ -210,7 +210,7 @@ git_commit_and_tag() {
   log_success "Created tag: v${new_version}"
   echo ""
   log_info "To publish this release, run:"
-  echo "  git push origin main --tags"
+  echo "  git push origin $(git rev-parse --abbrev-ref HEAD) --tags"
 }
 
 # ==============================================================================
