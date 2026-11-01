@@ -191,6 +191,17 @@ for localhost/loopback. Its iframe is sandboxed without clipboard permissions.
 The web server also emits Content Security Policy and Permissions Policy
 headers for embedded UI responses.
 
+### Mail and Calendar
+
+Provider plugins (Gmail, Graph, CalDAV, IMAP/SMTP) are untrusted code; the core decides, plugins execute.
+
+- **Mandatory gate.** `native_mail_send`, `native_mail_delete` and the calendar write tools are in the registry's external-effect list. They are always High risk, are never covered by a "don't ask again" grant or auto-approval, and refuse to run unless a gate is registered. A gate verdict of `needs_approval` forces a human approval for the exact input, regardless of the agent's approval threshold or a background (cron) run. A gate that errors or returns an unknown verdict denies.
+- **Agents cannot send arbitrary text.** `native_mail_send` takes only a `draft_id`. Drafts are immutable (a database trigger rejects `UPDATE`) and carry an integrity hash and a reply context verified with the provider when the draft was made. An approval binds to the draft, so changing the text means a new draft and a new approval.
+- **Rules.** Auto-send is closed by default (master switch off, no rules). Deny rules win; allow rules need exact recipients or domains (no wildcards, no public mail domains unless explicitly allowed), per-hour and per-day limits, and match the real payload. Bcc, attachments, forwards, links (unless allowed) and any deletion always need a person. Only a signed-in person can approve a rule proposal; the agent tool can only create proposals. Several returned messages in an hour pause the account's rules.
+- **No double sends.** Sending goes through an idempotency ledger keyed by the draft; a draft is sent at most once, including under concurrent attempts and lost answers.
+- **Message text is data.** Content from providers is sanitized and wrapped as untrusted, with an explicit notice, before it reaches a model.
+- **Known limits.** Message content can still mislead the *person* who approves; a rule in `free` text mode can disclose data to the sender it replies to.
+
 ---
 
 ## Best Practices for Deployers

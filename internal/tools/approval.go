@@ -97,7 +97,7 @@ type ApprovalGrant struct {
 // GrantEligibleTool reports whether a tool may receive a don't-ask-again waiver.
 // Administrative mutations always require an exact-action decision.
 func GrantEligibleTool(name string) bool {
-	if name == "" || strings.HasPrefix(name, "admin_") || name == "system_mcp_connect" {
+	if name == "" || strings.HasPrefix(name, "admin_") || name == "system_mcp_connect" || IsExternalEffectTool(name) {
 		return false
 	}
 	return true

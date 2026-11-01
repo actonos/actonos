@@ -37,8 +37,13 @@ type providerEntry struct {
 // Service is the core of mail and calendar support. It owns accounts and drafts, knows
 // which provider plugins are loaded (via plugin.CapabilityHook), and serves the tools.
 type Service struct {
-	accounts *AccountStore
-	drafts   *DraftStore
+	accounts  *AccountStore
+	drafts    *DraftStore
+	settings  *SettingsStore
+	rules     *RuleStore
+	proposals *ProposalStore
+	decisions *DecisionStore
+	ledger    *Ledger
 
 	mu        sync.RWMutex
 	providers map[string]*providerEntry
@@ -61,8 +66,39 @@ func NewService(db *sql.DB) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Service{accounts: accounts, drafts: drafts, providers: map[string]*providerEntry{}, sleep: sleepCtx}, nil
+	svc := &Service{accounts: accounts, drafts: drafts, providers: map[string]*providerEntry{}, sleep: sleepCtx}
+	if svc.settings, err = NewSettingsStore(db); err != nil {
+		return nil, err
+	}
+	if svc.rules, err = NewRuleStore(db); err != nil {
+		return nil, err
+	}
+	if svc.proposals, err = NewProposalStore(db, svc.rules); err != nil {
+		return nil, err
+	}
+	if svc.decisions, err = NewDecisionStore(db); err != nil {
+		return nil, err
+	}
+	if svc.ledger, err = NewLedger(db); err != nil {
+		return nil, err
+	}
+	return svc, nil
 }
+
+// Settings returns the master switch store.
+func (s *Service) Settings() *SettingsStore { return s.settings }
+
+// Rules returns the rule book. Hand it only to code that runs on behalf of an authenticated person.
+func (s *Service) Rules() *RuleStore { return s.rules }
+
+// Proposals returns the proposal store.
+func (s *Service) Proposals() *ProposalStore { return s.proposals }
+
+// Decisions returns the audit trail.
+func (s *Service) Decisions() *DecisionStore { return s.decisions }
+
+// Ledger returns the idempotency ledger.
+func (s *Service) Ledger() *Ledger { return s.ledger }
 
 func sleepCtx(ctx context.Context, d time.Duration) error {
 	t := time.NewTimer(d)
@@ -297,6 +333,9 @@ func (s *Service) MailList(ctx context.Context, accountID string, p abi.MailList
 	}
 	var res abi.MailListResult
 	err = s.readCall(ctx, b, func() (e error) { res, e = b.provider.MailList(ctx, b.account.Ref(), p); return })
+	if err == nil {
+		s.observeInbox(ctx, b.account, res.Messages)
+	}
 	return b.account, res, err
 }
 

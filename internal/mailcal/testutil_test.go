@@ -32,7 +32,12 @@ type fixture struct {
 
 func newFixture(t *testing.T, provider mailcal.Provider) *fixture {
 	t.Helper()
-	svc, err := mailcal.NewService(newDB(t))
+	return newFixtureOn(t, newDB(t), provider)
+}
+
+func newFixtureOn(t *testing.T, db *sql.DB, provider mailcal.Provider) *fixture {
+	t.Helper()
+	svc, err := mailcal.NewService(db)
 	if err != nil {
 		t.Fatal(err)
 	}

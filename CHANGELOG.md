@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Provider-agnostic mail and calendar model and a versioned JSON ABI (`mail@1`, `calendar@1`) that WASM provider plugins implement; plugins are announced to the core through a new `plugin.CapabilityHook` and called through `PluginInstance.CallJSON`.
   - Account registry (secrets are never stored in account config), immutable agent drafts with integrity hash and verified reply context, and agent tools to list, search, read, summarize and draft mail and to read the calendar and free/busy. Message text is wrapped as untrusted data. Nothing is sent in this version.
   - Reference provider (in-memory and as a real WASM plugin) plus a conformance suite any provider can be tested with, and four office tasks in the eval harness.
+- **Mail & Calendar sending, rules and approvals (`internal/tools/gate.go`, `internal/mailcal/policy`)**:
+  - A mandatory per-tool gate in `ToolRegistry.Execute`: tools whose effect leaves the device (send and delete mail, create, update, answer and delete events) are always High risk, can never be covered by "don't ask again" or auto-approval, refuse to run without a gate, and cannot be waved through by an agent's approval threshold or a background (cron) run.
+  - Auto-send rule engine (deny rules win, exact recipients and domains only, template or free text, no Bcc, attachments, forwards or links, hourly and daily limits, fail closed), rule proposals that only a signed-in person can approve, an audit trail, an idempotency ledger so a draft is sent at most once, and automatic rule pause after several bounces. The master switch is off by default.
 - **Plugin runtime**: guest calls that never return are now interrupted when their context ends.
 
 

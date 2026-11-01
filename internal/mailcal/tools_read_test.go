@@ -30,19 +30,27 @@ func mailcalToolNames(reg *tools.ToolRegistry) []string {
 	return names
 }
 
-// Phase 1 ships reading and drafting only. If a write tool shows up here before the approval
-// gate exists (Phase 2), this test fails and the change must not be merged.
-func TestOnlyReadAndDraftToolsExistInPhase1(t *testing.T) {
+// The tool set is closed: every mail or calendar tool must be listed in ReadToolNames or
+// WriteToolNames, and every external-effect tool must be covered by the gate list.
+func TestToolSetIsExactlyWhatIsDeclared(t *testing.T) {
 	fx := newFixture(t, nil)
-	want := mailcal.ReadToolNames()
+	want := append(mailcal.ReadToolNames(), mailcal.WriteToolNames()...)
 	sort.Strings(want)
 	if got := mailcalToolNames(fx.registry); strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("registered mail/calendar tools = %v, want exactly %v", got, want)
 	}
-	for _, forbidden := range []string{"native_mail_send", "native_mail_reply", "native_mail_delete", "native_mail_mark", "native_mail_move",
-		"native_calendar_create", "native_calendar_update", "native_calendar_respond", "native_calendar_delete", "native_mailcal_propose_rule"} {
-		if _, err := fx.registry.Get(forbidden); err == nil {
-			t.Errorf("%s must not be registered before the policy gate exists", forbidden)
+	gated := map[string]bool{}
+	for _, n := range mailcal.GatedToolNames() {
+		gated[n] = true
+	}
+	for _, n := range want {
+		if tools.IsExternalEffectTool(n) && !gated[n] {
+			t.Errorf("%s has an external effect but is not in GatedToolNames", n)
+		}
+	}
+	for n := range gated {
+		if !tools.IsExternalEffectTool(n) {
+			t.Errorf("%s is gated but missing from the registry's external-effect list", n)
 		}
 	}
 }

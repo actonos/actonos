@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/Button';
+import { EXTERNAL_EFFECT_TOOLS } from '@/lib/api/mailcal';
 import type { ApprovalRequest, DontAskAgain } from '@/lib/types';
 
 export function ApprovalDecisionBar({
@@ -24,7 +25,8 @@ export function ApprovalDecisionBar({
   const canGrant =
     Boolean(approval.tool_name) &&
     !approval.tool_name.startsWith('admin_') &&
-    approval.tool_name !== 'system_mcp_connect';
+    approval.tool_name !== 'system_mcp_connect' &&
+    !EXTERNAL_EFFECT_TOOLS.includes(approval.tool_name);
   const hasTask = Boolean(approval.task_id);
 
   return (

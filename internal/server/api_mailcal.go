@@ -41,6 +41,7 @@ func (s *Server) handleMailcalStatus(w http.ResponseWriter, r *http.Request) {
 	s.respondJSON(w, http.StatusOK, map[string]any{
 		"providers": len(svc.Providers()),
 		"accounts":  len(accounts),
+		"enabled":   svc.Settings().Enabled(r.Context()),
 	})
 }
 

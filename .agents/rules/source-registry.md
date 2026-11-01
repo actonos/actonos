@@ -259,6 +259,17 @@
 | `DELETE` | `/api/mailcal/accounts/{id}` | `handleMailcalDeleteAccount` | `api_mailcal.go` |
 | `POST` | `/api/mailcal/accounts/{id}/test` | `handleMailcalTestAccount` | `api_mailcal.go` |
 | `GET` | `/api/mailcal/drafts/{id}` | `handleMailcalGetDraft` | `api_mailcal.go` |
+| `GET` | `/api/mailcal/drafts/{id}/evaluation` | `handleMailcalEvaluateDraft` | `api_mailcal_rules.go` |
+| `POST` | `/api/mailcal/drafts/{id}/rule-proposal` | `handleMailcalProposalFromDraft` | `api_mailcal_rules.go` |
+| `GET`/`PUT` | `/api/mailcal/settings` | `handleMailcalGetSettings` / `handleMailcalPutSettings` | `api_mailcal_rules.go` |
+| `GET`/`POST` | `/api/mailcal/rules` | `handleMailcalListRules` / `handleMailcalCreateRule` | `api_mailcal_rules.go` |
+| `POST` | `/api/mailcal/rules/dry-run` | `handleMailcalDryRun` | `api_mailcal_rules.go` |
+| `PUT` | `/api/mailcal/rules/{id}/enabled` | `handleMailcalSetRuleEnabled` | `api_mailcal_rules.go` |
+| `DELETE` | `/api/mailcal/rules/{id}` | `handleMailcalDeleteRule` | `api_mailcal_rules.go` |
+| `GET` | `/api/mailcal/proposals` | `handleMailcalListProposals` | `api_mailcal_rules.go` |
+| `POST` | `/api/mailcal/proposals/{id}/approve` | `handleMailcalApproveProposal` | `api_mailcal_rules.go` |
+| `POST` | `/api/mailcal/proposals/{id}/reject` | `handleMailcalRejectProposal` | `api_mailcal_rules.go` |
+| `GET` | `/api/mailcal/decisions` | `handleMailcalListDecisions` | `api_mailcal_rules.go` |
 
 ## Backend Packages (`internal/`)
 

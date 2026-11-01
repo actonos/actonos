@@ -1307,6 +1307,33 @@ Probes the provider and updates the account status.
 ### `GET /api/mailcal/drafts/{id}`
 An immutable draft created by an agent with `native_mail_draft`.
 
+### `GET /api/mailcal/drafts/{id}/evaluation`
+What the rule engine would decide for this draft right now: `{verdict: "allow"|"needs_approval"|"deny", rule_id?, reasons[]}`. Shown on the approval card.
+
+### `POST /api/mailcal/drafts/{id}/rule-proposal`
+"Approve and create a rule": stores the narrowest rule that would have allowed this draft (exact recipients, reply-only, exact text) as a **pending proposal**. Nothing becomes active until the proposal is approved.
+
+### `GET /api/mailcal/settings`
+### `PUT /api/mailcal/settings`
+Master switch `{enabled}`. **Off by default**: while off, every write (send, delete, calendar changes) is denied.
+
+### `GET /api/mailcal/rules`
+### `POST /api/mailcal/rules`
+Auto-send rule book (`?account=` filters). Creating a rule validates it: no wildcards, no public mail domains unless `allow_public_domain`, allow rules need `per_hour` and `per_day` limits. Invalid or dangerously broad rules return `400 INVALID_REQUEST`.
+
+### `PUT /api/mailcal/rules/{id}/enabled`
+### `DELETE /api/mailcal/rules/{id}`
+### `POST /api/mailcal/rules/dry-run`
+Body `{rule, draft_id}`: would this rule handle that draft on its own, and why not.
+
+### `GET /api/mailcal/proposals`
+### `POST /api/mailcal/proposals/{id}/approve`
+### `POST /api/mailcal/proposals/{id}/reject`
+Rule proposals (`?status=pending`). Agents can only create proposals (`native_mailcal_propose_rule`); approving one creates an enabled rule and is only possible through this authenticated API.
+
+### `GET /api/mailcal/decisions`
+Audit trail (`?account=&verdict=&phase=&limit=`). Holds ids and hashes, never message text.
+
 ---
 
 ## Error Format

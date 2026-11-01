@@ -141,6 +141,8 @@ type ToolRegistry struct {
 	approvals          *ApprovalManager
 	fileMutations      FileMutationSink
 	workspaceMutations WorkspaceMutationSink
+	gates              map[string]ToolGate
+	gateRequired       map[string]struct{}
 }
 
 // SetPolicyResolver enables authoritative execution-time permission checks.
@@ -208,6 +210,15 @@ func WithTraceID(ctx context.Context, traceID string) context.Context {
 // WithApprovalID binds a previously approved exact action to execution.
 func WithApprovalID(ctx context.Context, approvalID string) context.Context {
 	return context.WithValue(ctx, approvalContextKey, approvalID)
+}
+
+// ApprovalIDFromContext returns the approval id bound by WithApprovalID, or "".
+func ApprovalIDFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	id, _ := ctx.Value(approvalContextKey).(string)
+	return id
 }
 
 type taskIDContextKey struct{}
@@ -704,6 +715,14 @@ func (r *ToolRegistry) Execute(ctx context.Context, agentID, name string, inputJ
 		}
 	}
 
+	forceApproval, gateErr := r.evaluateGate(ctx, agentID, name, normalizedInput)
+	if gateErr != nil {
+		if r.auditLogger != nil {
+			r.auditLogger.LogAudit(TraceIDFromContext(ctx), agentID, name, ToolRiskLevel(name), "Denied", gateErr.Error(), 0)
+		}
+		return nil, gateErr
+	}
+
 	if r.bus != nil {
 		r.bus.Publish(bus.NewEvent(bus.EventToolExecutionStarted, agentID, map[string]any{
 			"tool_name": name,
@@ -718,9 +737,10 @@ func (r *ToolRegistry) Execute(ctx context.Context, agentID, name string, inputJ
 		ctx = WithTraceID(ctx, traceID)
 	}
 
-	if resolver != nil && approvalRequired(policy.ApprovalThreshold, riskLevel) && !IsApprovalBypassed(ctx) {
+	thresholdNeedsApproval := resolver != nil && approvalRequired(policy.ApprovalThreshold, riskLevel) && !IsApprovalBypassed(ctx)
+	if forceApproval || thresholdNeedsApproval {
 		skipExactApproval := false
-		if approvalManager != nil && GrantEligibleTool(name) {
+		if !forceApproval && approvalManager != nil && GrantEligibleTool(name) {
 			grant, grantErr := approvalManager.ActiveGrant(ctx, agentID, name, TaskIDFromContext(ctx))
 			if grantErr != nil {
 				return nil, fmt.Errorf("checking approval grant: %w", grantErr)
@@ -860,6 +880,11 @@ func ToolRiskLevel(name string) string {
 	switch name {
 	case "native_exec", "native_file_delete", "native_workspace_delete", "native_cron_schedule":
 		return "High"
+	}
+	if IsExternalEffectTool(name) {
+		return "High"
+	}
+	switch name {
 	case "native_file_write", "native_workspace_write", "native_browser_navigate", "native_browser_screenshot", "native_http_fetch", "native_channel_notify":
 		return "Medium"
 	}

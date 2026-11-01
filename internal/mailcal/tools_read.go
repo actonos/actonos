@@ -25,8 +25,8 @@ const (
 	listPreviewRunes = 240
 )
 
-// ReadToolNames lists the tools registered in Phase 1. A guard test pins this set so no write
-// tool can appear before the approval gate exists (Phase 2).
+// ReadToolNames lists the read and draft tools of Phase 1. A guard test pins the full tool set
+// (ReadToolNames plus WriteToolNames) so a tool cannot appear without being listed here.
 func ReadToolNames() []string {
 	return []string{ToolMailList, ToolMailSearch, ToolMailGet, ToolMailThread, ToolMailDraft, ToolCalList, ToolCalGet, ToolCalFreeBusy}
 }
@@ -128,7 +128,10 @@ func (s *Service) SyncTools(ctx context.Context) error {
 	}
 	switch {
 	case len(accounts) > 0 && len(s.toolNames) == 0:
-		for _, t := range s.readTools() {
+		// The gate goes in first: a gated tool without a gate refuses to run anyway, and this
+		// order means there is no moment where a write tool exists with the gate missing.
+		s.registry.RegisterGate(s, GatedToolNames()...)
+		for _, t := range append(s.readTools(), s.writeTools()...) {
 			s.registry.RegisterOrReplace(t)
 			s.toolNames = append(s.toolNames, t.Name())
 		}
@@ -136,6 +139,7 @@ func (s *Service) SyncTools(ctx context.Context) error {
 		for _, name := range s.toolNames {
 			s.registry.Unregister(name)
 		}
+		s.registry.RegisterGate(nil, GatedToolNames()...)
 		s.toolNames = nil
 	}
 	return nil

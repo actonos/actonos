@@ -28,10 +28,10 @@ const (
 )
 
 // ClassifyRisk determines the RiskTier ("low", "medium", "high") of a tool execution.
-// - Low: safe workspace reading, system status queries, idempotent reads.
-// - Medium: local workspace modifications, safe http fetch, internal notifications.
-// - High: shell execution, file deletion, root/system modifications, external messaging,
-//         vault writes, system reboot, OTA updates, cron schedule.
+//   - Low: safe workspace reading, system status queries, idempotent reads.
+//   - Medium: local workspace modifications, safe http fetch, internal notifications.
+//   - High: shell execution, file deletion, root/system modifications, external messaging,
+//     vault writes, system reboot, OTA updates, cron schedule.
 func ClassifyRisk(toolName string, input json.RawMessage) string {
 	name := strings.TrimSpace(strings.ToLower(toolName))
 
@@ -44,6 +44,7 @@ func ClassifyRisk(toolName string, input json.RawMessage) string {
 		name == "admin_ota_apply" ||
 		name == "system_mcp_connect" ||
 		strings.HasPrefix(name, "admin_") ||
+		IsExternalEffectTool(name) ||
 		strings.Contains(name, "vault_write") ||
 		strings.Contains(name, "vault_delete") ||
 		strings.Contains(name, "vault_set") {
