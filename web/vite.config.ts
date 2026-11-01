@@ -40,6 +40,17 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       tailwindcss(),
+      {
+        // go:embed needs at least one file in the build directory, and a fresh clone has only the
+        // tracked placeholder. emptyOutDir removes it, so put it back after every build.
+        name: 'keep-embed-placeholder',
+        apply: 'build',
+        closeBundle() {
+          const dir = path.resolve(__dirname, buildDir);
+          fs.mkdirSync(dir, { recursive: true });
+          fs.writeFileSync(path.join(dir, '.keep'), '');
+        },
+      },
     ],
     resolve: {
       alias: {

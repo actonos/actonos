@@ -35,7 +35,9 @@ web/.vite/
 web/.cache/
 web/coverage/
 *.tsbuildinfo
-internal/server/dist/
+# Built web UI. The placeholder is tracked so that `go vet`/`go test` compile (go:embed) on a fresh clone.
+internal/server/dist/*
+!internal/server/dist/.keep
 
 # Package manager locks (keep package-lock.json)
 web/yarn.lock
