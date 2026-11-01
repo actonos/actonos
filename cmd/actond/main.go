@@ -21,6 +21,7 @@ import (
 	"github.com/actonos/actonos/internal/bus"
 	"github.com/actonos/actonos/internal/channels"
 	"github.com/actonos/actonos/internal/llm"
+	"github.com/actonos/actonos/internal/mailcal"
 	"github.com/actonos/actonos/internal/memory"
 	"github.com/actonos/actonos/internal/plugin"
 	"github.com/actonos/actonos/internal/server"
@@ -374,16 +375,34 @@ func main() {
 	if err != nil {
 		slog.Warn("failed to initialize wasm loader", "error", err)
 	}
+	// 10c. Mail & calendar core. Providers arrive as plugins, so the service must be registered
+	// as the capability hook before the plugin scan below announces them.
+	mailcalSvc, err := mailcal.NewService(db.SQLDB())
+	if err != nil {
+		slog.Warn("failed to initialize mail and calendar support", "error", err)
+		mailcalSvc = nil
+	} else {
+		mailcalSvc.SetToolRegistry(toolReg)
+	}
+
 	var pluginMgr *plugin.Manager
 	if wasmLoader != nil {
 		pluginMgr = plugin.NewManager(wasmLoader, toolReg, channelMgr, eventBus, pluginKV, vault, pluginsDir)
 		if userWorkspace != nil {
 			pluginMgr.SetWorkspaceStore(userWorkspace)
 		}
+		if mailcalSvc != nil {
+			pluginMgr.SetCapabilityHook(mailcalSvc)
+		}
 		if err := pluginMgr.ScanAndLoadAll(ctx); err != nil {
 			slog.Warn("failed to load wasm plugins", "error", err)
 		}
 		defer pluginMgr.Close(ctx)
+	}
+	if mailcalSvc != nil {
+		if err := mailcalSvc.SyncTools(ctx); err != nil {
+			slog.Warn("failed to publish mail and calendar tools", "error", err)
+		}
 	}
 
 	// Load initial channel accounts from every *_accounts.json (plugin channel ids).
@@ -491,6 +510,7 @@ func main() {
 		PairingManager:      pairingMgr,
 		ChannelManager:      channelMgr,
 		PluginManager:       pluginMgr,
+		Mailcal:             mailcalSvc,
 		WorkspaceDir:        workspaceDir,
 		WorkspaceStore:      userWorkspace,
 		SkillsDir:           skillsDir,

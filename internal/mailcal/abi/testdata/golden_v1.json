@@ -1,0 +1,382 @@
+{
+  "cal_delete": {
+    "calendar_id": "primary",
+    "id": "e1",
+    "send_updates": true
+  },
+  "cal_get_params": {
+    "calendar_id": "primary",
+    "id": "e1"
+  },
+  "cal_list_params": {
+    "calendar_id": "primary",
+    "from": "2026-03-01T09:30:00Z",
+    "to": "2026-03-02T09:30:00Z",
+    "cursor": "c",
+    "limit": 5
+  },
+  "cal_list_result": {
+    "events": [
+      {
+        "id": "e1",
+        "calendar_id": "primary",
+        "title": "Sync",
+        "start": "2026-03-01T09:30:00Z",
+        "end": "2026-03-01T10:30:00Z",
+        "time_zone": "UTC",
+        "all_day": true,
+        "location": "Room",
+        "description": "d",
+        "conference_url": "https://meet.example.com/x",
+        "attendees": [
+          {
+            "email": "bob@example.com",
+            "name": "Bob",
+            "status": "accepted"
+          }
+        ],
+        "organizer": {
+          "name": "Alice",
+          "email": "alice@example.com"
+        }
+      }
+    ],
+    "next_cursor": "n"
+  },
+  "cal_respond": {
+    "calendar_id": "primary",
+    "id": "e1",
+    "response": "accepted",
+    "comment": "ok"
+  },
+  "cal_write_params": {
+    "event": {
+      "id": "e1",
+      "calendar_id": "primary",
+      "title": "Sync",
+      "start": "2026-03-01T09:30:00Z",
+      "end": "2026-03-01T10:30:00Z",
+      "time_zone": "UTC",
+      "all_day": true,
+      "location": "Room",
+      "description": "d",
+      "conference_url": "https://meet.example.com/x",
+      "attendees": [
+        {
+          "email": "bob@example.com",
+          "name": "Bob",
+          "status": "accepted"
+        }
+      ],
+      "organizer": {
+        "name": "Alice",
+        "email": "alice@example.com"
+      }
+    },
+    "send_updates": true,
+    "idempotency_key": "k"
+  },
+  "capabilities": {
+    "abi": [
+      "mail@1",
+      "calendar@1"
+    ],
+    "ops": [
+      "acton_mailcal_capabilities",
+      "acton_mail_list",
+      "acton_mail_get",
+      "acton_mail_get_thread",
+      "acton_mail_search",
+      "acton_mail_create_draft",
+      "acton_mail_send",
+      "acton_mail_mark",
+      "acton_mail_move",
+      "acton_mail_delete",
+      "acton_calendar_list_events",
+      "acton_calendar_get_event",
+      "acton_calendar_create_event",
+      "acton_calendar_update_event",
+      "acton_calendar_respond",
+      "acton_calendar_delete_event",
+      "acton_calendar_free_busy"
+    ],
+    "limits": {
+      "max_recipients": 50,
+      "max_body_bytes": 1000,
+      "max_attachment_bytes": 5
+    },
+    "notes": "n"
+  },
+  "event": {
+    "id": "e1",
+    "calendar_id": "primary",
+    "title": "Sync",
+    "start": "2026-03-01T09:30:00Z",
+    "end": "2026-03-01T10:30:00Z",
+    "time_zone": "UTC",
+    "all_day": true,
+    "location": "Room",
+    "description": "d",
+    "conference_url": "https://meet.example.com/x",
+    "attendees": [
+      {
+        "email": "bob@example.com",
+        "name": "Bob",
+        "status": "accepted"
+      }
+    ],
+    "organizer": {
+      "name": "Alice",
+      "email": "alice@example.com"
+    }
+  },
+  "free_busy_params": {
+    "emails": [
+      "alice@example.com"
+    ],
+    "from": "2026-03-01T09:30:00Z",
+    "to": "2026-03-01T10:30:00Z"
+  },
+  "free_busy_result": {
+    "busy": {
+      "alice@example.com": [
+        {
+          "start": "2026-03-01T09:30:00Z",
+          "end": "2026-03-01T10:30:00Z"
+        }
+      ]
+    }
+  },
+  "mail_delete_params": {
+    "ids": [
+      "m1"
+    ]
+  },
+  "mail_draft_params": {
+    "to": [
+      {
+        "name": "Alice",
+        "email": "alice@example.com"
+      }
+    ],
+    "cc": [
+      {
+        "name": "Alice",
+        "email": "alice@example.com"
+      }
+    ],
+    "subject": "s",
+    "body_text": "b",
+    "in_reply_to": "m1"
+  },
+  "mail_draft_result": {
+    "provider_draft_id": "d1"
+  },
+  "mail_get_params": {
+    "id": "m1"
+  },
+  "mail_list_params": {
+    "folder": "INBOX",
+    "cursor": "c",
+    "limit": 10,
+    "unread_only": true
+  },
+  "mail_list_result": {
+    "messages": [
+      {
+        "id": "m1",
+        "thread_id": "t1",
+        "folder": "INBOX",
+        "from": {
+          "name": "Alice",
+          "email": "alice@example.com"
+        },
+        "to": [
+          {
+            "name": "Alice",
+            "email": "alice@example.com"
+          }
+        ],
+        "cc": [
+          {
+            "name": "Alice",
+            "email": "alice@example.com"
+          }
+        ],
+        "subject": "Hello",
+        "date": "2026-03-01T09:30:00Z",
+        "snippet": "Hi",
+        "body_text": "Hi there",
+        "labels": [
+          "x"
+        ],
+        "unread": true,
+        "in_reply_to": "m0",
+        "attachments": [
+          {
+            "id": "a1",
+            "name": "f.pdf",
+            "mime": "application/pdf",
+            "size": 10
+          }
+        ]
+      }
+    ],
+    "next_cursor": "n"
+  },
+  "mail_mark_params": {
+    "ids": [
+      "m1"
+    ],
+    "unread": true
+  },
+  "mail_move_params": {
+    "ids": [
+      "m1"
+    ],
+    "folder": "Archive"
+  },
+  "mail_search_params": {
+    "query": "invoice",
+    "folder": "INBOX",
+    "cursor": "c",
+    "limit": 10
+  },
+  "mail_send_params": {
+    "to": [
+      {
+        "name": "Alice",
+        "email": "alice@example.com"
+      }
+    ],
+    "cc": [
+      {
+        "name": "Alice",
+        "email": "alice@example.com"
+      }
+    ],
+    "bcc": [
+      {
+        "name": "Alice",
+        "email": "alice@example.com"
+      }
+    ],
+    "subject": "s",
+    "body_text": "b",
+    "in_reply_to": "m1",
+    "thread_id": "t1",
+    "idempotency_key": "k"
+  },
+  "mail_send_result": {
+    "provider_message_id": "p1",
+    "thread_id": "t1",
+    "replayed": true
+  },
+  "mail_thread_params": {
+    "thread_id": "t1"
+  },
+  "message": {
+    "id": "m1",
+    "thread_id": "t1",
+    "folder": "INBOX",
+    "from": {
+      "name": "Alice",
+      "email": "alice@example.com"
+    },
+    "to": [
+      {
+        "name": "Alice",
+        "email": "alice@example.com"
+      }
+    ],
+    "cc": [
+      {
+        "name": "Alice",
+        "email": "alice@example.com"
+      }
+    ],
+    "subject": "Hello",
+    "date": "2026-03-01T09:30:00Z",
+    "snippet": "Hi",
+    "body_text": "Hi there",
+    "labels": [
+      "x"
+    ],
+    "unread": true,
+    "in_reply_to": "m0",
+    "attachments": [
+      {
+        "id": "a1",
+        "name": "f.pdf",
+        "mime": "application/pdf",
+        "size": 10
+      }
+    ]
+  },
+  "request": {
+    "account": {
+      "id": "acct1",
+      "config": {
+        "host": "h"
+      }
+    },
+    "params": {
+      "k": 1
+    }
+  },
+  "response_err": {
+    "error": {
+      "code": "rate_limited",
+      "message": "slow down",
+      "retry_after_ms": 500
+    }
+  },
+  "response_ok": {
+    "result": {
+      "ok": true
+    }
+  },
+  "thread": {
+    "id": "t1",
+    "messages": [
+      {
+        "id": "m1",
+        "thread_id": "t1",
+        "folder": "INBOX",
+        "from": {
+          "name": "Alice",
+          "email": "alice@example.com"
+        },
+        "to": [
+          {
+            "name": "Alice",
+            "email": "alice@example.com"
+          }
+        ],
+        "cc": [
+          {
+            "name": "Alice",
+            "email": "alice@example.com"
+          }
+        ],
+        "subject": "Hello",
+        "date": "2026-03-01T09:30:00Z",
+        "snippet": "Hi",
+        "body_text": "Hi there",
+        "labels": [
+          "x"
+        ],
+        "unread": true,
+        "in_reply_to": "m0",
+        "attachments": [
+          {
+            "id": "a1",
+            "name": "f.pdf",
+            "mime": "application/pdf",
+            "size": 10
+          }
+        ]
+      }
+    ]
+  }
+}

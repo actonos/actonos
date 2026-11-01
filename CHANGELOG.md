@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Mail & Calendar foundation (`internal/mailcal`, `/api/mailcal/*`, `web/src/pages/Mailcal`)**:
+  - Provider-agnostic mail and calendar model and a versioned JSON ABI (`mail@1`, `calendar@1`) that WASM provider plugins implement; plugins are announced to the core through a new `plugin.CapabilityHook` and called through `PluginInstance.CallJSON`.
+  - Account registry (secrets are never stored in account config), immutable agent drafts with integrity hash and verified reply context, and agent tools to list, search, read, summarize and draft mail and to read the calendar and free/busy. Message text is wrapped as untrusted data. Nothing is sent in this version.
+  - Reference provider (in-memory and as a real WASM plugin) plus a conformance suite any provider can be tested with, and four office tasks in the eval harness.
+- **Plugin runtime**: guest calls that never return are now interrupted when their context ends.
+
 
 ## [1.0.4] - 2026-08-31
 

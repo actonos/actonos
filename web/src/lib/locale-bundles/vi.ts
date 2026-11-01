@@ -18,6 +18,7 @@ import viTerminal from '../../locales/vi/terminal.json';
 import viPlugins from '../../locales/vi/plugins.json';
 import viChannels from '../../locales/vi/channels.json';
 import viCosts from '../../locales/vi/costs.json';
+import viMailcal from '../../locales/vi/mailcal.json';
 
 export const bundle = {
   common: viCommon,
@@ -39,6 +40,7 @@ export const bundle = {
   plugins: viPlugins,
   channels: viChannels,
   costs: viCosts,
+  mailcal: viMailcal,
 } as const;
 
 export default bundle;

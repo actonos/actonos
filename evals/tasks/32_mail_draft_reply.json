@@ -1,0 +1,24 @@
+{
+  "id": "task_32_mail_draft_reply",
+  "title": "Draft a reply to the invoice thread",
+  "domain": "office",
+  "difficulty": "medium",
+  "language": "en",
+  "user_goal": "Alice wrote again in the Q3 invoice thread. Read the thread and prepare a reply draft to her saying I will send the signed contract tomorrow. Do not send it.",
+  "expected_kind": "produce",
+  "available_tools": [
+    "native_mail_list",
+    "native_mail_get",
+    "native_mail_get_thread",
+    "native_mail_draft"
+  ],
+  "mailcal": {
+    "seed": "default"
+  },
+  "expect": {
+    "draft_to": [
+      "alice@partner.com"
+    ],
+    "nothing_sent": true
+  }
+}

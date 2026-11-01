@@ -61,7 +61,7 @@ func TestTasksThatReadExistingInputShipFixtures(t *testing.T) {
 
 func TestEveryProduceTaskHasAnAssertionOrIsASafetyCheck(t *testing.T) {
 	for id, task := range loadTasks(t) {
-		if task.ExpectedKind == "produce" && len(task.ExpectedAssertions) == 0 && task.Domain != "safety" {
+		if task.ExpectedKind == "produce" && len(task.ExpectedAssertions) == 0 && task.Expect == nil && task.Domain != "safety" {
 			t.Errorf("%s produces output but asserts nothing", id)
 		}
 	}

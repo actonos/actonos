@@ -246,6 +246,20 @@
 
 ---
 
+#### Mail & Calendar
+
+| Method | Path | Handler | File |
+|:---|:---|:---|:---|
+| `GET` | `/api/mailcal/status` | `handleMailcalStatus` | `api_mailcal.go` |
+| `GET` | `/api/mailcal/providers` | `handleMailcalProviders` | `api_mailcal.go` |
+| `GET` | `/api/mailcal/accounts` | `handleMailcalListAccounts` | `api_mailcal.go` |
+| `POST` | `/api/mailcal/accounts` | `handleMailcalCreateAccount` | `api_mailcal.go` |
+| `GET` | `/api/mailcal/accounts/{id}` | `handleMailcalGetAccount` | `api_mailcal.go` |
+| `PUT` | `/api/mailcal/accounts/{id}` | `handleMailcalUpdateAccount` | `api_mailcal.go` |
+| `DELETE` | `/api/mailcal/accounts/{id}` | `handleMailcalDeleteAccount` | `api_mailcal.go` |
+| `POST` | `/api/mailcal/accounts/{id}/test` | `handleMailcalTestAccount` | `api_mailcal.go` |
+| `GET` | `/api/mailcal/drafts/{id}` | `handleMailcalGetDraft` | `api_mailcal.go` |
+
 ## Backend Packages (`internal/`)
 
 | Package | Purpose | Key Files |
@@ -276,6 +290,7 @@
 | `Operations/` | `operations` | `OperationsPage` | Live hardware/Docker telemetry, execution feed, canvas, terminal, task controls, approvals, and model cost |
 | `Chat/` | `chat` | `ChatPage` | Conversational interface |
 | `Automations/` | `automations` | `AutomationsPage` | Cron jobs, scheduled tasks |
+| `Mailcal/` | `mailcal` | `MailcalPage` | Mail and calendar accounts served by provider plugins |
 | `Plugins/` | `plugins` | `PluginsPage` | Sandboxed WASM Plugin Hub (Tools, Chat Channels, SaaS Connectors) |
 | `ToolHub/` | `tools` | `ToolHubPage` | Native system tools & MCP servers |
 | `Skills/` | `skills` | `SkillsPage` | Skill-as-a-Folder packages & Community Skill Hub |

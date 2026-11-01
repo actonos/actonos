@@ -1,0 +1,56 @@
+{
+  "eyebrow": "Mail & Calendar",
+  "title": "Mail & Calendar accounts",
+  "subtitle": "Connect mailboxes and calendars through provider plugins. Agents can read and draft; nothing is sent without your approval.",
+  "noEmail": "no address set",
+  "kind": {
+    "mail": "Mail",
+    "calendar": "Calendar",
+    "both": "Mail & calendar"
+  },
+  "status": {
+    "ok": "Connected",
+    "auth_expired": "Sign-in expired",
+    "paused": "Paused",
+    "error": "Error"
+  },
+  "actions": {
+    "refresh": "Refresh",
+    "addAccount": "Add account",
+    "add": "Add",
+    "cancel": "Cancel",
+    "test": "Test",
+    "delete": "Delete"
+  },
+  "empty": {
+    "title": "No accounts yet",
+    "description": "Add an account to let agents read your mail and calendar.",
+    "noProviderTitle": "No provider plugin installed",
+    "noProviderDescription": "Install a mail or calendar provider plugin first, then add an account here."
+  },
+  "error": {
+    "title": "Could not load accounts"
+  },
+  "modal": {
+    "title": "Add account",
+    "provider": "Provider",
+    "kind": "Type",
+    "label": "Name",
+    "labelPlaceholder": "Work",
+    "email": "Your address (optional)",
+    "emailPlaceholder": "me@example.com",
+    "secretsHint": "Passwords and tokens are never stored here; they go in the vault."
+  },
+  "toast": {
+    "created": "Account added",
+    "createFailed": "Could not add the account",
+    "testOk": "Connection works",
+    "testFailed": "Connection test failed",
+    "deleted": "Account removed",
+    "deleteFailed": "Could not remove the account"
+  },
+  "confirmDelete": {
+    "title": "Remove this account?",
+    "description": "Remove {{label}} and its drafts. Mail and calendar data stay with the provider."
+  }
+}

@@ -17,7 +17,8 @@
     "notifications": "Notifications",
     "audit-logs": "Audit Logs",
     "costs": "Costs",
-    "settings": "Settings"
+    "settings": "Settings",
+    "mailcal": "Mail & Calendar"
   },
   "sections": {
     "overview": "Overview",

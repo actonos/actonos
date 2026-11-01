@@ -98,6 +98,14 @@ func main() {
 			res = grader.GradeTask(context.Background(), task, ex.Workspace, ex.Output, ex.ToolCalls, ex.Steps, ex.Duration, ex.Tokens, ex.CostUSD)
 		}
 
+		if res.Passed && task.Expect != nil {
+			if reason := ex.Mailcal.verify(context.Background(), task.Expect, ex.Output); reason != "" {
+				res.Passed = false
+				res.FailureReason = "expectation failed: " + reason
+				res.FalseCompleted = false
+			}
+		}
+		ex.Mailcal.Close(context.Background())
 		if !res.Passed {
 			res.AgentOutput = excerpt(ex.Output, 400)
 			if ex.Detail != "" {

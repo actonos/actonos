@@ -1,0 +1,56 @@
+{
+  "eyebrow": "Thư & Lịch",
+  "title": "Tài khoản thư và lịch",
+  "subtitle": "Kết nối hộp thư và lịch qua plugin nhà cung cấp. Agent có thể đọc và soạn nháp; không có gì được gửi nếu bạn chưa duyệt.",
+  "noEmail": "chưa đặt địa chỉ",
+  "kind": {
+    "mail": "Thư",
+    "calendar": "Lịch",
+    "both": "Thư & lịch"
+  },
+  "status": {
+    "ok": "Đã kết nối",
+    "auth_expired": "Phiên đăng nhập hết hạn",
+    "paused": "Tạm dừng",
+    "error": "Lỗi"
+  },
+  "actions": {
+    "refresh": "Làm mới",
+    "addAccount": "Thêm tài khoản",
+    "add": "Thêm",
+    "cancel": "Hủy",
+    "test": "Kiểm tra",
+    "delete": "Xóa"
+  },
+  "empty": {
+    "title": "Chưa có tài khoản",
+    "description": "Thêm một tài khoản để agent đọc được thư và lịch của bạn.",
+    "noProviderTitle": "Chưa cài plugin nhà cung cấp",
+    "noProviderDescription": "Hãy cài một plugin thư hoặc lịch trước, rồi thêm tài khoản tại đây."
+  },
+  "error": {
+    "title": "Không tải được tài khoản"
+  },
+  "modal": {
+    "title": "Thêm tài khoản",
+    "provider": "Nhà cung cấp",
+    "kind": "Loại",
+    "label": "Tên",
+    "labelPlaceholder": "Công việc",
+    "email": "Địa chỉ của bạn (tùy chọn)",
+    "emailPlaceholder": "me@example.com",
+    "secretsHint": "Mật khẩu và token không bao giờ được lưu ở đây; chúng nằm trong vault."
+  },
+  "toast": {
+    "created": "Đã thêm tài khoản",
+    "createFailed": "Không thêm được tài khoản",
+    "testOk": "Kết nối hoạt động",
+    "testFailed": "Kiểm tra kết nối thất bại",
+    "deleted": "Đã xóa tài khoản",
+    "deleteFailed": "Không xóa được tài khoản"
+  },
+  "confirmDelete": {
+    "title": "Xóa tài khoản này?",
+    "description": "Xóa {{label}} cùng các bản nháp. Dữ liệu thư và lịch vẫn ở phía nhà cung cấp."
+  }
+}

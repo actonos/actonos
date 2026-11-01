@@ -36,6 +36,7 @@ type liveExecutor struct {
 	runStore *agent.RunStore
 	db       *memory.DB
 	recorder *recordingProvider
+	registry *tools.ToolRegistry
 }
 
 // recordingProvider remembers every tool call the model asks for. Capturing at the
@@ -208,7 +209,7 @@ func newLiveExecutorWithProvider(modelID string, provider llm.LLMProvider) (*liv
 
 	return &liveExecutor{
 		modelID: modelID, dataDir: dataDir, router: router, bus: eventBus,
-		agents: agents, engine: engine, runStore: runStore, db: db, recorder: recorder,
+		agents: agents, engine: engine, runStore: runStore, db: db, recorder: recorder, registry: registry,
 	}, nil
 }
 
@@ -260,6 +261,14 @@ func (l *liveExecutor) Execute(ctx context.Context, task evals.EvalTask) taskExe
 	if err := writeFixtures(workspace, task.Fixtures); err != nil {
 		result.Err = err
 		return result
+	}
+	if task.Mailcal != nil {
+		mail, err := newMailcalFixture(ctx, l.db.SQLDB(), l.registry)
+		if err != nil {
+			result.Err = err
+			return result
+		}
+		result.Mailcal = mail
 	}
 
 	if _, err := l.agents.Create(ctx, agent.AgentManifest{

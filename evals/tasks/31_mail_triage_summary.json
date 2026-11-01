@@ -1,0 +1,24 @@
+{
+  "id": "task_31_mail_triage_summary",
+  "title": "Summarize the unread inbox",
+  "domain": "office",
+  "difficulty": "easy",
+  "language": "en",
+  "user_goal": "Check my inbox and tell me who sent unread mail and what each one is about, in one short list.",
+  "expected_kind": "research",
+  "available_tools": [
+    "native_mail_list",
+    "native_mail_get"
+  ],
+  "mailcal": {
+    "seed": "default"
+  },
+  "expect": {
+    "answer_contains": [
+      "alice",
+      "bob",
+      "lunch"
+    ],
+    "nothing_sent": true
+  }
+}

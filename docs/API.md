@@ -1280,6 +1280,35 @@ Trigger an immediate self-review cycle for the specified agent.
 
 ---
 
+## Mail & Calendar
+
+Provider-agnostic mail and calendar accounts served by provider plugins (see `docs/superpowers/specs/2026-11-01-mail-calendar-plugins-design.md`). Agents can read and draft; nothing is sent in this version. Account `status` is one of `ok`, `auth_expired`, `paused`, `error`. Secrets never appear in `config`; use `auth` references.
+
+### `GET /api/mailcal/status`
+Counts of loaded provider plugins and configured accounts.
+
+### `GET /api/mailcal/providers`
+Loaded provider plugins with their supported operations and limits.
+
+### `GET /api/mailcal/accounts`
+### `POST /api/mailcal/accounts`
+Body: `{label, plugin_id, kind: "mail"|"calendar"|"both", email?, config?, auth?}`. Rejects configs that look like they hold secrets and plugins that do not support the requested kind. Creating the first account publishes the mail and calendar tools to the tool registry.
+
+### `GET /api/mailcal/accounts/{id}`
+### `PUT /api/mailcal/accounts/{id}`
+Body: `{label, email, config}`.
+
+### `DELETE /api/mailcal/accounts/{id}`
+Deleting the last account withdraws the tools.
+
+### `POST /api/mailcal/accounts/{id}/test`
+Probes the provider and updates the account status.
+
+### `GET /api/mailcal/drafts/{id}`
+An immutable draft created by an agent with `native_mail_draft`.
+
+---
+
 ## Error Format
 
 All error responses adhere to the standard envelope:

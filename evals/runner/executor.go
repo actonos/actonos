@@ -22,6 +22,8 @@ type taskExecution struct {
 	Err error
 	// Detail describes how the run ended; it is shown for failed tasks.
 	Detail string
+	// Mailcal is the task's mailbox fixture, when it has one. The runner verifies and closes it.
+	Mailcal *mailcalFixture
 }
 
 // taskExecutor runs one eval task. The mock executor fabricates results so the

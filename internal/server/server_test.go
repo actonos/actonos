@@ -19,6 +19,8 @@ import (
 	"github.com/actonos/actonos/internal/bus"
 	"github.com/actonos/actonos/internal/channels"
 	"github.com/actonos/actonos/internal/llm"
+	"github.com/actonos/actonos/internal/mailcal"
+	"github.com/actonos/actonos/internal/mailcal/refstore"
 	"github.com/actonos/actonos/internal/memory"
 	"github.com/actonos/actonos/internal/plugin"
 	"github.com/actonos/actonos/internal/system"
@@ -143,6 +145,14 @@ func newTestServer(t *testing.T) *Server {
 	pluginKV, _ := plugin.NewSQLiteKVStore(db.SQLDB())
 	wasmLoader, _ := plugin.NewWasmLoader(context.Background())
 	pluginMgr := plugin.NewManager(wasmLoader, toolReg, channelManager, eventBus, pluginKV, vault, filepath.Join(tempDir, "plugins"))
+	mailcalSvc, err := mailcal.NewService(db.SQLDB())
+	if err != nil {
+		t.Fatalf("creating mailcal service: %v", err)
+	}
+	mailcalSvc.SetToolRegistry(toolReg)
+	if err := mailcalSvc.RegisterProvider(context.Background(), "refmem", "Reference (in-memory)", mailcal.NewMemProvider(refstore.DefaultSeed())); err != nil {
+		t.Fatalf("registering the reference mail provider: %v", err)
+	}
 
 	cfg := Config{
 		AgentManager:        agentMgr,
@@ -167,6 +177,7 @@ func newTestServer(t *testing.T) *Server {
 		PluginManager:       pluginMgr,
 		HeartbeatDaemon:     heartbeat,
 		NotificationManager: notifMgr,
+		Mailcal:             mailcalSvc,
 		HAL:                 hal,
 		Tailscale:           tailscale,
 		EventBus:            eventBus,

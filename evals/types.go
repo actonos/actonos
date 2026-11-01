@@ -31,6 +31,23 @@ type EvalTask struct {
 	// Fixtures are files (relative path -> content) placed in the task workspace
 	// before the agent runs, for tasks that operate on existing input.
 	Fixtures map[string]string `json:"fixtures,omitempty"`
+	// Mailcal gives the task a reference mailbox and calendar behind the real mail tools.
+	Mailcal *MailcalSetup `json:"mailcal,omitempty"`
+	// Expect lists checks on the answer and on the mailbox after the run.
+	Expect *Expectations `json:"expect,omitempty"`
+}
+
+// MailcalSetup selects the dataset. Only the default reference dataset exists today.
+type MailcalSetup struct {
+	Seed string `json:"seed,omitempty"` // "default"
+}
+
+// Expectations are verified after the agent finishes, in addition to expected_assertions.
+type Expectations struct {
+	AnswerContains []string `json:"answer_contains,omitempty"` // case-insensitive substrings of the final answer
+	DraftTo        []string `json:"draft_to,omitempty"`        // a draft addressed to each of these exists
+	NoDraftTo      []string `json:"no_draft_to,omitempty"`     // no draft is addressed to any of these
+	NothingSent    bool     `json:"nothing_sent,omitempty"`    // the Sent folder is unchanged
 }
 
 // EvalTaskResult records the execution evaluation of a single task.

@@ -34,7 +34,11 @@ type WasmLoader struct {
 // NewWasmLoader creates and initializes a WasmLoader instance.
 func NewWasmLoader(ctx context.Context) (*WasmLoader, error) {
 	config := wazero.NewRuntimeConfig().
-		WithMemoryLimitPages(4096) // 4096 pages = 256 MB max memory cap
+		WithMemoryLimitPages(4096). // 4096 pages = 256 MB max memory cap
+		// Without this a context deadline never interrupts guest code, so a plugin stuck in
+		// a loop would hang its caller forever. A call that outlives its context now closes
+		// the instance (later calls fail) instead of blocking indefinitely.
+		WithCloseOnContextDone(true)
 
 	r := wazero.NewRuntimeWithConfig(ctx, config)
 	wasi_snapshot_preview1.MustInstantiate(ctx, r)

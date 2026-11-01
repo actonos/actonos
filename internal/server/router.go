@@ -11,6 +11,7 @@ import (
 	"github.com/actonos/actonos/internal/bus"
 	"github.com/actonos/actonos/internal/channels"
 	"github.com/actonos/actonos/internal/llm"
+	"github.com/actonos/actonos/internal/mailcal"
 	"github.com/actonos/actonos/internal/memory"
 	"github.com/actonos/actonos/internal/plugin"
 	"github.com/actonos/actonos/internal/system"
@@ -69,6 +70,7 @@ type Server struct {
 	ota              *system.OTAEngine
 	realtime         *realtimeHub
 	proactiveEngine  *agent.ProactiveEngine
+	mailcal          *mailcal.Service
 	reflectionEngine *agent.ReflectionEngine
 	allowMissingAuth bool
 }
@@ -83,6 +85,7 @@ type Config struct {
 	TaskManager         *agent.TaskManager
 	ProactiveEngine     *agent.ProactiveEngine
 	ReflectionEngine    *agent.ReflectionEngine
+	Mailcal             *mailcal.Service
 	TokenTracker        *memory.TokenTracker
 	ProfileManager      *agent.UserProfileManager
 	LLMRouter           *llm.ModelCascadeRouter
@@ -202,6 +205,7 @@ func NewServer(cfg Config) *Server {
 		buildTime:        buildTime,
 		ota:              cfg.OTAEngine,
 		proactiveEngine:  cfg.ProactiveEngine,
+		mailcal:          cfg.Mailcal,
 		reflectionEngine: cfg.ReflectionEngine,
 		allowMissingAuth: cfg.DisableAuthForTest,
 	}
@@ -496,6 +500,21 @@ func (s *Server) setupRoutes() {
 				r.Get("/{id}", s.handleGetTask)
 				r.Put("/{id}", s.handleUpdateTask)
 				r.Delete("/{id}", s.handleDeleteTask)
+			})
+
+			// Mail & Calendar (provider-agnostic; providers are plugins)
+			r.Route("/mailcal", func(r chi.Router) {
+				r.Get("/status", s.handleMailcalStatus)
+				r.Get("/providers", s.handleMailcalProviders)
+				r.Get("/accounts", s.handleMailcalListAccounts)
+				r.Post("/accounts", s.handleMailcalCreateAccount)
+				r.Route("/accounts/{id}", func(r chi.Router) {
+					r.Get("/", s.handleMailcalGetAccount)
+					r.Put("/", s.handleMailcalUpdateAccount)
+					r.Delete("/", s.handleMailcalDeleteAccount)
+					r.Post("/test", s.handleMailcalTestAccount)
+				})
+				r.Get("/drafts/{id}", s.handleMailcalGetDraft)
 			})
 
 			// Operations & Proactive Anomaly Engine

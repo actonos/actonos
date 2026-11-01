@@ -1,0 +1,23 @@
+{
+  "id": "task_34_calendar_next_meeting",
+  "title": "Find the next meeting and who is in it",
+  "domain": "office",
+  "difficulty": "easy",
+  "language": "en",
+  "user_goal": "What meetings do I have on 3 March 2026 and who is attending each?",
+  "expected_kind": "research",
+  "available_tools": [
+    "native_calendar_list",
+    "native_calendar_get"
+  ],
+  "mailcal": {
+    "seed": "default"
+  },
+  "expect": {
+    "answer_contains": [
+      "Team sync",
+      "Partner call",
+      "alice@partner.com"
+    ]
+  }
+}

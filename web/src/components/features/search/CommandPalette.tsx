@@ -16,6 +16,7 @@ import {
   Radio,
   Coins,
   type LucideIcon,
+  Mail,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { NavTab } from '@/components/layout/Sidebar';
@@ -93,6 +94,7 @@ export function CommandPalette({
       ['chat', MessageSquare],
       ['automations', Calendar],
       ['channels', Radio],
+      ['mailcal', Mail],
       ['workspace', Folder],
       ['tools', Wrench],
       ['notifications', Bell],

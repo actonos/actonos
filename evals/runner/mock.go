@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -11,14 +12,19 @@ import (
 	"github.com/actonos/actonos/evals"
 	"github.com/actonos/actonos/internal/agent"
 	"github.com/actonos/actonos/internal/llm"
+	"github.com/actonos/actonos/internal/tools"
+
+	_ "modernc.org/sqlite"
 )
 
 // mockExecutor pre-creates the artifacts each task asserts on and fabricates
 // latency and token counts. It validates the task definitions and graders only;
 // it says nothing about any model.
 type mockExecutor struct {
-	root   string
-	router *llm.ModelCascadeRouter
+	root     string
+	router   *llm.ModelCascadeRouter
+	db       *sql.DB
+	registry *tools.ToolRegistry
 }
 
 func newMockExecutor(modelID string) (*mockExecutor, error) {
@@ -28,7 +34,11 @@ func newMockExecutor(modelID string) (*mockExecutor, error) {
 	}
 	router := llm.NewModelCascadeRouter()
 	router.RegisterProvider(modelID, llm.NewMockProvider(modelID, `{"status":"ok"}`))
-	return &mockExecutor{root: root, router: router}, nil
+	db, err := sql.Open("sqlite", filepath.Join(root, "mock.db"))
+	if err != nil {
+		return nil, err
+	}
+	return &mockExecutor{root: root, router: router, db: db, registry: tools.NewToolRegistry(nil)}, nil
 }
 
 // mockJSON builds a JSON object containing every key the assertion requires.
@@ -48,13 +58,32 @@ func mockJSON(expected string) []byte {
 
 func (m *mockExecutor) Router() *llm.ModelCascadeRouter { return m.router }
 
-func (m *mockExecutor) Close() { _ = os.RemoveAll(m.root) }
+func (m *mockExecutor) Close() {
+	_ = m.db.Close()
+	_ = os.RemoveAll(m.root)
+}
 
-func (m *mockExecutor) Execute(_ context.Context, task evals.EvalTask) taskExecution {
+func (m *mockExecutor) Execute(ctx context.Context, task evals.EvalTask) taskExecution {
 	workspace := filepath.Join(m.root, task.ID)
 	_ = os.MkdirAll(workspace, 0755)
 	if err := writeFixtures(workspace, task.Fixtures); err != nil {
 		return taskExecution{Workspace: workspace, Err: err}
+	}
+
+	output := "Task executed successfully."
+	var mail *mailcalFixture
+	if task.Mailcal != nil {
+		var err error
+		if mail, err = newMailcalFixture(ctx, m.db, m.registry); err != nil {
+			return taskExecution{Workspace: workspace, Err: err}
+		}
+		said, err := mail.perform(ctx, task.Expect)
+		if err != nil {
+			return taskExecution{Workspace: workspace, Err: err}
+		}
+		if said != "" {
+			output = said
+		}
 	}
 
 	var toolCalls []llm.ToolCall
@@ -78,7 +107,8 @@ func (m *mockExecutor) Execute(_ context.Context, task evals.EvalTask) taskExecu
 	}
 
 	return taskExecution{
-		Output:    "Task executed successfully.",
+		Output:    output,
+		Mailcal:   mail,
 		ToolCalls: toolCalls,
 		Steps:     1,
 		Tokens:    500,

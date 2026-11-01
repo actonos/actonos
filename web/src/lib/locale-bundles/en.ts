@@ -18,6 +18,7 @@ import enTerminal from '../../locales/en/terminal.json';
 import enPlugins from '../../locales/en/plugins.json';
 import enChannels from '../../locales/en/channels.json';
 import enCosts from '../../locales/en/costs.json';
+import enMailcal from '../../locales/en/mailcal.json';
 
 export const bundle = {
   common: enCommon,
@@ -39,6 +40,7 @@ export const bundle = {
   plugins: enPlugins,
   channels: enChannels,
   costs: enCosts,
+  mailcal: enMailcal,
 } as const;
 
 export default bundle;

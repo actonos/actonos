@@ -49,6 +49,7 @@ type Manager struct {
 	pluginsDir  string
 	plugins     map[string]*loadedPluginState
 	disabledIDs map[string]bool
+	capHook     CapabilityHook
 }
 
 // NewManager creates a new WASM Plugin Manager.
@@ -192,6 +193,14 @@ func (m *Manager) loadSingleFile(ctx context.Context, id, wasmPath, metaPath str
 }
 
 func (m *Manager) activatePlugin(ctx context.Context, manifest PluginManifest, wasmBytes []byte, dir string, enabled bool) error {
+	// Deferred first so it runs last: capability hooks fire after the lock is released.
+	var afterUnlock []func()
+	defer func() {
+		for _, fn := range afterUnlock {
+			fn()
+		}
+	}()
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -288,6 +297,10 @@ func (m *Manager) activatePlugin(ctx context.Context, manifest PluginManifest, w
 
 	_ = cm
 	m.plugins[id] = state
+	if hook := m.capHook; hook != nil {
+		activatedManifest, activatedInst := manifest, inst
+		afterUnlock = append(afterUnlock, func() { hook.PluginActivated(ctx, activatedManifest, activatedInst) })
+	}
 	slog.Info("activated wasm plugin", "id", id, "capabilities", manifest.Capabilities, "tools_count", len(state.toolBridges))
 	return nil
 }
@@ -310,6 +323,9 @@ func snapshotPluginLogs(state *loadedPluginState) []string {
 func (m *Manager) deactivatePluginLocked(ctx context.Context, state *loadedPluginState) {
 	if state != nil {
 		state.runtimeLogs = snapshotPluginLogs(state)
+	}
+	if m.capHook != nil && state != nil && state.inst != nil {
+		m.capHook.PluginDeactivated(ctx, state.manifest.ID)
 	}
 	if m.toolReg != nil {
 		for _, tb := range state.toolBridges {

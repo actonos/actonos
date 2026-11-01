@@ -24,6 +24,7 @@ export const namespaces = [
   'plugins',
   'channels',
   'costs',
+  'mailcal',
 ] as const;
 
 type LocaleBundle = Record<string, Record<string, unknown>>;

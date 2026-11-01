@@ -27,6 +27,7 @@ import {
   Boxes,
   Radio,
   Coins,
+  Mail,
 } from 'lucide-react';
 import { useTheme } from '../providers/ThemeProvider';
 
@@ -42,6 +43,7 @@ export type NavTab =
   | 'skills'
   | 'plugins'
   | 'channels'
+  | 'mailcal'
   | 'workspace'
   | 'terminal'
   | 'notifications'
@@ -110,6 +112,7 @@ export function Sidebar({
       items: [
         { id: 'plugins', label: t('links.plugins', 'Plugins'), icon: Boxes },
         { id: 'channels', label: t('links.channels', 'Channels'), icon: Radio },
+        { id: 'mailcal', label: t('links.mailcal', 'Mail & Calendar'), icon: Mail },
         { id: 'skills', label: t('links.skills', 'Skills'), icon: Sparkles },
         { id: 'tools', label: t('links.tools', 'Native Tools'), icon: Wrench },
       ],

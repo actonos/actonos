@@ -21,6 +21,7 @@ require (
 	github.com/yalue/onnxruntime_go v1.32.0
 	golang.org/x/crypto v0.55.0
 	golang.org/x/mod v0.38.0
+	golang.org/x/net v0.57.0
 	golang.org/x/sys v0.47.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.56.0
@@ -72,7 +73,6 @@ require (
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba // indirect
 	golang.org/x/exp v0.0.0-20260727155853-b88d891fe743 // indirect
 	golang.org/x/image v0.44.0 // indirect
-	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/term v0.45.0 // indirect
