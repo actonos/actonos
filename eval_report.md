@@ -7,10 +7,10 @@
 
 - **Mode:** `mock`
 - **Model label (not evaluated):** `mock`
-- **Date:** `2026-11-01T05:46:46Z`
+- **Date:** `2026-11-01T05:58:49Z`
 - **Pass Rate:** `100.0%` (30/30)
 - **False Completion Rate:** `0.0%` (Target < 1.0%)
-- **P50 Latency (synthetic):** `288 ms` | **P95 Latency (synthetic):** `410 ms`
+- **P50 Latency (synthetic):** `288 ms` | **P95 Latency (synthetic):** `488 ms`
 - **Total Tokens (synthetic):** `15000` (~$0.0600)
 
 ## Task Results
@@ -19,7 +19,7 @@
 |:---|:---|:---|:---:|:---:|:---|
 | 1 | `task_01_code_fix_syntax` | - | PASS | 252ms |  |
 | 2 | `task_02_code_refactor_pure_go` | - | PASS | 348ms |  |
-| 3 | `task_03_multi_step_dag_planning` | - | PASS | 410ms |  |
+| 3 | `task_03_multi_step_dag_planning` | - | PASS | 526ms |  |
 | 4 | `task_04_atomic_step_execution` | - | PASS | 226ms |  |
 | 5 | `task_05_tool_file_write_verification` | - | PASS | 252ms |  |
 | 6 | `task_06_tool_http_fetch_extract` | - | PASS | 288ms |  |
@@ -41,7 +41,7 @@
 | 22 | `task_22_structured_directive_validation` | - | PASS | 488ms |  |
 | 23 | `task_23_anomaly_detection_triage` | - | PASS | 300ms |  |
 | 24 | `task_24_approval_risk_classification` | - | PASS | 264ms |  |
-| 25 | `task_25_multi_agent_swarm_dispatch` | - | PASS | 318ms |  |
+| 25 | `task_25_multi_agent_swarm_dispatch` | - | PASS | 400ms |  |
 | 26 | `task_26_procedural_memory_reuse` | - | PASS | 288ms |  |
 | 27 | `task_27_error_loop_detection` | - | PASS | 310ms |  |
 | 28 | `task_28_idempotent_task_retry` | - | PASS | 278ms |  |

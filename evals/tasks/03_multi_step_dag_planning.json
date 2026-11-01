@@ -4,7 +4,7 @@
   "domain": "planning",
   "difficulty": "medium",
   "language": "en",
-  "user_goal": "Build an audit log exporter service: 1. Design schema, 2. Implement SQLite reader, 3. Generate CSV report, 4. Verify report exists",
+  "user_goal": "Build an audit log exporter service: 1. Design schema, 2. Implement SQLite reader, 3. Generate the CSV report and save it as audit_report.csv in the workspace root, 4. Verify report exists",
   "expected_kind": "produce",
   "available_tools": [
     "native_file_write",

@@ -36,6 +36,17 @@ var forbiddenCommandPatterns = []string{
 	"remove-item -recurse d:\\",
 }
 
+// ValidateCommand reports whether a shell command passes the destructive-command
+// screen that guards native_exec. Exposed so evaluations judge an agent's attempted
+// commands by the same rule the product enforces.
+func ValidateCommand(command string) error {
+	raw, err := json.Marshal(map[string]string{"command": command})
+	if err != nil {
+		return err
+	}
+	return validateCommandToolInput(raw)
+}
+
 func validateCommandToolInput(input json.RawMessage) error {
 	var request struct {
 		Command string `json:"command"`

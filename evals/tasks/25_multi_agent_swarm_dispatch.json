@@ -4,7 +4,7 @@
   "domain": "planning",
   "difficulty": "hard",
   "language": "en",
-  "user_goal": "Coordinate a swarm where dev agent builds microservice and doc agent writes API docs",
+  "user_goal": "Coordinate a swarm where dev agent builds microservice and doc agent writes the API docs to api_docs.md in the workspace root",
   "expected_kind": "produce",
   "available_tools": [
     "native_file_write"
