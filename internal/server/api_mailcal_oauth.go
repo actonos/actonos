@@ -2,8 +2,10 @@ package server
 
 import (
 	"errors"
+	"net"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/actonos/actonos/internal/mailcal"
 	"github.com/go-chi/chi/v5"
@@ -27,10 +29,42 @@ func requestOrigin(r *http.Request) string {
 	return scheme + "://" + r.Host
 }
 
+// isLoopbackHost reports whether a Host header names this machine (providers accept http only there).
+func isLoopbackHost(hostport string) bool {
+	host := hostport
+	if h, _, err := net.SplitHostPort(hostport); err == nil {
+		host = h
+	}
+	host = strings.Trim(strings.ToLower(host), "[]")
+	return host == "localhost" || host == "127.0.0.1" || host == "::1"
+}
+
+// oauthOriginAllowed is true when the page the user is on can be the OAuth redirect target: HTTPS
+// anywhere, plain HTTP only on this machine.
+func oauthOriginAllowed(r *http.Request) bool {
+	return strings.HasPrefix(requestOrigin(r), "https://") || isLoopbackHost(r.Host)
+}
+
+// httpsRequiredMessage explains why sign-in cannot start from this address and, when the Tailscale
+// node can serve HTTPS, where to open ActonOS instead.
+func (s *Server) httpsRequiredMessage() string {
+	msg := "Google, Microsoft and other providers only accept https redirect addresses. Open ActonOS over HTTPS and try again."
+	if s.tailscale != nil {
+		if u := s.tailscale.HTTPSURL(); u != "" {
+			msg = "Google, Microsoft and other providers only accept https redirect addresses. Open ActonOS at " + u + " and try again."
+		}
+	}
+	return msg
+}
+
 // POST /api/mailcal/accounts/{id}/oauth/start  (authenticated)
 func (s *Server) handleMailcalOAuthStart(w http.ResponseWriter, r *http.Request) {
 	flow := s.mailcalOAuthOrFail(w)
 	if flow == nil {
+		return
+	}
+	if !oauthOriginAllowed(r) {
+		s.respondError(w, http.StatusBadRequest, "OAUTH_HTTPS_REQUIRED", s.httpsRequiredMessage())
 		return
 	}
 	redirect := requestOrigin(r) + "/api/mailcal/oauth/callback"

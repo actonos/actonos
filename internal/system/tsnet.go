@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,6 +22,9 @@ type TailscaleStatus struct {
 	Hostname   string `json:"hostname"`
 	PeersCount int    `json:"peers_count"`
 	AuthKeySet bool   `json:"auth_key_set"`
+	// HTTPSURL is the address that serves the Web UI over HTTPS with a real certificate
+	// (https://<host>.<tailnet>.ts.net). Empty until HTTPS certificates are enabled for the tailnet.
+	HTTPSURL string `json:"https_url,omitempty"`
 }
 
 // TailscaleManager manages the embedded tsnet.Server.
@@ -101,6 +105,52 @@ func (m *TailscaleManager) Listen(network, addr string) (net.Listener, error) {
 	return m.server.Listen(network, addr)
 }
 
+// ListenTLS creates a TLS listener on the Tailscale mesh network. The certificate for the node's
+// <host>.<tailnet>.ts.net name is issued and renewed by Tailscale on demand; this fails to serve
+// until HTTPS certificates are enabled for the tailnet (admin console, DNS, HTTPS Certificates).
+func (m *TailscaleManager) ListenTLS(network, addr string) (net.Listener, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if !m.enabled || m.server == nil {
+		return nil, fmt.Errorf("tailscale is not enabled or running")
+	}
+
+	return m.server.ListenTLS(network, addr)
+}
+
+// HTTPSURL returns the HTTPS address of this node, or "" when the tailnet cannot issue it a certificate.
+func (m *TailscaleManager) HTTPSURL() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if !m.enabled || m.server == nil {
+		return ""
+	}
+	return httpsURLFor(m.server.CertDomains())
+}
+
+// httpsURLFor builds the base URL from the domains Tailscale can issue certificates for.
+func httpsURLFor(domains []string) string {
+	for _, d := range domains {
+		d = strings.TrimSuffix(strings.TrimSpace(d), ".")
+		if d != "" && !strings.ContainsAny(d, "*/ ") {
+			return "https://" + d
+		}
+	}
+	return ""
+}
+
+// TailscaleHTTPSEnabled reports whether the HTTPS listener on the tailnet should be started.
+// It is on by default; ACTON_TAILSCALE_HTTPS=0 (or false/off/no) turns it off.
+func TailscaleHTTPSEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("ACTON_TAILSCALE_HTTPS"))) {
+	case "0", "false", "off", "no":
+		return false
+	}
+	return true
+}
+
 // GetStatus returns the current connection state.
 func (m *TailscaleManager) GetStatus(ctx context.Context) (*TailscaleStatus, error) {
 	m.mu.RLock()
@@ -134,6 +184,7 @@ func (m *TailscaleManager) GetStatus(ctx context.Context) (*TailscaleStatus, err
 		status.IP = st.TailscaleIPs[0].String()
 		status.FQDN = st.Self.DNSName
 		status.PeersCount = len(st.Peer)
+		status.HTTPSURL = httpsURLFor(m.server.CertDomains())
 	}
 
 	return status, nil

@@ -563,17 +563,40 @@ func main() {
 		}
 	}()
 
-	// Serve Web UI & REST API on embedded Tailscale mesh node if active
+	// Serve Web UI & REST API on embedded Tailscale mesh node if active. HTTPS (:443) uses a real
+	// certificate for <host>.<tailnet>.ts.net, which is what OAuth providers require for redirect URIs.
 	if tailscaleMgr != nil {
-		for _, port := range []string{":80", ":8080"} {
-			port := port
+		type tsListener struct {
+			addr  string
+			https bool
+		}
+		listeners := []tsListener{{":80", false}, {":8080", false}}
+		if system.TailscaleHTTPSEnabled() {
+			listeners = append(listeners, tsListener{":443", true})
+		}
+		for _, l := range listeners {
+			l := l
 			go func() {
-				ln, err := tailscaleMgr.Listen("tcp", port)
+				var ln net.Listener
+				var err error
+				if l.https {
+					ln, err = tailscaleMgr.ListenTLS("tcp", l.addr)
+				} else {
+					ln, err = tailscaleMgr.Listen("tcp", l.addr)
+				}
 				if err != nil {
-					slog.Debug("tailscale mesh listener not started", "port", port, "error", err)
+					if l.https {
+						slog.Warn("tailscale HTTPS listener not started; enable HTTPS Certificates for the tailnet (Tailscale admin console, DNS) and make sure MagicDNS is on", "error", err)
+					} else {
+						slog.Debug("tailscale mesh listener not started", "port", l.addr, "error", err)
+					}
 					return
 				}
-				slog.Info("ActonOS Web UI & REST API listening on Tailscale mesh", "port", port)
+				if l.https {
+					slog.Info("ActonOS Web UI & REST API listening on Tailscale HTTPS", "port", l.addr, "url", tailscaleMgr.HTTPSURL())
+				} else {
+					slog.Info("ActonOS Web UI & REST API listening on Tailscale mesh", "port", l.addr)
+				}
 				tsSrv := &http.Server{
 					Handler:           apiServer.Router(),
 					ReadHeaderTimeout: 30 * time.Second,
@@ -584,7 +607,7 @@ func main() {
 					_ = tsSrv.Close()
 				}()
 				if err := tsSrv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, net.ErrClosed) {
-					slog.Debug("tailscale mesh http server closed", "port", port, "error", err)
+					slog.Debug("tailscale mesh http server closed", "port", l.addr, "error", err)
 				}
 			}()
 		}

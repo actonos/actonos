@@ -1,6 +1,7 @@
 package server
 
 import (
+	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -49,5 +50,45 @@ func TestAnOAuthAccountIsNotConnectedUntilTheSignInFinishes(t *testing.T) {
 	}
 	if got := dataOf(t, env)["status"]; got != "auth_expired" {
 		t.Fatalf("a fresh OAuth account must not look connected, got %v", got)
+	}
+}
+
+func TestOAuthSignInNeedsHTTPSExceptOnThisMachine(t *testing.T) {
+	cases := []struct {
+		name   string
+		host   string
+		header string
+		tls    bool
+		want   bool
+	}{
+		{"plain http on a LAN address", "192.168.1.20:8080", "", false, false},
+		{"plain http on a .local name", "acton-mini.local:8080", "", false, false},
+		{"plain http on a tailnet name", "acton-mini.tail1234.ts.net", "", false, false},
+		{"localhost is fine for providers", "localhost:8080", "", false, true},
+		{"loopback address", "127.0.0.1:8080", "", false, true},
+		{"loopback ipv6", "[::1]:8080", "", false, true},
+		{"behind a proxy that says https", "agent.example.com", "https", false, true},
+		{"direct TLS (Tailscale HTTPS)", "acton-mini.tail1234.ts.net", "", true, true},
+		{"a forged proto header other than https", "192.168.1.20:8080", "http", false, false},
+	}
+	for _, c := range cases {
+		r := httptest.NewRequest(http.MethodPost, "/api/mailcal/accounts/a/oauth/start", nil)
+		r.Host = c.host
+		if c.header != "" {
+			r.Header.Set("X-Forwarded-Proto", c.header)
+		}
+		if c.tls {
+			r.TLS = &tls.ConnectionState{}
+		}
+		if got := oauthOriginAllowed(r); got != c.want {
+			t.Errorf("%s: allowed=%v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func TestHTTPSRequiredMessageSaysWhatToDo(t *testing.T) {
+	srv := newTestServer(t)
+	if msg := srv.httpsRequiredMessage(); !strings.Contains(msg, "https") {
+		t.Fatalf("message must explain the https requirement: %q", msg)
 	}
 }
