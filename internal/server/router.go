@@ -73,6 +73,7 @@ type Server struct {
 	mailcal          *mailcal.Service
 	mailcalOAuth     *mailcal.OAuthFlow
 	mailcalClients   *mailcal.VaultClients
+	mailcalCreds     *mailcal.CredentialBroker
 	reflectionEngine *agent.ReflectionEngine
 	allowMissingAuth bool
 }
@@ -90,6 +91,7 @@ type Config struct {
 	Mailcal             *mailcal.Service
 	MailcalOAuth        *mailcal.OAuthFlow
 	MailcalClients      *mailcal.VaultClients
+	MailcalCredentials  *mailcal.CredentialBroker
 	TokenTracker        *memory.TokenTracker
 	ProfileManager      *agent.UserProfileManager
 	LLMRouter           *llm.ModelCascadeRouter
@@ -212,6 +214,7 @@ func NewServer(cfg Config) *Server {
 		mailcal:          cfg.Mailcal,
 		mailcalOAuth:     cfg.MailcalOAuth,
 		mailcalClients:   cfg.MailcalClients,
+		mailcalCreds:     cfg.MailcalCredentials,
 		reflectionEngine: cfg.ReflectionEngine,
 		allowMissingAuth: cfg.DisableAuthForTest,
 	}
@@ -523,6 +526,7 @@ func (s *Server) setupRoutes() {
 					r.Delete("/", s.handleMailcalDeleteAccount)
 					r.Post("/test", s.handleMailcalTestAccount)
 					r.Post("/oauth/start", s.handleMailcalOAuthStart)
+					r.Put("/password", s.handleMailcalPutPassword)
 				})
 				r.Get("/oauth/clients/{provider}", s.handleMailcalGetOAuthClient)
 				r.Put("/oauth/clients/{provider}", s.handleMailcalPutOAuthClient)

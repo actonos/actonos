@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Sign-in is run by the core with the user's own OAuth client (PKCE, single-use state, a nonce cookie so a stranger's callback cannot link their mailbox); refresh tokens never leave the core. Plugins that declare `permissions.oauth` can ask a new host call for a short-lived access token for their own accounts only.
   - A Gmail and Google Calendar provider plugin (`make plugin-gmail`) built on a shared provider kit (typed backend, HTTP, MIME, WebAssembly guest runtime). Sending is idempotent, search cannot be widened with operators, and hidden HTML text is dropped.
   - Deleting an account deletes its stored token.
+- **Microsoft 365 / Outlook and CalDAV plugins (`internal/mailcal/plugins/graph`, `internal/mailcal/plugins/caldav`)**:
+  - A Microsoft Graph provider (mail and calendar; sends are idempotent through a private message property and event `transactionId`; delete moves to Deleted Items) and a CalDAV calendar provider (iCalendar toolkit that keeps unknown properties, conflict-safe updates, no silent invitations). Added without changing the rule engine, gate or ABI.
+  - Password accounts: a new `acton_account` host call hands a plugin the login of its own accounts only; passwords live in the vault and never in the account record or API responses.
 - **Plugin runtime**: guest calls that never return are now interrupted when their context ends.
 
 

@@ -154,6 +154,11 @@ func (s *Server) handleMailcalDeleteAccount(w http.ResponseWriter, r *http.Reque
 		s.respondMailcalError(w, err)
 		return
 	}
+	if s.mailcalCreds != nil {
+		if err := s.mailcalCreds.Forget(r.Context(), id); err != nil {
+			slog.Warn("mailcal: could not delete the stored password of a removed account", "account", id, "error", err)
+		}
+	}
 	if s.mailcalOAuth != nil {
 		if err := s.mailcalOAuth.Forget(r.Context(), id); err != nil {
 			slog.Warn("mailcal: could not delete the stored token of a removed account", "account", id, "error", err)

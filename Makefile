@@ -23,7 +23,7 @@
 #   make help          Show this help message
 # ==============================================================================
 
-.PHONY: plugin-gmail all deps dev lint test test-unit test-race test-integ build-web build build-embedding dist model-embedding docker docker-multiarch docker-run iso iso-arm64 \
+.PHONY: plugin-gmail plugin-graph plugin-caldav all deps dev lint test test-unit test-race test-integ build-web build build-embedding dist model-embedding docker docker-multiarch docker-run iso iso-arm64 \
         clean version bump-patch bump-minor bump-major release help
 
 # ------------------------------------------------------------------------------
@@ -127,6 +127,18 @@ plugin-gmail:
 	@mkdir -p $(BUILD_DIR)/plugins/mailcal-gmail
 	GOOS=wasip1 GOARCH=wasm CGO_ENABLED=0 $(GO) build -buildmode=c-shared -o $(BUILD_DIR)/plugins/mailcal-gmail/plugin.wasm ./internal/mailcal/plugins/gmail/wasm
 	cp internal/mailcal/plugins/gmail/manifest.json $(BUILD_DIR)/plugins/mailcal-gmail/manifest.json
+
+plugin-graph:
+	@echo "==> Building the Microsoft Graph plugin..."
+	@mkdir -p $(BUILD_DIR)/plugins/mailcal-graph
+	GOOS=wasip1 GOARCH=wasm CGO_ENABLED=0 $(GO) build -buildmode=c-shared -o $(BUILD_DIR)/plugins/mailcal-graph/plugin.wasm ./internal/mailcal/plugins/graph/wasm
+	cp internal/mailcal/plugins/graph/manifest.json $(BUILD_DIR)/plugins/mailcal-graph/manifest.json
+
+plugin-caldav:
+	@echo "==> Building the CalDAV plugin..."
+	@mkdir -p $(BUILD_DIR)/plugins/mailcal-caldav
+	GOOS=wasip1 GOARCH=wasm CGO_ENABLED=0 $(GO) build -buildmode=c-shared -o $(BUILD_DIR)/plugins/mailcal-caldav/plugin.wasm ./internal/mailcal/plugins/caldav/wasm
+	cp internal/mailcal/plugins/caldav/manifest.json $(BUILD_DIR)/plugins/mailcal-caldav/manifest.json
 
 model-embedding:
 	@echo "==> Downloading multilingual-e5-small ONNX artifacts..."
@@ -246,6 +258,8 @@ help:
 	@echo "  make model-embedding Download pinned multilingual-e5-small ONNX files"
 	@echo "  make build-embedding Build the CGO ONNX helper"
 	@echo "  make plugin-gmail  Build the Gmail and Google Calendar plugin"
+	@echo "  make plugin-graph  Build the Microsoft Graph plugin"
+	@echo "  make plugin-caldav Build the CalDAV plugin"
 	@echo "  make docker        Build Docker image"
 	@echo "  make iso           Build bare-metal installation ISO"
 	@echo "  make version       Print current version"

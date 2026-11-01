@@ -18,4 +18,12 @@ You bring your own OAuth client, so ActonOS never goes through Google's app revi
 
 The plugin asks only for the Gmail "modify" scope (read, draft, send, label, trash; not permanent delete) and the Calendar events and free/busy scopes.
 
+## Microsoft 365 and Outlook (Graph)
+
+Register an app in Microsoft Entra (personal or work accounts), add the `redirect_uri` shown by `POST /api/mailcal/accounts/{id}/oauth/start`, and store the client with `PUT /api/mailcal/oauth/clients/microsoft`. Build with `make plugin-graph` and install `build/plugins/mailcal-graph`. Scopes: `offline_access Mail.ReadWrite Mail.Send Calendars.ReadWrite`. Search returns one page (a Graph limit); mail delete moves to Deleted Items.
+
+## CalDAV (Fastmail, iCloud, Nextcloud, Radicale)
+
+Use an app password. Build with `make plugin-caldav`. Account config: `calendar_url` (https URL of the calendar collection), `email` (your own address, needed to answer invitations), optional `username`; then `PUT /api/mailcal/accounts/{id}/password`. The shipped manifest allows `caldav.fastmail.com` and `caldav.icloud.com`; for another server copy the plugin folder under a new `id`, add your host to `permissions.net_outbound`, and install it unsigned. Limits: no free/busy for other people, single occurrences of recurring events cannot be changed, and the server (not the plugin) sends invitations, so events with attendees can only be created when notifying attendees is requested.
+
 Known unverified assumptions (check on a test account): that Gmail keeps the `X-Acton-Idempotency-Key` header on sent mail (it is how a retry finds its own earlier send), and that the Gmail API removes a `Bcc` header before delivery.

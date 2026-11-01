@@ -240,7 +240,7 @@ func TestDeletingAnAccountDeletesItsToken(t *testing.T) {
 func TestProvidersAdvertiseTheirSignInProvider(t *testing.T) {
 	env := newOAuthEnv(t, "r")
 	list := env.svc.Providers()
-	if len(list) != 1 || list[0].OAuthProvider != "google" {
+	if len(list) != 1 || list[0].OAuthProvider != "google" || list[0].AuthKind != "oauth" {
 		t.Fatalf("%+v", list)
 	}
 }

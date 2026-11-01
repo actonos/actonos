@@ -51,6 +51,7 @@ type Manager struct {
 	disabledIDs map[string]bool
 	capHook     CapabilityHook
 	tokens      TokenBroker
+	credentials CredentialBroker
 }
 
 // NewManager creates a new WASM Plugin Manager.
@@ -247,14 +248,15 @@ func (m *Manager) activatePlugin(ctx context.Context, manifest PluginManifest, w
 
 	gate := NewSecurityGate(manifest)
 	hostCtx := &HostContext{
-		PluginID:  id,
-		Manifest:  manifest,
-		Gate:      gate,
-		KV:        m.kvStore,
-		Secrets:   m.secrets,
-		Tokens:    m.tokens,
-		EventBus:  m.eventBus,
-		Workspace: m.workspace,
+		PluginID:    id,
+		Manifest:    manifest,
+		Gate:        gate,
+		KV:          m.kvStore,
+		Secrets:     m.secrets,
+		Tokens:      m.tokens,
+		Credentials: m.credentials,
+		EventBus:    m.eventBus,
+		Workspace:   m.workspace,
 	}
 	hostCtx.SeedLogs(preservedLogs)
 

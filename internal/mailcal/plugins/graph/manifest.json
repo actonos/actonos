@@ -1,0 +1,17 @@
+{
+  "id": "mailcal-graph",
+  "name": "Microsoft 365 and Outlook",
+  "version": "1.0.0",
+  "description": "Read, draft and send mail and manage events in a Microsoft account through Microsoft Graph. Sign-in and tokens are handled by ActonOS.",
+  "capabilities": ["mail@1", "calendar@1"],
+  "permissions": {
+    "net_outbound": ["graph.microsoft.com"],
+    "oauth": ["microsoft"]
+  },
+  "oauth": {
+    "provider": "microsoft",
+    "auth_url": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+    "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+    "scopes": ["offline_access", "Mail.ReadWrite", "Mail.Send", "Calendars.ReadWrite"]
+  }
+}

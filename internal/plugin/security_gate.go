@@ -19,7 +19,18 @@ var (
 	ErrWorkspaceDisabled    = errors.New("workspace access is not enabled for this plugin")
 	ErrBusEventUnauthorized = errors.New("bus event emission not authorized for topic")
 	ErrOAuthUnauthorized    = errors.New("oauth provider not authorized in plugin manifest")
+	ErrCredsUnauthorized    = errors.New("account credentials not authorized in plugin manifest")
 )
+
+// CheckCredentialsAccess verifies the manifest sets permissions.credentials.
+func (g *SecurityGate) CheckCredentialsAccess() error {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	if !g.manifest.Permissions.Credentials {
+		return fmt.Errorf("%w: permissions.credentials is not set", ErrCredsUnauthorized)
+	}
+	return nil
+}
 
 // CheckOAuthAccess verifies the manifest lists provider under permissions.oauth.
 func (g *SecurityGate) CheckOAuthAccess(provider string) error {

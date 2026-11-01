@@ -1,0 +1,11 @@
+{
+  "id": "mailcal-caldav",
+  "name": "CalDAV calendar",
+  "version": "1.0.0",
+  "description": "Read and manage events on a CalDAV server (Fastmail, iCloud, Nextcloud, Radicale) using an app password. To use another server, add its host to permissions.net_outbound and install the plugin unsigned.",
+  "capabilities": ["calendar@1"],
+  "permissions": {
+    "net_outbound": ["caldav.fastmail.com", "caldav.icloud.com"],
+    "credentials": true
+  }
+}

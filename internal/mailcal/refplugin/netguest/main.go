@@ -20,9 +20,10 @@ type probe struct {
 	provkit.Base
 	http   netio.Doer
 	tokens netio.Tokens
+	creds  netio.Credentials
 }
 
-var backend = &probe{http: wasmguest.HTTP{}, tokens: wasmguest.Tokens{}}
+var backend = &probe{http: wasmguest.HTTP{}, tokens: wasmguest.Tokens{}, creds: wasmguest.Credentials{}}
 
 func (p *probe) Capabilities(context.Context, abi.AccountRef) (abi.Capabilities, error) {
 	return abi.Capabilities{ABI: []string{abi.CapMail}, Ops: []string{abi.ExportCapabilities, abi.ExportMailList}}, nil
@@ -46,6 +47,15 @@ func (p *probe) MailList(ctx context.Context, acct abi.AccountRef, _ abi.MailLis
 	return abi.MailListResult{Messages: []abi.Message{{ID: "p1", Subject: fmt.Sprintf("%d %s", resp.Status, resp.Body)}}}, nil
 }
 
+// MailGet reports the username and the LENGTH of the password, never the password itself.
+func (p *probe) MailGet(ctx context.Context, acct abi.AccountRef, _ string) (abi.Message, error) {
+	login, err := p.creds.Credentials(ctx, acct.ID)
+	if err != nil {
+		return abi.Message{}, err
+	}
+	return abi.Message{ID: "c1", Subject: login.Username, BodyText: fmt.Sprintf("password length %d", len(login.Password))}, nil
+}
+
 //go:wasmexport acton_alloc
 func actonAlloc(size uint32) uint32 { return wasmguest.Alloc(size) }
 
@@ -57,6 +67,9 @@ func actonPluginInit(ptr, length uint32) uint32 { return 0 }
 
 //go:wasmexport acton_mailcal_capabilities
 func capabilities(p, l uint32) uint64 { return wasmguest.Serve(backend, abi.ExportCapabilities, p, l) }
+
+//go:wasmexport acton_mail_get
+func mailGet(p, l uint32) uint64 { return wasmguest.Serve(backend, abi.ExportMailGet, p, l) }
 
 //go:wasmexport acton_mail_list
 func mailList(p, l uint32) uint64 { return wasmguest.Serve(backend, abi.ExportMailList, p, l) }

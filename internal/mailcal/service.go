@@ -28,6 +28,9 @@ type ProviderInfo struct {
 	Limits   abi.Limits `json:"limits"`
 	// OAuthProvider is set when the plugin signs users in through ActonOS (for example "google").
 	OAuthProvider string `json:"oauth_provider,omitempty"`
+	// AuthKind tells the UI which sign-in form to show: "oauth" (the core runs the flow),
+	// "password" (the plugin receives the account's login through acton_account) or "".
+	AuthKind string `json:"auth_kind,omitempty"`
 }
 
 type providerEntry struct {
@@ -148,6 +151,16 @@ func (s *Service) PluginActivated(ctx context.Context, manifest plugin.PluginMan
 		return
 	}
 	s.registerProvider(manifest.ID, manifest.Name, manifest.Version, provider, caps)
+	s.mu.Lock()
+	if e := s.providers[manifest.ID]; e != nil {
+		switch {
+		case manifest.OAuth != nil:
+			e.info.AuthKind = "oauth"
+		case manifest.Permissions.Credentials:
+			e.info.AuthKind = "password"
+		}
+	}
+	s.mu.Unlock()
 	if manifest.OAuth != nil {
 		s.mu.Lock()
 		if e := s.providers[manifest.ID]; e != nil {

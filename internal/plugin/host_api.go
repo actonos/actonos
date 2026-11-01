@@ -61,6 +61,7 @@ type HostContext struct {
 	KV           KVStore
 	Secrets      SecretProvider
 	Tokens       TokenBroker
+	Credentials  CredentialBroker
 	EventBus     *bus.EventBus
 	Workspace    *workspace.Store
 	HTTPClient   *http.Client
@@ -347,6 +348,15 @@ func RegisterHostModule(ctx context.Context, r wazero.Runtime) error {
 		Export("get_token").
 		Instantiate(ctx); err != nil {
 		return fmt.Errorf("instantiating acton_oauth: %w", err)
+	}
+
+	// 8b. acton_account (username and password of the plugin's own password accounts)
+	if _, err := r.NewHostModuleBuilder("acton_account").
+		NewFunctionBuilder().
+		WithFunc(accountGetCredentials).
+		Export("get_credentials").
+		Instantiate(ctx); err != nil {
+		return fmt.Errorf("instantiating acton_account: %w", err)
 	}
 
 	// 9. acton_host (legacy combined host module)

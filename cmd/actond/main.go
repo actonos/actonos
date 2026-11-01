@@ -390,9 +390,11 @@ func main() {
 	stateStore := auth.NewStateStore(10 * time.Minute)
 	oauthEngine := auth.NewOAuthEngine(stateStore)
 	tokenDaemon := auth.NewTokenRefreshDaemon(oauthEngine, vault, db, eventBus)
+	var mailcalCreds *mailcal.CredentialBroker
 	var mailcalOAuth *mailcal.OAuthFlow
 	var mailcalClients *mailcal.VaultClients
 	if mailcalSvc != nil {
+		mailcalCreds = mailcal.NewCredentialBroker(mailcalSvc.Accounts(), vault)
 		mailcalClients = &mailcal.VaultClients{Vault: vault}
 		mailcalOAuth = mailcal.NewOAuthFlow(mailcalSvc, oauthEngine, stateStore, tokenDaemon, mailcalClients)
 	}
@@ -406,6 +408,7 @@ func main() {
 		if mailcalSvc != nil {
 			pluginMgr.SetCapabilityHook(mailcalSvc)
 			pluginMgr.SetTokenBroker(mailcal.NewTokenBroker(mailcalSvc.Accounts(), tokenDaemon, mailcalSvc.OAuthSpec))
+			pluginMgr.SetCredentialBroker(mailcalCreds)
 		}
 		if err := pluginMgr.ScanAndLoadAll(ctx); err != nil {
 			slog.Warn("failed to load wasm plugins", "error", err)
@@ -526,6 +529,7 @@ func main() {
 		Mailcal:             mailcalSvc,
 		MailcalOAuth:        mailcalOAuth,
 		MailcalClients:      mailcalClients,
+		MailcalCredentials:  mailcalCreds,
 		WorkspaceDir:        workspaceDir,
 		WorkspaceStore:      userWorkspace,
 		SkillsDir:           skillsDir,

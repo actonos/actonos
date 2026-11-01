@@ -270,6 +270,7 @@
 | `POST` | `/api/mailcal/proposals/{id}/approve` | `handleMailcalApproveProposal` | `api_mailcal_rules.go` |
 | `POST` | `/api/mailcal/proposals/{id}/reject` | `handleMailcalRejectProposal` | `api_mailcal_rules.go` |
 | `GET` | `/api/mailcal/decisions` | `handleMailcalListDecisions` | `api_mailcal_rules.go` |
+| `PUT` | `/api/mailcal/accounts/{id}/password` | `handleMailcalPutPassword` | `api_mailcal_password.go` |
 | `POST` | `/api/mailcal/accounts/{id}/oauth/start` | `handleMailcalOAuthStart` | `api_mailcal_oauth.go` |
 | `GET` | `/api/mailcal/oauth/callback` (public) | `handleMailcalOAuthCallback` | `api_mailcal_oauth.go` |
 | `GET`/`PUT` | `/api/mailcal/oauth/clients/{provider}` | `handleMailcalGetOAuthClient` / `handleMailcalPutOAuthClient` | `api_mailcal_oauth.go` |

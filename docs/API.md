@@ -1340,6 +1340,9 @@ Starts the sign-in for an account whose plugin signs users in through ActonOS. R
 ### `GET /api/mailcal/oauth/callback`
 **Public** (the browser arrives from another site, so the `SameSite=Strict` session cookie is not sent). Protected by a single-use `state`, PKCE (S256) and the nonce cookie. Always answers `302` to `/mailcal?oauth=ok|denied|state|no_refresh_token|failed`; provider data never appears in the URL.
 
+### `PUT /api/mailcal/accounts/{id}/password`
+Body `{password}`. For accounts that sign in with an app password (CalDAV, IMAP/SMTP). The password goes straight into the vault; the response only says `{configured: true}`, the account record holds just the name of the vault key, and deleting the account deletes the password.
+
 ### `GET /api/mailcal/oauth/clients/{provider}`
 ### `PUT /api/mailcal/oauth/clients/{provider}`
 The user's own OAuth client (bring-your-own): `PUT {client_id, client_secret}` stores it in the vault; `GET` returns only `{configured}`.

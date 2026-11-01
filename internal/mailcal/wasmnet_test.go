@@ -105,3 +105,30 @@ func TestAnExpiredLoginSurfacesAsAuthExpiredAndAProviderErrorKeepsItsCode(t *tes
 		}
 	}
 }
+
+type fakeCredBroker struct{ err error }
+
+func (f fakeCredBroker) Credentials(_ context.Context, pluginID, accountID string) (plugin.Credentials, error) {
+	if f.err != nil {
+		return plugin.Credentials{}, f.err
+	}
+	return plugin.Credentials{Username: "me@fastmail.example", Password: "app-password-123"}, nil
+}
+
+func TestAWasmProviderReceivesCredentialsOnlyWithThePermission(t *testing.T) {
+	build := func(perms plugin.PluginPermissions, b plugin.CredentialBroker) mailcal.Provider {
+		manifest := plugin.PluginManifest{ID: "netprobe", Name: "probe", Version: "1", Capabilities: []string{"mail@1"}, Permissions: perms}
+		host := &plugin.HostContext{PluginID: manifest.ID, Manifest: manifest, Gate: plugin.NewSecurityGate(manifest), Credentials: b}
+		return mailcal.NewBridgeProvider(refplugintest.InstanceOf(t, refplugintest.BuildGuest(t, "./internal/mailcal/refplugin/netguest"), manifest, host))
+	}
+	msg, err := build(plugin.PluginPermissions{Credentials: true}, fakeCredBroker{}).MailGet(context.Background(), abi.AccountRef{ID: "a"}, "x")
+	if err != nil || msg.Subject != "me@fastmail.example" || msg.BodyText != "password length 16" {
+		t.Fatalf("%+v %v", msg, err)
+	}
+	if _, err := build(plugin.PluginPermissions{}, fakeCredBroker{}).MailGet(context.Background(), abi.AccountRef{ID: "a"}, "x"); !mailcal.IsCode(err, abi.ErrInvalid) {
+		t.Fatalf("without permissions.credentials the call must be refused, got %v", err)
+	}
+	if _, err := build(plugin.PluginPermissions{Credentials: true}, fakeCredBroker{err: plugin.ErrCredentialsForbidden}).MailGet(context.Background(), abi.AccountRef{ID: "a"}, "x"); !mailcal.IsCode(err, abi.ErrInvalid) {
+		t.Fatalf("another plugin's account must be refused, got %v", err)
+	}
+}

@@ -39,6 +39,14 @@ type Tokens interface {
 	AccessToken(ctx context.Context, accountID string) (string, error)
 }
 
+// Login is a username and password for a password account (CalDAV, IMAP/SMTP).
+type Login struct{ Username, Password string }
+
+// Credentials returns the login of one of the plugin's own password accounts.
+type Credentials interface {
+	Credentials(ctx context.Context, accountID string) (Login, error)
+}
+
 // Header looks a response header up case-insensitively.
 func (r Response) Header(name string) string {
 	for k, v := range r.Headers {
