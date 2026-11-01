@@ -6,7 +6,10 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { useToast } from '@/components/ui/Toast';
 import { useRealtime } from '@/components/providers/RealtimeProvider';
+import { mailcalApi } from '@/lib/api/mailcal';
+import { Button } from '@/components/ui/Button';
 import { ApprovalDecisionBar } from './ApprovalDecisionBar';
+import { MailApprovalPreview, mailDraftIdOf } from './MailApprovalPreview';
 import { Clock, ShieldAlert } from 'lucide-react';
 
 export function ApprovalInterruption() {
@@ -63,7 +66,7 @@ export function ApprovalInterruption() {
 
   if (!approval) return null;
 
-  const decide = async (approved: boolean, dontAskAgain?: DontAskAgain) => {
+  const decide = async (approved: boolean, dontAskAgain?: DontAskAgain, proposeRule = false) => {
     setDeciding(true);
     try {
       if (approved) {
@@ -82,6 +85,16 @@ export function ApprovalInterruption() {
           })
         );
         window.dispatchEvent(new CustomEvent('actonos:tools-updated'));
+        const draftId = mailDraftIdOf(approval);
+        if (proposeRule && draftId) {
+          // The message is already approved; a failure here must not look like a failed approval.
+          try {
+            await mailcalApi.proposeFromDraft(draftId);
+            info(t('approval.ruleProposed'), t('approval.ruleProposedHint'));
+          } catch (cause) {
+            error(t('approval.ruleProposeFailed'), cause instanceof Error ? cause.message : String(cause));
+          }
+        }
       } else {
         await api.rejectAction(approval.id, feedback.trim() || t('approval.defaultFeedback'));
         info(t('approval.rejected'), approval.tool_name);
@@ -145,9 +158,15 @@ export function ApprovalInterruption() {
         <p className="text-body-sm text-slate mt-1">
           {t('approval.description', { tool: approval.tool_name, agent: approval.agent_id })}
         </p>
-        <pre className="my-4 max-h-60 overflow-auto rounded-[18px] bg-deep-ink text-white p-4 text-xs">
-          {JSON.stringify(approval.input, null, 2)}
-        </pre>
+        {mailDraftIdOf(approval) ? (
+          <div className="my-4">
+            <MailApprovalPreview draftId={mailDraftIdOf(approval)} />
+          </div>
+        ) : (
+          <pre className="my-4 max-h-60 overflow-auto rounded-[18px] bg-deep-ink text-white p-4 text-xs">
+            {JSON.stringify(approval.input, null, 2)}
+          </pre>
+        )}
         <label className="block text-caption font-semibold text-deep-ink mb-1">{t('approval.feedbackLabel')}</label>
         <textarea
           ref={feedbackRef}
@@ -170,6 +189,13 @@ export function ApprovalInterruption() {
           onReject={() => decide(false)}
           onApprove={(dontAskAgain) => decide(true, dontAskAgain)}
         />
+        {mailDraftIdOf(approval) && (
+          <div className="mt-2 flex justify-end">
+            <Button variant="secondary" size="sm" disabled={deciding} onClick={() => void decide(true, undefined, true)}>
+              {t('approval.approveAndPropose')}
+            </Button>
+          </div>
+        )}
       </Card>
     </div>
   );

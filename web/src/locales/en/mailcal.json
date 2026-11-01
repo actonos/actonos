@@ -39,7 +39,28 @@
     "labelPlaceholder": "Work",
     "email": "Your address (optional)",
     "emailPlaceholder": "me@example.com",
-    "secretsHint": "Passwords and tokens are never stored here; they go in the vault."
+    "secretsHint": "Passwords and tokens are never stored here; they go in the vault.",
+    "username": "Username (if different from the address)",
+    "calendarUrl": "Calendar address (https)",
+    "imapHost": "IMAP server",
+    "imapPort": "IMAP port",
+    "smtpHost": "SMTP server",
+    "smtpPort": "SMTP port",
+    "mode": "Security",
+    "sentMailbox": "Sent folder",
+    "trashMailbox": "Trash folder",
+    "password": "App password",
+    "netTcpHint": "Add these lines to permissions.net_tcp of the plugin you install:",
+    "errors": {
+      "provider": "Choose a provider.",
+      "password": "Enter the app password.",
+      "calendarUrl": "The calendar address must start with https://.",
+      "imapRequired": "Server names and your address are required.",
+      "port": "Ports must be numbers from 1 to 65535."
+    },
+    "calendarUrlPlaceholder": "https://caldav.example.com/dav/calendars/me/work/",
+    "tls": "TLS",
+    "starttls": "STARTTLS"
   },
   "toast": {
     "created": "Account added",
@@ -52,5 +73,182 @@
   "confirmDelete": {
     "title": "Remove this account?",
     "description": "Remove {{label}} and its drafts. Mail and calendar data stay with the provider."
+  },
+  "tabs": {
+    "label": "Mail and calendar sections",
+    "accounts": "Accounts",
+    "rules": "Auto-send rules",
+    "proposals": "Rule proposals",
+    "audit": "Audit"
+  },
+  "switch": {
+    "label": "Allow agents to send and change things",
+    "on": "On",
+    "off": "Off",
+    "onNote": "Agents can send mail and change your calendar only when a rule you approved allows it or you approve each action.",
+    "offWarning": "Off: every send, delete and calendar change is refused. Reading and drafting still work.",
+    "failed": "Could not change the setting"
+  },
+  "verdict": {
+    "allow": "Allowed by a rule",
+    "needs_approval": "Needs your approval",
+    "deny": "Blocked by a rule"
+  },
+  "rules": {
+    "intro": "A rule lets agents send or change something without asking, only for exactly what it describes. Anything else still needs your approval.",
+    "add": "Add rule",
+    "error": "Could not load the rules",
+    "empty": {
+      "title": "No rules yet",
+      "description": "Without rules every send waits for your approval. That is the safe default."
+    },
+    "toast": {
+      "created": "Rule added",
+      "failed": "Could not update the rule"
+    },
+    "state": {
+      "enabled": "On",
+      "paused": "Paused"
+    },
+    "effect": {
+      "allow": "Allow",
+      "deny": "Block"
+    },
+    "action": {
+      "reply": "Reply to a message",
+      "send_new": "Send a new message",
+      "calendar_accept": "Accept an invitation",
+      "calendar_create": "Create an event",
+      "calendar_update": "Change an event"
+    },
+    "bodyMode": {
+      "template": "Fixed text",
+      "free": "Any text"
+    },
+    "limits": "{{hour}} per hour, {{day}} per day",
+    "pause": "Pause",
+    "resume": "Resume",
+    "everyone": "any recipient",
+    "confirmDelete": {
+      "title": "Delete this rule?",
+      "description": "Agents will need your approval again for what it allowed."
+    },
+    "editor": {
+      "title": "Add rule",
+      "account": "Account",
+      "action": "What",
+      "effect": "Effect",
+      "addresses": "Exact addresses (one per line)",
+      "domains": "Exact domains (one per line)",
+      "noWildcards": "Wildcards and public mail domains such as gmail.com are not accepted.",
+      "bodyMode": "Text",
+      "template": "The only text this rule may send",
+      "freeWarning": "I understand that free text can reveal information to the person being answered.",
+      "allowLinks": "Allow links in the text",
+      "attendeeDomains": "Allowed attendee domains (one per line)",
+      "workingHours": "Working hours (HH:MM-HH:MM)",
+      "maxMinutes": "Longest event (minutes)",
+      "perHour": "Most per hour",
+      "perDay": "Most per day",
+      "dryRun": "Try it",
+      "dryRunHint": "Check what this rule would do with an existing draft, without saving it.",
+      "draftId": "Draft id",
+      "runDry": "Check",
+      "save": "Save rule",
+      "errors": {
+        "account": "Choose an account.",
+        "template": "Write the fixed text.",
+        "ack": "Confirm that you understand the risk of free text.",
+        "recipients": "Add at least one address or domain.",
+        "limits": "Limits must be whole numbers of at least 1."
+      }
+    }
+  },
+  "proposals": {
+    "intro": "Rules suggested by an agent or created from an approved message. Nothing here has any effect until you approve it.",
+    "error": "Could not load the proposals",
+    "empty": {
+      "title": "No proposals waiting",
+      "description": "When you approve a message and choose to propose a rule, it appears here."
+    },
+    "toast": {
+      "approved": "Rule created",
+      "rejected": "Proposal rejected",
+      "failed": "Could not update the proposal"
+    },
+    "source": {
+      "agent": "Suggested by an agent",
+      "user": "From an approval"
+    },
+    "approve": "Create rule",
+    "reject": "Reject"
+  },
+  "audit": {
+    "verdict": "Result",
+    "phase": "Step",
+    "any": "Any",
+    "phases": {
+      "gate": "Decision",
+      "executed": "Done",
+      "bounce": "Returned mail"
+    },
+    "export": "Export CSV",
+    "approvedByPerson": "Approved by you",
+    "error": "Could not load the audit trail",
+    "empty": {
+      "title": "Nothing recorded yet",
+      "description": "Every decision about sending or changing something is listed here."
+    }
+  },
+  "oauth": {
+    "client": {
+      "title": "Your OAuth client",
+      "configured": "Configured",
+      "replace": "Replace",
+      "id": "Client id",
+      "secret": "Client secret",
+      "save": "Save client"
+    },
+    "help": {
+      "google": "Create an OAuth client of type Web application in the Google Cloud Console, enable the Gmail and Calendar APIs, and add your own account as a test user.",
+      "microsoft": "Register an app in Microsoft Entra, add the redirect address below, and use its application (client) id.",
+      "generic": "Create an OAuth client with this provider and add the redirect address below."
+    },
+    "redirectHint": "Redirect address to register:",
+    "startFailed": "Could not start the sign-in",
+    "connect": "Sign in",
+    "reconnect": "Sign in again",
+    "result": {
+      "title": "Sign-in did not finish",
+      "ok": "Account connected",
+      "denied": "The sign-in was cancelled or refused.",
+      "state": "The sign-in request expired or did not start from this browser. Try again.",
+      "no_refresh_token": "The provider did not allow lasting access. Remove this app from your account's security page, then sign in again.",
+      "failed": "The sign-in failed. Check the client id and secret, then try again."
+    }
+  },
+  "reconnect": {
+    "generic": "This account needs to sign in again.",
+    "newPassword": "New password",
+    "save": "Save",
+    "saved": "Password saved",
+    "failed": "Could not save the password"
+  },
+  "approval": {
+    "previewLabel": "What will be sent",
+    "loading": "Loading the message...",
+    "loadFailed": "The message to be sent could not be loaded. Do not approve it.",
+    "to": "To",
+    "cc": "Cc",
+    "bcc": "Bcc",
+    "subject": "Subject",
+    "notInThread": "A recipient has not written in this conversation.",
+    "notAReply": "This is not a verified reply to an existing message.",
+    "approveAndPropose": "Approve and propose a rule",
+    "showMessage": "Show message",
+    "hideMessage": "Hide message",
+    "ruleProposed": "Rule proposed",
+    "ruleProposedHint": "It is waiting for your review in Mail and Calendar. It is not active yet.",
+    "ruleProposeFailed": "The message was approved, but the rule could not be proposed"
   }
 }

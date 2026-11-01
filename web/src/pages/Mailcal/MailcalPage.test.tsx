@@ -24,6 +24,9 @@ vi.mock('@/lib/api/mailcal', async () => {
       testAccount: (...a: unknown[]) => testAccount(...a),
       deleteAccount: (...a: unknown[]) => deleteAccount(...a),
       updateAccount: vi.fn(),
+      getSettings: () => Promise.resolve({ enabled: false }),
+      listProposals: () => Promise.resolve({ proposals: [], count: 0 }),
+      putPassword: vi.fn(),
     },
   };
 });

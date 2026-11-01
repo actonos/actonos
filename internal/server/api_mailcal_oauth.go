@@ -57,7 +57,8 @@ func (s *Server) handleMailcalOAuthCallback(w http.ResponseWriter, r *http.Reque
 		http.SetCookie(w, &http.Cookie{Name: mailcalOAuthCookie, Value: "", Path: "/api/mailcal/oauth", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode})
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		http.Redirect(w, r, "/mailcal?"+url.Values{"oauth": {result}}.Encode(), http.StatusFound)
+		// The SPA routes by URL hash, so the result travels inside it.
+		http.Redirect(w, r, "/#/mailcal?"+url.Values{"oauth": {result}}.Encode(), http.StatusFound)
 	}
 	if flow == nil || r.URL.Query().Get("error") != "" {
 		back("denied")

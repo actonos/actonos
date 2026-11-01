@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { getErrorMessage } from '@/lib/errors';
+import { mailcalApi } from '@/lib/api/mailcal';
+import { MailApprovalPreview, mailDraftIdOf } from '../governance/MailApprovalPreview';
 
 export function ChatApprovalCard({
   approval,
@@ -16,15 +18,18 @@ export function ChatApprovalCard({
 }) {
   const { t } = useTranslation('chat');
   const { t: tOps } = useTranslation('operations');
+  const { t: tMail } = useTranslation('mailcal');
   const { error, info, success } = useToast();
   const [deciding, setDeciding] = useState(false);
+  const [showMail, setShowMail] = useState(false);
+  const draftId = mailDraftIdOf(approval);
   const rootRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     rootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end', inline: 'nearest' });
   }, [approval.id]);
 
-  const decide = async (approved: boolean) => {
+  const decide = async (approved: boolean, proposeRule = false) => {
     setDeciding(true);
     try {
       if (approved) {
@@ -36,6 +41,14 @@ export function ChatApprovalCard({
           })
         );
         window.dispatchEvent(new CustomEvent('actonos:tools-updated'));
+        if (proposeRule && draftId) {
+          try {
+            await mailcalApi.proposeFromDraft(draftId);
+            info(tMail('approval.ruleProposed'), tMail('approval.ruleProposedHint'));
+          } catch (cause) {
+            error(tMail('approval.ruleProposeFailed'), getErrorMessage(cause));
+          }
+        }
       } else {
         await api.rejectAction(approval.id, t('approvalRejectedFeedback'));
         info(tOps('approval.rejected'), approval.tool_name);
@@ -62,6 +75,11 @@ export function ChatApprovalCard({
       aria-label={t('approvalTitle')}
       aria-live="polite"
     >
+      {draftId && showMail && (
+        <div className="mb-2 rounded-2xl border border-onyx/15 bg-canvas p-3">
+          <MailApprovalPreview draftId={draftId} />
+        </div>
+      )}
       <div className="flex items-center gap-2">
         <Badge variant={riskVariant} className="px-2 py-0 text-[10px] shrink-0">
           {approval.risk_level}
@@ -70,6 +88,16 @@ export function ChatApprovalCard({
           {approval.tool_name}
         </p>
         <div className="flex shrink-0 items-center gap-1.5">
+          {draftId && (
+            <>
+              <Button type="button" variant="ghost" size="sm" aria-expanded={showMail} onClick={() => setShowMail((v) => !v)}>
+                {showMail ? tMail('approval.hideMessage') : tMail('approval.showMessage')}
+              </Button>
+              <Button type="button" variant="ghost" size="sm" disabled={deciding} onClick={() => void decide(true, true)}>
+                {tMail('approval.approveAndPropose')}
+              </Button>
+            </>
+          )}
           <Button
             type="button"
             variant="ghost"

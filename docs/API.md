@@ -1338,7 +1338,7 @@ Audit trail (`?account=&verdict=&phase=&limit=`). Holds ids and hashes, never me
 Starts the sign-in for an account whose plugin signs users in through ActonOS. Returns `{auth_url, redirect_uri}` and sets a short-lived `HttpOnly`, `SameSite=Lax` cookie that only the browser which started the flow holds. Register `redirect_uri` as an allowed redirect in the provider's console. `412 OAUTH_CLIENT_MISSING` when no client id is stored.
 
 ### `GET /api/mailcal/oauth/callback`
-**Public** (the browser arrives from another site, so the `SameSite=Strict` session cookie is not sent). Protected by a single-use `state`, PKCE (S256) and the nonce cookie. Always answers `302` to `/mailcal?oauth=ok|denied|state|no_refresh_token|failed`; provider data never appears in the URL.
+**Public** (the browser arrives from another site, so the `SameSite=Strict` session cookie is not sent). Protected by a single-use `state`, PKCE (S256) and the nonce cookie. Always answers `302` to `/#/mailcal?oauth=ok|denied|state|no_refresh_token|failed`; provider data never appears in the URL.
 
 ### `PUT /api/mailcal/accounts/{id}/password`
 Body `{password}`. For accounts that sign in with an app password (CalDAV, IMAP/SMTP). The password goes straight into the vault; the response only says `{configured: true}`, the account record holds just the name of the vault key, and deleting the account deletes the password.

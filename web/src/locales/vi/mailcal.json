@@ -39,7 +39,28 @@
     "labelPlaceholder": "Công việc",
     "email": "Địa chỉ của bạn (tùy chọn)",
     "emailPlaceholder": "me@example.com",
-    "secretsHint": "Mật khẩu và token không bao giờ được lưu ở đây; chúng nằm trong vault."
+    "secretsHint": "Mật khẩu và token không bao giờ được lưu ở đây; chúng nằm trong vault.",
+    "username": "Tên đăng nhập (nếu khác địa chỉ)",
+    "calendarUrl": "Địa chỉ lịch (https)",
+    "imapHost": "Máy chủ IMAP",
+    "imapPort": "Cổng IMAP",
+    "smtpHost": "Máy chủ SMTP",
+    "smtpPort": "Cổng SMTP",
+    "mode": "Bảo mật",
+    "sentMailbox": "Thư mục Đã gửi",
+    "trashMailbox": "Thư mục Thùng rác",
+    "password": "Mật khẩu ứng dụng",
+    "netTcpHint": "Thêm các dòng này vào permissions.net_tcp của plugin bạn cài:",
+    "errors": {
+      "provider": "Hãy chọn nhà cung cấp.",
+      "password": "Hãy nhập mật khẩu ứng dụng.",
+      "calendarUrl": "Địa chỉ lịch phải bắt đầu bằng https://.",
+      "imapRequired": "Cần tên máy chủ và địa chỉ của bạn.",
+      "port": "Cổng phải là số từ 1 đến 65535."
+    },
+    "calendarUrlPlaceholder": "https://caldav.example.com/dav/calendars/me/work/",
+    "tls": "TLS",
+    "starttls": "STARTTLS"
   },
   "toast": {
     "created": "Đã thêm tài khoản",
@@ -52,5 +73,182 @@
   "confirmDelete": {
     "title": "Xóa tài khoản này?",
     "description": "Xóa {{label}} cùng các bản nháp. Dữ liệu thư và lịch vẫn ở phía nhà cung cấp."
+  },
+  "tabs": {
+    "label": "Các mục Thư và Lịch",
+    "accounts": "Tài khoản",
+    "rules": "Luật tự gửi",
+    "proposals": "Đề xuất luật",
+    "audit": "Nhật ký"
+  },
+  "switch": {
+    "label": "Cho phép agent gửi và thay đổi",
+    "on": "Bật",
+    "off": "Tắt",
+    "onNote": "Agent chỉ gửi thư hoặc đổi lịch khi có luật bạn đã duyệt cho phép, hoặc khi bạn duyệt từng thao tác.",
+    "offWarning": "Đang tắt: mọi thao tác gửi, xoá và đổi lịch đều bị từ chối. Đọc và soạn nháp vẫn dùng được.",
+    "failed": "Không đổi được cài đặt"
+  },
+  "verdict": {
+    "allow": "Luật cho phép",
+    "needs_approval": "Cần bạn duyệt",
+    "deny": "Luật chặn"
+  },
+  "rules": {
+    "intro": "Một luật cho phép agent gửi hoặc thay đổi mà không cần hỏi, chỉ đúng với điều luật mô tả. Mọi thứ khác vẫn cần bạn duyệt.",
+    "add": "Thêm luật",
+    "error": "Không tải được các luật",
+    "empty": {
+      "title": "Chưa có luật nào",
+      "description": "Khi chưa có luật, mọi thao tác gửi đều chờ bạn duyệt. Đó là mặc định an toàn."
+    },
+    "toast": {
+      "created": "Đã thêm luật",
+      "failed": "Không cập nhật được luật"
+    },
+    "state": {
+      "enabled": "Bật",
+      "paused": "Tạm dừng"
+    },
+    "effect": {
+      "allow": "Cho phép",
+      "deny": "Chặn"
+    },
+    "action": {
+      "reply": "Trả lời một thư",
+      "send_new": "Gửi thư mới",
+      "calendar_accept": "Chấp nhận lời mời",
+      "calendar_create": "Tạo sự kiện",
+      "calendar_update": "Sửa sự kiện"
+    },
+    "bodyMode": {
+      "template": "Văn bản cố định",
+      "free": "Văn bản tuỳ ý"
+    },
+    "limits": "{{hour}} mỗi giờ, {{day}} mỗi ngày",
+    "pause": "Tạm dừng",
+    "resume": "Tiếp tục",
+    "everyone": "mọi người nhận",
+    "confirmDelete": {
+      "title": "Xoá luật này?",
+      "description": "Agent sẽ cần bạn duyệt lại những việc luật này từng cho phép."
+    },
+    "editor": {
+      "title": "Thêm luật",
+      "account": "Tài khoản",
+      "action": "Việc gì",
+      "effect": "Hiệu lực",
+      "addresses": "Địa chỉ chính xác (mỗi dòng một địa chỉ)",
+      "domains": "Tên miền chính xác (mỗi dòng một miền)",
+      "noWildcards": "Không chấp nhận ký tự đại diện hay miền thư công cộng như gmail.com.",
+      "bodyMode": "Nội dung",
+      "template": "Văn bản duy nhất luật này được gửi",
+      "freeWarning": "Tôi hiểu văn bản tuỳ ý có thể làm lộ thông tin cho người được trả lời.",
+      "allowLinks": "Cho phép liên kết trong văn bản",
+      "attendeeDomains": "Miền người tham dự được phép (mỗi dòng một miền)",
+      "workingHours": "Giờ làm việc (HH:MM-HH:MM)",
+      "maxMinutes": "Sự kiện dài nhất (phút)",
+      "perHour": "Tối đa mỗi giờ",
+      "perDay": "Tối đa mỗi ngày",
+      "dryRun": "Chạy thử",
+      "dryRunHint": "Xem luật này sẽ xử lý một bản nháp có sẵn thế nào, mà không lưu luật.",
+      "draftId": "Mã bản nháp",
+      "runDry": "Kiểm tra",
+      "save": "Lưu luật",
+      "errors": {
+        "account": "Hãy chọn tài khoản.",
+        "template": "Hãy nhập văn bản cố định.",
+        "ack": "Hãy xác nhận bạn hiểu rủi ro của văn bản tuỳ ý.",
+        "recipients": "Hãy thêm ít nhất một địa chỉ hoặc tên miền.",
+        "limits": "Hạn mức phải là số nguyên từ 1 trở lên."
+      }
+    }
+  },
+  "proposals": {
+    "intro": "Các luật do agent gợi ý hoặc tạo từ một thư bạn đã duyệt. Chưa có gì ở đây có hiệu lực cho tới khi bạn duyệt.",
+    "error": "Không tải được các đề xuất",
+    "empty": {
+      "title": "Không có đề xuất nào đang chờ",
+      "description": "Khi bạn duyệt một thư và chọn đề xuất luật, nó sẽ hiện ở đây."
+    },
+    "toast": {
+      "approved": "Đã tạo luật",
+      "rejected": "Đã từ chối đề xuất",
+      "failed": "Không cập nhật được đề xuất"
+    },
+    "source": {
+      "agent": "Do agent gợi ý",
+      "user": "Từ một lần duyệt"
+    },
+    "approve": "Tạo luật",
+    "reject": "Từ chối"
+  },
+  "audit": {
+    "verdict": "Kết quả",
+    "phase": "Bước",
+    "any": "Tất cả",
+    "phases": {
+      "gate": "Quyết định",
+      "executed": "Đã thực hiện",
+      "bounce": "Thư trả về"
+    },
+    "export": "Xuất CSV",
+    "approvedByPerson": "Bạn đã duyệt",
+    "error": "Không tải được nhật ký",
+    "empty": {
+      "title": "Chưa ghi nhận gì",
+      "description": "Mọi quyết định về việc gửi hoặc thay đổi đều được liệt kê ở đây."
+    }
+  },
+  "oauth": {
+    "client": {
+      "title": "OAuth client của bạn",
+      "configured": "Đã cấu hình",
+      "replace": "Thay",
+      "id": "Client id",
+      "secret": "Client secret",
+      "save": "Lưu client"
+    },
+    "help": {
+      "google": "Tạo OAuth client loại Web application trong Google Cloud Console, bật Gmail API và Calendar API, và thêm chính tài khoản của bạn làm người dùng thử.",
+      "microsoft": "Đăng ký một ứng dụng trong Microsoft Entra, thêm địa chỉ chuyển hướng bên dưới và dùng application (client) id của nó.",
+      "generic": "Tạo một OAuth client ở nhà cung cấp này và thêm địa chỉ chuyển hướng bên dưới."
+    },
+    "redirectHint": "Địa chỉ chuyển hướng cần đăng ký:",
+    "startFailed": "Không bắt đầu được đăng nhập",
+    "connect": "Đăng nhập",
+    "reconnect": "Đăng nhập lại",
+    "result": {
+      "title": "Đăng nhập chưa hoàn tất",
+      "ok": "Đã kết nối tài khoản",
+      "denied": "Đăng nhập bị huỷ hoặc bị từ chối.",
+      "state": "Yêu cầu đăng nhập đã hết hạn hoặc không bắt đầu từ trình duyệt này. Hãy thử lại.",
+      "no_refresh_token": "Nhà cung cấp không cấp quyền truy cập lâu dài. Hãy gỡ ứng dụng này khỏi trang bảo mật tài khoản của bạn rồi đăng nhập lại.",
+      "failed": "Đăng nhập thất bại. Kiểm tra client id và secret rồi thử lại."
+    }
+  },
+  "reconnect": {
+    "generic": "Tài khoản này cần đăng nhập lại.",
+    "newPassword": "Mật khẩu mới",
+    "save": "Lưu",
+    "saved": "Đã lưu mật khẩu",
+    "failed": "Không lưu được mật khẩu"
+  },
+  "approval": {
+    "previewLabel": "Nội dung sẽ được gửi",
+    "loading": "Đang tải thư...",
+    "loadFailed": "Không tải được thư sắp gửi. Đừng duyệt.",
+    "to": "Tới",
+    "cc": "Cc",
+    "bcc": "Bcc",
+    "subject": "Tiêu đề",
+    "notInThread": "Có người nhận chưa từng viết trong cuộc trò chuyện này.",
+    "notAReply": "Đây không phải là thư trả lời đã được xác minh cho một thư có sẵn.",
+    "approveAndPropose": "Duyệt và đề xuất luật",
+    "showMessage": "Xem thư",
+    "hideMessage": "Ẩn thư",
+    "ruleProposed": "Đã đề xuất luật",
+    "ruleProposedHint": "Luật đang chờ bạn xem lại trong Thư và Lịch. Chưa có hiệu lực.",
+    "ruleProposeFailed": "Thư đã được duyệt nhưng không đề xuất được luật"
   }
 }

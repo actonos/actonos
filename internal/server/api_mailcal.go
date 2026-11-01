@@ -103,6 +103,12 @@ func (s *Server) handleMailcalCreateAccount(w http.ResponseWriter, r *http.Reque
 		s.respondMailcalError(w, err)
 		return
 	}
+	if acct.Auth.Type == "oauth" {
+		// Until the person signs in there is no token; say so instead of looking connected.
+		if err := svc.Accounts().SetStatus(r.Context(), acct.ID, mailcal.StatusAuthExpired, "waiting for sign-in"); err == nil {
+			acct.Status, acct.StatusDetail = mailcal.StatusAuthExpired, "waiting for sign-in"
+		}
+	}
 	if err := svc.SyncTools(r.Context()); err != nil {
 		s.respondMailcalError(w, err)
 		return

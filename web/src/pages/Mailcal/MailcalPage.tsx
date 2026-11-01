@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Mail, Plus, RefreshCw, Trash2, Zap } from 'lucide-react';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { AsyncState } from '@/components/ui/AsyncState';
 import { Badge, type BadgeProps } from '@/components/ui/Badge';
@@ -17,6 +18,14 @@ import {
   type MailcalStatus,
 } from '@/lib/api/mailcal';
 import { AccountModal } from './AccountModal';
+import { AuditTab } from './AuditTab';
+import { MasterSwitch } from './MasterSwitch';
+import { ProposalsTab } from './ProposalsTab';
+import { ReconnectBanner } from './ReconnectBanner';
+import { RulesTab } from './RulesTab';
+
+type Tab = 'accounts' | 'rules' | 'proposals' | 'audit';
+const OAUTH_RESULTS = ['ok', 'denied', 'state', 'no_refresh_token', 'failed'];
 
 const STATUS_VARIANT: Record<MailcalStatus, NonNullable<BadgeProps['variant']>> = {
   ok: 'success',
@@ -36,6 +45,8 @@ export function MailcalPage() {
   const [saving, setSaving] = useState(false);
   const [testingId, setTestingId] = useState('');
   const [deleting, setDeleting] = useState<MailcalAccount | null>(null);
+  const [tab, setTab] = useState<Tab>('accounts');
+  const [pending, setPending] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -55,10 +66,32 @@ export function MailcalPage() {
     void load();
   }, [load]);
 
-  const handleCreate = async (input: MailcalAccountInput) => {
+  useEffect(() => {
+    mailcalApi
+      .listProposals('pending')
+      .then((r) => setPending(r.count))
+      .catch(() => setPending(0));
+  }, [tab]);
+
+  // The provider sign-in returns here with ?oauth=<result> inside the URL hash.
+  useEffect(() => {
+    const hash = window.location.hash;
+    const query = hash.split('?')[1];
+    if (!query) return;
+    const result = new URLSearchParams(query).get('oauth');
+    if (!result) return;
+    const code = OAUTH_RESULTS.includes(result) ? result : 'failed';
+    if (code === 'ok') success(t('oauth.result.ok'));
+    else toastError(t('oauth.result.title'), t(`oauth.result.${code}`));
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/mailcal`);
+    void load();
+  }, []);
+
+  const handleCreate = async (input: MailcalAccountInput, password?: string) => {
     setSaving(true);
     try {
-      await mailcalApi.createAccount(input);
+      const created = await mailcalApi.createAccount(input);
+      if (password) await mailcalApi.putPassword(created.id, password);
       setModalOpen(false);
       success(t('toast.created'));
       await load();
@@ -113,6 +146,26 @@ export function MailcalPage() {
         }
       />
 
+      <MasterSwitch />
+
+      <SegmentedControl<Tab>
+        label={t('tabs.label')}
+        value={tab}
+        onChange={setTab}
+        options={[
+          { value: 'accounts', label: t('tabs.accounts') },
+          { value: 'rules', label: t('tabs.rules') },
+          { value: 'proposals', label: pending > 0 ? `${t('tabs.proposals')} (${pending})` : t('tabs.proposals') },
+          { value: 'audit', label: t('tabs.audit') },
+        ]}
+        className="my-3"
+      />
+
+      {tab === 'rules' && <RulesTab accounts={accounts} />}
+      {tab === 'proposals' && <ProposalsTab onChanged={() => setTab('proposals')} />}
+      {tab === 'audit' && <AuditTab />}
+
+      {tab === 'accounts' && (
       <AsyncState
         loading={loading}
         error={loadError}
@@ -138,7 +191,7 @@ export function MailcalPage() {
                     <p className="mt-1 truncate text-body-sm text-slate">
                       {account.email || t('noEmail')} · {account.plugin_id}
                     </p>
-                    {account.status_detail && <p className="mt-1 text-caption text-status-warning">{account.status_detail}</p>}
+                    {account.status_detail && account.status !== 'auth_expired' && <p className="mt-1 text-caption text-status-warning">{account.status_detail}</p>}
                   </div>
                 </div>
                 <div className="flex shrink-0 gap-2">
@@ -156,10 +209,12 @@ export function MailcalPage() {
                   </Button>
                 </div>
               </Card>
+              <ReconnectBanner account={account} onDone={() => void load()} />
             </li>
           ))}
         </ul>
       </AsyncState>
+      )}
 
       <AccountModal isOpen={modalOpen} providers={providers} saving={saving} onClose={() => setModalOpen(false)} onSubmit={handleCreate} />
       <ConfirmModal

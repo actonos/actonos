@@ -108,5 +108,6 @@
   "mobile": {
     "menu": "Menu"
   },
-  "mobileNavigation": "Mobile Navigation"
+  "mobileNavigation": "Mobile Navigation",
+  "mailAttention": "{{count}} mail items need your attention"
 }

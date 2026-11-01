@@ -26,6 +26,8 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { api, type CronJobItem } from '@/lib/api';
+import { mailcalApi } from '@/lib/api/mailcal';
+import { MailTriagePreset } from './MailTriagePreset';
 import { useInstalledChannels } from '@/lib/installed-channels';
 import type { AgentManifest, CronExecutionRecord } from '@/lib/types';
 
@@ -43,7 +45,15 @@ export function AutomationsPage() {
     setHashParam('view', tab === 'jobs' ? undefined : tab);
   };
   const [loading, setLoading] = useState(true);
+  const [hasMailAccount, setHasMailAccount] = useState(false);
   const [runningJobId, setRunningJobId] = useState<string | null>(null);
+
+  useEffect(() => {
+    mailcalApi
+      .listAccounts()
+      .then((r) => setHasMailAccount(r.accounts.some((a) => a.kind !== 'calendar')))
+      .catch(() => setHasMailAccount(false));
+  }, []);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -205,6 +215,8 @@ export function AutomationsPage() {
             </Button>
           </>
         )} />
+
+        <MailTriagePreset hasAccount={hasMailAccount} onCreated={loadData} />
 
         {/* Sub-Tabs: Scheduled Tasks vs Execution History */}
         <div className="flex gap-2 mb-6 border-b border-onyx/10 pb-3">

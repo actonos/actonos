@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A new `acton_tcp` host call lets a plugin open TLS connections to the `host:port` pairs its manifest lists under `permissions.net_tcp`. There is no plaintext mode, the host runs the plaintext phase of SMTP and IMAP STARTTLS itself (refusing servers that hide STARTTLS or inject data before the handshake), resolves names once and refuses local, private and metadata addresses, and enforces connection, time and traffic limits.
   - IMAP and SMTP provider plugin (`make plugin-imap-smtp`). Sending is at most once: a copy flagged `\Draft` is parked in Sent before submission and cleared only after the server accepted the message, so an uncertain attempt is reported instead of risking a duplicate.
 - **Changed**: the default HTTP client for plugins now connects only to the address it vetted (closing a DNS-rebinding window) and therefore no longer uses `HTTP_PROXY`.
+- **Mail & Calendar screens (`web/src/pages/Mailcal`, `web/src/pages/Automations/MailTriagePreset.tsx`)**:
+  - Master switch (off by default), auto-send rule editor with a "try it on a draft" check, rule proposals (agent-suggested ones are labelled and do nothing until approved), audit trail with CSV export that neutralizes spreadsheet formulas and carries no message text, and a badge in the sidebar for items waiting for you.
+  - Sign-in forms: OAuth client panel (the secret is write-only), a Sign in button and a result message after returning from the provider, a banner on accounts whose sign-in expired, and app-password forms for CalDAV and IMAP/SMTP that show which `net_tcp` lines to add to the plugin.
+  - The approval card for a mail send shows exactly what will be sent (plain text only), warns when a recipient never wrote in the conversation, and offers "Approve and propose a rule", which only creates a proposal.
+  - An Automations preset that schedules a limited mail-triage agent: read and draft only unless you allow acting under your rules, and never exec, cron or file tools.
+- **Fixed**: the OAuth callback redirected to a path the hash-routed app does not read; it now returns to `/#/mailcal`. A newly created OAuth account is shown as waiting for sign-in instead of connected.
 - **Plugin runtime**: guest calls that never return are now interrupted when their context ends.
 
 

@@ -17,7 +17,7 @@ func TestMailcalOAuthCallbackFailsClosedAndLeaksNothing(t *testing.T) {
 		rec := httptest.NewRecorder()
 		srv.Router().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
 		loc := rec.Header().Get("Location")
-		if rec.Code != http.StatusFound || !strings.HasPrefix(loc, "/mailcal?oauth=") {
+		if rec.Code != http.StatusFound || !strings.HasPrefix(loc, "/#/mailcal?oauth=") {
 			t.Fatalf("%s: code=%d location=%q", target, rec.Code, loc)
 		}
 		if strings.Contains(loc, "secret-details") || strings.Contains(loc, "abc") {
@@ -38,5 +38,16 @@ func TestMailcalOAuthStartNeedsAFlow(t *testing.T) {
 	status, env := call(t, srv, http.MethodGet, "/api/mailcal/oauth/clients/google", "")
 	if status != http.StatusOK || dataOf(t, env)["configured"] != false {
 		t.Fatalf("client status: %d %v", status, env)
+	}
+}
+
+func TestAnOAuthAccountIsNotConnectedUntilTheSignInFinishes(t *testing.T) {
+	srv := newTestServer(t)
+	status, env := call(t, srv, http.MethodPost, "/api/mailcal/accounts", `{"label":"G","plugin_id":"refmem","kind":"both","auth":{"type":"oauth"}}`)
+	if status != http.StatusCreated {
+		t.Fatalf("create: %d %v", status, env)
+	}
+	if got := dataOf(t, env)["status"]; got != "auth_expired" {
+		t.Fatalf("a fresh OAuth account must not look connected, got %v", got)
 	}
 }

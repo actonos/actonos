@@ -162,7 +162,7 @@ Expected: sáu test PASS (`TestSignInStoresTheTokenUnderThePerAccountKey`, `...R
 | Route | Xác thực | Ý nghĩa |
 |:---|:-:|:---|
 | `POST /api/mailcal/accounts/{id}/oauth/start` | có | trả `{auth_url, redirect_uri}` và đặt cookie `acton_mailcal_oauth` (HttpOnly, `SameSite=Lax`, `Path=/api/mailcal/oauth`, 10 phút, `Secure` khi HTTPS) |
-| `GET /api/mailcal/oauth/callback` | **không** | hoàn tất; luôn trả 302 về `/mailcal?oauth=ok|denied|state|no_refresh_token|failed`, xoá cookie, `Cache-Control: no-store`, `Referrer-Policy: no-referrer`; **không** đưa dữ liệu nhà cung cấp vào URL |
+| `GET /api/mailcal/oauth/callback` | **không** | hoàn tất; luôn trả 302 về `/#/mailcal?oauth=ok|denied|state|no_refresh_token|failed`, xoá cookie, `Cache-Control: no-store`, `Referrer-Policy: no-referrer`; **không** đưa dữ liệu nhà cung cấp vào URL |
 | `GET|PUT /api/mailcal/oauth/clients/{provider}` | có | PUT `{client_id, client_secret}`; GET chỉ `{configured}` |
 
 - [ ] **Step 1-2: Test và handler**

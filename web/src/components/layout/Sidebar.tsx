@@ -30,6 +30,7 @@ import {
   Mail,
 } from 'lucide-react';
 import { useTheme } from '../providers/ThemeProvider';
+import { useMailAttention } from '@/lib/useMailAttention';
 
 export type NavTab =
   | 'dashboard'
@@ -82,6 +83,7 @@ export function Sidebar({
   const { t, i18n } = useTranslation('nav');
   const { snapshot } = useRealtime();
   const unreadCount = snapshot?.notifications_unread ?? 0;
+  const mailAttention = useMailAttention();
   const [showLangOverlay, setShowLangOverlay] = useState(false);
   const [langSearch, setLangSearch] = useState('');
   const { resolvedTheme } = useTheme();
@@ -228,6 +230,9 @@ export function Sidebar({
                             }`}
                         >
                           <Icon className="w-4 h-4" />
+                          {collapsed && !showLangOverlay && item.id === 'mailcal' && mailAttention > 0 && (
+                            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-soft-meadow" />
+                          )}
                           {collapsed && !showLangOverlay && item.id === 'notifications' && unreadCount > 0 && (
                             <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-soft-meadow" />
                           )}
@@ -236,6 +241,12 @@ export function Sidebar({
                         {(!collapsed || showLangOverlay) && (
                           <span className="text-body-sm font-medium leading-snug truncate flex-1 text-left">
                             {item.label}
+                          </span>
+                        )}
+
+                        {(!collapsed || showLangOverlay) && item.id === 'mailcal' && mailAttention > 0 && (
+                          <span aria-label={t('mailAttention', { count: mailAttention })} className="px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-mono font-bold">
+                            {mailAttention > 99 ? '99+' : mailAttention}
                           </span>
                         )}
 
