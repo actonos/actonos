@@ -40,6 +40,7 @@ type TokenRefreshDaemon struct {
 	db            *memory.DB
 	bus           *bus.EventBus
 	configs       map[string]OAuthProviderConfig
+	refreshLocks  sync.Map // provider -> *sync.Mutex
 	refreshBuffer time.Duration
 	interval      time.Duration
 	stopCh        chan struct{}
@@ -264,4 +265,47 @@ func (d *TokenRefreshDaemon) Start(ctx context.Context) {
 // Stop terminates the background refresh daemon loop.
 func (d *TokenRefreshDaemon) Stop() {
 	close(d.stopCh)
+}
+
+// DeleteToken removes the stored token for provider (for example when an account is deleted).
+func (d *TokenRefreshDaemon) DeleteToken(ctx context.Context, provider string) error {
+	_, err := d.db.SQLDB().ExecContext(ctx, `DELETE FROM oauth_tokens WHERE provider = ?`, provider)
+	return err
+}
+
+// RefreshNow refreshes the stored token for provider immediately and returns the new data.
+// Calls for the same provider are serialized, so two callers never spend the same
+// (possibly rotating) refresh token twice; the second caller reuses the first one's result
+// when the token is no longer near expiry.
+func (d *TokenRefreshDaemon) RefreshNow(ctx context.Context, provider string) (*StoredTokenData, error) {
+	lock, _ := d.refreshLocks.LoadOrStore(provider, &sync.Mutex{})
+	mu := lock.(*sync.Mutex)
+	mu.Lock()
+	defer mu.Unlock()
+
+	current, err := d.GetToken(ctx, provider)
+	if err != nil {
+		return nil, err
+	}
+	d.mu.RLock()
+	buffer := d.refreshBuffer
+	cfg, hasCfg := d.configs[provider]
+	d.mu.RUnlock()
+	if time.Until(current.ExpiresAt) > buffer {
+		return current, nil // someone else already refreshed it
+	}
+	if current.RefreshToken == "" {
+		return nil, fmt.Errorf("%w: no refresh token stored for %s", ErrTokenRefresh, provider)
+	}
+	if !hasCfg {
+		return nil, fmt.Errorf("%w: no provider config registered for %s", ErrTokenRefresh, provider)
+	}
+	fresh, err := d.oauthEngine.RefreshToken(ctx, cfg, current.RefreshToken)
+	if err != nil {
+		return nil, err
+	}
+	if err := d.SaveToken(ctx, provider, fresh); err != nil {
+		return nil, err
+	}
+	return d.GetToken(ctx, provider)
 }

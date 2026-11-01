@@ -229,3 +229,12 @@ func (e *OAuthEngine) RefreshToken(
 
 	return &tokenResp, nil
 }
+
+// NewOAuthEngineWithClient is NewOAuthEngine with a caller-supplied HTTP client (tests, proxies).
+func NewOAuthEngineWithClient(stateStore *StateStore, client *http.Client) *OAuthEngine {
+	e := NewOAuthEngine(stateStore)
+	if client != nil {
+		e.httpClient = client
+	}
+	return e
+}

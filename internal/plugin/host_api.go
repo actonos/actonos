@@ -60,6 +60,7 @@ type HostContext struct {
 	Gate         *SecurityGate
 	KV           KVStore
 	Secrets      SecretProvider
+	Tokens       TokenBroker
 	EventBus     *bus.EventBus
 	Workspace    *workspace.Store
 	HTTPClient   *http.Client
@@ -339,7 +340,16 @@ func RegisterHostModule(ctx context.Context, r wazero.Runtime) error {
 		return fmt.Errorf("instantiating acton_workspace: %w", err)
 	}
 
-	// 8. acton_host (legacy combined host module)
+	// 8. acton_oauth (short-lived access tokens held by the core; refresh tokens never cross)
+	if _, err := r.NewHostModuleBuilder("acton_oauth").
+		NewFunctionBuilder().
+		WithFunc(oauthGetToken).
+		Export("get_token").
+		Instantiate(ctx); err != nil {
+		return fmt.Errorf("instantiating acton_oauth: %w", err)
+	}
+
+	// 9. acton_host (legacy combined host module)
 	_, err := r.NewHostModuleBuilder("acton_host").
 		NewFunctionBuilder().
 		WithFunc(hostHTTPRequest).

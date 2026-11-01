@@ -18,7 +18,20 @@ var (
 	ErrStorageDisabled      = errors.New("persistent storage is not enabled for this plugin")
 	ErrWorkspaceDisabled    = errors.New("workspace access is not enabled for this plugin")
 	ErrBusEventUnauthorized = errors.New("bus event emission not authorized for topic")
+	ErrOAuthUnauthorized    = errors.New("oauth provider not authorized in plugin manifest")
 )
+
+// CheckOAuthAccess verifies the manifest lists provider under permissions.oauth.
+func (g *SecurityGate) CheckOAuthAccess(provider string) error {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	for _, allowed := range g.manifest.Permissions.OAuth {
+		if provider != "" && allowed == provider {
+			return nil
+		}
+	}
+	return fmt.Errorf("%w: provider %q is not listed in permissions.oauth", ErrOAuthUnauthorized, provider)
+}
 
 // SecurityGate enforces sandboxing invariants and capability permissions for a plugin.
 type SecurityGate struct {

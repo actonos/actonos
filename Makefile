@@ -23,7 +23,7 @@
 #   make help          Show this help message
 # ==============================================================================
 
-.PHONY: all deps dev lint test test-unit test-race test-integ build-web build build-embedding dist model-embedding docker docker-multiarch docker-run iso iso-arm64 \
+.PHONY: plugin-gmail all deps dev lint test test-unit test-race test-integ build-web build build-embedding dist model-embedding docker docker-multiarch docker-run iso iso-arm64 \
         clean version bump-patch bump-minor bump-major release help
 
 # ------------------------------------------------------------------------------
@@ -120,6 +120,13 @@ build-only:
 	@echo "==> Building $(BINARY) (Go only, no web rebuild)..."
 	@mkdir -p $(BUILD_DIR)
 	$(GO) build $(GOFLAGS) -ldflags '$(LDFLAGS)' -o $(BUILD_DIR)/$(BINARY) ./cmd/actond/
+
+# Mail & calendar provider plugins (WebAssembly). Output: $(BUILD_DIR)/plugins/<id>/{plugin.wasm,manifest.json}
+plugin-gmail:
+	@echo "==> Building the Gmail and Google Calendar plugin..."
+	@mkdir -p $(BUILD_DIR)/plugins/mailcal-gmail
+	GOOS=wasip1 GOARCH=wasm CGO_ENABLED=0 $(GO) build -buildmode=c-shared -o $(BUILD_DIR)/plugins/mailcal-gmail/plugin.wasm ./internal/mailcal/plugins/gmail/wasm
+	cp internal/mailcal/plugins/gmail/manifest.json $(BUILD_DIR)/plugins/mailcal-gmail/manifest.json
 
 model-embedding:
 	@echo "==> Downloading multilingual-e5-small ONNX artifacts..."
@@ -238,6 +245,7 @@ help:
 	@echo "  make build-only    Build Go binary without rebuilding web"
 	@echo "  make model-embedding Download pinned multilingual-e5-small ONNX files"
 	@echo "  make build-embedding Build the CGO ONNX helper"
+	@echo "  make plugin-gmail  Build the Gmail and Google Calendar plugin"
 	@echo "  make docker        Build Docker image"
 	@echo "  make iso           Build bare-metal installation ISO"
 	@echo "  make version       Print current version"

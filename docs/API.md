@@ -1334,6 +1334,16 @@ Rule proposals (`?status=pending`). Agents can only create proposals (`native_ma
 ### `GET /api/mailcal/decisions`
 Audit trail (`?account=&verdict=&phase=&limit=`). Holds ids and hashes, never message text.
 
+### `POST /api/mailcal/accounts/{id}/oauth/start`
+Starts the sign-in for an account whose plugin signs users in through ActonOS. Returns `{auth_url, redirect_uri}` and sets a short-lived `HttpOnly`, `SameSite=Lax` cookie that only the browser which started the flow holds. Register `redirect_uri` as an allowed redirect in the provider's console. `412 OAUTH_CLIENT_MISSING` when no client id is stored.
+
+### `GET /api/mailcal/oauth/callback`
+**Public** (the browser arrives from another site, so the `SameSite=Strict` session cookie is not sent). Protected by a single-use `state`, PKCE (S256) and the nonce cookie. Always answers `302` to `/mailcal?oauth=ok|denied|state|no_refresh_token|failed`; provider data never appears in the URL.
+
+### `GET /api/mailcal/oauth/clients/{provider}`
+### `PUT /api/mailcal/oauth/clients/{provider}`
+The user's own OAuth client (bring-your-own): `PUT {client_id, client_secret}` stores it in the vault; `GET` returns only `{configured}`.
+
 ---
 
 ## Error Format

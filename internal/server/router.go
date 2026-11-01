@@ -71,6 +71,8 @@ type Server struct {
 	realtime         *realtimeHub
 	proactiveEngine  *agent.ProactiveEngine
 	mailcal          *mailcal.Service
+	mailcalOAuth     *mailcal.OAuthFlow
+	mailcalClients   *mailcal.VaultClients
 	reflectionEngine *agent.ReflectionEngine
 	allowMissingAuth bool
 }
@@ -86,6 +88,8 @@ type Config struct {
 	ProactiveEngine     *agent.ProactiveEngine
 	ReflectionEngine    *agent.ReflectionEngine
 	Mailcal             *mailcal.Service
+	MailcalOAuth        *mailcal.OAuthFlow
+	MailcalClients      *mailcal.VaultClients
 	TokenTracker        *memory.TokenTracker
 	ProfileManager      *agent.UserProfileManager
 	LLMRouter           *llm.ModelCascadeRouter
@@ -206,6 +210,8 @@ func NewServer(cfg Config) *Server {
 		ota:              cfg.OTAEngine,
 		proactiveEngine:  cfg.ProactiveEngine,
 		mailcal:          cfg.Mailcal,
+		mailcalOAuth:     cfg.MailcalOAuth,
+		mailcalClients:   cfg.MailcalClients,
 		reflectionEngine: cfg.ReflectionEngine,
 		allowMissingAuth: cfg.DisableAuthForTest,
 	}
@@ -315,6 +321,9 @@ func (s *Server) setupRoutes() {
 		r.Get("/ready", s.handleReady)
 		r.Get("/models", s.handleGetModelsCatalog)
 		r.Get("/notifications/push/vapid-key", s.handleGetVAPIDPublicKey)
+		// The provider redirects the browser here from another site, so the SameSite=Strict
+		// session cookie is absent. See handleMailcalOAuthCallback for what protects it.
+		r.Get("/mailcal/oauth/callback", s.handleMailcalOAuthCallback)
 
 		// Authentication Endpoints
 		r.Route("/auth", func(r chi.Router) {
@@ -513,7 +522,10 @@ func (s *Server) setupRoutes() {
 					r.Put("/", s.handleMailcalUpdateAccount)
 					r.Delete("/", s.handleMailcalDeleteAccount)
 					r.Post("/test", s.handleMailcalTestAccount)
+					r.Post("/oauth/start", s.handleMailcalOAuthStart)
 				})
+				r.Get("/oauth/clients/{provider}", s.handleMailcalGetOAuthClient)
+				r.Put("/oauth/clients/{provider}", s.handleMailcalPutOAuthClient)
 				r.Get("/drafts/{id}", s.handleMailcalGetDraft)
 				r.Get("/drafts/{id}/evaluation", s.handleMailcalEvaluateDraft)
 				r.Post("/drafts/{id}/rule-proposal", s.handleMailcalProposalFromDraft)

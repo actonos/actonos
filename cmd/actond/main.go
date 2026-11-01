@@ -385,6 +385,18 @@ func main() {
 		mailcalSvc.SetToolRegistry(toolReg)
 	}
 
+	// The OAuth pieces are created here, not later, because plugins copy the token broker when
+	// they load: it must exist before the plugin scan below.
+	stateStore := auth.NewStateStore(10 * time.Minute)
+	oauthEngine := auth.NewOAuthEngine(stateStore)
+	tokenDaemon := auth.NewTokenRefreshDaemon(oauthEngine, vault, db, eventBus)
+	var mailcalOAuth *mailcal.OAuthFlow
+	var mailcalClients *mailcal.VaultClients
+	if mailcalSvc != nil {
+		mailcalClients = &mailcal.VaultClients{Vault: vault}
+		mailcalOAuth = mailcal.NewOAuthFlow(mailcalSvc, oauthEngine, stateStore, tokenDaemon, mailcalClients)
+	}
+
 	var pluginMgr *plugin.Manager
 	if wasmLoader != nil {
 		pluginMgr = plugin.NewManager(wasmLoader, toolReg, channelMgr, eventBus, pluginKV, vault, pluginsDir)
@@ -393,11 +405,15 @@ func main() {
 		}
 		if mailcalSvc != nil {
 			pluginMgr.SetCapabilityHook(mailcalSvc)
+			pluginMgr.SetTokenBroker(mailcal.NewTokenBroker(mailcalSvc.Accounts(), tokenDaemon, mailcalSvc.OAuthSpec))
 		}
 		if err := pluginMgr.ScanAndLoadAll(ctx); err != nil {
 			slog.Warn("failed to load wasm plugins", "error", err)
 		}
 		defer pluginMgr.Close(ctx)
+	}
+	if mailcalOAuth != nil {
+		slog.Info("mailcal: oauth accounts registered with the token refresher", "count", mailcalOAuth.RegisterAll(ctx))
 	}
 	if mailcalSvc != nil {
 		if err := mailcalSvc.SyncTools(ctx); err != nil {
@@ -447,9 +463,6 @@ func main() {
 
 	// 11. Initialize System Auth, OAuth 2.1 PKCE Engine & Token Refresh Daemon
 	sysAuth := auth.NewSystemAuthManager(db.SQLDB())
-	stateStore := auth.NewStateStore(10 * time.Minute)
-	oauthEngine := auth.NewOAuthEngine(stateStore)
-	tokenDaemon := auth.NewTokenRefreshDaemon(oauthEngine, vault, db, eventBus)
 	tokenDaemon.Start(ctx)
 	defer tokenDaemon.Stop()
 	slog.Info("token refresh daemon started (auto-renew 5min before expiry)")
@@ -511,6 +524,8 @@ func main() {
 		ChannelManager:      channelMgr,
 		PluginManager:       pluginMgr,
 		Mailcal:             mailcalSvc,
+		MailcalOAuth:        mailcalOAuth,
+		MailcalClients:      mailcalClients,
 		WorkspaceDir:        workspaceDir,
 		WorkspaceStore:      userWorkspace,
 		SkillsDir:           skillsDir,

@@ -21,6 +21,17 @@ type PluginPermissions struct {
 	Storage     bool     `json:"storage,omitempty"`      // True if plugin is granted scoped persistent KV storage
 	Workspace   bool     `json:"workspace,omitempty"`    // True if plugin is granted access to read/write User Workspace files
 	BusEvents   []string `json:"bus_events,omitempty"`   // Whitelist of event topics plugin can emit to internal/bus
+	OAuth       []string `json:"oauth,omitempty"`        // OAuth providers (for example "google") whose short-lived access tokens the plugin may request
+}
+
+// PluginOAuth tells the core how to sign a user in to the plugin's provider. The core, not
+// the plugin, runs the flow and keeps the refresh token; the user supplies the client id and
+// secret (bring-your-own client).
+type PluginOAuth struct {
+	Provider string   `json:"provider"` // matches an entry in permissions.oauth, e.g. "google"
+	AuthURL  string   `json:"auth_url"`
+	TokenURL string   `json:"token_url"`
+	Scopes   []string `json:"scopes"`
 }
 
 // PluginToolDef describes an individual tool exported by the plugin.
@@ -55,6 +66,7 @@ type PluginManifest struct {
 	License      string               `json:"license,omitempty"`
 	Capabilities []string             `json:"capabilities"`
 	Permissions  PluginPermissions    `json:"permissions"`
+	OAuth        *PluginOAuth         `json:"oauth,omitempty"`
 	Tools        []PluginToolDef      `json:"tools,omitempty"`
 	Channels     []PluginChannelDef   `json:"channels,omitempty"`
 	Connectors   []PluginConnectorDef `json:"connectors,omitempty"`

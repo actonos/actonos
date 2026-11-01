@@ -50,6 +50,7 @@ type Manager struct {
 	plugins     map[string]*loadedPluginState
 	disabledIDs map[string]bool
 	capHook     CapabilityHook
+	tokens      TokenBroker
 }
 
 // NewManager creates a new WASM Plugin Manager.
@@ -251,6 +252,7 @@ func (m *Manager) activatePlugin(ctx context.Context, manifest PluginManifest, w
 		Gate:      gate,
 		KV:        m.kvStore,
 		Secrets:   m.secrets,
+		Tokens:    m.tokens,
 		EventBus:  m.eventBus,
 		Workspace: m.workspace,
 	}

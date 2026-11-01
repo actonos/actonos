@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Mail & Calendar sending, rules and approvals (`internal/tools/gate.go`, `internal/mailcal/policy`)**:
   - A mandatory per-tool gate in `ToolRegistry.Execute`: tools whose effect leaves the device (send and delete mail, create, update, answer and delete events) are always High risk, can never be covered by "don't ask again" or auto-approval, refuse to run without a gate, and cannot be waved through by an agent's approval threshold or a background (cron) run.
   - Auto-send rule engine (deny rules win, exact recipients and domains only, template or free text, no Bcc, attachments, forwards or links, hourly and daily limits, fail closed), rule proposals that only a signed-in person can approve, an audit trail, an idempotency ledger so a draft is sent at most once, and automatic rule pause after several bounces. The master switch is off by default.
+- **Google accounts and the Gmail plugin (`acton_oauth`, `internal/mailcal/plugins/gmail`)**:
+  - Sign-in is run by the core with the user's own OAuth client (PKCE, single-use state, a nonce cookie so a stranger's callback cannot link their mailbox); refresh tokens never leave the core. Plugins that declare `permissions.oauth` can ask a new host call for a short-lived access token for their own accounts only.
+  - A Gmail and Google Calendar provider plugin (`make plugin-gmail`) built on a shared provider kit (typed backend, HTTP, MIME, WebAssembly guest runtime). Sending is idempotent, search cannot be widened with operators, and hidden HTML text is dropped.
+  - Deleting an account deletes its stored token.
 - **Plugin runtime**: guest calls that never return are now interrupted when their context ends.
 
 

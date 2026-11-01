@@ -111,3 +111,75 @@ func Instance(tb testing.TB) *plugin.PluginInstance {
 	tb.Cleanup(func() { _ = inst.Close(ctx) })
 	return inst
 }
+
+var (
+	guestMu    sync.Mutex
+	guestCache = map[string][]byte{}
+)
+
+// BuildGuest compiles any guest package of this module (for example
+// "./internal/mailcal/refplugin/netguest") to WebAssembly once per test process. It skips the
+// test when the Go toolchain is unavailable and fails it when the build is broken.
+func BuildGuest(tb testing.TB, pkg string) []byte {
+	tb.Helper()
+	guestMu.Lock()
+	defer guestMu.Unlock()
+	if b, ok := guestCache[pkg]; ok {
+		return b
+	}
+	goBin, err := exec.LookPath("go")
+	if err != nil {
+		tb.Skipf("no Go toolchain to build %s: %v", pkg, err)
+	}
+	dir, err := os.MkdirTemp("", "guest-*")
+	if err != nil {
+		tb.Fatal(err)
+	}
+	out := filepath.Join(dir, "guest.wasm")
+	cmd := exec.Command(goBin, "build", "-buildmode=c-shared", "-o", out, pkg)
+	cmd.Dir = moduleRoot()
+	cmd.Env = append(os.Environ(), "GOOS=wasip1", "GOARCH=wasm", "CGO_ENABLED=0")
+	if combined, err := cmd.CombinedOutput(); err != nil {
+		tb.Fatalf("building %s: %v\n%s", pkg, err, combined)
+	}
+	b, err := os.ReadFile(out)
+	if err != nil {
+		tb.Fatal(err)
+	}
+	guestCache[pkg] = b
+	return b
+}
+
+var (
+	loadersMu sync.Mutex
+	loaders   = map[string]*plugin.WasmLoader{}
+)
+
+// InstanceOf instantiates a guest built with BuildGuest. The module is compiled once per
+// process and manifest.ID; instances are cheap, so tests can create one per case. Set
+// host.Manifest and host.Gate from the manifest before calling.
+func InstanceOf(tb testing.TB, wasm []byte, manifest plugin.PluginManifest, host *plugin.HostContext) *plugin.PluginInstance {
+	tb.Helper()
+	ctx := context.Background()
+	loadersMu.Lock()
+	loader, ok := loaders[manifest.ID]
+	if !ok {
+		var err error
+		if loader, err = plugin.NewWasmLoader(ctx); err != nil {
+			loadersMu.Unlock()
+			tb.Fatal(err)
+		}
+		if _, err := loader.Compile(ctx, manifest.ID, wasm); err != nil {
+			loadersMu.Unlock()
+			tb.Fatalf("compiling %s: %v", manifest.ID, err)
+		}
+		loaders[manifest.ID] = loader
+	}
+	loadersMu.Unlock()
+	inst, err := loader.Instantiate(ctx, manifest.ID, manifest, host)
+	if err != nil {
+		tb.Fatalf("instantiating %s: %v", manifest.ID, err)
+	}
+	tb.Cleanup(func() { _ = inst.Close(ctx) })
+	return inst
+}

@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/actonos/actonos/internal/mailcal"
@@ -148,9 +149,15 @@ func (s *Server) handleMailcalDeleteAccount(w http.ResponseWriter, r *http.Reque
 	if svc == nil {
 		return
 	}
-	if err := svc.Accounts().Delete(r.Context(), chi.URLParam(r, "id")); err != nil {
+	id := chi.URLParam(r, "id")
+	if err := svc.Accounts().Delete(r.Context(), id); err != nil {
 		s.respondMailcalError(w, err)
 		return
+	}
+	if s.mailcalOAuth != nil {
+		if err := s.mailcalOAuth.Forget(r.Context(), id); err != nil {
+			slog.Warn("mailcal: could not delete the stored token of a removed account", "account", id, "error", err)
+		}
 	}
 	if err := svc.SyncTools(r.Context()); err != nil {
 		s.respondMailcalError(w, err)

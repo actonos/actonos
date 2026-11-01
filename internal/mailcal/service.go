@@ -26,12 +26,15 @@ type ProviderInfo struct {
 	ABI      []string   `json:"abi"`
 	Ops      []string   `json:"ops"`
 	Limits   abi.Limits `json:"limits"`
+	// OAuthProvider is set when the plugin signs users in through ActonOS (for example "google").
+	OAuthProvider string `json:"oauth_provider,omitempty"`
 }
 
 type providerEntry struct {
 	info     ProviderInfo
 	provider Provider
 	caps     abi.Capabilities
+	oauth    *plugin.PluginOAuth
 }
 
 // Service is the core of mail and calendar support. It owns accounts and drafts, knows
@@ -145,6 +148,25 @@ func (s *Service) PluginActivated(ctx context.Context, manifest plugin.PluginMan
 		return
 	}
 	s.registerProvider(manifest.ID, manifest.Name, manifest.Version, provider, caps)
+	if manifest.OAuth != nil {
+		s.mu.Lock()
+		if e := s.providers[manifest.ID]; e != nil {
+			spec := *manifest.OAuth
+			e.oauth = &spec
+			e.info.OAuthProvider = spec.Provider
+		}
+		s.mu.Unlock()
+	}
+}
+
+// OAuthSpec returns the sign-in description a provider plugin declared, if any.
+func (s *Service) OAuthSpec(pluginID string) (plugin.PluginOAuth, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if e := s.providers[pluginID]; e != nil && e.oauth != nil {
+		return *e.oauth, true
+	}
+	return plugin.PluginOAuth{}, false
 }
 
 // PluginDeactivated implements plugin.CapabilityHook.

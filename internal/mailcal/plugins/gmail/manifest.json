@@ -1,0 +1,21 @@
+{
+  "id": "mailcal-gmail",
+  "name": "Gmail and Google Calendar",
+  "version": "1.0.0",
+  "description": "Read, draft and send mail and manage events in a Google account. Sign-in and tokens are handled by ActonOS.",
+  "capabilities": ["mail@1", "calendar@1"],
+  "permissions": {
+    "net_outbound": ["gmail.googleapis.com", "www.googleapis.com"],
+    "oauth": ["google"]
+  },
+  "oauth": {
+    "provider": "google",
+    "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
+    "token_url": "https://oauth2.googleapis.com/token",
+    "scopes": [
+      "https://www.googleapis.com/auth/gmail.modify",
+      "https://www.googleapis.com/auth/calendar.events",
+      "https://www.googleapis.com/auth/calendar.freebusy"
+    ]
+  }
+}
