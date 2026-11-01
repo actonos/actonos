@@ -60,7 +60,9 @@
     },
     "calendarUrlPlaceholder": "https://caldav.example.com/dav/calendars/me/work/",
     "tls": "TLS",
-    "starttls": "STARTTLS"
+    "starttls": "STARTTLS",
+    "verified": "Đã xác minh ABI 1: đúng bản dựng này đã qua các kiểm tra tuân thủ.",
+    "unverified": "Chưa xác minh: không có chứng nhận tuân thủ khớp với bản dựng này. Plugin vẫn chạy trong cùng hộp cát và cùng cơ chế duyệt."
   },
   "toast": {
     "created": "Đã thêm tài khoản",

@@ -134,6 +134,11 @@ export function AccountModal({ isOpen, providers, saving, onClose, onSubmit }: A
               </option>
             ))}
           </select>
+          {provider && (
+            <p className="text-caption text-slate" data-testid="mailcal-provider-verified">
+              {provider.verified ? t('modal.verified') : t('modal.unverified')}
+            </p>
+          )}
         </div>
 
         <div className="flex flex-col gap-1.5">

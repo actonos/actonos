@@ -60,7 +60,9 @@
     },
     "calendarUrlPlaceholder": "https://caldav.example.com/dav/calendars/me/work/",
     "tls": "TLS",
-    "starttls": "STARTTLS"
+    "starttls": "STARTTLS",
+    "verified": "Verified against ABI 1: this exact build passed the conformance checks.",
+    "unverified": "Not verified: no conformance certificate matches this build. It still runs in the same sandbox and behind the same approvals."
   },
   "toast": {
     "created": "Account added",

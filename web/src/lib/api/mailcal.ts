@@ -28,6 +28,8 @@ export interface MailcalProvider {
   oauth_provider?: string;
   /** Which sign-in form to show: OAuth handled by the core, or an app password. */
   auth_kind?: 'oauth' | 'password';
+  /** True when the plugin carries a conformance certificate for exactly this build. Informational only. */
+  verified?: boolean;
 }
 
 export interface MailcalTestResult {

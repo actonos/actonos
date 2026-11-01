@@ -6,12 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/actonos/actonos/internal/mailcal/abi"
+	"github.com/actonos/actonos/internal/mailcal/certificate"
 	"github.com/actonos/actonos/internal/plugin"
 	"github.com/actonos/actonos/internal/tools"
 )
@@ -31,6 +33,10 @@ type ProviderInfo struct {
 	// AuthKind tells the UI which sign-in form to show: "oauth" (the core runs the flow),
 	// "password" (the plugin receives the account's login through acton_account) or "".
 	AuthKind string `json:"auth_kind,omitempty"`
+	// Verified is true when the plugin directory holds a conformance certificate for exactly
+	// this plugin.wasm. It is information for the person installing the plugin; every plugin
+	// runs in the same sandbox and behind the same gates whether or not it is verified.
+	Verified bool `json:"verified"`
 }
 
 type providerEntry struct {
@@ -55,6 +61,9 @@ type Service struct {
 	providers map[string]*providerEntry
 	registry  *tools.ToolRegistry
 	toolNames []string
+	// pluginsDir is where installed plugins live (<dir>/<plugin id>/plugin.wasm); empty means
+	// no plugin is reported as verified.
+	pluginsDir string
 
 	// sleep is replaceable so tests do not wait for real back-off delays.
 	sleep func(ctx context.Context, d time.Duration) error
@@ -131,6 +140,14 @@ func (s *Service) SetToolRegistry(r *tools.ToolRegistry) {
 	s.mu.Unlock()
 }
 
+// SetPluginsDir tells the service where installed plugins live so it can report which of
+// them carry a valid conformance certificate. Call it before plugins are scanned.
+func (s *Service) SetPluginsDir(dir string) {
+	s.mu.Lock()
+	s.pluginsDir = dir
+	s.mu.Unlock()
+}
+
 // PluginActivated implements plugin.CapabilityHook.
 func (s *Service) PluginActivated(ctx context.Context, manifest plugin.PluginManifest, caller plugin.Caller) {
 	if !declaresMailCal(manifest.Capabilities) {
@@ -158,6 +175,9 @@ func (s *Service) PluginActivated(ctx context.Context, manifest plugin.PluginMan
 			e.info.AuthKind = "oauth"
 		case manifest.Permissions.Credentials:
 			e.info.AuthKind = "password"
+		}
+		if s.pluginsDir != "" {
+			e.info.Verified = certificate.VerifyDir(filepath.Join(s.pluginsDir, manifest.ID))
 		}
 	}
 	s.mu.Unlock()

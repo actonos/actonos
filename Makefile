@@ -23,7 +23,7 @@
 #   make help          Show this help message
 # ==============================================================================
 
-.PHONY: plugin-gmail plugin-graph plugin-caldav plugin-imap-smtp all deps dev lint test test-unit test-race test-integ build-web build build-embedding dist model-embedding docker docker-multiarch docker-run iso iso-arm64 \
+.PHONY: plugin-gmail plugin-graph plugin-caldav plugin-imap-smtp plugins conformance all deps dev lint test test-unit test-race test-integ build-web build build-embedding dist model-embedding docker docker-multiarch docker-run iso iso-arm64 \
         clean version bump-patch bump-minor bump-major release help
 
 # ------------------------------------------------------------------------------
@@ -146,6 +146,16 @@ plugin-imap-smtp:
 	GOOS=wasip1 GOARCH=wasm CGO_ENABLED=0 $(GO) build -buildmode=c-shared -o $(BUILD_DIR)/plugins/mailcal-imap-smtp/plugin.wasm ./internal/mailcal/plugins/imapsmtp/wasm
 	cp internal/mailcal/plugins/imapsmtp/manifest.json $(BUILD_DIR)/plugins/mailcal-imap-smtp/manifest.json
 
+plugins: plugin-gmail plugin-graph plugin-caldav plugin-imap-smtp
+
+# Runs the offline conformance suite against every built plugin and writes conformance.json next to each
+# plugin.wasm. A person with a sandbox account can add --live to a single run by hand (see
+# docs/MAILCAL-PLUGIN-GUIDE.md); the certificate only vouches for the exact build that was tested.
+conformance: plugins
+	@for id in mailcal-gmail mailcal-graph mailcal-caldav mailcal-imap-smtp; do \
+		$(GO) run ./cmd/mailcal-conformance --wasm $(BUILD_DIR)/plugins/$$id/plugin.wasm --manifest $(BUILD_DIR)/plugins/$$id/manifest.json || exit 1; \
+	done
+
 model-embedding:
 	@echo "==> Downloading multilingual-e5-small ONNX artifacts..."
 	@bash scripts/download-embedding-model.sh
@@ -267,6 +277,8 @@ help:
 	@echo "  make plugin-graph  Build the Microsoft Graph plugin"
 	@echo "  make plugin-caldav Build the CalDAV plugin"
 	@echo "  make plugin-imap-smtp Build the IMAP and SMTP plugin"
+	@echo "  make plugins       Build every mail and calendar provider plugin"
+	@echo "  make conformance   Build them and write a conformance certificate next to each"
 	@echo "  make docker        Build Docker image"
 	@echo "  make iso           Build bare-metal installation ISO"
 	@echo "  make version       Print current version"

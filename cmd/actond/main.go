@@ -406,6 +406,7 @@ func main() {
 			pluginMgr.SetWorkspaceStore(userWorkspace)
 		}
 		if mailcalSvc != nil {
+			mailcalSvc.SetPluginsDir(pluginsDir)
 			pluginMgr.SetCapabilityHook(mailcalSvc)
 			pluginMgr.SetTokenBroker(mailcal.NewTokenBroker(mailcalSvc.Accounts(), tokenDaemon, mailcalSvc.OAuthSpec))
 			pluginMgr.SetCredentialBroker(mailcalCreds)
