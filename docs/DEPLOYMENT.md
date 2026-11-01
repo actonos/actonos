@@ -215,6 +215,10 @@ The ISO build process:
 4. Applies the preseed configuration for automated installation
 5. Generates a bootable hybrid ISO
 
+> **systemd and the command sandbox.** On bare metal every command runs in its own cgroup v2 (memory, pids and CPU caps).
+> The service user can only create one if systemd delegates the subtree, so the unit must contain `Delegate=yes`
+> (both `deploy/systemd/actond.service` and the live-build unit do). Without it `native_exec` fails closed.
+
 ---
 
 ## OTA Updates
