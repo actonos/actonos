@@ -30,13 +30,22 @@
 
 **Vấn đề đã tìm thấy và xử lý trong đợt này:** sandbox `bwrap` không chạy được lệnh nào trên x86_64 (thiếu `/lib64`) và để lộ biến môi trường của host; gửi tin tới kênh không tồn tại báo thành công nhưng bỏ tin; line-ending CRLF làm nhiễu diff; trigger CI sai nhánh.
 
+**Đã xử lý thêm sau đợt đầu:**
+
+- Entry bundle web giảm từ ~483 KB xuống ~304 KB bằng cách nạp locale theo từng ngôn ngữ (`src/lib/i18n.ts`, `src/lib/locale-bundles/`); ngân sách 350 KB được khôi phục. Test web phải `await i18nReady` (đã thêm vào `src/test/setup.ts`).
+- Eval `live` đã được cài đặt (`evals/runner/live.go`), chạy từng task qua agent engine thật; có `--only`/`--max-tasks` để giới hạn chi phí.
+- Thêm test âm tính cho `command_policy.go` / `risk.go`; sửa bộ lọc lệnh (chặn `rm -fr /`, `rm -rf ~`, bớt chặn nhầm `rm -rf /workspace/...`).
+- Sửa lỗi path-escape qua symlink treo trong `internal/security/path.go`.
+- Sửa `FactoryReset` xoá nhầm bảng không tồn tại (`chat_messages`, `memory_fragments`) khiến tin nhắn và ký ức không bị xoá.
+- Tách file lớn: `native_tools.go` (10 file), `api_system.go` (5), `host_api.go` (5), `engine.go` (5), `heartbeat.go` (4). Chỉ di chuyển code; tập khai báo giữ nguyên.
+- Coverage: `server` 61.7%, `security` 91.3%.
+
 **Việc còn mở:**
 
-1. Cài đặt chế độ eval `live` (chạy task qua agent engine với provider thật) để có baseline cho mục 8.
-2. Entry bundle web ~480 KB (đã vượt ngân sách 350 KB từ trước 1.0.4 vì toàn bộ locale được nạp tĩnh); ngân sách tạm đặt 500 KB. Tách locale theo ngôn ngữ để đưa về dưới mức cũ.
-3. Chạy và ổn định Playwright e2e trên CI, rồi bỏ `continue-on-error`.
-4. Nâng coverage dư địa mỏng cho `server` và `security`; thêm test âm tính cho `command_policy.go` / `risk.go`.
-5. Tách dần các file lớn (`native_tools.go`, `engine.go`, `host_api.go`, `api_system.go`, `heartbeat.go`).
+1. Chạy eval `live` với khoá API thật để có baseline cho mục 8 (`ANTHROPIC_API_KEY=... go run ./evals/runner --mode=live --only=task_05`). Chế độ này đã được cài đặt và kiểm thử bằng provider giả, nhưng chưa từng chạy với model thật.
+2. Playwright e2e: 37 test pass hai lần liên tiếp trên Linux cục bộ (đã sửa các lỗi thật và test lỗi thời, thêm baseline `*-linux.png`). Job CI vẫn để `continue-on-error` cho đến khi xanh trên runner GitHub, vì baseline ảnh được tạo ngoài CI.
+3. Tách tiếp các file còn lớn: `api_agent.go`, `server_test.go`, `embedding.go`, `workspace/store.go`.
+4. `web/src/components/features/chat/ChatSessionRail.tsx` không còn được import ở đâu (drawer "Sessions" đã bị thay bằng màn hình danh sách phiên); có thể xoá cùng các khoá locale `sessions`/`closeSessions`.
 
 ---
 

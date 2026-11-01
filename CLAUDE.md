@@ -54,6 +54,7 @@ The `Makefile` builds with `CGO_ENABLED=0`; only `test-race` and `build-embeddin
 ## Conventions that bite
 
 - Changing a JSON-exposed Go struct → update `web/src/lib/types.ts`. Adding/changing an endpoint → `router.go`, `docs/API.md`, `.agents/rules/source-registry.md`. New user-facing text → keys in **both** `web/src/locales/en` and `vi` (new namespace: also `web/src/lib/i18n.ts`). User-visible changes → `CHANGELOG.md` under `[Unreleased]`.
+- Web locales are lazy-loaded per language (`web/src/lib/i18n.ts`); render and tests must wait for `i18nReady` (already done in `main.tsx` and `src/test/setup.ts`).
 - Web CI enforces: eslint with zero warnings and no `any`, locale parity (`check:i18n`), zero hardcoded UI strings (`audit:i18n`), no emoji in UI, named exports only, entry-bundle budget in `web/scripts/check-bundle.mjs`.
 - Go: wrap errors with `fmt.Errorf("...: %w", err)`, `slog` not `fmt`/`log`, `ctx` first parameter, platform code in `_linux.go`/`_windows.go` files or build tags. Commits use Conventional Commits scoped by package, and **never** include `Co-Authored-By` (or any other attribution/"Generated with" trailer) in commit messages or PR descriptions.
 - Coverage floors per package are in `scripts/cover-gate.go`; `internal/server` and `internal/security` sit only slightly above theirs, so new code there needs tests.
