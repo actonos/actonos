@@ -14,9 +14,9 @@ func NewDeepSeekProvider(apiKey, model string) *DeepSeekProvider {
 	if model == "" {
 		model = "deepseek-chat"
 	}
-	return &DeepSeekProvider{
-		OpenAIProvider: NewOpenAIProvider(apiKey, model, "https://api.deepseek.com/v1"),
-	}
+	base := NewOpenAIProvider(apiKey, model, "https://api.deepseek.com/v1")
+	base.ReplayReasoning = true
+	return &DeepSeekProvider{OpenAIProvider: base}
 }
 
 func (p *DeepSeekProvider) ModelName() string {

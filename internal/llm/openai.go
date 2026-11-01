@@ -24,6 +24,10 @@ type OpenAIProvider struct {
 	// gateways keep the Chat Completions transport even when they serve OpenAI
 	// models behind a custom base URL.
 	UseResponsesAPI bool
+	// ReplayReasoning sends an assistant tool-call turn's reasoning_content back on
+	// follow-up requests. DeepSeek thinking models require it (HTTP 400 otherwise);
+	// generic OpenAI-compatible endpoints reject the field, so it is off by default.
+	ReplayReasoning bool
 }
 
 // NewOpenAIProvider creates a provider for OpenAI or a compatible endpoint. The
@@ -55,11 +59,12 @@ func isOpenAIEndpoint(baseURL string) bool {
 }
 
 type openAIMessage struct {
-	Role       string           `json:"role"`
-	Content    *string          `json:"content"`
-	ToolCalls  []openAIToolCall `json:"tool_calls,omitempty"`
-	ToolCallID string           `json:"tool_call_id,omitempty"`
-	Name       string           `json:"name,omitempty"`
+	Role             string           `json:"role"`
+	Content          *string          `json:"content"`
+	ReasoningContent string           `json:"reasoning_content,omitempty"`
+	ToolCalls        []openAIToolCall `json:"tool_calls,omitempty"`
+	ToolCallID       string           `json:"tool_call_id,omitempty"`
+	Name             string           `json:"name,omitempty"`
 }
 
 type openAIToolCall struct {
@@ -98,6 +103,13 @@ func normalizeToolArguments(raw json.RawMessage) string {
 }
 
 func toOpenAIMessages(messages []Message) []openAIMessage {
+	return buildOpenAIMessages(messages, false)
+}
+
+// buildOpenAIMessages converts messages to the Chat Completions wire format.
+// With replayReasoning, an assistant turn that issued tool calls carries its
+// reasoning_content so thinking-mode providers can continue the tool loop.
+func buildOpenAIMessages(messages []Message, replayReasoning bool) []openAIMessage {
 	result := make([]openAIMessage, 0, len(messages))
 	for _, m := range messages {
 		var toolCalls []openAIToolCall
@@ -130,15 +142,20 @@ func toOpenAIMessages(messages []Message) []openAIMessage {
 			contentPtr = &c
 		}
 
-		// reasoning_content is an OUTPUT-only field. DeepSeek (and other reasoning
-		// gateways) reject requests that echo it back in an input message, so it is
-		// never replayed to the provider.
+		// reasoning_content is an OUTPUT-only field for most gateways, which reject
+		// it in input messages, so it is not replayed unless the provider asks for it.
+		// DeepSeek thinking mode is the exception, and only for tool-call turns.
+		reasoning := ""
+		if replayReasoning && m.Role == RoleAssistant && len(toolCalls) > 0 {
+			reasoning = m.ReasoningContent
+		}
 		result = append(result, openAIMessage{
-			Role:       string(m.Role),
-			Content:    contentPtr,
-			ToolCalls:  toolCalls,
-			ToolCallID: m.ToolCallID,
-			Name:       m.Name,
+			Role:             string(m.Role),
+			Content:          contentPtr,
+			ReasoningContent: reasoning,
+			ToolCalls:        toolCalls,
+			ToolCallID:       m.ToolCallID,
+			Name:             m.Name,
 		})
 	}
 	return result
@@ -190,7 +207,7 @@ func (p *OpenAIProvider) completeChat(ctx context.Context, messages []Message, o
 
 	reqBody := openAIChatRequest{
 		Model:     model,
-		Messages:  toOpenAIMessages(messages),
+		Messages:  buildOpenAIMessages(messages, p.ReplayReasoning),
 		Tools:     opts.Tools,
 		Stream:    false,
 		MaxTokens: opts.MaxTokens,
@@ -285,7 +302,7 @@ func (p *OpenAIProvider) streamChat(ctx context.Context, messages []Message, opt
 	}
 	reqBody := openAIChatRequest{
 		Model:     model,
-		Messages:  toOpenAIMessages(messages),
+		Messages:  buildOpenAIMessages(messages, p.ReplayReasoning),
 		Tools:     opts.Tools,
 		Stream:    true,
 		MaxTokens: opts.MaxTokens,
