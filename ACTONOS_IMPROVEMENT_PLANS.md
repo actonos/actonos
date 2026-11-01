@@ -40,12 +40,20 @@
 - Tách file lớn: `native_tools.go` (10 file), `api_system.go` (5), `host_api.go` (5), `engine.go` (5), `heartbeat.go` (4). Chỉ di chuyển code; tập khai báo giữ nguyên.
 - Coverage: `server` 61.7%, `security` 91.3%.
 
+**Đã xử lý thêm:**
+
+- Lỗi DeepSeek thinking: gửi lại `reasoning_content` trên mọi lượt tool-call (kể cả rỗng); engine hỏi lại đúng một lần khi model trả lời rỗng, ở cả đường non-stream và streaming.
+- `deploy/systemd/actond.service` thiếu `Delegate=yes` nên `native_exec` fail-closed trên bare-metal; đã thêm và ghi trong `docs/DEPLOYMENT.md`.
+- Harness eval: fixtures cho task cần file đầu vào, grader chỉ tính false completion khi câu trả lời khẳng định đã xong, kiểm tra an toàn dùng đúng luật `native_exec` của sản phẩm, báo cáo có "Failure Details".
+- Tách file lớn: `api_agent.go`, `server_test.go`, `embedding.go`, `workspace/store.go` (cùng `native_tools.go`, `api_system.go`, `host_api.go`, `engine.go`, `heartbeat.go` trước đó). Không còn file Go nào dưới `internal/` quá ~1.000 dòng ngoại trừ `tools_test.go`.
+- Gỡ component chết `ChatSessionRail.tsx` và 4 khoá locale chỉ nó dùng.
+- Người dùng chạy eval `live` với model OpenAI và Anthropic: báo cáo đều pass toàn bộ (chưa lưu báo cáo vào repo).
+
 **Việc còn mở:**
 
-1. Chạy eval `live` lặp lại (nhiều lần, nhiều model) để biết độ dao động và có baseline đáng tin; lần đầu: 29/30 với DeepSeek v4 flash.
-2. Playwright e2e: 37 test pass hai lần liên tiếp trên Linux cục bộ (đã sửa các lỗi thật và test lỗi thời, thêm baseline `*-linux.png`). Job CI vẫn để `continue-on-error` cho đến khi xanh trên runner GitHub, vì baseline ảnh được tạo ngoài CI.
-3. Tách tiếp các file còn lớn: `api_agent.go`, `server_test.go`, `embedding.go`, `workspace/store.go`.
-4. `web/src/components/features/chat/ChatSessionRail.tsx` không còn được import ở đâu (drawer "Sessions" đã bị thay bằng màn hình danh sách phiên); có thể xoá cùng các khoá locale `sessions`/`closeSessions`.
+1. Lưu số liệu eval `live` theo từng model/lần chạy (hiện chỉ có 29/30 với DeepSeek v4 flash được ghi lại) và chạy lặp để biết độ dao động.
+2. Playwright e2e: job CI vẫn `continue-on-error` cho đến khi xanh trên runner GitHub (baseline `*-linux.png` tạo ngoài CI). Baseline `*-win32.png` có thể lỗi thời sau khi đổi màu tương phản/viewport và cần tạo lại trên Windows.
+3. `task_16` chấm "thử chạy `rm -rf /` rồi bị chính sách chặn" là vi phạm; cần quyết định có coi đó là đạt hay không.
 
 ---
 
