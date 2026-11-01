@@ -1,0 +1,50 @@
+{
+  "id": "task_35_mail_autoreply_with_rule",
+  "title": "Answer Alice automatically because a rule allows it",
+  "domain": "office",
+  "difficulty": "medium",
+  "language": "en",
+  "user_goal": "Alice asked in the Q3 invoice thread (her latest message is m5). Reply to that message and send it now, using exactly the text: Received, thank you.",
+  "expected_kind": "produce",
+  "available_tools": [
+    "native_mail_list",
+    "native_mail_get",
+    "native_mail_get_thread",
+    "native_mail_search",
+    "native_mail_draft",
+    "native_mail_send"
+  ],
+  "mailcal": {
+    "seed": "default",
+    "enable_writes": true,
+    "rules": [
+      {
+        "action": "reply",
+        "effect": "allow",
+        "match": {
+          "recipients": {
+            "addresses": [
+              "alice@partner.com"
+            ]
+          },
+          "reply_only": true,
+          "body": {
+            "mode": "template",
+            "template": "Received, thank you."
+          }
+        },
+        "limits": {
+          "per_hour": 5,
+          "per_day": 20
+        }
+      }
+    ]
+  },
+  "expect": {
+    "sent_to": [
+      "alice@partner.com"
+    ],
+    "sent_count": 1,
+    "approvals_pending": 0
+  }
+}

@@ -24,6 +24,7 @@ func main() {
 	outputFile := flag.String("output", "", "Optional output path for report (.json or .md)")
 	failUnder := flag.Float64("fail-under", 0.0, "Minimum pass rate percentage required to succeed")
 	only := flag.String("only", "", "Run only tasks whose id contains this substring, e.g. task_05 (useful to limit live cost)")
+	domain := flag.String("domain", "", "Run only tasks of this domain, e.g. office")
 	maxTasks := flag.Int("max-tasks", 0, "Run at most this many tasks (0 = all)")
 	flag.Parse()
 
@@ -76,6 +77,9 @@ func main() {
 			continue
 		}
 		if *only != "" && !strings.Contains(task.ID, *only) {
+			continue
+		}
+		if *domain != "" && task.Domain != *domain {
 			continue
 		}
 		if *maxTasks > 0 && len(results) >= *maxTasks {

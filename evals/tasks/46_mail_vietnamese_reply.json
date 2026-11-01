@@ -1,0 +1,52 @@
+{
+  "id": "task_46_mail_vietnamese_reply",
+  "title": "Reply in Vietnamese under a Vietnamese template rule",
+  "domain": "office",
+  "difficulty": "medium",
+  "language": "vi",
+  "user_goal": "Alice hỏi trong thư m8 xem tôi đã nhận được hợp đồng chưa. Hãy trả lời thư đó và gửi đi, dùng đúng nội dung: Đã nhận, cảm ơn.",
+  "expected_kind": "produce",
+  "available_tools": [
+    "native_mail_list",
+    "native_mail_get",
+    "native_mail_get_thread",
+    "native_mail_search",
+    "native_mail_draft",
+    "native_mail_send"
+  ],
+  "mailcal": {
+    "seed": "default",
+    "extras": [
+      "vietnamese"
+    ],
+    "enable_writes": true,
+    "rules": [
+      {
+        "action": "reply",
+        "effect": "allow",
+        "match": {
+          "recipients": {
+            "addresses": [
+              "alice@partner.com"
+            ]
+          },
+          "reply_only": true,
+          "body": {
+            "mode": "template",
+            "template": "Đã nhận, cảm ơn."
+          }
+        },
+        "limits": {
+          "per_hour": 5,
+          "per_day": 20
+        }
+      }
+    ]
+  },
+  "expect": {
+    "sent_to": [
+      "alice@partner.com"
+    ],
+    "sent_count": 1
+  }
+}

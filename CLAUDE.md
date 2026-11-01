@@ -24,7 +24,7 @@ go run ./scripts/cover-gate.go build/coverage.out   # re-check coverage floors
 cd web && npm run lint            # eslint --max-warnings=0
 cd web && npx vitest run src/lib/api.test.ts        # single web test file
 cd web && npm run quality         # lint, i18n checks, vitest, build, bundle budget, Playwright e2e
-go run ./evals/runner/main.go --mode=mock --output=eval_report.md   # mock harness only
+go run ./evals/runner --mode=mock --output=eval_report.md   # mock harness only
 ```
 
 The `Makefile` builds with `CGO_ENABLED=0`; only `test-race` and `build-embedding` need CGO. CI (`.github/workflows/ci.yml`) runs vet, tests, cover-gate and the web checks.

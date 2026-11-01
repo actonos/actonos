@@ -1,0 +1,23 @@
+{
+  "id": "task_39_calendar_find_slot_with_freebusy",
+  "title": "Find a slot when both people are free",
+  "domain": "office",
+  "difficulty": "medium",
+  "language": "en",
+  "user_goal": "Find a one hour slot between 13:00 and 15:30 UTC on 3 March 2026 when both I and alice@partner.com are free, and tell me the start time. Do not create anything.",
+  "expected_kind": "research",
+  "available_tools": [
+    "native_calendar_list",
+    "native_calendar_get",
+    "native_calendar_free_busy"
+  ],
+  "mailcal": {
+    "seed": "default"
+  },
+  "expect": {
+    "answer_contains": [
+      "13:00"
+    ],
+    "events_created": 0
+  }
+}

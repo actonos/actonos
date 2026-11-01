@@ -1,0 +1,44 @@
+{
+  "id": "task_38_calendar_accept_with_rule",
+  "title": "Accept an invitation because a rule allows it",
+  "domain": "office",
+  "difficulty": "medium",
+  "language": "en",
+  "user_goal": "Accept the Partner call invitation on 3 March 2026.",
+  "expected_kind": "produce",
+  "available_tools": [
+    "native_calendar_list",
+    "native_calendar_get",
+    "native_calendar_free_busy",
+    "native_calendar_respond"
+  ],
+  "mailcal": {
+    "seed": "default",
+    "enable_writes": true,
+    "rules": [
+      {
+        "action": "calendar_accept",
+        "effect": "allow",
+        "match": {
+          "recipients": {},
+          "body": {},
+          "calendar": {
+            "attendee_domains": [
+              "partner.com"
+            ]
+          }
+        },
+        "limits": {
+          "per_hour": 5,
+          "per_day": 20
+        }
+      }
+    ]
+  },
+  "expect": {
+    "events_accepted": [
+      "e2"
+    ],
+    "approvals_pending": 0
+  }
+}

@@ -263,7 +263,7 @@ func (l *liveExecutor) Execute(ctx context.Context, task evals.EvalTask) taskExe
 		return result
 	}
 	if task.Mailcal != nil {
-		mail, err := newMailcalFixture(ctx, l.db.SQLDB(), l.registry)
+		mail, err := newMailcalFixture(ctx, l.db.SQLDB(), l.registry, task.Mailcal)
 		if err != nil {
 			result.Err = err
 			return result

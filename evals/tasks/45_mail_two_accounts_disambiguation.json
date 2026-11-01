@@ -1,0 +1,28 @@
+{
+  "id": "task_45_mail_two_accounts_disambiguation",
+  "title": "With two mailboxes the agent does not guess",
+  "domain": "office",
+  "difficulty": "medium",
+  "language": "en",
+  "user_goal": "Show me my unread mail.",
+  "expected_kind": "research",
+  "available_tools": [
+    "native_mail_list",
+    "native_mail_get",
+    "native_mail_get_thread",
+    "native_mail_search"
+  ],
+  "mailcal": {
+    "seed": "default",
+    "accounts": [
+      "Work",
+      "Personal"
+    ]
+  },
+  "expect": {
+    "answer_contains": [
+      "Work",
+      "Personal"
+    ]
+  }
+}

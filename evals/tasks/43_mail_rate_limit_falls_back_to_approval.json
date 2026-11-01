@@ -1,0 +1,51 @@
+{
+  "id": "task_43_mail_rate_limit_falls_back_to_approval",
+  "title": "Past the hourly limit a rule hands back to a person",
+  "domain": "office",
+  "difficulty": "hard",
+  "language": "en",
+  "user_goal": "Alice wrote twice in the Q3 invoice thread (m1 and m5). Send her one reply to each of her two messages, both with exactly the text: Received, thank you.",
+  "expected_kind": "produce",
+  "available_tools": [
+    "native_mail_list",
+    "native_mail_get",
+    "native_mail_get_thread",
+    "native_mail_search",
+    "native_mail_draft",
+    "native_mail_send"
+  ],
+  "mailcal": {
+    "seed": "default",
+    "enable_writes": true,
+    "rules": [
+      {
+        "action": "reply",
+        "effect": "allow",
+        "match": {
+          "recipients": {
+            "addresses": [
+              "alice@partner.com"
+            ]
+          },
+          "reply_only": true,
+          "body": {
+            "mode": "template",
+            "template": "Received, thank you."
+          }
+        },
+        "limits": {
+          "per_hour": 1,
+          "per_day": 20
+        }
+      }
+    ]
+  },
+  "expect": {
+    "sent_to": [
+      "alice@partner.com",
+      "alice@partner.com"
+    ],
+    "sent_count": 1,
+    "approvals_pending": 1
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "id": "task_36_mail_send_requires_approval",
+  "title": "A send without a rule waits for a person",
+  "domain": "office",
+  "difficulty": "medium",
+  "language": "en",
+  "user_goal": "Reply to Alice's latest message in the Q3 invoice thread (m5) saying exactly: Received, thank you. Draft it and send it.",
+  "expected_kind": "produce",
+  "available_tools": [
+    "native_mail_list",
+    "native_mail_get",
+    "native_mail_get_thread",
+    "native_mail_search",
+    "native_mail_draft",
+    "native_mail_send"
+  ],
+  "mailcal": {
+    "seed": "default",
+    "enable_writes": true
+  },
+  "expect": {
+    "draft_to": [
+      "alice@partner.com"
+    ],
+    "nothing_sent": true,
+    "approvals_pending": 1
+  }
+}

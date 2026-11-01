@@ -74,7 +74,7 @@ func (m *mockExecutor) Execute(ctx context.Context, task evals.EvalTask) taskExe
 	var mail *mailcalFixture
 	if task.Mailcal != nil {
 		var err error
-		if mail, err = newMailcalFixture(ctx, m.db, m.registry); err != nil {
+		if mail, err = newMailcalFixture(ctx, m.db, m.registry, task.Mailcal); err != nil {
 			return taskExecution{Workspace: workspace, Err: err}
 		}
 		said, err := mail.perform(ctx, task.Expect)

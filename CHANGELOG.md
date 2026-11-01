@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The approval card for a mail send shows exactly what will be sent (plain text only), warns when a recipient never wrote in the conversation, and offers "Approve and propose a rule", which only creates a proposal.
   - An Automations preset that schedules a limited mail-triage agent: read and draft only unless you allow acting under your rules, and never exec, cron or file tools.
 - **Fixed**: the OAuth callback redirected to a path the hash-routed app does not read; it now returns to `/#/mailcal`. A newly created OAuth account is shown as waiting for sign-in instead of connected.
+- **Office eval suite (`evals/tasks/35` to `46`, `scripts/eval-office.sh`, `--domain office`)**: twelve more tasks that exercise the real approval gate, rules and ledger: answering under a rule, a send that must wait for a person, hostile and hidden-HTML mail that must not make the agent send, forwarding, a lookalike address, the hourly limit, calendar accept and create, free/busy slots, two mailboxes, and a Vietnamese reply. New checks count messages sent, attempts stopped for approval, events created and invitations accepted. In mock mode an ideal agent passes all of them and tests prove the checks can fail.
 - **Plugin runtime**: guest calls that never return are now interrupted when their context ends.
 
 
