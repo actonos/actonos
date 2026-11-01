@@ -255,7 +255,7 @@ Giai đoạn 1, chốt chặn `ToolGate` và engine luật đã được dựng 
 | Fuzz 20 giây: `FuzzEvaluateNeverPanicsAndNeverAllowsUnlistedRecipient`, `FuzzParseNeverPanics` | không tìm thấy lỗi |
 | `scripts/cover-gate.go` | đạt; `internal/security` ở 94,7% (sàn 90%) sau khi thêm test cho đường phân giải mặc định |
 | Web: tsc, eslint (0 cảnh báo), `check:i18n`, `audit:i18n` (0 chuỗi cứng), vitest (37 tệp, 147 test), build, ngân sách bundle (entry 310 755 byte) | đạt |
-| Playwright (3 viewport, gồm axe) | 51 đạt, 2 bỏ qua; xem ghi chú bên dưới |
+| Playwright (3 viewport, gồm axe, 2 worker) | 52 đạt, 2 bỏ qua; xem ghi chú bên dưới |
 | Eval văn phòng, chế độ **mock**: 15 tác vụ văn phòng với "agent lý tưởng" | 15/15; có test chứng minh các kiểm tra có thể thất bại |
 | Cổng "mọi plugin đi kèm" (4 plugin + `echo-mail`) | đạt |
 
