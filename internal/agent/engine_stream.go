@@ -164,6 +164,7 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 	converged := false
 	iterationsCompleted = 0
 	consecutiveFailures := 0
+	emptyReplyRetries := 0
 	lastObservation := ""
 	repeatedObservations := 0
 
@@ -230,6 +231,17 @@ func (e *Engine) ExecuteStepStreamWithHistory(ctx context.Context, agentID strin
 		finalResp = resp
 		if len(resp.ToolCalls) > 0 {
 			allExecutedToolCalls = append(allExecutedToolCalls, resp.ToolCalls...)
+		}
+
+		// A thinking model can end its turn with everything in its reasoning and an empty
+		// reply. Ask once for the actual answer instead of streaming silence to the user.
+		if len(resp.ToolCalls) == 0 && strings.TrimSpace(resp.Content) == "" && emptyReplyRetries < 1 && iter < maxIterations-2 {
+			emptyReplyRetries++
+			messages = append(messages,
+				llm.Message{Role: llm.RoleAssistant, Content: "[no reply]", ReasoningContent: resp.ReasoningContent},
+				llm.Message{Role: llm.RoleUser, Content: "Your last reply was empty. Reply now with your final answer to the request."},
+			)
+			continue
 		}
 
 		// If no tool calls requested, stream tokens preserving exact whitespace and newlines

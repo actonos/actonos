@@ -477,3 +477,44 @@ func TestEngineGivesUpAfterOneEmptyReplyRetry(t *testing.T) {
 		t.Fatalf("expected exactly one retry (2 calls), got %d", calls)
 	}
 }
+
+func TestEngineStreamAsksOnceMoreWhenTheReplyIsEmpty(t *testing.T) {
+	db, eventBus := setupTestDB(t)
+	agentMgr, _ := NewAgentManager(db, eventBus)
+
+	provider := llm.NewMockProvider("stream-thinker", "")
+	provider.StreamCompleteFunc = func(_ context.Context, messages []llm.Message, _ llm.CompletionOptions) (<-chan llm.StreamChunk, error) {
+		ch := make(chan llm.StreamChunk, 3)
+		if provider.StreamCompleteCalls == 1 {
+			// Only reasoning arrives; there is no reply text.
+			ch <- llm.StreamChunk{DeltaReasoning: "The answer is forty-two."}
+		} else {
+			last := messages[len(messages)-1]
+			if last.Role != llm.RoleUser || !strings.Contains(last.Content, "empty") {
+				t.Errorf("the retry must ask for the answer explicitly, last message: %+v", last)
+			}
+			ch <- llm.StreamChunk{DeltaContent: "Forty-two."}
+		}
+		ch <- llm.StreamChunk{Done: true}
+		close(ch)
+		return ch, nil
+	}
+	router := llm.NewModelCascadeRouter()
+	router.RegisterProvider("stream-thinker", provider)
+	engine := NewEngine(agentMgr, eventBus, router, nil)
+
+	created, err := agentMgr.Create(context.Background(), AgentManifest{
+		Name: "Stream thinker", ModelConfig: llm.ModelConfig{PrimaryModel: "stream-thinker"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := make(chan AgentStreamEvent, 64)
+	resp, err := engine.ExecuteStepStream(context.Background(), created.AgentID, "What is the answer?", events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Content != "Forty-two." || provider.StreamCompleteCalls != 2 {
+		t.Fatalf("expected one retry that yields the answer, got content=%q after %d call(s)", resp.Content, provider.StreamCompleteCalls)
+	}
+}
