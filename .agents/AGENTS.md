@@ -69,6 +69,7 @@ ActonOS is an Extensible AI Agent Operating System Kernel written in **Go** with
 ### Commits
 - Use [Conventional Commits](https://www.conventionalcommits.org/) format
 - Scope by package name: `feat(agent)`, `fix(memory)`, `docs`, etc.
+- Do **not** add `Co-Authored-By` or any other attribution/"Generated with" trailer to commit messages or PR descriptions.
 
 ## File Organization
 
