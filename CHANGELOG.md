@@ -40,6 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A manifest gate runs over every shipped plugin (no bare wildcards, no secrets, storage, workspace or bus, consistent OAuth declaration, real exports, certifiable), plus `echo-mail`, a read-only example provider written from the guide without touching any core file.
   - Scheduled triage runs are pinned by tests: no send while the switch is off, an approval request when no rule matches, one send under a matching rule.
 - **Plugin runtime**: guest calls that never return are now interrupted when their context ends.
+- **Agent guidance and checks**: root `AGENTS.md` (read by any AI coding tool; `CLAUDE.md` imports it), per-area `AGENTS.md` for `internal/mailcal` and `web`, a mail-and-calendar skill, refreshed rules and skills, tests that fail when `.agents/rules/source-registry.md` or `docs/API.md` drift from the router, and `make check-fast`, `check-web` and `check-full`.
+- **Fixed**: `actond` now honors the unprefixed `DATA_DIR`, `LISTEN_ADDR`, `LOG_LEVEL` and `LOG_FORMAT` that the Dockerfile, compose files and deployment docs have always documented (for example `LOG_LEVEL` in docker-compose had no effect), and `make dev` loads `.env`. The eval runner commands in `evals/run.sh`, `evals/run.ps1` and the eval workflow ran a single file and failed to compile; they now run the package.
+- **Documented**: 44 routes missing from `docs/API.md`, and the interactive host terminal (`/api/terminal/ws`) is now described as the operator shell it is.
 
 
 ## [1.0.4] - 2026-08-31
