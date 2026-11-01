@@ -23,6 +23,8 @@
 - [Human Approvals & Agent Runs](#human-approvals--agent-runs)
 - [Operations & Proactive Anomaly Engine](#operations--proactive-anomaly-engine)
 - [Agent Self-Improvement & Insights](#agent-self-improvement--insights)
+- [Additional Endpoints & Aliases](#additional-endpoints--aliases)
+- [Mail & Calendar](#mail--calendar)
 - [Error Format](#error-format)
 
 ---
@@ -1277,6 +1279,143 @@ Dismiss a proposal.
 
 ### `POST /api/agents/{agentID}/insights/self-review`
 Trigger an immediate self-review cycle for the specified agent.
+
+---
+
+## Additional Endpoints & Aliases
+
+Secondary routes and aliases that complete the sections above. Errors use the standard envelope (see [Error Format](#error-format)). Routes that change system state through an administrative action answer `202 Accepted` with `{"status": "approval_required", "approval": {...}}` until a person approves them.
+
+### Health & System
+
+### `GET /api/ready`
+Public readiness probe (separate from `/api/health`): `200` with a per-dependency report when the daemon can serve, a non-200 code otherwise.
+
+### `GET /api/system/models`
+Same model catalog as `GET /api/models`, under the protected prefix.
+
+### `GET /api/system/profile`
+### `GET /api/system/identity`
+Read the operator identity used in prompts: `user_name`, `user_role`, `language`, `timezone`, `communication_style`, `bio`, `custom_instructions`, `soul`.
+
+### `PUT /api/system/profile`
+### `PUT /api/system/identity`
+Save the identity fields above (same body). `/api/system/identity` and `/api/system/profile` are aliases.
+
+### `POST /api/system/keys`
+Save LLM provider credentials. Body: `{provider, api_key, base_url?, default_model?, enabled?}`, or the legacy per-provider fields (`anthropic_key`, `gemini_key`, `openai_key`, `deepseek_key`). Keys are stored in the vault and never returned.
+
+### `GET /api/system/storage`
+Disk usage of the data directory.
+
+### `POST /api/system/wifi/connect`
+Body: `{ssid, password}`. Connects through the HAL (bare-metal only); `501 HAL_NOT_CONFIGURED` otherwise.
+
+### `POST /api/system/ota/rollback`
+Roll back to the previous OTA release. Requires approval (`202 approval_required`).
+
+### `DELETE /api/system/backup`
+### `DELETE /api/system/backups/{id}`
+Delete a backup snapshot. The first form takes `?id=`; both are handled identically.
+
+### Agents
+
+### `POST /api/agents/{agentID}/stop`
+Stop an agent and cancel its in-flight work. Returns `{status: "stopped", agent_id}`.
+
+### `GET /api/agents/soul`
+### `PUT /api/agents/soul`
+### `PUT /api/agents/{agentID}/soul`
+Read or save an agent's `SOUL.md`. Without `{agentID}` the agent comes from `agent_id` (query or body) and defaults to the system agent. Body: `{agent_id?, soul | content}`.
+
+### `GET /api/agents/memory-md`
+### `DELETE /api/agents/memory-md`
+### `DELETE /api/agents/{agentID}/memory-md`
+Read or clear an agent's `MEMORY.md`; agent resolution as for soul. Clearing returns `{status: "cleared", agent_id}`.
+
+### Cron
+
+### `GET /api/cron`
+### `POST /api/cron`
+### `DELETE /api/cron/{id}`
+### `POST /api/cron/{id}/run`
+Aliases of the agent cron routes. `POST /api/cron` saves a job: `{id?, agent_id, name, cron_expr, prompt, target_channel?, target_recipient?}`; `POST /api/cron/{id}/run` triggers it now (`404` if unknown).
+
+### Conversations
+
+### `PUT /api/conversations/{id}`
+Update a conversation: `{title?, is_pinned?}`. Returns `{status: "updated"}`.
+
+### `PUT /api/conversations/{id}/pin`
+Body: `{is_pinned}`. Returns `{status: "updated", is_pinned}`.
+
+### Channels & Pairing
+
+### `POST /api/integrations/channels`
+Save channel accounts (the body mirrors `GET /api/integrations/channels`). Returns `{status: "saved"}`.
+
+### `GET /api/integrations/pairing/codes`
+Active pairing codes: `{codes, count}`.
+
+### `GET /api/integrations/pairing/pending`
+Senders waiting to be paired: `{pending, count}`.
+
+### `GET /api/integrations/pairing/policy`
+Per-channel pairing requirement: `{policies: {channel_id: bool}}`.
+
+### `POST /api/integrations/pairing/policy`
+Body: `{channel_id, required}`. Require or stop requiring pairing for a channel.
+
+### `POST /api/integrations/pairing/allow`
+Authorize a sender without a code. Body: `{channel_id, sender_id, sender_name?}`. Returns `{status: "paired", sender}`.
+
+### `DELETE /api/integrations/authorizations`
+Revoke a paired sender. Body: `{channel_id, sender_id}`. Returns `{status: "revoked"}`.
+
+### Notifications
+
+### `GET /api/notifications/preferences`
+### `PUT /api/notifications/preferences`
+Read or save notification preferences (digest, push, quiet hours).
+
+### `POST /api/notifications/digest/trigger`
+Send the daily digest now.
+
+### Plugins & Vault
+
+### `PUT /api/plugins/{id}/config`
+Save a plugin's configuration; secret fields go to the vault, then the plugin is reloaded.
+
+### `POST /api/plugins/{id}/disable`
+Disable a plugin and unload it.
+
+### `PUT /api/vault/secrets/{name}`
+Set a vault secret. Body: `{value}`. Empty values are rejected; the value is never returned.
+
+### Tools
+
+### `GET /api/tools/mcp`
+List MCP servers (`{servers: [...]}`; environment secrets are not included).
+
+### `PUT /api/tools/mcp/{serverID}`
+Enable or disable a server. Body: `{enabled}`. Requires approval.
+
+### `DELETE /api/tools/mcp/{serverID}`
+Disconnect a server. Requires approval.
+
+### `POST /api/tools/skill`
+Create a skill folder. Body: `{name, description, content}`.
+
+### `POST /api/tools/wasm`
+Upload a WASM tool (multipart form, file field). Requires approval.
+
+### Terminal
+
+### `GET /api/terminal/info`
+Shells available to the Terminal page (`os`, `default_shell`, `available_shells`).
+
+### `GET /api/terminal/ws`
+Interactive pseudo-terminal on the host for the signed-in operator. Query: `shell`, `cols`, `rows`; text frames go to the shell's stdin, and `{"type":"resize","cols":N,"rows":N}` resizes it. Same-origin, cookie-authenticated, working directory `agents/<admin agent>/workspace`. **Not sandboxed and not subject to tool approvals** (unlike agent tool calls); treat admin login as host access.
 
 ---
 

@@ -65,7 +65,6 @@
 | `DELETE` | `/api/agents/{agentID}/memories/{memoryID}/pin` | `handleUnpinMemory` | `api_agent.go` |
 | `PUT` | `/api/agents/{agentID}/memories/{memoryID}/importance` | `handleSetMemoryImportance` | `api_agent.go` |
 | `GET` | `/api/llm/health` | `handleGetLLMHealth` | `api_system.go` |
-| `POST` | `/api/llm/router/retune` | `handleRetuneLLMRouter` | `api_system.go` |
 
 #### Cron Jobs (under `/api/agents/cron` and alias `/api/cron`)
 
@@ -275,6 +274,50 @@
 | `GET` | `/api/mailcal/oauth/callback` (public) | `handleMailcalOAuthCallback` | `api_mailcal_oauth.go` |
 | `GET`/`PUT` | `/api/mailcal/oauth/clients/{provider}` | `handleMailcalGetOAuthClient` / `handleMailcalPutOAuthClient` | `api_mailcal_oauth.go` |
 
+#### Additional routes
+
+Aliases and secondary routes (kept in sync by `TestSourceRegistryListsEveryRoute`).
+
+| Method | Path | Handler | File |
+|:---|:---|:---|:---|
+| `DELETE` | `/api/agents/memory-md` | `handleClearMemoryMD` | `api_agent_files.go` |
+| `POST` | `/api/agents/{agentID}/chat/stream` | `handleChatStream` | `api_agent_chat.go` |
+| `DELETE` | `/api/agents/{agentID}/memory-md` | `handleClearMemoryMD` | `api_agent_files.go` |
+| `PUT` | `/api/agents/{agentID}/soul` | `handleSaveSoul` | `api_agent_files.go` |
+| `PUT` | `/api/conversations/{id}/pin` | `handleTogglePinConversation` | `api_conversations.go` |
+| `GET` | `/api/cron` | `handleListCronJobs` | `api_agent_cron.go` |
+| `POST` | `/api/cron` | `handleSaveCronJob` | `api_agent_cron.go` |
+| `GET` | `/api/cron/history` | `handleListAllCronHistory` | `api_agent_cron.go` |
+| `DELETE` | `/api/cron/{id}` | `handleDeleteCronJob` | `api_agent_cron.go` |
+| `GET` | `/api/cron/{id}/history` | `handleGetCronJobHistory` | `api_agent_cron.go` |
+| `POST` | `/api/cron/{id}/run` | `handleRunCronJob` | `api_agent_cron.go` |
+| `POST` | `/api/integrations/pairing/allow` | `handleAllowPairingSender` | `api_integrations.go` |
+| `GET` | `/api/integrations/pairing/codes` | `handleListPairingCodes` | `api_integrations.go` |
+| `GET` | `/api/integrations/pairing/pending` | `handleListPendingPairing` | `api_integrations.go` |
+| `GET` | `/api/integrations/pairing/policy` | `handleGetPairingPolicies` | `api_integrations.go` |
+| `POST` | `/api/integrations/pairing/policy` | `handleSetPairingPolicy` | `api_integrations.go` |
+| `GET` | `/api/ready` | `handleReady` | `health.go` |
+| `GET` | `/api/runs/{id}` | `handleGetAgentRun` | `api_runs.go` |
+| `POST` | `/api/runs/{id}/cancel` | `handleCancelAgentRun` | `api_runs.go` |
+| `DELETE` | `/api/system/backup` | `handleDeleteBackup` | `api_backup.go` |
+| `DELETE` | `/api/system/backups/{id}` | `handleDeleteBackup` | `api_backup.go` |
+| `GET` | `/api/system/metrics/prometheus` | `handlePrometheusMetrics` | `api_system.go` |
+| `GET` | `/api/system/models` | `handleGetModelsCatalog` | `api_system.go` |
+| `POST` | `/api/system/ota/apply` | `handleApplyOTA` | `api_ota_storage.go` |
+| `POST` | `/api/system/ota/rollback` | `handleRollbackOTA` | `api_ota_storage.go` |
+| `GET` | `/api/system/ota/status` | `handleOTAStatus` | `api_ota_storage.go` |
+| `GET` | `/api/terminal/info` | `handleTerminalInfo` | `api_terminal.go` |
+| `GET` | `/api/terminal/ws` | `handleTerminalWebSocket` | `api_terminal.go` |
+| `POST` | `/api/tools/hub/uninstall` | `handleUninstallHubSkill` | `api_tools.go` |
+| `GET` | `/api/workspace/chunks` | `handleDBGetFileEmbeddingChunks` | `api_workspace_db.go` |
+| `POST` | `/api/workspace/duplicate` | `handleDBDuplicateWorkspaceFile` | `api_workspace_db.go` |
+| `POST` | `/api/workspace/reindex` | `handleDBReindexWorkspaceFile` | `api_workspace_db.go` |
+| `POST` | `/api/workspace/rename` | `handleDBRenameWorkspaceFile` | `api_workspace_db.go` |
+| `GET` | `/api/workspace/stats` | `handleDBGetWorkspaceStats` | `api_workspace_db.go` |
+| `GET` | `/api/workspace/zip` | `handleDBDownloadWorkspaceZip` | `api_workspace_db.go` |
+
+---
+
 ## Backend Packages (`internal/`)
 
 | Package | Purpose | Key Files |
@@ -284,13 +327,15 @@
 | `bus` | Event bus (Go channels) | `eventbus.go` |
 | `channels` | Unified messaging channel abstractions, session routing & pairing | `adapter.go`, `manager.go`, `router.go`, `pairing.go`, `session.go`, `webhook.go` |
 | `llm` | LLM provider abstraction, cascading, and true SSE streaming | `provider.go`, `router.go`, `openai.go`, `anthropic.go`, `gemini.go`, `deepseek.go` |
+| `mailcal` | Mail and calendar: ABI (`abi`), policy rules (`policy`), drafts, ledger, OAuth, provider plugins (`plugins/*`), toolkit (`provkit`), conformance | `service.go`, `drafts.go`, `writeops.go`, `rules.go`, `oauth.go`, `abi/abi.go`, `policy/` |
 | `memory` | Hybrid RAG, durable local embedding queue, workspace watcher, Chromem vector search, FTS5, token ledger, vault | `embedding.go`, `embedding_watcher.go`, `hybrid.go`, `vector.go`, `fts.go`, `decay.go`, `tokens.go`, `vault.go`, `db.go` |
 | `plugin` | WasmLoader unified polyglot plugin runtime, Wazero linear memory sandbox, host syscalls, security gate, bridges | `types.go`, `loader.go`, `host_api.go`, `security_gate.go`, `bridge_tool.go`, `bridge_channel.go`, `bridge_connector.go`, `manager.go` |
 | `sandbox` | Fail-closed command isolation and Linux cgroup enforcement | `executor.go`, `strong_linux.go`, `strong_other.go`, `bwrap_linux.go`, `jail_docker.go`, `subshell.go` |
 | `security` | Canonical workspace path containment and outbound SSRF protection | `path.go`, `network.go` |
 | `server` | HTTP router, configured data roots, durable approval/run APIs, administrative action dispatch, true SSE, static assets | `router.go`, `api_approvals.go`, `api_runs.go`, `api_plugins.go`, `admin_actions.go`, `api_*.go`, `static.go`, `layered_fs.go` |
 | `system` | HAL, hardware metrics, Tailscale, Wi-Fi, tamper-evident audit | `hal.go`, `hal_linux.go`, `hal_docker.go`, `tailscale.go`, `metrics.go`, `audit.go` |
-| `tools` | Authorized execution boundary, approvals, MCP, WASM, skill watcher, hub | `registry.go`, `approval.go`, `command_policy.go`, `mcp_client.go`, `native_tools.go`, `skill_watcher.go`, `hub.go`, `browser_tool.go` |
+| `workspace` | DB-backed user file store | `store.go` |
+| `tools` | Authorized execution boundary, approvals, MCP, WASM, skill watcher, hub | `registry.go`, `gate.go`, `approval.go`, `command_policy.go`, `mcp_client.go`, `native_tools.go`, `skill_watcher.go`, `hub.go`, `browser_tool.go` |
 
 ---
 
@@ -344,7 +389,7 @@
 
 ## Locale Namespaces (`web/src/locales/`)
 
-Both `en/` and `vi/` contain the following 16 active namespace files:
+Both `en/` and `vi/` contain one file per namespace (20 today; `ls web/src/locales/en` is authoritative, `check:i18n` enforces parity):
 
 | Namespace | File | UI Coverage |
 |:---|:---|:---|
@@ -364,6 +409,10 @@ Both `en/` and `vi/` contain the following 16 active namespace files:
 | `dashboard` | `dashboard.json` | Dashboard overview |
 | `automations` | `automations.json` | Cron jobs, scheduled tasks |
 | `operations` | `operations.json` | Live operations, runtime telemetry, approvals and cost |
+| `channels` | `channels.json` | Channel pairing and account routing |
+| `costs` | `costs.json` | Model cost views |
+| `mailcal` | `mailcal.json` | Mail and calendar accounts, rules, proposals, audit |
+| `terminal` | `terminal.json` | Terminal panel |
 
 ---
 

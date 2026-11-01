@@ -176,8 +176,10 @@ or final verification failure. Run and event records are available through
 The realtime WebSocket authenticates with a Strict SameSite, HttpOnly session
 cookie. Tokens are not placed in WebSocket URLs. The channel is read-only and
 contains operational metadata only; secrets and MCP environment values are
-excluded. The xterm.js UI is an observation terminal, not an interactive host
-shell. Live Canvas is disabled until the operator explicitly configures
+excluded. The Operations xterm.js view is an observation terminal. The separate
+Terminal page (`/api/terminal/ws`) is the exception: an interactive PTY on the
+host for the signed-in operator, outside the sandbox and the tool approval
+flow, so administrator login is equivalent to host access. Live Canvas is disabled until the operator explicitly configures
 `ACTONOS_CANVAS_URL`.
 
 The browser never persists the returned API bearer token in Web Storage.
