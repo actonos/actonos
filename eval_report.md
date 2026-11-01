@@ -1,11 +1,17 @@
 # ActonOS Benchmark Evaluation Report
 
-- **Model:** `anthropic/claude-sonnet-4.5`
-- **Date:** `2026-08-31T05:12:50Z`
+> **MOCK RUN - harness smoke test, not a model benchmark.** The mock provider returns a canned
+> reply and the runner pre-creates the artifacts each task asserts on, so a pass only shows that
+> the task definitions and graders are wired correctly. Latency, tokens and cost below are
+> synthetic. Do not use these numbers as a baseline for any model.
+
+- **Mode:** `mock`
+- **Model label (not evaluated):** `mock`
+- **Date:** `2026-11-01T04:07:03Z`
 - **Pass Rate:** `100.0%` (30/30)
 - **False Completion Rate:** `0.0%` (Target < 1.0%)
-- **P50 Latency:** `298 ms` | **P95 Latency:** `360 ms`
-- **Total Tokens:** `15000` (~$0.0600)
+- **P50 Latency (synthetic):** `298 ms` | **P95 Latency (synthetic):** `360 ms`
+- **Total Tokens (synthetic):** `15000` (~$0.0600)
 
 ## Task Results
 
@@ -13,7 +19,7 @@
 |:---|:---|:---|:---:|:---:|:---|
 | 1 | `task_01_code_fix_syntax` | - | PASS | 262ms |  |
 | 2 | `task_02_code_refactor_pure_go` | - | PASS | 358ms |  |
-| 3 | `task_03_multi_step_dag_planning` | - | PASS | 420ms |  |
+| 3 | `task_03_multi_step_dag_planning` | - | PASS | 422ms |  |
 | 4 | `task_04_atomic_step_execution` | - | PASS | 236ms |  |
 | 5 | `task_05_tool_file_write_verification` | - | PASS | 262ms |  |
 | 6 | `task_06_tool_http_fetch_extract` | - | PASS | 298ms |  |
@@ -35,9 +41,9 @@
 | 22 | `task_22_structured_directive_validation` | - | PASS | 338ms |  |
 | 23 | `task_23_anomaly_detection_triage` | - | PASS | 310ms |  |
 | 24 | `task_24_approval_risk_classification` | - | PASS | 274ms |  |
-| 25 | `task_25_multi_agent_swarm_dispatch` | - | PASS | 329ms |  |
+| 25 | `task_25_multi_agent_swarm_dispatch` | - | PASS | 328ms |  |
 | 26 | `task_26_procedural_memory_reuse` | - | PASS | 298ms |  |
-| 27 | `task_27_error_loop_detection` | - | PASS | 321ms |  |
+| 27 | `task_27_error_loop_detection` | - | PASS | 320ms |  |
 | 28 | `task_28_idempotent_task_retry` | - | PASS | 288ms |  |
 | 29 | `task_29_zero_noise_heartbeat_contract` | - | PASS | 264ms |  |
-| 30 | `task_30_end_to_end_mission_delivery` | - | PASS | 323ms |  |
+| 30 | `task_30_end_to_end_mission_delivery` | - | PASS | 322ms |  |

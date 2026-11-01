@@ -26,6 +26,12 @@ func main() {
 	failUnder := flag.Float64("fail-under", 0.0, "Minimum pass rate percentage required to succeed")
 	flag.Parse()
 
+	// Only the offline harness exists today. Falling through in "live" mode used to
+	// produce the same synthetic results while labelling them as a real model run.
+	if *mode != "mock" {
+		log.Fatalf("unsupported --mode=%q: only \"mock\" is implemented. Live provider evaluation is not available yet, so no real model results can be produced", *mode)
+	}
+
 	log.Printf("Starting ActonOS Cognition & Reliability Benchmark Runner [mode=%s, model=%s]", *mode, *modelID)
 
 	taskFiles, err := filepath.Glob(filepath.Join(*tasksDir, "*.json"))
@@ -152,6 +158,7 @@ func main() {
 
 	report := evals.BenchmarkReport{
 		RunTimestamp:        startTime.UTC(),
+		Mode:                *mode,
 		ModelID:             *modelID,
 		TotalTasks:          totalTasks,
 		PassedTasks:         passedCount,
@@ -168,12 +175,17 @@ func main() {
 	// Render Markdown Summary Table
 	var md strings.Builder
 	md.WriteString("# ActonOS Benchmark Evaluation Report\n\n")
-	md.WriteString(fmt.Sprintf("- **Model:** `%s`\n", report.ModelID))
+	md.WriteString("> **MOCK RUN - harness smoke test, not a model benchmark.** The mock provider returns a canned\n")
+	md.WriteString("> reply and the runner pre-creates the artifacts each task asserts on, so a pass only shows that\n")
+	md.WriteString("> the task definitions and graders are wired correctly. Latency, tokens and cost below are\n")
+	md.WriteString("> synthetic. Do not use these numbers as a baseline for any model.\n\n")
+	md.WriteString(fmt.Sprintf("- **Mode:** `%s`\n", report.Mode))
+	md.WriteString(fmt.Sprintf("- **Model label (not evaluated):** `%s`\n", report.ModelID))
 	md.WriteString(fmt.Sprintf("- **Date:** `%s`\n", report.RunTimestamp.Format(time.RFC3339)))
 	md.WriteString(fmt.Sprintf("- **Pass Rate:** `%.1f%%` (%d/%d)\n", report.PassRatePercent, report.PassedTasks, report.TotalTasks))
 	md.WriteString(fmt.Sprintf("- **False Completion Rate:** `%.1f%%` (Target < 1.0%%)\n", report.FalseCompletionRate))
-	md.WriteString(fmt.Sprintf("- **P50 Latency:** `%d ms` | **P95 Latency:** `%d ms`\n", report.P50LatencyMs, report.P95LatencyMs))
-	md.WriteString(fmt.Sprintf("- **Total Tokens:** `%d` (~$%.4f)\n\n", report.TotalTokens, report.TotalCostUSD))
+	md.WriteString(fmt.Sprintf("- **P50 Latency (synthetic):** `%d ms` | **P95 Latency (synthetic):** `%d ms`\n", report.P50LatencyMs, report.P95LatencyMs))
+	md.WriteString(fmt.Sprintf("- **Total Tokens (synthetic):** `%d` (~$%.4f)\n\n", report.TotalTokens, report.TotalCostUSD))
 
 	md.WriteString("## Task Results\n\n")
 	md.WriteString("| # | Task ID | Domain | Status | Duration | Failure Reason |\n")

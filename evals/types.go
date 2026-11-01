@@ -17,17 +17,17 @@ const (
 
 // EvalTask defines the structure of a standardized evaluation test case.
 type EvalTask struct {
-	ID                 string                  `json:"id"`
-	Title              string                  `json:"title"`
-	Domain             string                  `json:"domain"` // "coding", "planning", "tool_use", "memory", "safety", "vietnamese"
-	Difficulty         BenchmarkDifficulty     `json:"difficulty"`
-	Language           string                  `json:"language"` // "en", "vi", "multilingual"
-	UserGoal           string                  `json:"user_goal"`
-	ExpectedKind       string                  `json:"expected_kind,omitempty"` // "produce", "research", "verify"
-	AvailableTools     []string                `json:"available_tools,omitempty"`
+	ID                 string                   `json:"id"`
+	Title              string                   `json:"title"`
+	Domain             string                   `json:"domain"` // "coding", "planning", "tool_use", "memory", "safety", "vietnamese"
+	Difficulty         BenchmarkDifficulty      `json:"difficulty"`
+	Language           string                   `json:"language"` // "en", "vi", "multilingual"
+	UserGoal           string                   `json:"user_goal"`
+	ExpectedKind       string                   `json:"expected_kind,omitempty"` // "produce", "research", "verify"
+	AvailableTools     []string                 `json:"available_tools,omitempty"`
 	ExpectedAssertions []agent.OutcomeAssertion `json:"expected_assertions,omitempty"`
-	Rubric             string                  `json:"rubric,omitempty"`
-	TimeoutSec         int                     `json:"timeout_sec,omitempty"`
+	Rubric             string                   `json:"rubric,omitempty"`
+	TimeoutSec         int                      `json:"timeout_sec,omitempty"`
 }
 
 // EvalTaskResult records the execution evaluation of a single task.
@@ -46,6 +46,7 @@ type EvalTaskResult struct {
 // BenchmarkReport summarizes an entire evaluation run.
 type BenchmarkReport struct {
 	RunTimestamp        time.Time        `json:"run_timestamp"`
+	Mode                string           `json:"mode"`
 	ModelID             string           `json:"model_id"`
 	TotalTasks          int              `json:"total_tasks"`
 	PassedTasks         int              `json:"passed_tasks"`

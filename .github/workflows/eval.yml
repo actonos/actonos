@@ -11,7 +11,7 @@ on:
         required: false
         default: "anthropic/claude-sonnet-4.5"
       mode:
-        description: "Evaluation mode (mock or live)"
+        description: "Evaluation mode (only mock is implemented; live exits with an error)"
         required: false
         default: "mock"
 
