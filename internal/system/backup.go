@@ -401,19 +401,28 @@ func (bm *BackupManager) FactoryReset(ctx context.Context, confirmToken string) 
 	safetyPath := filepath.Join(bm.backupsDir, "pre-factory-reset-safety.db")
 	_, _ = bm.db.ExecContext(ctx, `VACUUM INTO ?`, safetyPath)
 
+	// Children before parents. Some tables are created lazily by their owning
+	// subsystem, so a missing table is fine; any other failure must surface rather
+	// than report a reset that did not happen.
 	tablesToClear := []string{
 		"run_events",
 		"agent_runs",
 		"autonomous_tasks",
 		"notifications",
+		"messages",
 		"conversations",
-		"chat_messages",
-		"memory_fragments",
+		"memories_fts",
+		"memories",
 		"cron_jobs",
 	}
 
 	for _, table := range tablesToClear {
-		_, _ = bm.db.ExecContext(ctx, fmt.Sprintf("DELETE FROM %s;", table))
+		if _, err := bm.db.ExecContext(ctx, fmt.Sprintf("DELETE FROM %s;", table)); err != nil {
+			if strings.Contains(err.Error(), "no such table") {
+				continue
+			}
+			return fmt.Errorf("clearing %s: %w", table, err)
+		}
 	}
 
 	// Reclaim pages
