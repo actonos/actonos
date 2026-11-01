@@ -1,0 +1,8 @@
+{
+  "id": "mailcal-echo-mail",
+  "name": "Echo mail (example)",
+  "version": "1.0.0",
+  "description": "Example read-only provider: serves the messages written in the account's config. It exists to show how small a provider plugin is; it needs no network and no permissions.",
+  "capabilities": ["mail@1"],
+  "permissions": {}
+}
