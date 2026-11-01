@@ -997,6 +997,7 @@ export function ChatPage({ selectedAgentID, onSelectAgentID }: ChatPageProps) {
                     <div className="flex items-center gap-2">
                       {/* Agent Selector Dropdown */}
                       <select
+                        aria-label={t('selectAgent')}
                         value={activeAgentID}
                         onChange={(e) => {
                           setActiveAgentID(e.target.value);

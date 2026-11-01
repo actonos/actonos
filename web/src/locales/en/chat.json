@@ -167,5 +167,6 @@
   "resumingAfterApproval": "Resuming after approval…",
   "closePopover": "Close",
   "workspaceLabel": "Workspace",
-  "clearSearch": "Clear search"
+  "clearSearch": "Clear search",
+  "filterByChannel": "Filter by channel"
 }

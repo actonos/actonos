@@ -118,7 +118,7 @@ export function App() {
 
   useEffect(() => {
     const handleShortcut = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setCommandOpen((prev) => !prev);
       }

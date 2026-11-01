@@ -63,7 +63,7 @@ export function WorkspaceEditor({
   // Keyboard shortcut Ctrl+S
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
         if (activeTab) {
           onSave(activeTab.id);

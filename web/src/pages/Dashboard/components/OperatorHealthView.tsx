@@ -127,9 +127,9 @@ export function OperatorHealthView({
           <div className="flex items-center gap-5">
             <div
               className={`w-18 h-18 rounded-2xl flex flex-col items-center justify-center border text-center shadow-xs shrink-0 ${isHealthy
-                ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-700'
+                ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-800'
                 : isDegraded
-                  ? 'bg-amber-500/10 border-amber-500/25 text-amber-700'
+                  ? 'bg-amber-500/10 border-amber-500/25 text-amber-800'
                   : 'bg-accent-coral/10 border-accent-coral/25 text-accent-coral'
                 }`}
             >

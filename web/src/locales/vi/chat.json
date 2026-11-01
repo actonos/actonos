@@ -167,5 +167,6 @@
   "resumingAfterApproval": "Đang tiếp tục sau khi phê duyệt…",
   "closePopover": "Đóng",
   "workspaceLabel": "Không gian làm việc",
-  "clearSearch": "Xóa tìm kiếm"
+  "clearSearch": "Xóa tìm kiếm",
+  "filterByChannel": "Lọc theo kênh"
 }

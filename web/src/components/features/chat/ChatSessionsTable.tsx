@@ -235,6 +235,7 @@ export function ChatSessionsTable({
             <div className="flex items-center gap-1.5 bg-soft-meadow px-3 py-1.5 rounded-full border border-onyx/10 text-caption">
               <Bot className="w-3.5 h-3.5 text-slate" />
               <select
+                aria-label={t('selectAgent')}
                 value={selectedAgentID}
                 onChange={(e) => onSelectAgentID(e.target.value)}
                 className="bg-transparent border-0 text-deep-ink font-medium focus:outline-none cursor-pointer pr-1 text-caption"
@@ -252,6 +253,7 @@ export function ChatSessionsTable({
             <div className="flex items-center gap-1.5 bg-soft-meadow px-3 py-1.5 rounded-full border border-onyx/10 text-caption">
               <Filter className="w-3.5 h-3.5 text-slate" />
               <select
+                aria-label={t('filterByChannel')}
                 value={selectedChannel}
                 onChange={(e) => onSelectChannel(e.target.value)}
                 className="bg-transparent border-0 text-deep-ink font-medium focus:outline-none cursor-pointer pr-1 text-caption"

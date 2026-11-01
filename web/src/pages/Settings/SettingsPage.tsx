@@ -513,6 +513,7 @@ export function SettingsPage() {
                       {t('identity.language')}
                     </label>
                     <select
+                      aria-label={t('identity.language')}
                       value={identityProfile.language}
                       onChange={(e) => setIdentityProfile({ ...identityProfile, language: e.target.value })}
                       className="w-full px-4 py-2.5 bg-canvas border border-onyx/15 rounded-full text-body-sm text-deep-ink font-sans focus:outline-none focus:ring-2 focus:ring-deep-ink"
@@ -527,6 +528,7 @@ export function SettingsPage() {
                       {t('identity.timezone')}
                     </label>
                     <select
+                      aria-label={t('identity.timezone')}
                       value={identityProfile.timezone || 'UTC'}
                       onChange={(e) => setIdentityProfile({ ...identityProfile, timezone: e.target.value })}
                       className="w-full px-4 py-2.5 bg-canvas border border-onyx/15 rounded-full text-body-sm text-deep-ink font-sans focus:outline-none focus:ring-2 focus:ring-deep-ink"
