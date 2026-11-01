@@ -30,6 +30,9 @@ jobs:
       - name: Unit tests with coverage
         run: go test -count=1 -coverprofile=coverage.out ./internal/...
 
+      - name: Eval harness tests
+        run: go test -count=1 ./evals/...
+
       - name: Enforce per-package coverage floors
         run: go run ./scripts/cover-gate.go coverage.out
 

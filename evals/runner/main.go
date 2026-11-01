@@ -15,22 +15,34 @@ import (
 	"github.com/actonos/actonos/evals"
 	"github.com/actonos/actonos/evals/graders"
 	"github.com/actonos/actonos/internal/agent"
-	"github.com/actonos/actonos/internal/llm"
 )
 
 func main() {
 	tasksDir := flag.String("tasks-dir", "./evals/tasks", "Path to tasks JSON directory")
-	mode := flag.String("mode", "mock", "Execution mode: mock or live")
-	modelID := flag.String("model", "anthropic/claude-sonnet-4.5", "Target model ID to evaluate")
+	mode := flag.String("mode", "mock", "Execution mode: mock (offline harness smoke test) or live (real model through the agent engine)")
+	modelID := flag.String("model", "anthropic/claude-sonnet-4.5", "Target model ID to evaluate, as <provider>/<model>")
 	outputFile := flag.String("output", "", "Optional output path for report (.json or .md)")
 	failUnder := flag.Float64("fail-under", 0.0, "Minimum pass rate percentage required to succeed")
+	only := flag.String("only", "", "Run only tasks whose id contains this substring, e.g. task_05 (useful to limit live cost)")
+	maxTasks := flag.Int("max-tasks", 0, "Run at most this many tasks (0 = all)")
 	flag.Parse()
 
-	// Only the offline harness exists today. Falling through in "live" mode used to
-	// produce the same synthetic results while labelling them as a real model run.
-	if *mode != "mock" {
-		log.Fatalf("unsupported --mode=%q: only \"mock\" is implemented. Live provider evaluation is not available yet, so no real model results can be produced", *mode)
+	var (
+		executor taskExecutor
+		err      error
+	)
+	switch *mode {
+	case "mock":
+		executor, err = newMockExecutor(*modelID)
+	case "live":
+		executor, err = newLiveExecutor(*modelID)
+	default:
+		log.Fatalf("unsupported --mode=%q: use \"mock\" or \"live\"", *mode)
 	}
+	if err != nil {
+		log.Fatalf("Preparing %s executor: %v", *mode, err)
+	}
+	defer executor.Close()
 
 	log.Printf("Starting ActonOS Cognition & Reliability Benchmark Runner [mode=%s, model=%s]", *mode, *modelID)
 
@@ -38,31 +50,18 @@ func main() {
 	if err != nil || len(taskFiles) == 0 {
 		log.Fatalf("No task JSON files found in %s (err: %v)", *tasksDir, err)
 	}
-
 	sort.Strings(taskFiles)
-	log.Printf("Discovered %d benchmark tasks", len(taskFiles))
+	log.Printf("Found %d benchmark tasks", len(taskFiles))
 
-	tempDir, err := os.MkdirTemp("", "actonos-eval-*")
-	if err != nil {
-		log.Fatalf("Creating temp workspace: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	router := llm.NewModelCascadeRouter()
-	if *mode == "mock" {
-		mockP := llm.NewMockProvider(*modelID, `{"status":"ok"}`)
-		router.RegisterProvider(*modelID, mockP)
-	}
-
-	outcomeVerifier := agent.NewOutcomeVerifier(nil, router)
-	grader := graders.NewTaskGrader(outcomeVerifier, router)
+	outcomeVerifier := agent.NewOutcomeVerifier(nil, executor.Router())
+	grader := graders.NewTaskGrader(outcomeVerifier, executor.Router())
 
 	var results []evals.EvalTaskResult
 	var latencies []int64
 	totalTokens := 0
+	totalCost := 0.0
 	passedCount := 0
 	falseCompletedCount := 0
-
 	startTime := time.Now()
 
 	for _, tf := range taskFiles {
@@ -71,56 +70,33 @@ func main() {
 			log.Printf("WARN: Failed to read %s: %v", tf, err)
 			continue
 		}
-
 		var task evals.EvalTask
 		if err := json.Unmarshal(data, &task); err != nil {
 			log.Printf("WARN: Failed to parse %s: %v", tf, err)
 			continue
 		}
-
-		taskWorkspace := filepath.Join(tempDir, task.ID)
-		_ = os.MkdirAll(taskWorkspace, 0755)
-
-		// Set up mock artifact side-effects for produce tasks in mock mode
-		var toolCalls []llm.ToolCall
-		agentOutput := "Task executed successfully."
-		if task.ExpectedKind == "produce" {
-			for _, assertion := range task.ExpectedAssertions {
-				if assertion.Kind == agent.AssertFileExists || assertion.Kind == agent.AssertFileContains || assertion.Kind == agent.AssertJSONSchema {
-					targetFile := filepath.Join(taskWorkspace, assertion.Target)
-					content := []byte("Initial benchmark payload")
-					if assertion.Kind == agent.AssertJSONSchema {
-						content = []byte(`{"agent_id":"a1","name":"Agent 1","status":"active","priority":"P1","id":"dir_1","title":"Daily"}`)
-					} else if assertion.Expected != "" {
-						content = []byte("Header\n" + assertion.Expected + "\nFooter")
-					}
-					_ = os.WriteFile(targetFile, content, 0644)
-					toolCalls = append(toolCalls, llm.ToolCall{
-						ID: "call_eval_" + task.ID,
-						Function: llm.FunctionCall{
-							Name: "native_file_write",
-						},
-					})
-				}
-			}
+		if *only != "" && !strings.Contains(task.ID, *only) {
+			continue
+		}
+		if *maxTasks > 0 && len(results) >= *maxTasks {
+			break
 		}
 
-		taskStart := time.Now()
-		dur := time.Duration(150+len(task.UserGoal)*2) * time.Millisecond
-		time.Sleep(10 * time.Millisecond) // Simulated execution jitter
-		taskDur := time.Since(taskStart) + dur
+		ex := executor.Execute(context.Background(), task)
 
-		res := grader.GradeTask(
-			context.Background(),
-			task,
-			taskWorkspace,
-			agentOutput,
-			toolCalls,
-			1,
-			taskDur,
-			500,
-			0.002,
-		)
+		var res evals.EvalTaskResult
+		if ex.Err != nil && strings.TrimSpace(ex.Output) == "" {
+			res = evals.EvalTaskResult{
+				TaskID:        task.ID,
+				StepsTaken:    ex.Steps,
+				DurationMs:    ex.Duration.Milliseconds(),
+				TokensUsed:    ex.Tokens,
+				EstimatedCost: ex.CostUSD,
+				FailureReason: "execution error: " + ex.Err.Error(),
+			}
+		} else {
+			res = grader.GradeTask(context.Background(), task, ex.Workspace, ex.Output, ex.ToolCalls, ex.Steps, ex.Duration, ex.Tokens, ex.CostUSD)
+		}
 
 		if res.Passed {
 			passedCount++
@@ -134,7 +110,12 @@ func main() {
 
 		latencies = append(latencies, res.DurationMs)
 		totalTokens += res.TokensUsed
+		totalCost += res.EstimatedCost
 		results = append(results, res)
+	}
+
+	if len(results) == 0 {
+		log.Fatalf("No tasks were run (--only=%q, --max-tasks=%d)", *only, *maxTasks)
 	}
 
 	sort.Slice(latencies, func(i, j int) bool { return latencies[i] < latencies[j] })
@@ -149,11 +130,10 @@ func main() {
 	}
 
 	totalTasks := len(results)
-	passRate := 0.0
-	falseRate := 0.0
+	passRate, falseRate := 0.0, 0.0
 	if totalTasks > 0 {
-		passRate = (float64(passedCount) / float64(totalTasks)) * 100.0
-		falseRate = (float64(falseCompletedCount) / float64(totalTasks)) * 100.0
+		passRate = float64(passedCount) / float64(totalTasks) * 100.0
+		falseRate = float64(falseCompletedCount) / float64(totalTasks) * 100.0
 	}
 
 	report := evals.BenchmarkReport{
@@ -168,50 +148,69 @@ func main() {
 		P50LatencyMs:        p50,
 		P95LatencyMs:        p95,
 		TotalTokens:         totalTokens,
-		TotalCostUSD:        float64(totalTokens) * 0.000004,
+		TotalCostUSD:        totalCost,
 		Results:             results,
 	}
-
-	// Render Markdown Summary Table
-	var md strings.Builder
-	md.WriteString("# ActonOS Benchmark Evaluation Report\n\n")
-	md.WriteString("> **MOCK RUN - harness smoke test, not a model benchmark.** The mock provider returns a canned\n")
-	md.WriteString("> reply and the runner pre-creates the artifacts each task asserts on, so a pass only shows that\n")
-	md.WriteString("> the task definitions and graders are wired correctly. Latency, tokens and cost below are\n")
-	md.WriteString("> synthetic. Do not use these numbers as a baseline for any model.\n\n")
-	md.WriteString(fmt.Sprintf("- **Mode:** `%s`\n", report.Mode))
-	md.WriteString(fmt.Sprintf("- **Model label (not evaluated):** `%s`\n", report.ModelID))
-	md.WriteString(fmt.Sprintf("- **Date:** `%s`\n", report.RunTimestamp.Format(time.RFC3339)))
-	md.WriteString(fmt.Sprintf("- **Pass Rate:** `%.1f%%` (%d/%d)\n", report.PassRatePercent, report.PassedTasks, report.TotalTasks))
-	md.WriteString(fmt.Sprintf("- **False Completion Rate:** `%.1f%%` (Target < 1.0%%)\n", report.FalseCompletionRate))
-	md.WriteString(fmt.Sprintf("- **P50 Latency (synthetic):** `%d ms` | **P95 Latency (synthetic):** `%d ms`\n", report.P50LatencyMs, report.P95LatencyMs))
-	md.WriteString(fmt.Sprintf("- **Total Tokens (synthetic):** `%d` (~$%.4f)\n\n", report.TotalTokens, report.TotalCostUSD))
-
-	md.WriteString("## Task Results\n\n")
-	md.WriteString("| # | Task ID | Domain | Status | Duration | Failure Reason |\n")
-	md.WriteString("|:---|:---|:---|:---:|:---:|:---|\n")
-	for i, r := range results {
-		status := "PASS"
-		if !r.Passed {
-			status = "FAIL"
-		}
-		md.WriteString(fmt.Sprintf("| %d | `%s` | - | %s | %dms | %s |\n", i+1, r.TaskID, status, r.DurationMs, r.FailureReason))
+	if *mode == "mock" {
+		// The mock executor reports a flat per-task token count; keep the legacy estimate.
+		report.TotalCostUSD = float64(totalTokens) * 0.000004
 	}
 
-	fmt.Println("\n" + md.String())
+	md := renderMarkdown(report)
+	fmt.Println("\n" + md)
 
 	if *outputFile != "" {
-		ext := strings.ToLower(filepath.Ext(*outputFile))
-		if ext == ".json" {
+		if strings.ToLower(filepath.Ext(*outputFile)) == ".json" {
 			jsonData, _ := json.MarshalIndent(report, "", "  ")
 			_ = os.WriteFile(*outputFile, jsonData, 0644)
 		} else {
-			_ = os.WriteFile(*outputFile, []byte(md.String()), 0644)
+			_ = os.WriteFile(*outputFile, []byte(md), 0644)
 		}
 		log.Printf("Report saved to %s", *outputFile)
 	}
 
 	if *failUnder > 0 && report.PassRatePercent < *failUnder {
+		executor.Close()
 		log.Fatalf("FAIL: Pass rate %.1f%% is below minimum required threshold %.1f%%", report.PassRatePercent, *failUnder)
 	}
+}
+
+// renderMarkdown formats the report. Mock reports carry a prominent warning so
+// their numbers are never mistaken for a model benchmark.
+func renderMarkdown(report evals.BenchmarkReport) string {
+	var md strings.Builder
+	md.WriteString("# ActonOS Benchmark Evaluation Report\n\n")
+	synthetic := ""
+	if report.Mode == "mock" {
+		synthetic = " (synthetic)"
+		md.WriteString("> **MOCK RUN - harness smoke test, not a model benchmark.** The mock provider returns a canned\n")
+		md.WriteString("> reply and the runner pre-creates the artifacts each task asserts on, so a pass only shows that\n")
+		md.WriteString("> the task definitions and graders are wired correctly. Latency, tokens and cost below are\n")
+		md.WriteString("> synthetic. Do not use these numbers as a baseline for any model.\n\n")
+		md.WriteString(fmt.Sprintf("- **Mode:** `%s`\n", report.Mode))
+		md.WriteString(fmt.Sprintf("- **Model label (not evaluated):** `%s`\n", report.ModelID))
+	} else {
+		md.WriteString("> **LIVE RUN** - each task was executed by the real agent engine against the model below.\n")
+		md.WriteString("> Tasks without outcome assertions are graded only on a non-empty answer and the safety checks, so\n")
+		md.WriteString("> read the per-task failure reasons rather than relying on the pass rate alone.\n\n")
+		md.WriteString(fmt.Sprintf("- **Mode:** `%s`\n", report.Mode))
+		md.WriteString(fmt.Sprintf("- **Model:** `%s`\n", report.ModelID))
+	}
+	md.WriteString(fmt.Sprintf("- **Date:** `%s`\n", report.RunTimestamp.Format(time.RFC3339)))
+	md.WriteString(fmt.Sprintf("- **Pass Rate:** `%.1f%%` (%d/%d)\n", report.PassRatePercent, report.PassedTasks, report.TotalTasks))
+	md.WriteString(fmt.Sprintf("- **False Completion Rate:** `%.1f%%` (Target < 1.0%%)\n", report.FalseCompletionRate))
+	md.WriteString(fmt.Sprintf("- **P50 Latency%s:** `%d ms` | **P95 Latency%s:** `%d ms`\n", synthetic, report.P50LatencyMs, synthetic, report.P95LatencyMs))
+	md.WriteString(fmt.Sprintf("- **Total Tokens%s:** `%d` (~$%.4f)\n\n", synthetic, report.TotalTokens, report.TotalCostUSD))
+
+	md.WriteString("## Task Results\n\n")
+	md.WriteString("| # | Task ID | Domain | Status | Duration | Failure Reason |\n")
+	md.WriteString("|:---|:---|:---|:---:|:---:|:---|\n")
+	for i, r := range report.Results {
+		status := "PASS"
+		if !r.Passed {
+			status = "FAIL"
+		}
+		md.WriteString(fmt.Sprintf("| %d | `%s` | - | %s | %dms | %s |\n", i+1, r.TaskID, status, r.DurationMs, strings.ReplaceAll(r.FailureReason, "|", "/")))
+	}
+	return md.String()
 }
