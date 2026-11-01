@@ -1282,13 +1282,13 @@ Trigger an immediate self-review cycle for the specified agent.
 
 ## Mail & Calendar
 
-Provider-agnostic mail and calendar accounts served by provider plugins (see `docs/superpowers/specs/2026-11-01-mail-calendar-plugins-design.md`). Agents can read and draft; nothing is sent in this version. Account `status` is one of `ok`, `auth_expired`, `paused`, `error`. Secrets never appear in `config`; use `auth` references.
+Provider-agnostic mail and calendar accounts served by provider plugins (see `docs/superpowers/specs/2026-11-01-mail-calendar-plugins-design.md`). Agents can read and draft; sending, deleting and calendar changes need the master switch, a draft and a rule or a person's approval. Account `status` is one of `ok`, `auth_expired`, `paused`, `error`. Secrets never appear in `config`; use `auth` references.
 
 ### `GET /api/mailcal/status`
 Counts of loaded provider plugins and configured accounts.
 
 ### `GET /api/mailcal/providers`
-Loaded provider plugins with their supported operations and limits.
+Loaded provider plugins with their supported operations and limits: `{plugin_id, name, version, abi[], ops[], limits, oauth_provider?, auth_kind?, verified}`. `auth_kind` is `oauth` or `password` and tells the UI which sign-in form to show. `verified` is true when a `conformance.json` next to the plugin's `plugin.wasm` matches that exact module; it is information only and changes no permission.
 
 ### `GET /api/mailcal/accounts`
 ### `POST /api/mailcal/accounts`

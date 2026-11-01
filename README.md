@@ -27,6 +27,7 @@ A single-purpose appliance OS designed as a **customizable, self-governing agent
 | **Universal Agent Engine** | Create unlimited AI agents with custom personas, system prompts, tool bindings, LLM models, and delegation scopes. |
 | **Multi-Agent Swarm** | Agent-to-Agent delegation via Goroutines. Orchestration agents decompose tasks and dispatch to specialized sub-agents. |
 | **WasmLoader Plugin Engine** | Sandboxed WebAssembly runtime (Wazero pure Go) running Tools, Messaging Channels, and SaaS Connectors with strict egress firewalls and AES-256-GCM vault brokering (not DMI/CPU bound). |
+| **Mail & Calendar** | Gmail, Microsoft 365, CalDAV and IMAP/SMTP as sandboxed provider plugins. Agents read and draft; sending is off by default and needs your rules or your approval. Write your own provider with [the plugin guide](docs/MAILCAL-PLUGIN-GUIDE.md). |
 | **Dynamic Tooling Hub** | Hot-load MCP servers, WASM plugins, and Skill-as-a-Folder scripts at runtime — no restarts needed. |
 | **Dual-Runtime HAL** | Automatic environment detection: bare-metal (D-Bus, Wi-Fi Hotspot, Bubblewrap sandbox) or Docker (container metrics, jailed exec). |
 | **Hybrid Memory (RAG)** | SQLite FTS5 + Chromem-go vectors generated locally by pinned multilingual-e5-small ONNX, with a durable one-minute debounce queue. |
@@ -170,11 +171,13 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the full A-Z development guid
 actonos/
 ├── cmd/actond/              # Binary entrypoint (auto-detects bare-metal vs Docker)
 ├── cmd/embeddingd/          # Loopback multilingual-e5-small ONNX helper
+├── cmd/mailcal-conformance/ # Conformance suite and certificate for mail and calendar plugins
 ├── internal/
 │   ├── agent/               # AI Agent Engine, Swarm, Planner, Verifier, Memory Reflection
 │   ├── auth/                # OAuth 2.1 PKCE, Token Refresh, Delegation Manager
 │   ├── bus/                 # Event-Driven Pub/Sub Channel Router
 │   ├── channels/            # Message routing, session state, pairing manager, account sync
+│   ├── mailcal/             # Mail and calendar: ABI, policy rules, drafts, provider plugins, conformance
 │   ├── plugin/              # WasmLoader runtime (Wazero), host syscalls, tool/channel/connector bridges
 │   ├── llm/                 # LLM Provider Interface & Cascade Router
 │   ├── tools/               # MCP Host, WASM Runner, Skill Watcher, Native Tools

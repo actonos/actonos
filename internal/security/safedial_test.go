@@ -112,3 +112,30 @@ func TestInvalidPortsAreRefused(t *testing.T) {
 		}
 	}
 }
+
+// Without an injected resolver the system lookup is used; a failure is reported, an answer is
+// vetted like any other.
+func TestTheSystemResolverIsUsedByDefaultAndItsErrorsPropagate(t *testing.T) {
+	original := lookupIP
+	t.Cleanup(func() { lookupIP = original })
+
+	lookupIP = func(context.Context, string) ([]net.IPAddr, error) {
+		return []net.IPAddr{{IP: net.ParseIP("93.184.216.34")}}, nil
+	}
+	ip, err := DialPolicy{}.SafeAddr(context.Background(), "mail.example.com")
+	if err != nil || ip.String() != "93.184.216.34" {
+		t.Fatalf("%v %v", ip, err)
+	}
+
+	lookupIP = func(context.Context, string) ([]net.IPAddr, error) {
+		return []net.IPAddr{{IP: net.ParseIP("192.168.1.5")}}, nil
+	}
+	if _, err := (DialPolicy{}).SafeAddr(context.Background(), "mail.example.com"); !errors.Is(err, ErrUnsafeAddress) {
+		t.Fatalf("a private answer from the system resolver must be refused: %v", err)
+	}
+
+	lookupIP = func(context.Context, string) ([]net.IPAddr, error) { return nil, errors.New("no such host") }
+	if _, err := (DialPolicy{}).SafeAddr(context.Background(), "mail.example.com"); err == nil {
+		t.Fatal("a lookup failure must be an error")
+	}
+}

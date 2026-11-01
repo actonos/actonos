@@ -34,6 +34,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - An Automations preset that schedules a limited mail-triage agent: read and draft only unless you allow acting under your rules, and never exec, cron or file tools.
 - **Fixed**: the OAuth callback redirected to a path the hash-routed app does not read; it now returns to `/#/mailcal`. A newly created OAuth account is shown as waiting for sign-in instead of connected.
 - **Office eval suite (`evals/tasks/35` to `46`, `scripts/eval-office.sh`, `--domain office`)**: twelve more tasks that exercise the real approval gate, rules and ledger: answering under a rule, a send that must wait for a person, hostile and hidden-HTML mail that must not make the agent send, forwarding, a lookalike address, the hourly limit, calendar accept and create, free/busy slots, two mailboxes, and a Vietnamese reply. New checks count messages sent, attempts stopped for approval, events created and invitations accepted. In mock mode an ideal agent passes all of them and tests prove the checks can fail.
+- **Provider conformance and plugin guide (`cmd/mailcal-conformance`, `internal/mailcal/certificate`, `docs/MAILCAL-PLUGIN-GUIDE.md`)**:
+  - `mailcal-conformance` runs the conformance suite on a compiled plugin (offline by default; `--live` reads a token or app password from the environment, never from flags or files) and writes a `conformance.json` bound to the SHA-256 of that exact module. `make plugins` and `make conformance` build and certify the four shipped plugins.
+  - The provider list reports `verified` and the Add account dialog shows whether the selected plugin carries a matching certificate. It is information only; every plugin runs in the same sandbox behind the same approvals.
+  - A manifest gate runs over every shipped plugin (no bare wildcards, no secrets, storage, workspace or bus, consistent OAuth declaration, real exports, certifiable), plus `echo-mail`, a read-only example provider written from the guide without touching any core file.
+  - Scheduled triage runs are pinned by tests: no send while the switch is off, an approval request when no rule matches, one send under a matching rule.
 - **Plugin runtime**: guest calls that never return are now interrupted when their context ends.
 
 

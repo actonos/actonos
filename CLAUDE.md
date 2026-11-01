@@ -15,6 +15,9 @@ make lint            # scripts/lint.sh: go vet, gofmt, golangci-lint (if install
 make test-unit       # go test ./internal/... with coverage, then scripts/cover-gate.go (per-package floors)
 make test-race       # CGO_ENABLED=1 go test -race ./internal/...
 make build           # web build -> internal/server/dist, then ./build/actond   (build-only: skip the web step)
+make plugins         # build the mail/calendar provider plugins into build/plugins/<id>/
+make conformance     # ... and certify each (cmd/mailcal-conformance writes conformance.json beside plugin.wasm)
+scripts/eval-office.sh <provider/model>   # office eval suite (mock gate; live runs are user-run)
 make build-embedding # build/embeddingd (CGO + `-tags ORT`, needs ONNX Runtime at runtime)
 
 go test ./internal/agent -run TestName -count=1     # single Go test
@@ -48,6 +51,8 @@ The `Makefile` builds with `CGO_ENABLED=0`; only `test-race` and `build-embeddin
 **Plugins.** `internal/plugin` runs WASM (wazero, pure Go) tools, channel adapters and connectors. Guests talk to the host through `host_api.go` syscalls; `security_gate.go` enforces the manifest allowlist for network, secrets, storage and bus topics, and `internal/security` blocks private/loopback egress. Channel plugins are bridged into `internal/channels` (`ChannelManager`, `MessageRouter`, pairing) and publish inbound messages on the event bus.
 
 **Memory.** `internal/memory`: SQLite (`modernc.org/sqlite`, pure Go) with FTS5 plus chromem-go vectors, combined in `HybridEngine`. Embeddings come from the separate CGO `cmd/embeddingd` helper over loopback so `actond` stays static. Memories have importance tiers, pinning and Ebbinghaus decay (`decay.go`); the vault (`vault.go`) is AES-256-GCM.
+
+**Mail & calendar.** `internal/mailcal` serves mail and calendar through WASM provider plugins (`internal/mailcal/plugins/*`, ABI `mail@1`/`calendar@1` in `internal/mailcal/abi`, additive-only, golden-tested). The core decides, plugins execute and are always untrusted: tools with an external effect (send/delete mail, calendar writes) pass a mandatory `ToolGate` inside `ToolRegistry.Execute` (always High risk, no grants, `needs_approval` cannot be bypassed even by cron), `native_mail_send` takes only an immutable `draft_id`, and auto-send is closed by default (master switch, `policy` rule engine, only humans approve rule proposals). New providers are built from `provkit` and add no core file (see `docs/MAILCAL-PLUGIN-GUIDE.md`; `plugins/echomail` is the worked example). Per-package tests for every shipped plugin run in `internal/mailcal/allplugins_test.go`.
 
 **Other pieces.** `internal/bus` (in-process pub/sub that glues components), `internal/llm` (provider adapters + `ModelCascadeRouter` with per-task-kind routing and fallback), `internal/system` (HAL for bare-metal vs Docker, audit hash-chain log, OTA with atomic symlink swap, backup/restore, notifications, tsnet), `internal/auth` (OAuth 2.1 PKCE, DCR, token refresher), `internal/workspace` (DB-backed user file store).
 

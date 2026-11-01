@@ -201,7 +201,29 @@ Provider plugins (Gmail, Graph, CalDAV, IMAP/SMTP) are untrusted code; the core 
 - **No double sends.** Sending goes through an idempotency ledger keyed by the draft; a draft is sent at most once, including under concurrent attempts and lost answers.
 - **Message text is data.** Content from providers is sanitized and wrapped as untrusted, with an explicit notice, before it reaches a model.
 - **Controlled TLS sockets (`acton_tcp`).** Plugins connect only to the `host:port` pairs in `permissions.net_tcp`; there is no plaintext mode. The core resolves the name once, refuses the connection if any address is loopback, private, link-local, CGNAT or multicast, dials that vetted address, and verifies the certificate against the name (TLS 1.2 or newer). For SMTP and IMAP STARTTLS the host runs the plaintext phase with fixed bytes, requires the server to advertise STARTTLS, and aborts if any data arrives before the handshake. Limits: 4 connections per plugin, 60 s idle, 50 MiB per direction. The default HTTP client for plugins dials the same vetted address. Not covered yet: the WebSocket path of plugins still resolves the name again after checking it.
-- **Known limits.** Message content can still mislead the *person* who approves; a rule in `free` text mode can disclose data to the sender it replies to.
+- **Verification labels are information, not trust.** A `conformance.json` next to `plugin.wasm` (written by `cmd/mailcal-conformance`) makes the account page show "verified against ABI 1" only while its SHA-256 matches the module. A plugin without one runs in the same sandbox behind the same gates.
+- **Known limits.** Message content can still mislead the *person* who approves; a rule in `free` text mode can disclose data to the sender it replies to. Nothing here has been checked against live Google, Microsoft, CalDAV or IMAP/SMTP services by the automated suite (see the spec, section 17).
+
+#### Mail and calendar threats and the tests that pin them
+
+| Threat | Defense | Tests |
+|:---|:---|:---|
+| Hostile mail makes the agent send or delete | Master switch off by default; mandatory gate; sends need a draft and, without a rule, a person | `TestSendIsDeniedWhileTheMasterSwitchIsOff`, `TestSendWithoutARuleNeedsApprovalEvenWhenBypassIsSet`, `TestDeletesAlwaysNeedAPerson`, office evals 35 to 46 |
+| Agent bypasses approval (threshold, cron, grant) | External-effect tools are always High, never grant-eligible, `needs_approval` cannot be waved through | `TestGateApprovalCannotBeBypassed`, `TestExternalEffectToolsAreHighRiskAndGrantIneligible`, `TestACronRunWithoutARuleStopsAtAnApprovalRequest` |
+| A tool is registered without a gate | Fail closed: no gate, no run | `TestExternalEffectToolWithoutGateIsDenied`, `TestGateDenyAndErrorFailClosed` |
+| Text changed after approval | Immutable drafts, approval bound to the draft | `TestDraftIsStoredNormalizedAndImmutable`, `TestDraftDetectsTampering`, `TestApprovalCannotBeReusedForADifferentDraft` |
+| Agent widens its own permissions | The agent can only propose rules; a person approves | `TestAnAgentCanOnlyProposeRules` |
+| Overbroad or lookalike rules | Exact addresses, no wildcards, deny wins, fail closed on limits and unknown usage | `TestAdversarialRequestsNeverAllow`, `TestDenyBeatsAllow`, `TestValidateRejectsDangerousRules`, `TestLimitsAndUnknownUsageFailClosed` |
+| Double send (retry, race, lost answer) | Idempotency ledger keyed by draft; provider-side keys; SMTP at most once | `TestApprovedSendHappensExactlyOnce`, `TestConcurrentSendsOfOneDraftSendOnce`, `TestALostAnswerAfterSendingDoesNotSendTwice`, `TestACronRunUnderAMatchingRuleSendsOnceAndRetriesAreReplays` |
+| Prompt injection in mail text | Hidden text stripped; content wrapped as untrusted | `TestSanitizeTextStripsHiddenAndControlCharacters`, `TestWrapUntrustedCannotBeClosedEarlyByTheContent` |
+| Stranger links their mailbox through OAuth | PKCE, single-use state, nonce cookie | `TestSignInRejectsAForeignBrowserAndCannotBeReplayed` |
+| Plugin reads another plugin's token or password | Broker checks the plugin id from the host context | `TestBrokerNeverServesAnotherPluginsAccount`, `TestCredentialsNeverGoToAnotherPlugin` |
+| Secrets leak into records, API or certificates | Vault only; write-only in the API | `TestPasswordsLiveInTheVaultAndNeverInTheAccountRecord`, `TestACertificateNeverContainsSecrets` |
+| Plugin reaches the local network | Resolve once, refuse private and loopback, verify the name | `TestSafeAddrRefusesLocalAndPrivateTargets`, `TestTheNameIsResolvedOnceSoRebindingCannotSwapTheTarget`, `TestOnlyTheListedHostAndPortAreReachable` |
+| STARTTLS downgrade or plaintext injection | The host runs the plaintext phase and aborts on any surprise | `TestStartTLSIsNeverDowngradedOrInjected` |
+| A plugin asks for more than a provider needs | Manifest gate over every shipped plugin | `TestEveryShippedPluginAsksForOnlyWhatAProviderNeeds` |
+| Forged or stale conformance label | Certificate is bound to the module hash | `TestACertificateStopsMatchingWhenThePluginChanges`, `TestAProviderIsReportedVerifiedOnlyWhileItsCertificateMatchesTheModule` |
+| Bounces damage reputation | Rules pause after several returned messages | `TestSeveralBouncesPauseTheRules` |
 
 ---
 

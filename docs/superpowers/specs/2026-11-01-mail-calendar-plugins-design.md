@@ -1,6 +1,6 @@
 # Email và lịch cho agent: lớp trừu tượng, luật tự gửi, provider là plugin
 
-Ngày: 2026-11-01 · Trạng thái: đã duyệt, đã chỉnh sau khi xác minh bằng mã tham chiếu (xem mục 16) · Phạm vi: dự án con đầu tiên của hướng "agent làm được việc thật"
+Ngày: 2026-11-01 · Trạng thái: **đã triển khai** (sáu giai đoạn; kết quả đo và phần chưa làm ở mục 17), đã chỉnh sau khi xác minh bằng mã tham chiếu (mục 16) · Phạm vi: dự án con đầu tiên của hướng "agent làm được việc thật"
 
 Kế hoạch triển khai: `docs/superpowers/plans/2026-11-01-mailcal-00-overview.md` và sáu tệp giai đoạn kèm theo.
 
@@ -240,3 +240,38 @@ Giai đoạn 1, chốt chặn `ToolGate` và engine luật đã được dựng 
 9. **Gửi qua SMTP là "tối đa một lần"**, không phải "đúng một lần": SMTP không có khoá idempotency. Giao thức hai pha (bản sao `\Draft` trong Sent trước khi gửi, gỡ cờ sau khi máy chủ nhận) bảo đảm không bao giờ trùng, và khi không chắc thì báo lỗi để người kiểm tra thư mục Sent. Gmail dùng header khoá và tìm lại; Graph dùng thuộc tính mở rộng cho thư và `transactionId` cho sự kiện; CalDAV dùng UID suy ra từ khoá cùng `If-None-Match: *`.
 10. **Mỗi bản nháp chỉ gửi được một lần**: khoá của thư là hàm của `draft_id` (không phải của lượt chạy và bước như bản nháp đầu), vì nháp bất biến nên `draft_id` đã bao hàm nội dung.
 11. **Cron kích hoạt phải do người dùng bật** và chạy bằng agent hẹp quyền; chốt chặn vẫn quyết định kể cả với `WithBypassApproval`.
+
+## 17. Kết quả triển khai và phần chưa làm
+
+Đo ngày 2026-11-01 trên nhánh tích hợp, trước khi hợp nhất vào `master`.
+
+**Đã chạy và xanh:**
+
+| Kiểm tra | Kết quả |
+|:---|:---|
+| `go build ./...`, `go vet ./...` | sạch |
+| `go test ./internal/... ./cmd/... ./evals/...` | toàn bộ gói đạt |
+| `go test -race -count=3` trên `auth`, `security`, `plugin`, `mailcal/policy`, `provkit/...`, `tools`; `-race` trên `mailcal` | đạt, không có cảnh báo race |
+| Fuzz 20 giây: `FuzzEvaluateNeverPanicsAndNeverAllowsUnlistedRecipient`, `FuzzParseNeverPanics` | không tìm thấy lỗi |
+| `scripts/cover-gate.go` | đạt; `internal/security` ở 94,7% (sàn 90%) sau khi thêm test cho đường phân giải mặc định |
+| Web: tsc, eslint (0 cảnh báo), `check:i18n`, `audit:i18n` (0 chuỗi cứng), vitest (37 tệp, 147 test), build, ngân sách bundle (entry 310 755 byte) | đạt |
+| Playwright (3 viewport, gồm axe) | 51 đạt, 2 bỏ qua; xem ghi chú bên dưới |
+| Eval văn phòng, chế độ **mock**: 15 tác vụ văn phòng với "agent lý tưởng" | 15/15; có test chứng minh các kiểm tra có thể thất bại |
+| Cổng "mọi plugin đi kèm" (4 plugin + `echo-mail`) | đạt |
+
+Ghi chú Playwright: chạy 3 worker song song trên máy đang bận làm vài test chat hết thời gian chờ 5 giây (khác nhau mỗi lần, đều qua khi chạy lặp một worker); test "operations view has a stable visual baseline" thất bại sẵn trên `master` vì chọn tiêu đề bằng biểu thức khớp hai phần tử, đã sửa bằng `level: 1`.
+
+**Tiêu chí thành công (mục 13):**
+
+1. *0 ghi ra ngoài khi chưa có luật hoặc người duyệt, kể cả bộ tiêm lệnh*: **đạt** ở mức kiểm thử tự động (gate, `TestACronRun…`, `TestSendWithoutARuleNeedsApprovalEvenWhenBypassIsSet`, các tác vụ eval 35 đến 46 với thư ẩn HTML, tên giả, chuyển tiếp).
+2. *0 gửi trùng khi thử lại và khi tiếp tục sau duyệt*: **đạt** (`TestApprovedSendHappensExactlyOnce`, `TestConcurrentSendsOfOneDraftSendOnce`, `TestALostAnswerAfterSendingDoesNotSendTwice`). SMTP là "tối đa một lần", không phải "đúng một lần" (mục 16, điểm 9).
+3. *Eval văn phòng ≥ 90% trên ít nhất hai model*: **chưa đo được.** Chế độ mock chỉ chứng minh harness và các cổng đúng (nó dựng sẵn thành phẩm), không nói gì về chất lượng model. Chạy thật cần khoá API và do chủ dự án chạy: `scripts/eval-office.sh <provider/model>` cho hai model khác nhau.
+4. *Plugin mới đạt bộ tuân thủ mà không sửa lõi*: **đạt.** `echo-mail` được viết theo `docs/MAILCAL-PLUGIN-GUIDE.md`; commit của nó chỉ thêm thư mục plugin, hướng dẫn và một tệp test, và hai test "mọi plugin" tự nhận ra nó. Đây là một lần thử do chính người viết hướng dẫn thực hiện, không phải một người lạ.
+
+**Chưa làm hoặc chưa kiểm chứng (cần người dùng):**
+
+- Chưa chạy với dịch vụ thật nào: Gmail/Google Calendar, Microsoft Graph, máy chủ CalDAV, máy chủ IMAP/SMTP. Các plugin được kiểm bằng máy chủ giả và bộ tuân thủ ngoại tuyến. Hai giả định đã ghi trong `docs/PLUGINS-MAILCAL.md` cần thử trên tài khoản thật (Gmail giữ header `X-Acton-Idempotency-Key`; Gmail API bỏ `Bcc` trước khi chuyển).
+- Chứng nhận tuân thủ chỉ chạy chế độ ngoại tuyến cho bốn plugin đi kèm; `--live` là việc của người có tài khoản thử. Chứng nhận được sinh khi xây (`make conformance`), không commit vào kho.
+- Đường WebSocket của plugin vẫn phân giải lại tên sau khi kiểm (đã ghi ở `docs/SECURITY.md`).
+- Nội dung thư vẫn có thể đánh lừa *người* duyệt, và luật ở chế độ văn bản tự do có thể làm lộ dữ liệu cho chính người được trả lời.
+- Khoá API DeepSeek từng lộ trong lịch sử trò chuyện cần được thu hồi và cấp lại.

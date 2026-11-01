@@ -558,6 +558,9 @@ graph TD
 - **`acton_storage`**: Scoped SQLite key-value persistence (`kv_get`, `kv_set`).
 - **`acton_workspace`**: User Workspace document and binary asset persistence (`save_file`, `read_file`).
 - **`acton_bus`**: System event publishing (`emit_event`) onto ActonOS Event Bus.
+- **`acton_oauth`**: `get_token`, a short-lived access token for the plugin's own accounts (`manifest.permissions.oauth`). The core runs sign-in and keeps the refresh token.
+- **`acton_account`**: `get_credentials`, the username and password of the plugin's own password accounts (`manifest.permissions.credentials`).
+- **`acton_tcp`**: controlled TLS sockets (`manifest.permissions.net_tcp`): vetted address, no plaintext mode, host-run STARTTLS, connection and byte limits.
 
 #### Security & Sandboxing Invariants:
 - **Egress Firewall**: Outbound HTTP/WS calls must match `net_outbound` and pass SSRF checks (no loopback/private/metadata; redirects re-validated). Direct raw TCP/UDP is impossible.
@@ -566,6 +569,30 @@ graph TD
 - **Resource & Timeout Quota**: 64 MB memory cap and 300s tool/poll deadline; guest panics never crash `actond`.
 - **Channels UI**: `/#/channels` is pairing and account routing for installed WASM chat plugins, not native Telegram/Discord/WhatsApp adapters.
 
+
+### Mail & Calendar (`internal/mailcal`)
+
+Mail and calendar are served by provider plugins; **the core decides, plugins execute.** A provider (Gmail, Graph, CalDAV, IMAP/SMTP, or one you write; see [MAILCAL-PLUGIN-GUIDE.md](MAILCAL-PLUGIN-GUIDE.md)) implements a versioned JSON ABI (`mail@1`, `calendar@1`, golden-tested and additive-only) through `internal/mailcal/provkit`.
+
+```
+agent / API / cron
+      |  native_mail_send {draft_id}
+      v
+tools.ToolRegistry.Execute  --- ToolGate (mandatory for external-effect tools)
+      |                          master switch -> rule engine (internal/mailcal/policy)
+      |                          allow | needs_approval (human, exact input) | deny
+      v
+mailcal.Service  -- idempotency ledger (one send per draft) -- audit
+      |
+      v
+BridgeProvider -> PluginInstance.CallJSON -> WASM provider -> acton_oauth / acton_account / acton_net / acton_tcp
+```
+
+- **Drafts are immutable** and carry a verified reply context; an approval binds to the draft.
+- **Rules** are closed by default (master switch off) and can only be approved by a signed-in person; the agent can only propose.
+- **Sign-in** is run by the core (PKCE, single-use state, nonce cookie); plugins receive only short-lived tokens or app-password logins for their own accounts.
+- **Conformance** (`internal/mailcal/conformance`, `cmd/mailcal-conformance`) is the suite any provider must pass; its certificate is bound to the module hash and shown as information only.
+- Adding a provider changes no core file; `internal/mailcal/plugins/echomail` is the worked example.
 
 ### Community Skills Registry & Requirements Verification
 

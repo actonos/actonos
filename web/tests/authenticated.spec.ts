@@ -42,7 +42,7 @@ test('command palette navigates and density persists', async ({ page }) => {
 
 test('operations view has a stable visual baseline', async ({ page }) => {
   await page.goto('/#/operations');
-  await expect(page.getByRole('heading', { name: /Live Operations|Vận hành/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Live Operations|Vận hành/, level: 1 })).toBeVisible();
   // Cards fill in as data arrives and change the page height; capture only once it has settled.
   await page.waitForLoadState('networkidle');
   await expect(page).toHaveScreenshot('operations.png', { fullPage: true, animations: 'disabled', maxDiffPixels: 1000 });
