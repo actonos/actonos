@@ -68,7 +68,7 @@ make dev
 
 ### Environment Variables (Optional)
 
-Create a `.env` file in the project root for local development:
+Create a `.env` file in the project root for local development (`make dev` loads it; `actond` itself reads the environment, not the file). `ACTON_*` names are canonical and the unprefixed `LOG_LEVEL`, `LISTEN_ADDR`, `DATA_DIR`, `LOG_FORMAT` are accepted too:
 
 ```bash
 # .env (not committed to git)
@@ -467,7 +467,7 @@ ActonOS includes a standardized 30+ task benchmark suite under `evals/` to preve
 .\evals\run.ps1
 
 # 2. Run against a live model provider
-go run ./evals/runner/main.go --mode=live --model=anthropic/claude-sonnet-4.5 --output=eval_report.md --fail-under=90.0
+go run ./evals/runner --mode=live --model=anthropic/claude-sonnet-4.5 --output=eval_report.md --fail-under=90.0
 ```
 
 ---

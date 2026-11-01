@@ -53,21 +53,22 @@ func main() {
 	flag.Parse()
 	system.WaitForOTAParent()
 
-	// Environment variable overrides
-	if envData := os.Getenv("ACTON_DATA_DIR"); envData != "" {
-		*dataDir = envData
+	// Environment variable overrides. ACTON_* is canonical; the unprefixed names are what the
+	// Dockerfile, compose files and docs/DEPLOYMENT.md have always documented, so they work too.
+	if v := envFirst("ACTON_DATA_DIR", "DATA_DIR"); v != "" {
+		*dataDir = v
 	}
-	if envLog := os.Getenv("ACTON_LOG_LEVEL"); envLog != "" {
-		*logLevel = envLog
+	if v := envFirst("ACTON_LOG_LEVEL", "LOG_LEVEL"); v != "" {
+		*logLevel = v
 	}
-	if envFormat := os.Getenv("ACTON_LOG_FORMAT"); envFormat != "" {
-		*logFormat = envFormat
+	if v := envFirst("ACTON_LOG_FORMAT", "LOG_FORMAT"); v != "" {
+		*logFormat = v
 	}
-	if envAddr := os.Getenv("ACTON_LISTEN_ADDR"); envAddr != "" {
-		*listenAddr = envAddr
+	if v := envFirst("ACTON_LISTEN_ADDR", "LISTEN_ADDR"); v != "" {
+		*listenAddr = v
 	}
-	if envEmbeddingURL := os.Getenv("ACTON_EMBEDDING_URL"); envEmbeddingURL != "" {
-		*embeddingURL = envEmbeddingURL
+	if v := envFirst("ACTON_EMBEDDING_URL"); v != "" {
+		*embeddingURL = v
 	}
 
 	if *showVer {
