@@ -206,7 +206,7 @@ export function NotificationBell({ onNavigateTab }: NotificationBellProps) {
             {loading && notifications.length === 0 ? (
               <div className="py-8 flex items-center justify-center text-caption text-slate">
                 <div className="w-4 h-4 border-2 border-deep-ink border-t-transparent rounded-full animate-spin mr-2" />
-                <span>Loading...</span>
+                <span>{t('bell.loading')}</span>
               </div>
             ) : notifications.length === 0 ? (
               <div className="py-8 px-4 text-center">

@@ -160,7 +160,7 @@ export function ProactiveAnomaliesCard({ onMissionCreated, className = '' }: Pro
                 {t('anomalies.noAnomalies')}
               </p>
               <p className="text-[11px] text-slate mt-0.5">
-                Proactive background monitors are idle and all health assertions pass.
+                {t('proactiveIdle')}
               </p>
             </div>
           </div>

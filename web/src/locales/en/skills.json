@@ -94,7 +94,8 @@
     "viewDetails": "Inspect",
     "sourceRepo": "GitHub",
     "skillUrl": "SkillsMP",
-    "stars": "{{count}} stars"
+    "stars": "{{count}} stars",
+    "starsFormatted": "{{n}} stars"
   },
   "detailModal": {
     "title": "Skill Details",
@@ -122,8 +123,10 @@
   "empty": {
     "title": "No skills found",
     "subtitle": "Create a custom skill or install one from the community hub.",
-    "noMatches": "No skills match the current search filters."
+    "noMatches": "No skills match the current search filters.",
+    "adjustHint": "Try adjusting your search keywords, status filter, or category."
   },
   "loading": "Loading skills catalog...",
-  "byAuthor": "By {{author}}"
+  "byAuthor": "By {{author}}",
+  "tagsHeading": "Tags"
 }

@@ -10,6 +10,13 @@
   },
   "actions": {
     "clear": "Xóa màn hình",
-    "reconnect": "Kết nối lại"
-  }
+    "reconnect": "Kết nối lại",
+    "selectShell": "Chọn môi trường shell",
+    "zoomOut": "Thu nhỏ",
+    "zoomIn": "Phóng to",
+    "clearScreen": "Xóa màn hình terminal",
+    "reconnectSession": "Kết nối lại phiên terminal"
+  },
+  "pseudoTerminal": "Pseudo-Terminal ActonOS ({{kind}})",
+  "sandboxEnvironment": "Môi trường Sandbox ActonOS"
 }

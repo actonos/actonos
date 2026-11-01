@@ -101,7 +101,8 @@
   },
   "page": {
     "eyebrow": "Autonomous Operations",
-    "activeBacklog": "{{count}} Active Backlog"
+    "activeBacklog": "{{count}} Active Backlog",
+    "autoHours": "Auto {{hours}}h"
   },
   "actions": {
     "refresh": "Refresh",
@@ -148,7 +149,8 @@
     "agent": "Agent:",
     "channel": "Channel:",
     "stalled": "Stalled",
-    "burst": "Burst Mode"
+    "burst": "Burst Mode",
+    "stepsSuffix": "steps"
   },
   "empty": {
     "title": "No Tasks Found",
@@ -188,7 +190,8 @@
     "enabled": "Enabled",
     "noStructuredDirectives": "No structured standing directives configured yet.",
     "deleteDirective": "Delete Directive",
-    "deleteDirectiveConfirm": "Are you sure you want to remove this standing directive?"
+    "deleteDirectiveConfirm": "Are you sure you want to remove this standing directive?",
+    "autoMission": "Auto-Mission"
   },
   "audit": {
     "title": "Cognitive Pulse Execution Ledger",
@@ -217,6 +220,15 @@
     "stepsCompleted": "steps completed",
     "pulseHistory": "Heartbeat Pulses & Tool Execution Traces",
     "noEvents": "No execution events recorded for this selection.",
-    "traceDetail": "Execution Event Trace Inspector"
+    "traceDetail": "Execution Event Trace Inspector",
+    "dependsOn": "Depends on:",
+    "eventsCount": "{{n}} events",
+    "tokensLabel": "Tokens:",
+    "latencyLabel": "Latency:",
+    "jsonPayload": "Structured JSON Payload"
+  },
+  "directiveForm": {
+    "titlePlaceholder": "e.g. Daily SEO & Sitemap Health Check",
+    "descriptionPlaceholder": "Describe the operational goals, rules, and actions for this standing directive..."
   }
 }

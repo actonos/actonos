@@ -95,7 +95,7 @@ export function DirectiveModal({
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Daily SEO & Sitemap Health Check"
+            placeholder={t('directiveForm.titlePlaceholder')}
             required
           />
         </div>
@@ -109,7 +109,7 @@ export function DirectiveModal({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
-            placeholder="Describe the operational goals, rules, and actions for this standing directive..."
+            placeholder={t('directiveForm.descriptionPlaceholder')}
             className="w-full rounded-[16px] border border-onyx/15 bg-canvas px-3.5 py-2.5 text-body-sm text-deep-ink placeholder:text-slate/60 focus:outline-none focus:ring-1 focus:ring-deep-ink font-sans transition-all"
             required
           />

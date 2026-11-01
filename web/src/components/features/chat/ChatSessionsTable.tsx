@@ -222,7 +222,7 @@ export function ChatSessionsTable({
                 type="button"
                 onClick={() => onSearchChange('')}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate hover:text-deep-ink p-0.5 rounded-full"
-                title="Clear search"
+                title={t('clearSearch')}
               >
                 <X className="w-3.5 h-3.5" />
               </button>

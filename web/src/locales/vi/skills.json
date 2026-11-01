@@ -94,7 +94,8 @@
     "viewDetails": "Chi tiết",
     "sourceRepo": "GitHub",
     "skillUrl": "SkillsMP",
-    "stars": "{{count}} sao"
+    "stars": "{{count}} sao",
+    "starsFormatted": "{{n}} sao"
   },
   "detailModal": {
     "title": "Chi tiết kỹ năng",
@@ -122,8 +123,10 @@
   "empty": {
     "title": "Không tìm thấy kỹ năng",
     "subtitle": "Tạo kỹ năng mới hoặc cài đặt từ cộng đồng.",
-    "noMatches": "Không có kỹ năng nào phù hợp với bộ lọc hiện tại."
+    "noMatches": "Không có kỹ năng nào phù hợp với bộ lọc hiện tại.",
+    "adjustHint": "Hãy thử đổi từ khóa tìm kiếm, bộ lọc trạng thái hoặc danh mục."
   },
   "loading": "Đang tải danh mục kỹ năng...",
-  "byAuthor": "Bởi {{author}}"
+  "byAuthor": "Bởi {{author}}",
+  "tagsHeading": "Thẻ"
 }

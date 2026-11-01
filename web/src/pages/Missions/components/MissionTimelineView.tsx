@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
-import type { AgentRun, AutonomousTask, HeartbeatRun, RunEvent } from '@/lib/types';
+import type { AgentRun, AutonomousTask, HeartbeatRun } from '@/lib/types';
 import {
   Clock,
   Activity,
@@ -35,7 +35,7 @@ export function MissionTimelineView({
   const [activeTaskFilter, setActiveTaskFilter] = useState<string>(
     propSelectedTask?.id || 'all'
   );
-  const [selectedEvent, setSelectedEvent] = useState<RunEvent | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<unknown>(null);
   const [copiedTrace, setCopiedTrace] = useState(false);
 
   const currentTask = useMemo(() => {
@@ -55,7 +55,7 @@ export function MissionTimelineView({
       duration_ms?: number;
       agent_id?: string;
       details?: string;
-      rawObject?: any;
+      rawObject?: unknown;
     };
 
     const items: TimelineItem[] = [];
@@ -136,7 +136,7 @@ export function MissionTimelineView({
     success('Report Exported', 'Mission timeline report downloaded as Markdown.');
   };
 
-  const handleCopyTraceJSON = (data: any) => {
+  const handleCopyTraceJSON = (data: unknown) => {
     navigator.clipboard.writeText(JSON.stringify(data, null, 2));
     setCopiedTrace(true);
     setTimeout(() => setCopiedTrace(false), 2000);
@@ -233,7 +233,7 @@ export function MissionTimelineView({
                         </span>
                         {step.dependencies && step.dependencies.length > 0 && (
                           <span className="text-[10px] text-slate font-mono">
-                            Depends on: {step.dependencies.join(', ')}
+                            {t('timeline.dependsOn')} {step.dependencies.join(', ')}
                           </span>
                         )}
                       </div>
@@ -281,7 +281,7 @@ export function MissionTimelineView({
             </h3>
           </div>
           <span className="text-caption text-slate font-mono">
-            {timelineEvents.length} events
+            {t('timeline.eventsCount', { n: timelineEvents.length })}
           </span>
         </div>
 
@@ -345,13 +345,13 @@ export function MissionTimelineView({
 
                     <div className="flex flex-wrap items-center gap-4 text-[11px] text-slate border-t border-onyx/5 pt-2 font-mono">
                       {event.agent_id && (
-                        <span>Agent: <strong className="text-deep-ink">{event.agent_id}</strong></span>
+                        <span>{t('task.agent')} <strong className="text-deep-ink">{event.agent_id}</strong></span>
                       )}
                       {event.tokens !== undefined && event.tokens > 0 && (
-                        <span>Tokens: <strong className="text-deep-ink">{event.tokens.toLocaleString()}</strong></span>
+                        <span>{t('timeline.tokensLabel')} <strong className="text-deep-ink">{event.tokens.toLocaleString()}</strong></span>
                       )}
                       {event.duration_ms !== undefined && event.duration_ms > 0 && (
-                        <span>Latency: <strong className="text-deep-ink">{event.duration_ms} ms</strong></span>
+                        <span>{t('timeline.latencyLabel')} <strong className="text-deep-ink">{event.duration_ms} ms</strong></span>
                       )}
                     </div>
                   </div>
@@ -371,7 +371,7 @@ export function MissionTimelineView({
       >
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <span className="text-caption text-slate font-mono">Structured JSON Payload</span>
+            <span className="text-caption text-slate font-mono">{t('timeline.jsonPayload')}</span>
             <Button
               variant="ghost"
               size="sm"

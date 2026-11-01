@@ -65,6 +65,11 @@
     "prevHash": "Mã băm SHA-256 khối liền trước",
     "rawJson": "Dữ liệu JSON gốc",
     "copyJson": "Sao chép JSON gốc",
-    "close": "Đóng"
+    "close": "Đóng",
+    "riskBadge": "Rủi ro {{level}}",
+    "localTime": "Giờ địa phương:",
+    "utcTime": "Giờ UTC:",
+    "sealed": "Đã niêm phong SHA-256",
+    "copyEntryHash": "Sao chép hash của bản ghi"
   }
 }

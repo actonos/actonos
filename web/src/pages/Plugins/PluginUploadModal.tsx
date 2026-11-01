@@ -126,7 +126,7 @@ export function PluginUploadModal({
                       <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                     </p>
                     <p className="text-caption text-slate mt-0.5">
-                      {(selectedFile.size / 1024).toFixed(1)} KB • {t('modals.packageBadge')}
+                      {`${(selectedFile.size / 1024).toFixed(1)} KB`} • {t('modals.packageBadge')}
                     </p>
                   </div>
                 </div>

@@ -214,6 +214,19 @@
     "confirmDeleteTitle": "Delete Backup Snapshot",
     "confirmDeleteDesc": "Are you sure you want to permanently remove this backup snapshot from local storage?",
     "snapshotDeleted": "Backup snapshot removed successfully.",
-    "snapshotDetails": "Snapshot Details"
+    "snapshotDetails": "Snapshot Details",
+    "agentsCount": "{{n}} agents",
+    "tasksCount": "{{n}} tasks",
+    "plusWorkspace": "+workspace",
+    "copyFullHash": "Copy full SHA-256",
+    "safetyActive": "Pre-restore Safety Active",
+    "safetyDescription": "ActonOS will take a safety snapshot of the existing database before applying the restore. The system will automatically reload once restored.",
+    "createdLabel": "Created:",
+    "sizeLabel": "Size:",
+    "contentsLabel": "Contents:",
+    "contentsValue": "{{agents}} agents, {{tasks}} tasks",
+    "fileLabel": "File:",
+    "resetPrefix": "To prevent accidental data loss, please type",
+    "resetSuffix": "below:"
   }
 }

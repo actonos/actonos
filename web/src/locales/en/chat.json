@@ -164,5 +164,8 @@
   "approvalRejectedFeedback": "Rejected from chat",
   "toolAwaitingApproval": "Awaiting approval",
   "toolRejected": "Rejected",
-  "resumingAfterApproval": "Resuming after approval…"
+  "resumingAfterApproval": "Resuming after approval…",
+  "closePopover": "Close",
+  "workspaceLabel": "Workspace",
+  "clearSearch": "Clear search"
 }

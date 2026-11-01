@@ -306,14 +306,14 @@ export function BackupRestoreSection() {
                     <td className="py-3 px-3">
                       <div className="flex items-center gap-2 text-caption text-slate font-mono">
                         <Badge variant="neutral" className="text-[10px]">
-                          {bak.agents_count || 0} agents
+                          {t('backup.agentsCount', { n: bak.agents_count || 0 })}
                         </Badge>
                         <Badge variant="neutral" className="text-[10px]">
-                          {bak.tasks_count || 0} tasks
+                          {t('backup.tasksCount', { n: bak.tasks_count || 0 })}
                         </Badge>
                         {bak.include_workspace && (
                           <Badge variant="neutral" className="text-[10px]">
-                            +workspace
+                            {t('backup.plusWorkspace')}
                           </Badge>
                         )}
                       </div>
@@ -328,7 +328,7 @@ export function BackupRestoreSection() {
                             type="button"
                             onClick={() => handleCopyHash(bak.checksum_sha256)}
                             className="p-1 hover:bg-canvas rounded text-slate hover:text-deep-ink transition-colors cursor-pointer"
-                            title="Copy full SHA-256"
+                            title={t('backup.copyFullHash')}
                           >
                             {copiedHash === bak.checksum_sha256 ? (
                               <Check className="w-3 h-3 text-green-600" />
@@ -439,10 +439,9 @@ export function BackupRestoreSection() {
           <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-deep-ink flex items-start gap-3">
             <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
             <div className="text-body-sm space-y-1">
-              <strong className="font-semibold block">Pre-restore Safety Active</strong>
+              <strong className="font-semibold block">{t('backup.safetyActive')}</strong>
               <p className="text-caption text-slate">
-                ActonOS will take a safety snapshot of the existing database before applying the restore.
-                The system will automatically reload once restored.
+                {t('backup.safetyDescription')}
               </p>
             </div>
           </div>
@@ -453,19 +452,19 @@ export function BackupRestoreSection() {
                 {t('backup.snapshotDetails', 'Snapshot Details')}
               </div>
               <div className="flex justify-between">
-                <span>Created:</span>
+                <span>{t('backup.createdLabel')}</span>
                 <strong className="text-deep-ink">{new Date(selectedRestoreSnapshot.created_at).toLocaleString()}</strong>
               </div>
               <div className="flex justify-between">
-                <span>Size:</span>
+                <span>{t('backup.sizeLabel')}</span>
                 <strong className="text-deep-ink">
                   {((selectedRestoreSnapshot.archive_size_bytes || selectedRestoreSnapshot.database_size_bytes) / 1024 / 1024).toFixed(2)} MB
                 </strong>
               </div>
               <div className="flex justify-between">
-                <span>Contents:</span>
+                <span>{t('backup.contentsLabel')}</span>
                 <strong className="text-deep-ink">
-                  {selectedRestoreSnapshot.agents_count || 0} agents, {selectedRestoreSnapshot.tasks_count || 0} tasks
+                  {t('backup.contentsValue', { agents: selectedRestoreSnapshot.agents_count || 0, tasks: selectedRestoreSnapshot.tasks_count || 0 })}
                 </strong>
               </div>
               {selectedRestoreSnapshot.notes && (
@@ -478,8 +477,8 @@ export function BackupRestoreSection() {
 
           {restoreFile && (
             <div className="p-3.5 rounded-xl bg-canvas border border-onyx/10 text-caption font-mono text-slate space-y-1">
-              <div>File: <strong className="text-deep-ink">{restoreFile.name}</strong></div>
-              <div>Size: <strong className="text-deep-ink">{(restoreFile.size / 1024 / 1024).toFixed(2)} MB</strong></div>
+              <div>{t('backup.fileLabel')} <strong className="text-deep-ink">{restoreFile.name}</strong></div>
+              <div>{t('backup.sizeLabel')} <strong className="text-deep-ink">{(restoreFile.size / 1024 / 1024).toFixed(2)} MB</strong></div>
             </div>
           )}
 
@@ -533,7 +532,7 @@ export function BackupRestoreSection() {
       >
         <div className="space-y-4">
           <p className="text-body-sm text-slate">
-            To prevent accidental data loss, please type <strong className="text-accent-coral font-mono">RESET-ACTONOS</strong> below:
+            {t('backup.resetPrefix')} <strong className="text-accent-coral font-mono">RESET-ACTONOS</strong> {t('backup.resetSuffix')}
           </p>
 
           <Input

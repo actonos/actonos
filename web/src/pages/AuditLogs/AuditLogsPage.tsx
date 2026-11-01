@@ -434,7 +434,7 @@ export function AuditLogsPage() {
                             type="button"
                             onClick={(e) => handleCopyTrace(e, log.trace_id)}
                             className="opacity-0 group-hover:opacity-100 p-1 hover:bg-canvas rounded text-slate hover:text-deep-ink transition-all cursor-pointer"
-                            title="Copy Trace ID"
+                            title={t('detail.copyTrace')}
                           >
                             {copiedTraceId === log.trace_id ? (
                               <Check className="w-3 h-3 text-green-600" />

@@ -107,13 +107,13 @@ export function StructuredDirectivesTab({
   const getPriorityBadge = (priority?: string) => {
     switch (priority) {
       case 'p0_critical':
-        return <Badge variant="stopped">P0 CRITICAL</Badge>;
+        return <Badge variant="stopped">{t('priorities.p0Short')}</Badge>;
       case 'p1_high':
-        return <Badge variant="warning">P1 HIGH</Badge>;
+        return <Badge variant="warning">{t('priorities.p1Short')}</Badge>;
       case 'p2_normal':
-        return <Badge variant="active">P2 NORMAL</Badge>;
+        return <Badge variant="active">{t('priorities.p2Short')}</Badge>;
       default:
-        return <Badge variant="neutral">P3 LOW</Badge>;
+        return <Badge variant="neutral">{t('priorities.p3Short')}</Badge>;
     }
   };
 
@@ -253,7 +253,7 @@ export function StructuredDirectivesTab({
                         )}
                         {item.auto_create_mission && (
                           <span className="text-[10px] font-mono text-deep-ink bg-soft-meadow px-2 py-0.5 rounded-full border border-onyx/10">
-                            Auto-Mission
+                            {t('directives.autoMission')}
                           </span>
                         )}
                       </div>

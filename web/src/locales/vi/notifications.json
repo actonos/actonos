@@ -79,5 +79,10 @@
     "savedDesc": "Lịch giờ yên lặng và định tuyến thông báo thông minh đã được cập nhật.",
     "digestTriggered": "Đã Tạo Bản Tin Tổng Hợp",
     "digestTriggeredDesc": "Một thông báo tóm tắt 24 giờ đã được thêm vào hộp thư của bạn."
-  }
+  },
+  "bell": {
+    "loading": "Đang tải..."
+  },
+  "loadingList": "Đang tải thông báo...",
+  "newBadge": "MỚI"
 }

@@ -149,5 +149,6 @@
     "cpuPercent": "{{value}}% CPU",
     "megabytes": "{{value}} MB",
     "tokens": "{{value}} tokens"
-  }
+  },
+  "proactiveIdle": "Proactive background monitors are idle and all health assertions pass."
 }

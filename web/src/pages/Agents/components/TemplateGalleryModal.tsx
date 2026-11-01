@@ -160,12 +160,12 @@ export function TemplateGalleryModal({
           {loading ? (
             <div className="col-span-2 py-16 text-center text-slate">
               <Sparkles className="w-6 h-6 mx-auto animate-spin text-slate mb-2" />
-              <p className="text-body-sm font-medium">Loading templates...</p>
+              <p className="text-body-sm font-medium">{t('templates.loading')}</p>
             </div>
           ) : filteredTemplates.length === 0 ? (
             <div className="col-span-2 py-16 text-center text-slate">
               <Bot className="w-8 h-8 mx-auto text-slate/50 mb-2" />
-              <p className="text-body-sm font-medium">No templates matching your filter criteria.</p>
+              <p className="text-body-sm font-medium">{t('templates.noMatches')}</p>
             </div>
           ) : (
             filteredTemplates.map((tmpl) => {
@@ -193,7 +193,7 @@ export function TemplateGalleryModal({
                             {tmpl.name}
                           </h4>
                           <span className="text-[11px] text-slate capitalize font-mono">
-                            {tmpl.category} • v{tmpl.version}
+                            {tmpl.category} • {t('templates.versionLabel', { version: tmpl.version })}
                           </span>
                         </div>
                       </div>
@@ -223,7 +223,7 @@ export function TemplateGalleryModal({
                   {/* Footer Action */}
                   <div className="flex items-center justify-between pt-2 border-t border-onyx/5">
                     <div className="flex items-center gap-2 text-[11px] text-slate font-mono">
-                      <span>{tmpl.manifest.authorized_tools?.length || 0} tools</span>
+                      <span>{t('templates.toolsCount', { n: tmpl.manifest.authorized_tools?.length || 0 })}</span>
                       {tmpl.manifest.heartbeat_config?.enabled && (
                         <span className="flex items-center gap-0.5 text-emerald-700">
                           <HeartPulse className="w-3 h-3" /> 24/7

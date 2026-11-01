@@ -61,7 +61,7 @@ export function BackgroundActivityPill({ onNavigateTab }: BackgroundActivityPill
           type="button"
           onClick={() => setDismissed(true)}
           className="text-white/60 hover:text-white transition-colors p-0.5 rounded-full cursor-pointer"
-          aria-label="Dismiss"
+          aria-label={t('dismiss')}
         >
           <X className="w-3.5 h-3.5" />
         </button>

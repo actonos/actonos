@@ -164,5 +164,8 @@
   "approvalRejectedFeedback": "Đã từ chối từ chat",
   "toolAwaitingApproval": "Đang chờ phê duyệt",
   "toolRejected": "Đã từ chối",
-  "resumingAfterApproval": "Đang tiếp tục sau khi phê duyệt…"
+  "resumingAfterApproval": "Đang tiếp tục sau khi phê duyệt…",
+  "closePopover": "Đóng",
+  "workspaceLabel": "Không gian làm việc",
+  "clearSearch": "Xóa tìm kiếm"
 }

@@ -159,7 +159,7 @@ export function AgentInsightsModal({
               {t('insights.subtitle')}
             </p>
             <p className="text-[11px] text-slate mt-0.5">
-              Target Agent ID: <span className="font-mono font-semibold">{agent.agent_id}</span>
+              {t('insights.targetAgentId')} <span className="font-mono font-semibold">{agent.agent_id}</span>
             </p>
           </div>
           <Button
@@ -209,7 +209,7 @@ export function AgentInsightsModal({
         {/* Proposals List */}
         {loading && proposals.length === 0 ? (
           <div className="py-12 text-center text-caption text-slate animate-pulse">
-            Loading agent insights...
+            {t('insights.loading')}
           </div>
         ) : filteredProposals.length === 0 ? (
           <div className="py-12 text-center rounded-[20px] bg-soft-meadow border border-onyx/5 space-y-2">
@@ -220,7 +220,7 @@ export function AgentInsightsModal({
               {t('insights.noInsights')}
             </p>
             <p className="text-caption text-slate">
-              Click &quot;{t('insights.runSelfReview')}&quot; to evaluate recent mission traces for optimization opportunities.
+              {t('insights.emptyHint', { action: t('insights.runSelfReview') })}
             </p>
           </div>
         ) : (

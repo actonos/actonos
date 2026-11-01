@@ -654,7 +654,7 @@ export function SkillsPage() {
                   {t('empty.noMatches', 'No skills match your filter criteria')}
                 </p>
                 <p className="font-sans text-caption text-slate mb-4">
-                  Try adjusting your search keywords, status filter, or category.
+                  {t('empty.adjustHint')}
                 </p>
                 <Button variant="primary" size="sm" onClick={clearAllFilters}>
                   {t('actions.clearFilters', 'Clear Filters')}
@@ -810,7 +810,7 @@ export function SkillsPage() {
                   {inspectSkill.stars ? (
                     <span className="inline-flex items-center gap-1 text-[11px] font-mono font-semibold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
                       <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-                      {inspectSkill.stars.toLocaleString()} stars
+                      {t('card.starsFormatted', { n: inspectSkill.stars.toLocaleString() })}
                     </span>
                   ) : null}
                 </div>
@@ -861,7 +861,7 @@ export function SkillsPage() {
             {/* Tags */}
             {inspectSkill.tags && inspectSkill.tags.length > 0 && (
               <div>
-                <h4 className="text-caption uppercase font-semibold text-slate tracking-wider mb-2">Tags</h4>
+                <h4 className="text-caption uppercase font-semibold text-slate tracking-wider mb-2">{t('tagsHeading')}</h4>
                 <div className="flex flex-wrap gap-1.5">
                   {inspectSkill.tags.map((tag) => (
                     <span

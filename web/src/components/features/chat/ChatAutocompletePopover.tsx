@@ -176,7 +176,7 @@ export function ChatAutocompletePopover({
             type="button"
             onClick={onClose}
             className="p-0.5 rounded-full text-slate hover:text-deep-ink hover:bg-onyx/10 transition-colors"
-            title="Close"
+            title={t('closePopover')}
           >
             <X className="w-3 h-3" />
           </button>

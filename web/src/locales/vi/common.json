@@ -18,7 +18,9 @@
       "verify": "Kiểm tra Yêu cầu & Đăng ký",
       "executing": "Đang thực thi thao tác",
       "finalizing": "Tải lại Kernel & Đồng bộ"
-    }
+    },
+    "previous": "Hành động trước",
+    "next": "Hành động tiếp theo"
   },
   "appName": "ActonOS",
   "startup": "Đang khởi động ActonOS Kernel...",
@@ -97,5 +99,7 @@
     "subtitle": "Truy cập nhanh 24/7 và nhận thông báo đẩy tức thì",
     "install": "Cài Đặt",
     "iosGuide": "Nhấn biểu tượng Chia sẻ rồi chọn \"Thêm vào Màn hình chính\""
-  }
+  },
+  "dismiss": "Đóng",
+  "realtimeStream": "Luồng thời gian thực"
 }

@@ -18,7 +18,9 @@
       "verify": "Requirements & Registration",
       "executing": "Executing Operation",
       "finalizing": "Hot-Reloading Kernel"
-    }
+    },
+    "previous": "Previous action",
+    "next": "Next action"
   },
   "appName": "ActonOS",
   "startup": "Starting ActonOS Kernel...",
@@ -97,5 +99,7 @@
     "subtitle": "Fast 24/7 mobile access & push alerts",
     "install": "Install",
     "iosGuide": "Tap Share icon then \"Add to Home Screen\""
-  }
+  },
+  "dismiss": "Dismiss",
+  "realtimeStream": "Realtime Stream"
 }

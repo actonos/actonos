@@ -101,7 +101,8 @@
   },
   "page": {
     "eyebrow": "Hoạt động tự chủ",
-    "activeBacklog": "{{count}} tồn đọng hoạt động"
+    "activeBacklog": "{{count}} tồn đọng hoạt động",
+    "autoHours": "Tự động {{hours}}h"
   },
   "actions": {
     "refresh": "Làm mới",
@@ -148,7 +149,8 @@
     "agent": "Agent:",
     "channel": "Kênh:",
     "stalled": "Bị kẹt",
-    "burst": "Chế độ Burst"
+    "burst": "Chế độ Burst",
+    "stepsSuffix": "bước"
   },
   "empty": {
     "title": "Không tìm thấy nhiệm vụ nào",
@@ -188,7 +190,8 @@
     "enabled": "Kích hoạt",
     "noStructuredDirectives": "Chưa có chỉ thị thường trực có cấu trúc nào.",
     "deleteDirective": "Xóa Chỉ thị",
-    "deleteDirectiveConfirm": "Bạn có chắc muốn xóa chỉ thị thường trực này?"
+    "deleteDirectiveConfirm": "Bạn có chắc muốn xóa chỉ thị thường trực này?",
+    "autoMission": "Nhiệm vụ tự động"
   },
   "audit": {
     "title": "Sổ cái thực thi xung nhận thức",
@@ -217,6 +220,15 @@
     "stepsCompleted": "bước hoàn thành",
     "pulseHistory": "Lịch Sử Xung Nhịp & Dấu Vết Thực Thi Tool",
     "noEvents": "Chưa có sự kiện thực thi nào được ghi nhận cho lựa chọn này.",
-    "traceDetail": "Thanh Tra Dấu Vết Sự Kiện Thực Thi"
+    "traceDetail": "Thanh Tra Dấu Vết Sự Kiện Thực Thi",
+    "dependsOn": "Phụ thuộc:",
+    "eventsCount": "{{n}} sự kiện",
+    "tokensLabel": "Token:",
+    "latencyLabel": "Độ trễ:",
+    "jsonPayload": "Payload JSON có cấu trúc"
+  },
+  "directiveForm": {
+    "titlePlaceholder": "vd: Kiểm tra SEO & Sitemap hằng ngày",
+    "descriptionPlaceholder": "Mô tả mục tiêu vận hành, quy tắc và hành động cho chỉ thị thường trực này..."
   }
 }

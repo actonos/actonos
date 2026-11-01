@@ -143,7 +143,12 @@
     "anomaliesDetected": "{{count}} proactive anomalies require operator oversight.",
     "nominalDescription": "Autonomous Swarm, Memory Layer, and 24/7 Heartbeat operating at peak efficiency.",
     "missionControl": "Mission Control",
-    "auditLogs": "Audit Ledger"
+    "auditLogs": "Audit Ledger",
+    "activeCount": "{{n}} active",
+    "channelLabel": "{{channel}} channel",
+    "noCircuitTrips": "0 circuit trips",
+    "ofActive": "/ {{total}} active",
+    "swarmNominal": "Swarm Nominal"
   },
   "vitals": {
     "pulse": "Heartbeat Pulse",

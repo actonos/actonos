@@ -79,5 +79,10 @@
     "savedDesc": "Smart notification routing and quiet hours schedule updated.",
     "digestTriggered": "Daily Digest Generated",
     "digestTriggeredDesc": "A 24-hour executive summary notification was added to your inbox."
-  }
+  },
+  "bell": {
+    "loading": "Loading..."
+  },
+  "loadingList": "Loading notifications...",
+  "newBadge": "NEW"
 }

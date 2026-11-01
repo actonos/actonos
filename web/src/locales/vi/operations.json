@@ -149,5 +149,6 @@
     "cpuPercent": "CPU {{value}}%",
     "megabytes": "{{value}} MB",
     "tokens": "{{value}} token"
-  }
+  },
+  "proactiveIdle": "Các bộ giám sát nền đang rảnh và mọi kiểm tra sức khỏe đều đạt."
 }

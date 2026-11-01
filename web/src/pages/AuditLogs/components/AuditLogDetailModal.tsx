@@ -87,7 +87,7 @@ export function AuditLogDetailModal({ log, isOpen, onClose }: AuditLogDetailModa
                   : 'neutral'
               }
             >
-              {log.risk_level} Risk
+              {t('detail.riskBadge', { level: log.risk_level })}
             </Badge>
             <Badge
               variant={
@@ -156,11 +156,11 @@ export function AuditLogDetailModal({ log, isOpen, onClose }: AuditLogDetailModa
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-caption">
             <div>
-              <span className="text-slate block">Local Time:</span>
+              <span className="text-slate block">{t('detail.localTime')}</span>
               <span className="font-mono text-deep-ink font-medium">{localTime}</span>
             </div>
             <div>
-              <span className="text-slate block">UTC Time:</span>
+              <span className="text-slate block">{t('detail.utcTime')}</span>
               <span className="font-mono text-deep-ink font-medium">{utcTime}</span>
             </div>
           </div>
@@ -176,7 +176,7 @@ export function AuditLogDetailModal({ log, isOpen, onClose }: AuditLogDetailModa
               </div>
               <span className="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full font-medium">
                 <ShieldCheck className="w-3 h-3" />
-                SHA-256 Sealed
+                {t('detail.sealed')}
               </span>
             </div>
 
@@ -191,7 +191,7 @@ export function AuditLogDetailModal({ log, isOpen, onClose }: AuditLogDetailModa
                     type="button"
                     onClick={handleCopyHash}
                     className="p-1 rounded hover:bg-soft-meadow text-slate hover:text-deep-ink transition-colors cursor-pointer shrink-0"
-                    title="Copy Entry Hash"
+                    title={t('detail.copyEntryHash')}
                   >
                     {copiedHash ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
                   </button>

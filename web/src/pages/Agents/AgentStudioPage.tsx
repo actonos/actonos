@@ -256,7 +256,7 @@ export function AgentStudioPage({
               if (tmpl.authorized_tools) setAuthorizedTools(tmpl.authorized_tools);
               if (tmpl.model_config?.primary_model) setPrimaryModel(tmpl.model_config.primary_model);
               if (tmpl.model_config?.fallback_model) setFallbackModel(tmpl.model_config.fallback_model);
-              if (tmpl.model_config?.reasoning_effort) setReasoningEffort(tmpl.model_config.reasoning_effort as any);
+              if (tmpl.model_config?.reasoning_effort) setReasoningEffort(tmpl.model_config.reasoning_effort as 'low' | 'medium' | 'high');
               if (tmpl.model_config?.max_tokens) setMaxTokens(tmpl.model_config.max_tokens);
               if (tmpl.heartbeat_config) {
                 setHeartbeatEnabled(tmpl.heartbeat_config.enabled ?? false);

@@ -386,7 +386,7 @@ export function NotificationsPage({ onNavigateTab }: NotificationsPageProps) {
         {loading && notifications.length === 0 ? (
           <div className="py-20 flex flex-col items-center justify-center text-slate">
             <div className="w-6 h-6 border-2 border-deep-ink border-t-transparent rounded-full animate-spin mb-3" />
-            <p className="text-body-sm font-medium">Loading notifications...</p>
+            <p className="text-body-sm font-medium">{t('loadingList')}</p>
           </div>
         ) : filteredNotifications.length === 0 ? (
           <EmptyState
@@ -422,7 +422,7 @@ export function NotificationsPage({ onNavigateTab }: NotificationsPageProps) {
                     </span>
                     {!notif.is_read && (
                       <span className="px-2 py-0.5 rounded-full bg-electric-cyan/15 text-deep-ink text-[10px] font-mono font-bold">
-                        NEW
+                        {t('newBadge')}
                       </span>
                     )}
                   </div>

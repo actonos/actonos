@@ -198,7 +198,7 @@ export function AgentHeartbeatSection({
                 <Input
                   value={activeHoursTimezone || ''}
                   onChange={(e) => onActiveHoursTimezoneChange(e.target.value)}
-                  placeholder="e.g. Asia/Ho_Chi_Minh"
+                  placeholder={t('heartbeatForm.timezonePlaceholder')}
                 />
               </div>
               <div>
@@ -208,7 +208,7 @@ export function AgentHeartbeatSection({
                 <Input
                   value={targetAccountID || ''}
                   onChange={(e) => onTargetAccountIDChange(e.target.value)}
-                  placeholder="e.g. tg_support_bot"
+                  placeholder={t('heartbeatForm.channelPlaceholder')}
                 />
               </div>
             </div>

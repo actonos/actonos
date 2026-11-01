@@ -363,7 +363,10 @@
       "prompt_clarity": "Prompt Clarity",
       "task_failure": "Failure Pattern",
       "performance": "Performance & Cost"
-    }
+    },
+    "targetAgentId": "Target Agent ID:",
+    "loading": "Loading agent insights...",
+    "emptyHint": "Click \"{{action}}\" to evaluate recent mission traces for optimization opportunities."
   },
   "memory": {
     "buttonLabel": "Manage Memory & Importance",
@@ -412,6 +415,14 @@
       "prod": "Productivity & Support",
       "sec": "Security & Audit",
       "analysis": "Data & SEO"
-    }
+    },
+    "loading": "Loading templates...",
+    "noMatches": "No templates matching your filter criteria.",
+    "versionLabel": "v{{version}}",
+    "toolsCount": "{{n}} tools"
+  },
+  "heartbeatForm": {
+    "timezonePlaceholder": "e.g. Asia/Ho_Chi_Minh",
+    "channelPlaceholder": "e.g. tg_support_bot"
   }
 }

@@ -214,6 +214,19 @@
     "confirmDeleteTitle": "Xóa Bản Sao Lưu",
     "confirmDeleteDesc": "Bạn có chắc chắn muốn xóa vĩnh viễn bản sao lưu này khỏi bộ nhớ máy chủ không?",
     "snapshotDeleted": "Đã xóa bản sao lưu thành công.",
-    "snapshotDetails": "Chi Tiết Bản Chụp"
+    "snapshotDetails": "Chi Tiết Bản Chụp",
+    "agentsCount": "{{n}} agent",
+    "tasksCount": "{{n}} tác vụ",
+    "plusWorkspace": "+không gian làm việc",
+    "copyFullHash": "Sao chép SHA-256 đầy đủ",
+    "safetyActive": "Đã bật bảo vệ trước khi khôi phục",
+    "safetyDescription": "ActonOS sẽ tạo bản chụp an toàn của cơ sở dữ liệu hiện tại trước khi khôi phục. Hệ thống sẽ tự động tải lại sau khi khôi phục xong.",
+    "createdLabel": "Đã tạo:",
+    "sizeLabel": "Kích thước:",
+    "contentsLabel": "Nội dung:",
+    "contentsValue": "{{agents}} agent, {{tasks}} tác vụ",
+    "fileLabel": "Tệp:",
+    "resetPrefix": "Để tránh mất dữ liệu ngoài ý muốn, vui lòng gõ",
+    "resetSuffix": "bên dưới:"
   }
 }

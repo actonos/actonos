@@ -65,6 +65,11 @@
     "prevHash": "Previous Block SHA-256 Hash",
     "rawJson": "Raw JSON Payload",
     "copyJson": "Copy JSON Payload",
-    "close": "Close"
+    "close": "Close",
+    "riskBadge": "{{level}} Risk",
+    "localTime": "Local Time:",
+    "utcTime": "UTC Time:",
+    "sealed": "SHA-256 Sealed",
+    "copyEntryHash": "Copy Entry Hash"
   }
 }

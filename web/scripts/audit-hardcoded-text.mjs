@@ -5,11 +5,19 @@ import ts from 'typescript';
 const root = path.resolve('src');
 const findings = [];
 const visibleAttributes = new Set(['alt', 'aria-label', 'placeholder', 'title']);
-const ignored = new Set(['ActonOS', 'CPU', 'RAM', 'UTF-8']);
+// Product names, units and protocol tokens are identical in every locale.
+const ignored = new Set([
+  'ActonOS', 'CPU', 'RAM', 'UTF-8',
+  'MB', 'KB', 'ms', 'px', 'PTY', 'null', 'Markdown',
+  'Telegram', 'Discord', 'WhatsApp',
+  'PowerShell (ConPTY)', 'Command Prompt (CMD)', 'WSL / Linux', 'Bash (/bin/bash)', 'POSIX Shell (/bin/sh)',
+  'UTF-8 / xterm-256color',
+]);
 const ignoredPatterns = [
   /^v?\d+\.\d+\.\d+(?:[- ().A-Za-z]+)?$/,
   /^[A-Z][A-Z0-9_]+=\S+$/,
   /^agent_[a-z0-9_]+$/,
+  /^[A-Z0-9]+(?:[-_][A-Z0-9]+)+$/, // CONSTANT-STYLE tokens such as RESET-ACTONOS
 ];
 
 function hasWords(value) {

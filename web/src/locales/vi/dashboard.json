@@ -143,10 +143,15 @@
     "anomaliesDetected": "{{count}} bất thường chủ động cần sự giám sát của vận hành viên.",
     "nominalDescription": "Đàn Agent tự chủ, Tầng Ký Ức Đa Tầng và Nhịp Đập 24/7 đang vận hành tối ưu.",
     "missionControl": "Trung Tâm Nhiệm Vụ",
-    "auditLogs": "Sổ Cái Kiểm Toán"
+    "auditLogs": "Sổ Cái Kiểm Toán",
+    "activeCount": "{{n}} đang hoạt động",
+    "channelLabel": "kênh {{channel}}",
+    "noCircuitTrips": "0 lần ngắt mạch",
+    "ofActive": "/ {{total}} đang hoạt động",
+    "swarmNominal": "Swarm ổn định"
   },
   "vitals": {
-    "openclaw": "Xung Nhịp OpenClaw",
+    "pulse": "Xung Nhịp Heartbeat",
     "llmHealth": "Mạng Lưới Mô Hình LLM",
     "hostMemory": "RAM & CPU Máy Chủ",
     "agentFleet": "Đội Ngũ Agent"

@@ -213,7 +213,7 @@ export function MessageBubble({
                       <span className="font-mono text-[11px] truncate max-w-[150px]">{att.name}</span>
                       {att.isWorkspace && (
                         <span className="px-1 py-0.2 rounded-xs bg-hi-yellow/30 text-white text-[8px] font-semibold uppercase tracking-wider">
-                          Workspace
+                          {t('workspaceLabel')}
                         </span>
                       )}
                       <span className="text-[9px] text-white/60">

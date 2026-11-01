@@ -78,7 +78,7 @@ export function ActionProgressToast() {
                   onClick={prevAction}
                   disabled={activeIndex === 0}
                   className="text-slate hover:text-deep-ink disabled:opacity-30 p-0.5 rounded-full transition-colors"
-                  title="Previous action"
+                  title={t('actionProgress.previous')}
                 >
                   <ChevronLeft className="w-3.5 h-3.5" />
                 </button>
@@ -90,7 +90,7 @@ export function ActionProgressToast() {
                   onClick={nextAction}
                   disabled={activeIndex === actions.length - 1}
                   className="text-slate hover:text-deep-ink disabled:opacity-30 p-0.5 rounded-full transition-colors"
-                  title="Next action"
+                  title={t('actionProgress.next')}
                 >
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
@@ -101,7 +101,7 @@ export function ActionProgressToast() {
               type="button"
               onClick={() => dismissAction(activeAction.id)}
               className="text-slate hover:text-deep-ink p-1 rounded-full hover:bg-onyx/5 transition-colors"
-              title="Dismiss"
+              title={t('dismiss')}
             >
               <X className="w-4 h-4" />
             </button>

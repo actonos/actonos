@@ -175,7 +175,7 @@ export function ConnectionStatusIndicator({
                 ) : (
                   <WifiOff className="w-3.5 h-3.5 text-red-500" />
                 )}
-                Realtime Stream
+                {t('realtimeStream')}
               </span>
               <span className="font-mono font-medium">{isOnline ? '120 FPS / WS' : 'Disconnected'}</span>
             </div>

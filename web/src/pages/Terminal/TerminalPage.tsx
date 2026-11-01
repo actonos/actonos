@@ -282,7 +282,7 @@ export function TerminalPage() {
             <div className="flex items-center gap-2 pl-2 border-l border-white/10">
               <TerminalIcon className="w-4 h-4 text-amber-400 shrink-0" />
               <span className="text-xs font-mono font-medium text-white/90 hidden sm:inline">
-                ActonOS Pseudo-Terminal ({isWindows ? 'ConPTY' : 'POSIX PTY'})
+                {t('pseudoTerminal', { kind: isWindows ? 'ConPTY' : 'POSIX PTY' })}
               </span>
             </div>
 
@@ -310,7 +310,7 @@ export function TerminalPage() {
                 value={selectedShell}
                 onChange={(e) => handleShellChange(e.target.value)}
                 className="appearance-none bg-[#1d1738] hover:bg-[#251f47] text-white/90 font-mono text-[12px] pl-3 pr-7 py-1.5 rounded-lg border border-white/15 focus:outline-none focus:border-amber-400/50 cursor-pointer transition-colors"
-                title="Select shell environment"
+                title={t('actions.selectShell')}
               >
                 {terminalInfo?.available_shells && terminalInfo.available_shells.length > 0 ? (
                   terminalInfo.available_shells.map((sh) => (
@@ -340,7 +340,7 @@ export function TerminalPage() {
                 type="button"
                 onClick={() => setFontSize((s) => Math.max(10, s - 1))}
                 className="p-1 rounded text-white/70 hover:text-white hover:bg-white/10 transition-colors"
-                title="Zoom Out"
+                title={t('actions.zoomOut')}
               >
                 <ZoomOut className="w-3.5 h-3.5" />
               </button>
@@ -349,7 +349,7 @@ export function TerminalPage() {
                 type="button"
                 onClick={() => setFontSize((s) => Math.min(24, s + 1))}
                 className="p-1 rounded text-white/70 hover:text-white hover:bg-white/10 transition-colors"
-                title="Zoom In"
+                title={t('actions.zoomIn')}
               >
                 <ZoomIn className="w-3.5 h-3.5" />
               </button>
@@ -361,7 +361,7 @@ export function TerminalPage() {
               size="sm"
               onClick={handleClear}
               className="text-white/70 hover:text-white hover:bg-white/10 h-8 px-2"
-              title="Clear terminal screen"
+              title={t('actions.clearScreen')}
               icon={<Trash2 className="w-3.5 h-3.5" />}
             >
               <span className="hidden lg:inline text-xs ml-1.5">{t('actions.clear', 'Clear')}</span>
@@ -373,7 +373,7 @@ export function TerminalPage() {
               size="sm"
               onClick={() => startSession(selectedShell)}
               className="text-white/70 hover:text-white hover:bg-white/10 h-8 px-2"
-              title="Reconnect terminal session"
+              title={t('actions.reconnectSession')}
               icon={<RefreshCw className="w-3.5 h-3.5" />}
             >
               <span className="hidden lg:inline text-xs ml-1.5">{t('actions.reconnect', 'Reconnect')}</span>
@@ -420,7 +420,7 @@ export function TerminalPage() {
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">
               <Sparkles className="w-3 h-3 text-amber-400" />
-              ActonOS Sandbox Environment
+              {t('sandboxEnvironment')}
             </span>
             <span className="hidden sm:inline">•</span>
             <span className="hidden sm:inline">UTF-8 / xterm-256color</span>

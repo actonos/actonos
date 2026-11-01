@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { api } from '@/lib/api';
+import type { NavTab } from '@/components/layout/Sidebar';
 import type {
   SystemMetrics,
   SystemAnomaly,
@@ -30,7 +31,7 @@ export interface OperatorHealthViewProps {
   agentsActive?: number;
   heartbeatConfig?: HeartbeatConfigData | null;
   providerReports?: Record<string, ProviderHealthReport>;
-  onNavigateTab?: (tab: any) => void;
+  onNavigateTab?: (tab: NavTab) => void;
   onRefresh?: () => void;
 }
 
@@ -193,7 +194,7 @@ export function OperatorHealthView({
                 <ShieldAlert className="w-4 h-4 text-amber-600" />
                 {t('anomalies.title', 'Proactive System Anomalies')}
               </span>
-              <span className="text-[11px] text-slate font-mono">{activeAnomalies.length} active</span>
+              <span className="text-[11px] text-slate font-mono">{t('operator.activeCount', { n: activeAnomalies.length })}</span>
             </div>
 
             {activeAnomalies.slice(0, 2).map((anomaly) => (
@@ -255,7 +256,7 @@ export function OperatorHealthView({
               <span className={`w-2.5 h-2.5 rounded-full ${heartbeatConfig?.enabled ? 'bg-emerald-500 animate-pulse' : 'bg-slate'}`} />
               {heartbeatConfig?.enabled ? `${heartbeatConfig.interval_minutes}m interval` : 'Disabled'}
             </div>
-            <span className="text-[11px] text-slate font-mono">{heartbeatConfig?.target_channel || 'all'} channel</span>
+            <span className="text-[11px] text-slate font-mono">{t('operator.channelLabel', { channel: heartbeatConfig?.target_channel || 'all' })}</span>
           </div>
           <div className="p-3 rounded-2xl bg-soft-meadow border border-onyx/10 text-deep-ink">
             <HeartPulse className="w-5 h-5" />
@@ -269,7 +270,7 @@ export function OperatorHealthView({
             <div className="font-serif text-heading-sm font-bold text-deep-ink">
               {Object.keys(providerReports).length > 0 ? `${Object.keys(providerReports).length} Connected` : 'Ready'}
             </div>
-            <span className="text-[11px] text-emerald-700 font-mono">0 circuit trips</span>
+            <span className="text-[11px] text-emerald-700 font-mono">{t('operator.noCircuitTrips')}</span>
           </div>
           <div className="p-3 rounded-2xl bg-soft-meadow border border-onyx/10 text-deep-ink">
             <Zap className="w-5 h-5" />
@@ -295,9 +296,9 @@ export function OperatorHealthView({
           <div className="space-y-1">
             <span className="text-caption font-semibold text-slate uppercase">{t('vitals.agentFleet', 'Agent Fleet')}</span>
             <div className="font-serif text-heading-sm font-bold text-deep-ink">
-              {agentsActive !== undefined ? agentsActive : agents.filter((a) => a.status === 'active').length} <span className="text-caption font-sans font-normal text-slate">/ {agentsCount !== undefined ? agentsCount : agents.length} active</span>
+              {agentsActive !== undefined ? agentsActive : agents.filter((a) => a.status === 'active').length} <span className="text-caption font-sans font-normal text-slate">{t('operator.ofActive', { total: agentsCount !== undefined ? agentsCount : agents.length })}</span>
             </div>
-            <span className="text-[11px] text-emerald-700 font-mono">Swarm Nominal</span>
+            <span className="text-[11px] text-emerald-700 font-mono">{t('operator.swarmNominal')}</span>
           </div>
           <div className="p-3 rounded-2xl bg-soft-meadow border border-onyx/10 text-deep-ink">
             <Bot className="w-5 h-5" />

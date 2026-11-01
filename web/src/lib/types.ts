@@ -762,7 +762,7 @@ export interface MemoryRecord {
   agent_id: string;
   layer: MemoryLayer;
   content: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   importance_weight: number;
   importance?: MemoryImportanceTier;
   pinned?: boolean;

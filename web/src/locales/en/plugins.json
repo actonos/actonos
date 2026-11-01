@@ -203,5 +203,6 @@
     "adjustFilters": "Try a different search or filter.",
     "clearFilters": "Clear filters",
     "noDescription": "No description."
-  }
+  },
+  "versionLabel": "v{{version}}"
 }

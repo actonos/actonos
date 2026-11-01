@@ -10,6 +10,13 @@
   },
   "actions": {
     "clear": "Clear",
-    "reconnect": "Reconnect"
-  }
+    "reconnect": "Reconnect",
+    "selectShell": "Select shell environment",
+    "zoomOut": "Zoom Out",
+    "zoomIn": "Zoom In",
+    "clearScreen": "Clear terminal screen",
+    "reconnectSession": "Reconnect terminal session"
+  },
+  "pseudoTerminal": "ActonOS Pseudo-Terminal ({{kind}})",
+  "sandboxEnvironment": "ActonOS Sandbox Environment"
 }

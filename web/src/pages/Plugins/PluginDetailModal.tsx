@@ -74,7 +74,7 @@ export function PluginDetailModal({
         {/* Meta Header */}
         <div className="-mt-3 mb-2 flex items-center justify-between font-mono text-caption text-slate">
           <div>
-            <span className="text-deep-ink font-semibold">{manifest.id}</span> • v{manifest.version || '1.0.0'}
+            <span className="text-deep-ink font-semibold">{manifest.id}</span> • {t('versionLabel', { version: manifest.version || '1.0.0' })}
             {manifest.author && <span> • {t('hub.byAuthor', { author: manifest.author })}</span>}
           </div>
           {manifest.license && (

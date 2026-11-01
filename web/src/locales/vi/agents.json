@@ -363,7 +363,10 @@
       "prompt_clarity": "Độ rõ của chỉ thị",
       "task_failure": "Mẫu lỗi lặp lại",
       "performance": "Hiệu năng & Chi phí"
-    }
+    },
+    "targetAgentId": "ID Agent mục tiêu:",
+    "loading": "Đang tải insight của agent...",
+    "emptyHint": "Nhấn \"{{action}}\" để đánh giá các vết nhiệm vụ gần đây và tìm cơ hội tối ưu."
   },
   "memory": {
     "buttonLabel": "Quản lý Bộ nhớ & Ký ức",
@@ -412,6 +415,14 @@
       "prod": "Năng Suất & Hỗ Trợ",
       "sec": "Bảo Mật & Kiểm Toán",
       "analysis": "Dữ Liệu & SEO"
-    }
+    },
+    "loading": "Đang tải mẫu...",
+    "noMatches": "Không có mẫu nào khớp với bộ lọc.",
+    "versionLabel": "v{{version}}",
+    "toolsCount": "{{n}} công cụ"
+  },
+  "heartbeatForm": {
+    "timezonePlaceholder": "vd: Asia/Ho_Chi_Minh",
+    "channelPlaceholder": "vd: tg_support_bot"
   }
 }

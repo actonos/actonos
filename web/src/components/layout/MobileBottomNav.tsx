@@ -54,7 +54,7 @@ export function MobileBottomNav({
 
   return (
     <nav
-      aria-label="Mobile Navigation"
+      aria-label={t('mobileNavigation')}
       className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-canvas/95 backdrop-blur-xl border-t border-onyx/10 px-2 py-1.5 flex items-center justify-around shadow-lg select-none pb-[calc(0.375rem+env(safe-area-inset-bottom))]"
     >
       {navItems.map((item) => {

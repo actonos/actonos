@@ -750,7 +750,7 @@ export function ChatComposer({
                   </span>
                   {att.isWorkspace && (
                     <span className="px-1.5 py-0.5 rounded-sm bg-hi-yellow/20 text-deep-ink text-[9px] font-semibold uppercase tracking-wider">
-                      Workspace
+                      {t('workspaceLabel')}
                     </span>
                   )}
                   <span className="text-[10px] text-slate/70">

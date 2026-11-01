@@ -203,5 +203,6 @@
     "adjustFilters": "Thử từ khóa hoặc bộ lọc khác.",
     "clearFilters": "Xóa bộ lọc",
     "noDescription": "Chưa có mô tả."
-  }
+  },
+  "versionLabel": "v{{version}}"
 }
