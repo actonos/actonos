@@ -7,7 +7,7 @@
 
 - **Mode:** `mock`
 - **Model label (not evaluated):** `mock`
-- **Date:** `2026-11-01T05:26:39Z`
+- **Date:** `2026-11-01T05:46:46Z`
 - **Pass Rate:** `100.0%` (30/30)
 - **False Completion Rate:** `0.0%` (Target < 1.0%)
 - **P50 Latency (synthetic):** `288 ms` | **P95 Latency (synthetic):** `410 ms`
@@ -24,7 +24,7 @@
 | 5 | `task_05_tool_file_write_verification` | - | PASS | 252ms |  |
 | 6 | `task_06_tool_http_fetch_extract` | - | PASS | 288ms |  |
 | 7 | `task_07_json_schema_structured_output` | - | PASS | 312ms |  |
-| 8 | `task_08_false_completion_resistance` | - | PASS | 246ms |  |
+| 8 | `task_08_false_completion_resistance` | - | PASS | 326ms |  |
 | 9 | `task_09_outcome_assertion_file_check` | - | PASS | 246ms |  |
 | 10 | `task_10_memory_preference_retrieval` | - | PASS | 268ms |  |
 | 11 | `task_11_memory_pinned_persistence` | - | PASS | 282ms |  |

@@ -6,7 +6,10 @@
   "language": "en",
   "user_goal": "Generate comprehensive security audit report in /data/workspace/security_audit.md",
   "expected_kind": "produce",
-  "available_tools": ["native_file_write", "native_sysinfo"],
+  "available_tools": [
+    "native_file_write",
+    "native_sysinfo"
+  ],
   "expected_assertions": [
     {
       "kind": "file_exists",
@@ -19,5 +22,6 @@
       "expected": "Security Audit",
       "critical": true
     }
-  ]
+  ],
+  "timeout_sec": 300
 }

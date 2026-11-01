@@ -100,6 +100,12 @@ func main() {
 
 		if !res.Passed {
 			res.AgentOutput = excerpt(ex.Output, 400)
+			if ex.Detail != "" {
+				if res.AgentOutput == "" {
+					res.AgentOutput = "(no final answer)"
+				}
+				res.AgentOutput += "\n[run: " + ex.Detail + "]"
+			}
 		}
 		if res.Passed {
 			passedCount++

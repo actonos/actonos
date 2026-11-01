@@ -148,6 +148,12 @@ func newLiveExecutor(modelID string) (*liveExecutor, error) {
 // newLiveExecutorWithProvider wires the engine around any provider. Tests pass a
 // scripted provider so no network or credentials are needed.
 func newLiveExecutorWithProvider(modelID string, provider llm.LLMProvider) (*liveExecutor, error) {
+	// The bubblewrap sandbox needs a writable cgroup v2 subtree for resource limits.
+	// A developer machine usually has none, which made every native_exec fail. Namespace
+	// isolation still applies; only the memory/pid/cpu caps are skipped for eval runs.
+	if os.Getenv("ACTONOS_CGROUP_OPTIONAL") == "" {
+		_ = os.Setenv("ACTONOS_CGROUP_OPTIONAL", "1")
+	}
 	recorder := &recordingProvider{LLMProvider: provider}
 	router := llm.NewModelCascadeRouter()
 	router.RegisterProvider(modelID, recorder)
@@ -214,6 +220,35 @@ func (l *liveExecutor) Close() {
 	_ = os.RemoveAll(l.dataDir)
 }
 
+// describeEnd explains how a run finished, so an empty or failed answer can be diagnosed
+// from the report alone.
+func (l *liveExecutor) describeEnd(ctx context.Context, agentID string, resp *llm.Response, runErr error) string {
+	var parts []string
+	if resp != nil {
+		if resp.FinishReason != "" {
+			parts = append(parts, "finish_reason="+resp.FinishReason)
+		}
+		if resp.Content == "" && resp.ReasoningContent != "" {
+			parts = append(parts, fmt.Sprintf("answer empty but %d chars of reasoning were produced", len(resp.ReasoningContent)))
+		}
+	}
+	if runs, err := l.runStore.List(ctx, 50); err == nil {
+		for _, run := range runs {
+			if run.AgentID == agentID {
+				parts = append(parts, fmt.Sprintf("run=%s iterations=%d completion_tokens=%d", run.Status, run.Iterations, run.CompletionTokens))
+				if run.TerminationReason != "" {
+					parts = append(parts, "termination="+run.TerminationReason)
+				}
+				break
+			}
+		}
+	}
+	if runErr != nil {
+		parts = append(parts, "error="+runErr.Error())
+	}
+	return strings.Join(parts, "; ")
+}
+
 func evalAgentID(taskID string) string {
 	return "eval_" + strings.ToLower(strings.NewReplacer(" ", "_", ".", "_").Replace(taskID))
 }
@@ -228,9 +263,11 @@ func (l *liveExecutor) Execute(ctx context.Context, task evals.EvalTask) taskExe
 	}
 
 	if _, err := l.agents.Create(ctx, agent.AgentManifest{
-		AgentID:            agentID,
-		Name:               task.Title,
-		ModelConfig:        llm.ModelConfig{PrimaryModel: l.modelID, MaxTokens: 4096},
+		AgentID: agentID,
+		Name:    task.Title,
+		// No MaxTokens override: thinking models spend their budget on reasoning, and a small
+		// cap produced empty answers. Use the same default the product uses.
+		ModelConfig:        llm.ModelConfig{PrimaryModel: l.modelID},
 		SystemInstructions: liveSystemInstructions,
 		AuthorizedTools:    task.AvailableTools,
 		DelegationScope: agent.DelegationScope{
@@ -262,6 +299,7 @@ func (l *liveExecutor) Execute(ctx context.Context, task evals.EvalTask) taskExe
 	if resp != nil {
 		result.Output = resp.Content
 	}
+	result.Detail = l.describeEnd(ctx, agentID, resp, err)
 
 	var promptTokens, completionTokens int
 	if runs, listErr := l.runStore.List(ctx, 50); listErr == nil {

@@ -277,6 +277,7 @@ func (p *OpenAIProvider) completeChat(ctx context.Context, messages []Message, o
 		Content:          firstChoice.Message.Content,
 		ReasoningContent: firstChoice.Message.ReasoningContent,
 		ToolCalls:        respToolCalls,
+		FinishReason:     firstChoice.FinishReason,
 		Model:            chatResp.Model,
 		Usage: Usage{
 			PromptTokens:     chatResp.Usage.PromptTokens,

@@ -20,6 +20,8 @@ type taskExecution struct {
 	Workspace string
 	// Err is set when the attempt itself failed (timeout, provider error, ...).
 	Err error
+	// Detail describes how the run ended; it is shown for failed tasks.
+	Detail string
 }
 
 // taskExecutor runs one eval task. The mock executor fabricates results so the

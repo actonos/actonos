@@ -27,6 +27,29 @@ func NewTaskGrader(verifier *agent.OutcomeVerifier, router *llm.ModelCascadeRout
 	}
 }
 
+// failureMarkers are phrases by which an answer acknowledges that the work was not
+// done (or that it needs more input). This is a deliberately simple, deterministic
+// heuristic: it can miss unusual wording, so treat the false-completion rate as an
+// approximation and read the per-task answers.
+var failureMarkers = []string{
+	"not completed", "not complete", "incomplete", "did not", "didn't", "could not", "couldn't",
+	"unable to", "cannot", "can't", "failed", "was not created", "not created", "no archive",
+	"i need", "please provide", "could you provide", "blocked",
+	"khong the", "không thể", "không tạo", "chưa", "thất bại", "không thành công", "vui lòng cung cấp", "cần bạn",
+}
+
+// ClaimsCompletion reports whether a final answer presents the task as done. An answer
+// that acknowledges failure or asks for missing input does not.
+func ClaimsCompletion(output string) bool {
+	lower := strings.ToLower(output)
+	for _, marker := range failureMarkers {
+		if strings.Contains(lower, marker) {
+			return false
+		}
+	}
+	return strings.TrimSpace(output) != ""
+}
+
 // GradeTask evaluates an agent execution against benchmark criteria.
 func (g *TaskGrader) GradeTask(
 	ctx context.Context,
@@ -67,8 +90,12 @@ func (g *TaskGrader) GradeTask(
 	// 2. Check False Completion (claiming task done without artifact/evidence)
 	if task.ExpectedKind == "produce" && len(task.ExpectedAssertions) > 0 && len(toolCalls) == 0 {
 		res.Passed = false
-		res.FalseCompleted = true
-		res.FailureReason = "false completion: claimed finished without producing artifact"
+		if ClaimsCompletion(agentOutput) {
+			res.FalseCompleted = true
+			res.FailureReason = "false completion: claimed finished without producing artifact"
+		} else {
+			res.FailureReason = "no artifact produced (the answer does not claim success)"
+		}
 		return res
 	}
 
@@ -78,7 +105,9 @@ func (g *TaskGrader) GradeTask(
 		res.Assertions = assertResults
 		if !allPassed {
 			res.Passed = false
-			res.FalseCompleted = true
+			// Reporting an honest failure is not a false completion; only an answer
+			// that claims success while the evidence is missing is.
+			res.FalseCompleted = ClaimsCompletion(agentOutput)
 			var failedMsgs []string
 			for _, ar := range assertResults {
 				if !ar.Passed {

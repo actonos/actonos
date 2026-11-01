@@ -109,12 +109,15 @@ type Usage struct {
 
 // Response represents a non-streaming completion result.
 type Response struct {
-	Content          string            `json:"content"`
-	ReasoningContent string            `json:"reasoning_content,omitempty"`
-	ToolCalls        []ToolCall        `json:"tool_calls,omitempty"`
-	Usage            Usage             `json:"usage"`
-	Model            string            `json:"model"`
-	ProviderItems    []json.RawMessage `json:"provider_items,omitempty"`
+	Content          string     `json:"content"`
+	ReasoningContent string     `json:"reasoning_content,omitempty"`
+	ToolCalls        []ToolCall `json:"tool_calls,omitempty"`
+	// FinishReason is the provider-reported stop reason ("stop", "length", ...).
+	// "length" with empty Content means the token budget ran out, typically spent on reasoning.
+	FinishReason  string            `json:"finish_reason,omitempty"`
+	Usage         Usage             `json:"usage"`
+	Model         string            `json:"model"`
+	ProviderItems []json.RawMessage `json:"provider_items,omitempty"`
 }
 
 // StreamChunk represents a single chunk during streaming completions.

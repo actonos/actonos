@@ -22,6 +22,15 @@ Two modes exist:
 
 Tasks that operate on existing input declare it under `fixtures` (relative path to content); the runner writes those files into the task workspace before the agent starts. Failed tasks keep a truncated copy of the final answer in the report's "Failure Details" section.
 
+Live runs set `ACTONOS_CGROUP_OPTIONAL=1` (unless you set it) because a developer machine usually has no writable cgroup v2
+subtree, which otherwise makes every `native_exec` fail; namespace isolation still applies, only resource caps are skipped.
+The agent runs with the product's default token budget (thinking models spend it on reasoning, so a small cap yields empty
+answers). A failed task's report entry includes why the run ended (finish reason, run status, iterations).
+
+False completion is judged by a simple deterministic heuristic: a missing artifact counts as a false completion only when the
+final answer claims success. An answer that admits failure or asks for missing input still fails the task but is not counted.
+The heuristic can miss unusual wording, so read the answers behind the rate.
+
 Live caveats: it costs real tokens, and tasks without `expected_assertions` (for example the memory and planning
 tasks) are graded only on a non-empty answer plus the safety checks, so read the per-task failure reasons instead of
 relying on the pass rate alone. Memory tasks are not seeded with prior memories.
