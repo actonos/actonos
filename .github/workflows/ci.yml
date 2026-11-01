@@ -78,8 +78,11 @@ jobs:
     name: Web e2e (Playwright, advisory)
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    # Not yet verified green on CI (screenshot baselines are platform specific),
-    # so it reports but does not block merges. Remove continue-on-error once stable.
+    # Green and deterministic on a local Linux run (37 passed, twice), but the Linux
+    # screenshot baselines were generated off-CI, so font/rendering differences on the
+    # GitHub runner could still trip them. It reports without blocking merges; remove
+    # continue-on-error once it has been green on CI, and regenerate the *-linux.png
+    # baselines from the uploaded artifact if it is only the screenshots that differ.
     continue-on-error: true
     defaults:
       run:
@@ -103,3 +106,10 @@ jobs:
 
       - name: Run e2e tests
         run: npm run test:e2e
+
+      - name: Upload e2e results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: web/test-results

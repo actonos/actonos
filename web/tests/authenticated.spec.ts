@@ -8,8 +8,9 @@ test.beforeEach(async ({ page }) => {
 
 test('authenticated dashboard is responsive and accessible', async ({ page }) => {
   await page.goto('/#/dashboard');
-  await expect(page.getByRole('heading', { name: /Dashboard|Bảng điều khiển/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Dashboard|Bảng điều khiển/ }).first()).toBeVisible();
   await expect(page.locator('body')).not.toHaveCSS('overflow-x', 'scroll');
+  await page.waitForLoadState('networkidle');
 
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
@@ -18,19 +19,22 @@ test('authenticated dashboard is responsive and accessible', async ({ page }) =>
     results.violations.filter((violation) => violation.impact === 'critical' || violation.impact === 'serious'),
     JSON.stringify(results.violations, null, 2)
   ).toEqual([]);
-  await expect(page).toHaveScreenshot('dashboard.png', { fullPage: true, maxDiffPixels: 1000 });
+  await expect(page).toHaveScreenshot('dashboard.png', { fullPage: true, animations: 'disabled', maxDiffPixels: 1000 });
 });
 
 test('command palette navigates and density persists', async ({ page }) => {
   await page.goto('/#/dashboard');
+  // The shortcut is registered once the shell has mounted.
+  await expect(page.getByRole('heading', { name: /Dashboard|Bảng điều khiển/ }).first()).toBeVisible();
   await page.keyboard.press('Control+K');
   await expect(page.getByRole('dialog', { name: /Quick search|Tìm nhanh/ })).toBeVisible();
   await page.getByPlaceholder(/Search pages|Tìm trang/).fill('operations');
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/#\/operations$/);
 
-  const densityButton = page.getByRole('button', { name: /compact density|mật độ gọn/i });
-  await densityButton.click();
+  // The density control lives in Settings > Identity (it was removed from the header).
+  await page.goto('/#/settings?view=identity');
+  await page.getByRole('tab', { name: /^(Compact|Gọn gàng)$/ }).click();
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.density)).toBe('compact');
   await page.reload();
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.density)).toBe('compact');
@@ -39,7 +43,9 @@ test('command palette navigates and density persists', async ({ page }) => {
 test('operations view has a stable visual baseline', async ({ page }) => {
   await page.goto('/#/operations');
   await expect(page.getByRole('heading', { name: /Live Operations|Vận hành/ })).toBeVisible();
-  await expect(page).toHaveScreenshot('operations.png', { fullPage: true, maxDiffPixels: 1000 });
+  // Cards fill in as data arrives and change the page height; capture only once it has settled.
+  await page.waitForLoadState('networkidle');
+  await expect(page).toHaveScreenshot('operations.png', { fullPage: true, animations: 'disabled', maxDiffPixels: 1000 });
 });
 
 test('primary routes render without horizontal overflow', async ({ page }) => {
@@ -93,14 +99,15 @@ test('operations and workflow tabs preserve deep-link state', async ({ page }) =
   await expect(page).toHaveURL(/automations\?view=history/);
 });
 
-test('chat session drawer is available on narrow layouts', async ({ page }) => {
-  test.skip((page.viewportSize()?.width || 0) >= 640, 'Mobile-only drawer behavior');
+test('chat conversation returns to the sessions list on narrow layouts', async ({ page }) => {
+  test.skip((page.viewportSize()?.width || 0) >= 640, 'Mobile-only navigation behavior');
   await page.goto('/#/chat');
-  await page.getByRole('button', { name: /^Sessions$/ }).click();
-  const closeButton = page.getByRole('button', { name: /Close sessions/ }).last();
-  await expect(closeButton).toBeVisible();
-  await closeButton.click();
-  await expect(closeButton).toBeHidden();
+  const search = page.getByPlaceholder(/Search by title|Tìm theo tiêu đề/);
+  await expect(search).toBeVisible();
+  await page.getByRole('button', { name: /^New Chat$/ }).first().click();
+  await expect(search).toBeHidden();
+  await page.getByRole('button', { name: /Back to Conversations|Quay lại danh sách/ }).first().click();
+  await expect(search).toBeVisible();
 });
 
 test('new chat first reply stays visible when the session hash is assigned', async ({ page }) => {
@@ -164,6 +171,7 @@ test('new chat first reply stays visible when the session hash is assigned', asy
 });
 
 test('primary authenticated routes have no serious accessibility violations', async ({ page }) => {
+  test.setTimeout(120_000); // eleven routes, each scanned with axe
   for (const route of ['agents', 'agents/new', 'chat', 'missions', 'automations', 'channels', 'plugins', 'tools', 'skills', 'workspace', 'settings']) {
     await page.goto(`/#/${route}`);
     await expect(page.locator('h1').first()).toBeVisible();
@@ -180,8 +188,8 @@ test('primary authenticated routes have no serious accessibility violations', as
 
 test('approval interruption requires rejection feedback', async ({ page }) => {
   await page.goto('/#/dashboard');
-  await expect(page.getByRole('heading').first()).toBeVisible();
-  await page.waitForTimeout(100);
+  // Wait for the authenticated shell: the listener only exists once it has mounted.
+  await expect(page.getByRole('heading', { name: /Dashboard|Bảng điều khiển/ }).first()).toBeVisible();
   await page.evaluate(() => {
     window.dispatchEvent(new CustomEvent('actonos:approval-required', {
       detail: {
