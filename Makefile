@@ -23,7 +23,7 @@
 #   make help          Show this help message
 # ==============================================================================
 
-.PHONY: plugin-gmail plugin-graph plugin-caldav plugin-imap-smtp plugins conformance all deps dev lint test test-unit test-race test-integ build-web build build-embedding dist model-embedding docker docker-multiarch docker-run iso iso-arm64 \
+.PHONY: check-fast check-web check-full plugin-gmail plugin-graph plugin-caldav plugin-imap-smtp plugins conformance all deps dev lint test test-unit test-race test-integ build-web build build-embedding dist model-embedding docker docker-multiarch docker-run iso iso-arm64 \
         clean version bump-patch bump-minor bump-major release help
 
 # ------------------------------------------------------------------------------
@@ -75,6 +75,34 @@ dev:
 lint:
 	@echo "==> Running linters..."
 	@bash scripts/lint.sh
+	@$(GO) run ./scripts/check-agent-docs.go
+
+# ------------------------------------------------------------------------------
+# Quick checks (output is kept short; run them one at a time, never next to each other)
+# ------------------------------------------------------------------------------
+# check-fast: compile and vet Go, typecheck the web app; PKG=./internal/mailcal/... also tests that package.
+check-fast:
+	@echo "==> go build + vet"
+	@$(GO) build ./... && $(GO) vet ./...
+	@echo "==> tsc"
+	@cd web && npx tsc --noEmit
+	@$(GO) run ./scripts/check-agent-docs.go
+	@if [ -n "$(PKG)" ]; then \
+		mkdir -p $(BUILD_DIR); echo "==> go test $(PKG)"; \
+		$(GO) test -count=1 $(PKG) > $(BUILD_DIR)/check.log 2>&1 || { tail -n 60 $(BUILD_DIR)/check.log; exit 1; }; \
+		grep -c '^ok' $(BUILD_DIR)/check.log | xargs -I{} echo "{} package(s) ok"; \
+	fi
+	@echo "check-fast ok"
+
+# check-web: everything in `npm run quality` except build, bundle budget and Playwright.
+check-web:
+	@cd web && npx tsc --noEmit && npm run lint --silent && npm run check:i18n --silent && npm run check:emoji --silent && npm run audit:i18n --silent -- --fail && npm test --silent
+	@echo "check-web ok"
+
+# check-full: the whole gate (lint, Go tests with coverage floors, web quality incl. Playwright).
+check-full: lint test-unit
+	@cd web && npm run quality
+	@echo "check-full ok"
 
 # ------------------------------------------------------------------------------
 # Testing
@@ -264,6 +292,9 @@ help:
 	@echo "  make deps          Install all dependencies (Go + Node)"
 	@echo "  make dev           Start development servers with hot-reload"
 	@echo "  make lint          Run all linters (Go + TypeScript)"
+	@echo "  make check-fast    Build, vet, typecheck (PKG=./path/... also tests it)"
+	@echo "  make check-web     Web lint, i18n, emoji, hardcoded-text and unit tests"
+	@echo "  make check-full    Full gate: lint, tests with coverage floors, web quality"
 	@echo "  make test          Run all tests"
 	@echo "  make test-unit     Run Go unit tests only"
 	@echo "  make test-race     Run Linux/CGO race detector"
