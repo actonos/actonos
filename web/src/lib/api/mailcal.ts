@@ -52,3 +52,13 @@ export const mailcalApi = {
   testAccount: (id: string) =>
     fetchJSON<MailcalTestResult>(`/mailcal/accounts/${encodeURIComponent(id)}/test`, { method: 'POST' }),
 };
+
+/** Tools whose effect leaves the device. The server refuses "don't ask again" for them. */
+export const EXTERNAL_EFFECT_TOOLS: readonly string[] = [
+  'native_mail_send',
+  'native_mail_delete',
+  'native_calendar_create_event',
+  'native_calendar_update_event',
+  'native_calendar_respond',
+  'native_calendar_delete_event',
+];
