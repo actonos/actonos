@@ -10,4 +10,4 @@ echo " Target Model: ${MODEL}"
 echo " Output Report: ${OUTPUT}"
 echo "=========================================="
 
-go run ./evals/runner/main.go --mode=mock --model="${MODEL}" --output="${OUTPUT}" --fail-under=90.0
+go run ./evals/runner --mode=mock --model="${MODEL}" --output="${OUTPUT}" --fail-under=90.0

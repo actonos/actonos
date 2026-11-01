@@ -9,4 +9,4 @@ Write-Host " Target Model: $Model" -ForegroundColor Gray
 Write-Host " Output Report: $Output" -ForegroundColor Gray
 Write-Host "==========================================" -ForegroundColor Cyan
 
-go run ./evals/runner/main.go --mode=mock --model=$Model --output=$Output --fail-under=90.0
+go run ./evals/runner --mode=mock --model=$Model --output=$Output --fail-under=90.0
