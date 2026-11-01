@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/actonos/actonos/internal/bus"
+	"github.com/actonos/actonos/internal/security"
 	"github.com/actonos/actonos/internal/workspace"
 	"github.com/coder/websocket"
 	"github.com/tetratelabs/wazero"
@@ -73,6 +74,12 @@ type HostContext struct {
 	secretValues []string
 	wsConns      map[int32]*HostWSConn
 	nextWSID     int32
+	tcpConns     map[int32]*hostTCPConn
+	nextTCPID    int32
+	// Dial is the policy for acton_tcp. The zero value is production: public addresses only.
+	Dial security.DialPolicy
+	// TCPByteLimit caps traffic per connection in each direction. 0 means 50 MiB.
+	TCPByteLimit int64
 	mu           sync.Mutex
 }
 
@@ -359,7 +366,25 @@ func RegisterHostModule(ctx context.Context, r wazero.Runtime) error {
 		return fmt.Errorf("instantiating acton_account: %w", err)
 	}
 
-	// 9. acton_host (legacy combined host module)
+	// 9. acton_tcp (TLS sockets for IMAP/SMTP-style providers)
+	if _, err := r.NewHostModuleBuilder("acton_tcp").
+		NewFunctionBuilder().
+		WithFunc(tcpConnect).
+		Export("connect").
+		NewFunctionBuilder().
+		WithFunc(tcpSend).
+		Export("send").
+		NewFunctionBuilder().
+		WithFunc(tcpRecv).
+		Export("recv").
+		NewFunctionBuilder().
+		WithFunc(tcpClose).
+		Export("close").
+		Instantiate(ctx); err != nil {
+		return fmt.Errorf("instantiating acton_tcp: %w", err)
+	}
+
+	// 10. acton_host (legacy combined host module)
 	_, err := r.NewHostModuleBuilder("acton_host").
 		NewFunctionBuilder().
 		WithFunc(hostHTTPRequest).

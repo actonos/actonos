@@ -6,9 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"strconv"
 	"time"
 
+	"github.com/actonos/actonos/internal/security"
 	"github.com/tetratelabs/wazero/api"
 )
 
@@ -29,9 +32,40 @@ func sandboxedHTTPClient(h *HostContext, timeout time.Duration) *http.Client {
 			return &cloned
 		}
 	}
+	var policy security.DialPolicy
+	if h != nil {
+		policy = h.Dial
+	}
 	return &http.Client{
 		Timeout:       timeout,
 		CheckRedirect: pluginRedirectCheck(gate),
+		Transport:     rebindingSafeTransport(policy),
+	}
+}
+
+// rebindingSafeTransport dials the single address the safe resolver vetted, never the name.
+// CheckOutboundURLContext already looked the name up once to enforce the allowlist; without this
+// the stock transport would look it up a second time and an attacker-controlled DNS server could
+// answer differently (a private address) the second time.
+func rebindingSafeTransport(p security.DialPolicy) *http.Transport {
+	return &http.Transport{
+		Proxy: nil, // a proxy would resolve the name itself, outside this policy
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(addr)
+			if err != nil {
+				return nil, err
+			}
+			n, err := strconv.Atoi(port)
+			if err != nil {
+				return nil, err
+			}
+			return p.DialTCP(ctx, host, n)
+		},
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 60 * time.Second,
+		MaxIdleConns:          4,
+		IdleConnTimeout:       30 * time.Second,
+		ForceAttemptHTTP2:     true,
 	}
 }
 

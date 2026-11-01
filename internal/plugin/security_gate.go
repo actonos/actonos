@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -19,6 +20,7 @@ var (
 	ErrWorkspaceDisabled    = errors.New("workspace access is not enabled for this plugin")
 	ErrBusEventUnauthorized = errors.New("bus event emission not authorized for topic")
 	ErrOAuthUnauthorized    = errors.New("oauth provider not authorized in plugin manifest")
+	ErrTCPUnauthorized      = errors.New("TCP endpoint not authorized in plugin manifest")
 	ErrCredsUnauthorized    = errors.New("account credentials not authorized in plugin manifest")
 )
 
@@ -30,6 +32,28 @@ func (g *SecurityGate) CheckCredentialsAccess() error {
 		return fmt.Errorf("%w: permissions.credentials is not set", ErrCredsUnauthorized)
 	}
 	return nil
+}
+
+// CheckTCPAccess verifies the manifest lists host:port under permissions.net_tcp. The port
+// is part of the grant: "imap.example.com:993" does not allow port 143.
+func (g *SecurityGate) CheckTCPAccess(host string, port int) error {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	host = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
+	for _, entry := range g.manifest.Permissions.NetTCP {
+		i := strings.LastIndex(entry, ":")
+		if i <= 0 {
+			continue
+		}
+		p, err := strconv.Atoi(entry[i+1:])
+		if err != nil || p != port {
+			continue
+		}
+		if matchDomain(entry[:i], host) {
+			return nil
+		}
+	}
+	return fmt.Errorf("%w: %s:%d is not listed in permissions.net_tcp", ErrTCPUnauthorized, host, port)
 }
 
 // CheckOAuthAccess verifies the manifest lists provider under permissions.oauth.

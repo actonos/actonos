@@ -21,6 +21,7 @@ type PluginPermissions struct {
 	Storage     bool     `json:"storage,omitempty"`      // True if plugin is granted scoped persistent KV storage
 	Workspace   bool     `json:"workspace,omitempty"`    // True if plugin is granted access to read/write User Workspace files
 	BusEvents   []string `json:"bus_events,omitempty"`   // Whitelist of event topics plugin can emit to internal/bus
+	NetTCP      []string `json:"net_tcp,omitempty"`      // "host:port" TLS endpoints for acton_tcp (for example "imap.example.com:993"); "*.example.com:993" matches one or more subdomains
 	Credentials bool     `json:"credentials,omitempty"`  // may ask the core for the username and password of the plugin's own password accounts (acton_account.get_credentials)
 	OAuth       []string `json:"oauth,omitempty"`        // OAuth providers (for example "google") whose short-lived access tokens the plugin may request
 }

@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Microsoft 365 / Outlook and CalDAV plugins (`internal/mailcal/plugins/graph`, `internal/mailcal/plugins/caldav`)**:
   - A Microsoft Graph provider (mail and calendar; sends are idempotent through a private message property and event `transactionId`; delete moves to Deleted Items) and a CalDAV calendar provider (iCalendar toolkit that keeps unknown properties, conflict-safe updates, no silent invitations). Added without changing the rule engine, gate or ABI.
   - Password accounts: a new `acton_account` host call hands a plugin the login of its own accounts only; passwords live in the vault and never in the account record or API responses.
+- **IMAP and SMTP plugin and controlled TLS sockets (`acton_tcp`, `internal/security/safedial.go`, `internal/mailcal/plugins/imapsmtp`)**:
+  - A new `acton_tcp` host call lets a plugin open TLS connections to the `host:port` pairs its manifest lists under `permissions.net_tcp`. There is no plaintext mode, the host runs the plaintext phase of SMTP and IMAP STARTTLS itself (refusing servers that hide STARTTLS or inject data before the handshake), resolves names once and refuses local, private and metadata addresses, and enforces connection, time and traffic limits.
+  - IMAP and SMTP provider plugin (`make plugin-imap-smtp`). Sending is at most once: a copy flagged `\Draft` is parked in Sent before submission and cleared only after the server accepted the message, so an uncertain attempt is reported instead of risking a duplicate.
+- **Changed**: the default HTTP client for plugins now connects only to the address it vetted (closing a DNS-rebinding window) and therefore no longer uses `HTTP_PROXY`.
 - **Plugin runtime**: guest calls that never return are now interrupted when their context ends.
 
 

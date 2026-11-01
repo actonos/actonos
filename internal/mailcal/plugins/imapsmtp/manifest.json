@@ -1,0 +1,11 @@
+{
+  "id": "mailcal-imap-smtp",
+  "name": "IMAP and SMTP mail",
+  "version": "1.0.0",
+  "description": "Read and send mail on any IMAP/SMTP server with an app password. To use a server, add its host:port entries to permissions.net_tcp (for example imap.example.com:993 and smtp.example.com:587) and install the plugin unsigned.",
+  "capabilities": ["mail@1"],
+  "permissions": {
+    "net_tcp": [],
+    "credentials": true
+  }
+}

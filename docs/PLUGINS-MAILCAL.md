@@ -26,4 +26,10 @@ Register an app in Microsoft Entra (personal or work accounts), add the `redirec
 
 Use an app password. Build with `make plugin-caldav`. Account config: `calendar_url` (https URL of the calendar collection), `email` (your own address, needed to answer invitations), optional `username`; then `PUT /api/mailcal/accounts/{id}/password`. The shipped manifest allows `caldav.fastmail.com` and `caldav.icloud.com`; for another server copy the plugin folder under a new `id`, add your host to `permissions.net_outbound`, and install it unsigned. Limits: no free/busy for other people, single occurrences of recurring events cannot be changed, and the server (not the plugin) sends invitations, so events with attendees can only be created when notifying attendees is requested.
 
+## IMAP and SMTP
+
+Use an app password. Build with `make plugin-imap-smtp`. The shipped manifest has an **empty** `permissions.net_tcp`: copy the plugin folder under a new `id`, add your servers (for example `imap.example.com:993` and `smtp.example.com:587`), and install it unsigned. Account config: `imap_host`, `smtp_host`, `email` (required), `imap_mode`/`smtp_mode` (`tls` or `starttls`; defaults are IMAP `tls` on 993 and SMTP `starttls` on 587), optional ports, `username`, `sent_mailbox`, `trash_mailbox`; then `PUT /api/mailcal/accounts/{id}/password`. Sending needs a Sent folder.
+
+**Sending is at most once, not exactly once** (SMTP has no idempotency key). If a send fails in a way that leaves it unknown whether the message was delivered, the plugin reports "may or may not have been delivered" and refuses to send again. Check the Sent folder; remove the leftover copy flagged as a draft (or delete it) before asking the agent to try again.
+
 Known unverified assumptions (check on a test account): that Gmail keeps the `X-Acton-Idempotency-Key` header on sent mail (it is how a retry finds its own earlier send), and that the Gmail API removes a `Bcc` header before delivery.

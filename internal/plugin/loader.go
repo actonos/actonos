@@ -315,6 +315,7 @@ func (inst *PluginInstance) Close(ctx context.Context) error {
 
 	if inst.hostCtx != nil {
 		inst.hostCtx.CloseAllWS()
+		inst.hostCtx.CloseAllTCP()
 	}
 
 	if shutdownFn := inst.mod.ExportedFunction("acton_plugin_shutdown"); shutdownFn != nil {
