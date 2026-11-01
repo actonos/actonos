@@ -15,12 +15,12 @@ import (
 
 // TailscaleStatus represents live connection details of the embedded node.
 type TailscaleStatus struct {
-	Connected   bool     `json:"connected"`
-	IP          string   `json:"ip,omitempty"`
-	FQDN        string   `json:"fqdn,omitempty"`
-	Hostname    string   `json:"hostname"`
-	PeersCount  int      `json:"peers_count"`
-	AuthKeySet  bool     `json:"auth_key_set"`
+	Connected  bool   `json:"connected"`
+	IP         string `json:"ip,omitempty"`
+	FQDN       string `json:"fqdn,omitempty"`
+	Hostname   string `json:"hostname"`
+	PeersCount int    `json:"peers_count"`
+	AuthKeySet bool   `json:"auth_key_set"`
 }
 
 // TailscaleManager manages the embedded tsnet.Server.

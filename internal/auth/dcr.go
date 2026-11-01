@@ -11,14 +11,14 @@ import (
 
 // ClientMetadata contains RFC 7591 Dynamic Client Registration metadata.
 type ClientMetadata struct {
-	ClientID                string   `json:"client_id"`
-	ClientSecret            string   `json:"client_secret,omitempty"`
-	ClientName              string   `json:"client_name"`
-	RedirectURIs            []string `json:"redirect_uris"`
-	GrantTypes              []string `json:"grant_types"`
-	ResponseTypes           []string `json:"response_types"`
-	Scope                   string   `json:"scope"`
-	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method"`
+	ClientID                string    `json:"client_id"`
+	ClientSecret            string    `json:"client_secret,omitempty"`
+	ClientName              string    `json:"client_name"`
+	RedirectURIs            []string  `json:"redirect_uris"`
+	GrantTypes              []string  `json:"grant_types"`
+	ResponseTypes           []string  `json:"response_types"`
+	Scope                   string    `json:"scope"`
+	TokenEndpointAuthMethod string    `json:"token_endpoint_auth_method"`
 	CreatedAt               time.Time `json:"created_at"`
 }
 

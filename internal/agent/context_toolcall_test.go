@@ -154,4 +154,3 @@ func TestAutoSummarizeObservation(t *testing.T) {
 		t.Fatalf("expected provenance reference in observation summary, got %s", res)
 	}
 }
-

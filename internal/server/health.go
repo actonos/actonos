@@ -11,16 +11,16 @@ import (
 
 // HealthReport is the liveness/readiness payload.
 type HealthReport struct {
-	Status            string            `json:"status"`
-	Version           string            `json:"version"`
-	GitCommit         string            `json:"git_commit"`
-	BuildTime         string            `json:"build_time"`
-	UptimeSeconds     uint64            `json:"uptime_seconds"`
-	RuntimeMode       string            `json:"runtime_mode"`
-	AgentsActive      int               `json:"agents_active"`
-	TailscaleConnected bool             `json:"tailscale_connected"`
-	TailscaleIP       string            `json:"tailscale_ip"`
-	Components        map[string]string `json:"components"`
+	Status             string            `json:"status"`
+	Version            string            `json:"version"`
+	GitCommit          string            `json:"git_commit"`
+	BuildTime          string            `json:"build_time"`
+	UptimeSeconds      uint64            `json:"uptime_seconds"`
+	RuntimeMode        string            `json:"runtime_mode"`
+	AgentsActive       int               `json:"agents_active"`
+	TailscaleConnected bool              `json:"tailscale_connected"`
+	TailscaleIP        string            `json:"tailscale_ip"`
+	Components         map[string]string `json:"components"`
 }
 
 func (s *Server) evaluateHealth(ctx context.Context) HealthReport {

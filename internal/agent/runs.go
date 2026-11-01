@@ -59,17 +59,17 @@ type RunEvent struct {
 
 // RunCheckpoint contains sufficient state to resume an approval-paused ReAct loop.
 type RunCheckpoint struct {
-	RunID       string        `json:"run_id"`
-	TraceID     string        `json:"trace_id"`
-	AgentID     string        `json:"agent_id"`
-	TaskID      string        `json:"task_id,omitempty"`
-	Goal        string        `json:"goal"`
-	Source      string        `json:"source"`
-	Messages    []llm.Message `json:"messages"`
-	Iteration   int           `json:"iteration"`
-	Usage       llm.Usage     `json:"usage"`
-	PendingTool    llm.ToolCall `json:"pending_tool"`
-	ConversationID string       `json:"conversation_id,omitempty"`
+	RunID          string        `json:"run_id"`
+	TraceID        string        `json:"trace_id"`
+	AgentID        string        `json:"agent_id"`
+	TaskID         string        `json:"task_id,omitempty"`
+	Goal           string        `json:"goal"`
+	Source         string        `json:"source"`
+	Messages       []llm.Message `json:"messages"`
+	Iteration      int           `json:"iteration"`
+	Usage          llm.Usage     `json:"usage"`
+	PendingTool    llm.ToolCall  `json:"pending_tool"`
+	ConversationID string        `json:"conversation_id,omitempty"`
 }
 
 // RunStore persists checkpoints and append-only run events.

@@ -45,9 +45,9 @@ type CronScheduler struct {
 // NewCronScheduler creates a CronScheduler instance with optional SQLite persistence.
 func NewCronScheduler(engine *Engine, eventBus *bus.EventBus, db ...*sql.DB) *CronScheduler {
 	cs := &CronScheduler{
-		cron:     cron.New(cron.WithParser(cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor))),
-		engine:   engine,
-		eventBus: eventBus,
+		cron:        cron.New(cron.WithParser(cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor))),
+		engine:      engine,
+		eventBus:    eventBus,
 		jobs:        make(map[string]*CronJob),
 		runningJobs: make(map[string]struct{}),
 	}

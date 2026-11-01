@@ -438,6 +438,3 @@ func (hm *HubManager) UninstallSkill(skillID string) error {
 
 	return nil
 }
-
-
-

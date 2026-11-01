@@ -104,4 +104,3 @@ func isWindows() bool {
 }
 
 var runtimeGOOS = func() string { return runtime.GOOS }
-

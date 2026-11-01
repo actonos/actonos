@@ -24,17 +24,17 @@ import (
 
 // BackupManifest describes the contents and metadata of an ActonOS backup bundle.
 type BackupManifest struct {
-	ID                     string    `json:"id"`
-	CreatedAt              time.Time `json:"created_at"`
-	Version                string    `json:"version"`
-	ChecksumSHA256         string    `json:"checksum_sha256"`
-	DatabaseSizeBytes      int64     `json:"database_size_bytes"`
-	ArchiveSizeBytes       int64     `json:"archive_size_bytes"`
-	IncludeWorkspace       bool      `json:"include_workspace"`
-	AgentsCount            int       `json:"agents_count"`
-	TasksCount             int       `json:"tasks_count"`
-	Notes                  string    `json:"notes,omitempty"`
-	FileName               string    `json:"file_name,omitempty"`
+	ID                string    `json:"id"`
+	CreatedAt         time.Time `json:"created_at"`
+	Version           string    `json:"version"`
+	ChecksumSHA256    string    `json:"checksum_sha256"`
+	DatabaseSizeBytes int64     `json:"database_size_bytes"`
+	ArchiveSizeBytes  int64     `json:"archive_size_bytes"`
+	IncludeWorkspace  bool      `json:"include_workspace"`
+	AgentsCount       int       `json:"agents_count"`
+	TasksCount        int       `json:"tasks_count"`
+	Notes             string    `json:"notes,omitempty"`
+	FileName          string    `json:"file_name,omitempty"`
 }
 
 // BackupManager orchestrates online SQLite backups, archive verification, restoration, and disaster recovery.

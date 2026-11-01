@@ -40,30 +40,30 @@ type ApprovalListProvider interface {
 
 // HeartbeatDaemon monitors proactive trigger rules, executes cognitive self-driving checks, and manages autonomous agent pulse.
 type HeartbeatDaemon struct {
-	mu            sync.RWMutex
-	executionMu   sync.Mutex
-	agentMgr      *AgentManager
-	engine        *Engine
-	eventBus      *bus.EventBus
-	db            *sql.DB
-	taskMgr       *TaskManager
-	sessionMgr    SessionHistoryProvider
-	approvalMgr   ApprovalListProvider
-	interval      time.Duration
-	enabled       bool
-	targetChannel string
-	targetAccount string
-	ackMaxChars   int
-	activeStart   string
-	activeEnd     string
-	activeTZ      string
-	stopCh         chan struct{}
-	triggerCh      chan struct{}
-	lastRun        time.Time
-	running        bool
-	stallTracker   map[string]taskStallState
-	lastAgentPulse map[string]time.Time
-	cronSched      *CronScheduler
+	mu              sync.RWMutex
+	executionMu     sync.Mutex
+	agentMgr        *AgentManager
+	engine          *Engine
+	eventBus        *bus.EventBus
+	db              *sql.DB
+	taskMgr         *TaskManager
+	sessionMgr      SessionHistoryProvider
+	approvalMgr     ApprovalListProvider
+	interval        time.Duration
+	enabled         bool
+	targetChannel   string
+	targetAccount   string
+	ackMaxChars     int
+	activeStart     string
+	activeEnd       string
+	activeTZ        string
+	stopCh          chan struct{}
+	triggerCh       chan struct{}
+	lastRun         time.Time
+	running         bool
+	stallTracker    map[string]taskStallState
+	lastAgentPulse  map[string]time.Time
+	cronSched       *CronScheduler
 	proactiveEngine *ProactiveEngine
 }
 
@@ -94,16 +94,16 @@ func NewHeartbeatDaemon(
 		interval = 5 * time.Minute
 	}
 	return &HeartbeatDaemon{
-		agentMgr:      agentMgr,
-		engine:        engine,
-		eventBus:      eventBus,
-		db:            db,
-		interval:      interval,
-		enabled:       true,
-		targetChannel: "all",
-		targetAccount: "all",
-		ackMaxChars:   defaultAckMaxChars,
-		stopCh:        make(chan struct{}),
+		agentMgr:       agentMgr,
+		engine:         engine,
+		eventBus:       eventBus,
+		db:             db,
+		interval:       interval,
+		enabled:        true,
+		targetChannel:  "all",
+		targetAccount:  "all",
+		ackMaxChars:    defaultAckMaxChars,
+		stopCh:         make(chan struct{}),
 		triggerCh:      make(chan struct{}, 1),
 		stallTracker:   make(map[string]taskStallState),
 		lastAgentPulse: make(map[string]time.Time),
@@ -484,12 +484,12 @@ func (h *HeartbeatDaemon) syncTriggerRules(ctx context.Context) {
 			}
 			jobID := fmt.Sprintf("trigger_%s_%d", a.AgentID, i)
 			_ = h.cronSched.RegisterJob(CronJob{
-				ID:      jobID,
-				AgentID: a.AgentID,
-				Name:    "trigger:" + a.Name,
+				ID:       jobID,
+				AgentID:  a.AgentID,
+				Name:     "trigger:" + a.Name,
 				CronExpr: rule.Expression,
-				Prompt:  strings.TrimSpace(rule.Filter),
-				Enabled: true,
+				Prompt:   strings.TrimSpace(rule.Filter),
+				Enabled:  true,
 			})
 		}
 	}

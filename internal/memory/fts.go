@@ -15,7 +15,7 @@ type FTSResult struct {
 	AgentID   string  `json:"agent_id"`
 	Layer     string  `json:"layer"`
 	Content   string  `json:"content"`
-	BM25Rank  float64 `json:"bm25_rank"` // Negative number in SQLite FTS5 (lower/more negative = more relevant)
+	BM25Rank  float64 `json:"bm25_rank"`  // Negative number in SQLite FTS5 (lower/more negative = more relevant)
 	NormScore float64 `json:"norm_score"` // Normalized 0.0 - 1.0 (higher = more relevant)
 }
 

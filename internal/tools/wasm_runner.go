@@ -46,9 +46,9 @@ func NewWASMTool(ctx context.Context, name, description string, schema json.RawM
 	}, nil
 }
 
-func (t *WASMTool) Name() string                     { return t.toolName }
-func (t *WASMTool) Description() string              { return t.description }
-func (t *WASMTool) Category() string                 { return "wasm" }
+func (t *WASMTool) Name() string                      { return t.toolName }
+func (t *WASMTool) Description() string               { return t.description }
+func (t *WASMTool) Category() string                  { return "wasm" }
 func (t *WASMTool) ParametersSchema() json.RawMessage { return t.schema }
 
 func (t *WASMTool) Execute(ctx context.Context, inputJSON json.RawMessage) (*ToolResult, error) {

@@ -352,4 +352,3 @@ func (s *Server) handleToggleSkill(w http.ResponseWriter, r *http.Request) {
 		"status":  "updated",
 	})
 }
-

@@ -387,4 +387,3 @@ func (m *UserProfileManager) ClearMemoryMD(ctx context.Context) error {
 func (m *UserProfileManager) AppendMemoryMD(ctx context.Context, entry string) error {
 	return m.AppendAgentMemoryMD(ctx, DefaultSystemAgentID, entry)
 }
-

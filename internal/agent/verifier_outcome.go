@@ -34,11 +34,11 @@ const (
 // OutcomeAssertion represents a machine-verifiable post-condition for a task or DAG step.
 type OutcomeAssertion struct {
 	Kind       AssertionKind `json:"kind"`
-	Target     string        `json:"target"`               // File path, URL, command, SQL query, or artifact name
-	Expected   string        `json:"expected,omitempty"`   // Substring, status code, row count, or exit code
-	Rubric     string        `json:"rubric,omitempty"`     // Evaluation guidelines for LLM judge
-	TimeoutSec int           `json:"timeout_sec,omitempty"`// Max verification timeout in seconds (default: 10s)
-	Critical   bool          `json:"critical"`             // If true, failure fails the entire task
+	Target     string        `json:"target"`                // File path, URL, command, SQL query, or artifact name
+	Expected   string        `json:"expected,omitempty"`    // Substring, status code, row count, or exit code
+	Rubric     string        `json:"rubric,omitempty"`      // Evaluation guidelines for LLM judge
+	TimeoutSec int           `json:"timeout_sec,omitempty"` // Max verification timeout in seconds (default: 10s)
+	Critical   bool          `json:"critical"`              // If true, failure fails the entire task
 }
 
 // AssertionResult records the outcome of verifying an assertion.

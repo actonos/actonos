@@ -245,12 +245,12 @@ func NewSkillTool(folderPath string) (*SkillTool, error) {
 	}, nil
 }
 
-func (s *SkillTool) Name() string                     { return s.skillName }
-func (s *SkillTool) Description() string              { return s.description }
-func (s *SkillTool) Category() string                 { return s.category }
+func (s *SkillTool) Name() string                      { return s.skillName }
+func (s *SkillTool) Description() string               { return s.description }
+func (s *SkillTool) Category() string                  { return s.category }
 func (s *SkillTool) ParametersSchema() json.RawMessage { return s.schema }
-func (s *SkillTool) Instructions() string             { return s.instructions }
-func (s *SkillTool) FolderPath() string               { return s.folderPath }
+func (s *SkillTool) Instructions() string              { return s.instructions }
+func (s *SkillTool) FolderPath() string                { return s.folderPath }
 
 func (s *SkillTool) IsEnabled() bool {
 	s.mu.RLock()
@@ -488,4 +488,3 @@ func (w *SkillWatcher) Stop() {
 		_ = w.watcher.Close()
 	}
 }
-

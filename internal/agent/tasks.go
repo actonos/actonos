@@ -41,7 +41,7 @@ type StructuredDirective struct {
 	ID                string `json:"id"`
 	Title             string `json:"title"`
 	Description       string `json:"description"`
-	Priority          string `json:"priority"` // "p0_critical", "p1_high", "p2_normal", "p3_low"
+	Priority          string `json:"priority"`           // "p0_critical", "p1_high", "p2_normal", "p3_low"
 	Schedule          string `json:"schedule,omitempty"` // Cron expression e.g. "0 9 * * *"
 	ExpectedOutcome   string `json:"expected_outcome,omitempty"`
 	Verification      string `json:"verification,omitempty"` // e.g. "file_exists:/data/workspace/reports/seo.md"

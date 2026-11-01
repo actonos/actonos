@@ -119,4 +119,3 @@ func TestTieredImportanceAndPinning(t *testing.T) {
 		t.Fatalf("demoted memory score (%f) must be lower than normal score (%f)", scoreDemoted, scoreNormal)
 	}
 }
-

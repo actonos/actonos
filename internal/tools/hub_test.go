@@ -240,4 +240,3 @@ Instructions
 		t.Fatalf("skill should be enabled")
 	}
 }
-

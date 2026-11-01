@@ -108,4 +108,3 @@ func AutoDetectSandbox() Sandbox {
 	}
 	return &unavailableSandbox{}
 }
-

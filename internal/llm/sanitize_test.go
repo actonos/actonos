@@ -286,4 +286,3 @@ func TestExtractEmbeddedToolCalls_UserReportedGlitchPattern(t *testing.T) {
 		t.Errorf("expected cleaned prose to strip gambling spam and tool tags, got %q", cleaned)
 	}
 }
-

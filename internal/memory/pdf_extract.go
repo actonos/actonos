@@ -733,7 +733,7 @@ func extractPageContentText(p pdf.Page, fonts map[string]*PDFFontContext) (strin
 			args = args[:0]
 		case "Tf":
 			// Font selection: look backwards for /FontName
-			prefix := strings.TrimSpace(string(rawContent[max(0, start-32) : start]))
+			prefix := strings.TrimSpace(string(rawContent[max(0, start-32):start]))
 			parts := strings.Fields(prefix)
 			for pIdx := len(parts) - 1; pIdx >= 0; pIdx-- {
 				if strings.HasPrefix(parts[pIdx], "/") {

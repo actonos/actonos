@@ -9,10 +9,10 @@ import (
 )
 
 type mockAdapter struct {
-	name      string
-	started   bool
-	stopped   bool
-	sentMsgs  []OutboundMessage
+	name     string
+	started  bool
+	stopped  bool
+	sentMsgs []OutboundMessage
 }
 
 func (m *mockAdapter) Name() string { return m.name }

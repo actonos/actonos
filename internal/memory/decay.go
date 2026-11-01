@@ -160,4 +160,3 @@ func CalculateTieredRetrievalScore(
 	score := (alpha * temporalScore) + (beta * similarity)
 	return score
 }
-

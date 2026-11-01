@@ -205,4 +205,3 @@ func cleanupCgroup(group string) {
 	}
 	_ = os.Remove(group)
 }
-

@@ -40,14 +40,14 @@ type TaskKindStats struct {
 
 // ProviderHealthReport summarizes operational health, latency, and reliability for a provider.
 type ProviderHealthReport struct {
-	ProviderID       string                   `json:"provider_id"`
-	Status           string                   `json:"status"` // "healthy", "degraded", "circuit_tripped"
-	TrippedUntil     *time.Time               `json:"tripped_until,omitempty"`
-	TotalCalls       int64                    `json:"total_calls"`
-	TotalFailures    int64                    `json:"total_failures"`
-	P50LatencyMs     int64                    `json:"p50_latency_ms"`
-	P95LatencyMs     int64                    `json:"p95_latency_ms"`
-	ConsecutiveFails int                      `json:"consecutive_fails"`
+	ProviderID       string                     `json:"provider_id"`
+	Status           string                     `json:"status"` // "healthy", "degraded", "circuit_tripped"
+	TrippedUntil     *time.Time                 `json:"tripped_until,omitempty"`
+	TotalCalls       int64                      `json:"total_calls"`
+	TotalFailures    int64                      `json:"total_failures"`
+	P50LatencyMs     int64                      `json:"p50_latency_ms"`
+	P95LatencyMs     int64                      `json:"p95_latency_ms"`
+	ConsecutiveFails int                        `json:"consecutive_fails"`
 	TaskStats        map[TaskKind]TaskKindStats `json:"task_stats,omitempty"`
 }
 

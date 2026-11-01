@@ -18,12 +18,12 @@ var (
 )
 
 var (
-	verifyKeysMu     sync.RWMutex
-	extraVerifyKeys  []ed25519.PublicKey
-	allowUnsignedMu  sync.RWMutex
-	allowUnsigned    *bool
-	requireSignedMu  sync.RWMutex
-	requireSigned    *bool
+	verifyKeysMu    sync.RWMutex
+	extraVerifyKeys []ed25519.PublicKey
+	allowUnsignedMu sync.RWMutex
+	allowUnsigned   *bool
+	requireSignedMu sync.RWMutex
+	requireSigned   *bool
 )
 
 // SetPluginVerifyKeys replaces process-local extra keys (tests). Official keys

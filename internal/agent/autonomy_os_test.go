@@ -161,7 +161,7 @@ func TestResumeApprovedWithoutCompletionMarkerLeavesInProgress(t *testing.T) {
 
 	manifest, err := agentMgr.Create(context.Background(), AgentManifest{
 		Name: "Resume", Status: StatusActive,
-		ModelConfig: llm.ModelConfig{PrimaryModel: "resume-model"},
+		ModelConfig:     llm.ModelConfig{PrimaryModel: "resume-model"},
 		AuthorizedTools: []string{"native_file_write"},
 		DelegationScope: DelegationScope{AllowedWorkspacePaths: []string{"*"}, RequireHumanApproval: ApprovalHigh},
 	})
@@ -238,7 +238,7 @@ func TestVerifyToolCommandRunsOnNonStreamPath(t *testing.T) {
 	engine.SetToolRegistry(registry)
 	created, err := manager.Create(context.Background(), AgentManifest{
 		Name: "Exec", Status: StatusActive,
-		ModelConfig: llm.ModelConfig{PrimaryModel: "exec-model"},
+		ModelConfig:     llm.ModelConfig{PrimaryModel: "exec-model"},
 		AuthorizedTools: []string{"native_exec"},
 		DelegationScope: DelegationScope{RequireHumanApproval: ApprovalLow, AllowedWorkspacePaths: []string{"*"}},
 	})
@@ -566,7 +566,7 @@ func TestCustomAgentHeartbeatIntervalHonored(t *testing.T) {
 	}
 	created, err := manager.Create(context.Background(), AgentManifest{
 		Name: "Custom Pulse", Status: StatusActive,
-		ModelConfig: llm.ModelConfig{PrimaryModel: "openai/gpt-4o"},
+		ModelConfig:     llm.ModelConfig{PrimaryModel: "openai/gpt-4o"},
 		HeartbeatConfig: &AgentHeartbeatConfig{Enabled: true, IntervalMinutes: 60, Directives: "Ping the health endpoint now."},
 	})
 	if err != nil {
@@ -701,7 +701,7 @@ func TestExecuteAutonomousGoalContinuesPastFirstStepHandoff(t *testing.T) {
 		}
 		if stepID == "task_1" {
 			return &llm.Response{
-				Model: "openai/gpt-4o",
+				Model:   "openai/gpt-4o",
 				Content: "Schritt 1 ist fertig. Soll ich mit den PDFs weitermachen?",
 				ToolCalls: []llm.ToolCall{{
 					ID: "w1", Type: "function",
@@ -711,7 +711,7 @@ func TestExecuteAutonomousGoalContinuesPastFirstStepHandoff(t *testing.T) {
 			}, nil
 		}
 		return &llm.Response{
-			Model: "openai/gpt-4o",
+			Model:   "openai/gpt-4o",
 			Content: "Wrote part PDF with verified evidence.",
 			ToolCalls: []llm.ToolCall{{
 				ID: "w2", Type: "function",
@@ -861,7 +861,7 @@ func TestApprovalPauseDoesNotFailPlanAndResumeContinues(t *testing.T) {
 
 	manifest, err := agentMgr.Create(context.Background(), AgentManifest{
 		Name: "Resume", Status: StatusActive,
-		ModelConfig: llm.ModelConfig{PrimaryModel: "resume-model"},
+		ModelConfig:     llm.ModelConfig{PrimaryModel: "resume-model"},
 		AuthorizedTools: []string{"native_file_write"},
 		DelegationScope: DelegationScope{AllowedWorkspacePaths: []string{"*"}, RequireHumanApproval: ApprovalHigh},
 	})

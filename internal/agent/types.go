@@ -62,15 +62,15 @@ type AgentHeartbeatConfig struct {
 
 // AgentManifest contains the complete declaration and configuration of an agent.
 type AgentManifest struct {
-	AgentID            string                `json:"agent_id"`
-	Name               string                `json:"name"`
-	Description        string                `json:"description"`
-	AvatarIcon         string                `json:"avatar_icon"`
-	Status             AgentStatus           `json:"status"`
-	IsSystem           bool                  `json:"is_system,omitempty"`
-	ModelConfig        llm.ModelConfig       `json:"model_config"`
-	SystemInstructions string                `json:"system_instructions"`
-	AuthorizedTools    []string              `json:"authorized_tools"`
+	AgentID            string          `json:"agent_id"`
+	Name               string          `json:"name"`
+	Description        string          `json:"description"`
+	AvatarIcon         string          `json:"avatar_icon"`
+	Status             AgentStatus     `json:"status"`
+	IsSystem           bool            `json:"is_system,omitempty"`
+	ModelConfig        llm.ModelConfig `json:"model_config"`
+	SystemInstructions string          `json:"system_instructions"`
+	AuthorizedTools    []string        `json:"authorized_tools"`
 	// ListenChannels defines which chat channels this agent responds to.
 	// ["*"] means all channels (default). Specific channel IDs like
 	// ["telegram", "discord"] or ["telegram:bot_1"] restrict the agent.
@@ -120,15 +120,15 @@ type AgentState struct {
 type StreamEventType string
 
 const (
-	EventStreamThought    StreamEventType = "thought"
-	EventStreamReasoning  StreamEventType = "reasoning"
-	EventStreamToken      StreamEventType = "token"
+	EventStreamThought   StreamEventType = "thought"
+	EventStreamReasoning StreamEventType = "reasoning"
+	EventStreamToken     StreamEventType = "token"
 	// EventStreamTokenReset tells the client to discard the tokens streamed during
 	// the current ReAct iteration. Emitted when an iteration turns out to be a
 	// tool-calling turn, so its preamble prose must not become the final answer.
-	EventStreamTokenReset StreamEventType = "token_reset"
-	EventStreamToolCall   StreamEventType = "tool_call"
-	EventStreamToolResult StreamEventType = "tool_result"
+	EventStreamTokenReset       StreamEventType = "token_reset"
+	EventStreamToolCall         StreamEventType = "tool_call"
+	EventStreamToolResult       StreamEventType = "tool_result"
 	EventStreamAudit            StreamEventType = "audit"
 	EventStreamDone             StreamEventType = "done"
 	EventStreamError            StreamEventType = "error"
@@ -149,19 +149,19 @@ type AuditLogEntry struct {
 
 // AgentStreamEvent encapsulates an event emitted during ReAct cognitive execution.
 type AgentStreamEvent struct {
-	Type           StreamEventType `json:"type"`
-	Thought        string          `json:"thought,omitempty"`
-	Reasoning      string          `json:"reasoning,omitempty"`
-	Content        string          `json:"content,omitempty"`
-	Tool           string          `json:"tool,omitempty"`
-	ToolCallID     string          `json:"tool_call_id,omitempty"`
-	Args           string          `json:"args,omitempty"`
-	Result         string          `json:"result,omitempty"`
-	Status         string          `json:"status,omitempty"`
-	LatencyMs      int64           `json:"latency_ms,omitempty"`
-	AuditLog       *AuditLogEntry  `json:"audit_log,omitempty"`
-	Model          string          `json:"model,omitempty"`
-	Usage          *llm.Usage      `json:"usage,omitempty"`
+	Type           StreamEventType        `json:"type"`
+	Thought        string                 `json:"thought,omitempty"`
+	Reasoning      string                 `json:"reasoning,omitempty"`
+	Content        string                 `json:"content,omitempty"`
+	Tool           string                 `json:"tool,omitempty"`
+	ToolCallID     string                 `json:"tool_call_id,omitempty"`
+	Args           string                 `json:"args,omitempty"`
+	Result         string                 `json:"result,omitempty"`
+	Status         string                 `json:"status,omitempty"`
+	LatencyMs      int64                  `json:"latency_ms,omitempty"`
+	AuditLog       *AuditLogEntry         `json:"audit_log,omitempty"`
+	Model          string                 `json:"model,omitempty"`
+	Usage          *llm.Usage             `json:"usage,omitempty"`
 	ConversationID string                 `json:"conversation_id,omitempty"`
 	Title          string                 `json:"title,omitempty"`
 	Error          string                 `json:"error,omitempty"`

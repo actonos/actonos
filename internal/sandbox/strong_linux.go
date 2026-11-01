@@ -15,4 +15,3 @@ func strongSandboxAvailable() bool {
 func newStrongSandbox() Sandbox {
 	return NewBubblewrapSandbox()
 }
-

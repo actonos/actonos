@@ -23,7 +23,7 @@ const (
 	// DefaultMaxTokensPerHour is the per-agent hourly token quota when unset.
 	DefaultMaxTokensPerHour = 250000
 	// DefaultCronJobsPerAgent is the maximum persisted cron jobs an agent may own.
-	DefaultCronJobsPerAgent = 8
+	DefaultCronJobsPerAgent  = 8
 	maxFailCyclesBeforeBlock = 3
 )
 
@@ -84,8 +84,8 @@ func resolveTurnTimeout(ctx context.Context, fallback time.Duration) (context.Co
 }
 
 type inFlightRegistry struct {
-	mu     sync.Mutex
-	byRun  map[string]context.CancelFunc
+	mu      sync.Mutex
+	byRun   map[string]context.CancelFunc
 	byAgent map[string]map[string]struct{}
 }
 

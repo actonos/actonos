@@ -182,10 +182,10 @@ func TestHeartbeatPicksUpAgentOriginatedMission(t *testing.T) {
 
 func TestHeartbeatDoesNotSpendTokensOnBlockedOrApprovalPausedMissions(t *testing.T) {
 	tests := []struct {
-		name   string
-		task   AutonomousTask
+		name      string
+		task      AutonomousTask
 		approvals []tools.ApprovalRequest
-		wantSkip string
+		wantSkip  string
 	}{
 		{
 			name: "blocked_mission",

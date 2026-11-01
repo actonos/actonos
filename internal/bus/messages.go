@@ -56,10 +56,10 @@ const (
 	EventMemoryQuery   = "memory.query"
 
 	// System events
-	EventSystemBoot       = "system.boot"
-	EventSystemShutdown   = "system.shutdown"
-	EventSystemHeartbeat  = "system.heartbeat"
-	EventUserMessage      = "user.message"
+	EventSystemBoot      = "system.boot"
+	EventSystemShutdown  = "system.shutdown"
+	EventSystemHeartbeat = "system.heartbeat"
+	EventUserMessage     = "user.message"
 )
 
 // Event represents a structured event transmitted over the EventBus.

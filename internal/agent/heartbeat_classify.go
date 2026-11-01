@@ -4,7 +4,6 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
-
 )
 
 // classifyHeartbeatResponse implements OpenClaw's heartbeat response

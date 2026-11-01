@@ -34,4 +34,3 @@ func VerifyDirectiveOutcome(ctx context.Context, dataDir, rule string) (bool, st
 	}
 	return res.Passed, res.Message, nil
 }
-

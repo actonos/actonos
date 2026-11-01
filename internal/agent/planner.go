@@ -32,13 +32,13 @@ const (
 
 // PlanStep represents a single decomposed step in a complex goal.
 type PlanStep struct {
-	ID           string   `json:"id"`
-	Title        string   `json:"title,omitempty"`
-	Description  string   `json:"description"`
-	Acceptance   string   `json:"acceptance,omitempty"`
-	AgentRole    string   `json:"agent_role"`       // "code", "data", "report", "general" or specific agent_id
-	Kind         string   `json:"kind,omitempty"`   // produce | research | verify
-	Atomic       bool     `json:"atomic,omitempty"` // whole goal is this single step
+	ID                string             `json:"id"`
+	Title             string             `json:"title,omitempty"`
+	Description       string             `json:"description"`
+	Acceptance        string             `json:"acceptance,omitempty"`
+	AgentRole         string             `json:"agent_role"`       // "code", "data", "report", "general" or specific agent_id
+	Kind              string             `json:"kind,omitempty"`   // produce | research | verify
+	Atomic            bool               `json:"atomic,omitempty"` // whole goal is this single step
 	Dependencies      []string           `json:"dependencies"`
 	Status            string             `json:"status"` // pending | in_progress | completed | failed | paused
 	Result            string             `json:"result,omitempty"`
