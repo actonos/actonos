@@ -412,3 +412,68 @@ func TestEngineDurableApprovalResumeWithChainedApproval(t *testing.T) {
 		t.Fatalf("unexpected final response: %+v calls=%d", resp, provider.CompleteCalls)
 	}
 }
+
+func TestEngineAsksOnceMoreWhenTheReplyIsEmpty(t *testing.T) {
+	db, eventBus := setupTestDB(t)
+	agentMgr, _ := NewAgentManager(db, eventBus)
+
+	calls := 0
+	mock := llm.NewMockProvider("thinker", "")
+	mock.CompleteFunc = func(_ context.Context, messages []llm.Message, _ llm.CompletionOptions) (*llm.Response, error) {
+		calls++
+		if calls == 1 {
+			// Everything went into the reasoning; the reply itself is empty.
+			return &llm.Response{Content: "", ReasoningContent: "The answer is forty-two.", FinishReason: "stop"}, nil
+		}
+		last := messages[len(messages)-1]
+		if last.Role != llm.RoleUser || !strings.Contains(last.Content, "empty") {
+			t.Errorf("the retry must ask for the answer explicitly, last message: %+v", last)
+		}
+		return &llm.Response{Content: "Forty-two."}, nil
+	}
+	router := llm.NewModelCascadeRouter()
+	router.RegisterProvider("thinker", mock)
+	engine := NewEngine(agentMgr, eventBus, router, nil)
+
+	created, err := agentMgr.Create(context.Background(), AgentManifest{
+		Name: "Thinker", ModelConfig: llm.ModelConfig{PrimaryModel: "thinker"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := engine.ExecuteStep(context.Background(), created.AgentID, "What is the answer?")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Content != "Forty-two." || calls != 2 {
+		t.Fatalf("expected one retry that yields the answer, got content=%q after %d call(s)", resp.Content, calls)
+	}
+}
+
+func TestEngineGivesUpAfterOneEmptyReplyRetry(t *testing.T) {
+	db, eventBus := setupTestDB(t)
+	agentMgr, _ := NewAgentManager(db, eventBus)
+
+	calls := 0
+	mock := llm.NewMockProvider("mute", "")
+	mock.CompleteFunc = func(context.Context, []llm.Message, llm.CompletionOptions) (*llm.Response, error) {
+		calls++
+		return &llm.Response{Content: "", ReasoningContent: "hmm"}, nil
+	}
+	router := llm.NewModelCascadeRouter()
+	router.RegisterProvider("mute", mock)
+	engine := NewEngine(agentMgr, eventBus, router, nil)
+
+	created, err := agentMgr.Create(context.Background(), AgentManifest{
+		Name: "Mute", ModelConfig: llm.ModelConfig{PrimaryModel: "mute"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engine.ExecuteStep(context.Background(), created.AgentID, "Say something"); err != nil {
+		t.Fatalf("an empty reply is not an error: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("expected exactly one retry (2 calls), got %d", calls)
+	}
+}

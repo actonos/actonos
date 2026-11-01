@@ -132,6 +132,7 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 	totalUsage = llm.Usage{}
 	maxIterations := 20
 	consecutiveFailures := 0
+	emptyReplyRetries := 0
 	lastObservation := ""
 	repeatedObservations := 0
 	converged := false
@@ -210,6 +211,17 @@ func (e *Engine) ExecuteStepWithHistory(ctx context.Context, agentID string, use
 		}
 
 		finalResp = resp
+
+		// A thinking model can end its turn having put everything in its reasoning and
+		// nothing in the reply. Ask once for the actual answer instead of returning silence.
+		if len(resp.ToolCalls) == 0 && strings.TrimSpace(resp.Content) == "" && emptyReplyRetries < 1 && iter < maxIterations-2 {
+			emptyReplyRetries++
+			messages = append(messages,
+				llm.Message{Role: llm.RoleAssistant, Content: "[no reply]", ReasoningContent: resp.ReasoningContent},
+				llm.Message{Role: llm.RoleUser, Content: "Your last reply was empty. Reply now with your final answer to the request."},
+			)
+			continue
+		}
 
 		// If no tool calls requested, we reached the final response
 		if len(resp.ToolCalls) == 0 || e.tools == nil || currentOpts.Tools == nil {
