@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [1.0.6] - 2026-11-01
+
 ### Added
 
 - **HTTPS over Tailscale**: the embedded Tailscale node now serves the Web UI on `:443` with a real certificate for `<host>.<tailnet>.ts.net` (turn off with `ACTON_TAILSCALE_HTTPS=0`), and the Tailscale status reports `https_url`. OAuth providers only accept https redirect addresses, so Gmail, Google Calendar and Microsoft 365 accounts can now be connected. Starting a sign-in from a plain `http://` address (except `localhost`) is refused with `OAUTH_HTTPS_REQUIRED` and a pointer to the HTTPS address, and the OAuth panel warns about it.
@@ -379,7 +382,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Apache 2.0 license
 
 <!-- Release links -->
-[Unreleased]: https://github.com/actonos/actonos/compare/v1.0.5...HEAD
+[Unreleased]: https://github.com/actonos/actonos/compare/v1.0.6...HEAD
+[1.0.6]: https://github.com/actonos/actonos/releases/tag/v1.0.6
 [1.0.5]: https://github.com/actonos/actonos/releases/tag/v1.0.5
 [1.0.4]: https://github.com/actonos/actonos/releases/tag/v1.0.4
 [1.0.3]: https://github.com/actonos/actonos/releases/tag/v1.0.3
