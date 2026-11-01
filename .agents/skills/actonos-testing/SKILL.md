@@ -19,7 +19,7 @@ Use this skill when writing or running tests for ActonOS.
 |:---|:---|:---|:---|
 | Unit Tests | `internal/**/*_test.go` | (none) | `make test-unit` |
 | Integration Tests | `*_os_test.go` / `*_integ_test.go` under `internal/` | `integration` | `make test-integ` |
-| Benchmark Eval Suite | `evals/` (30+ tasks) | (none) | `./evals/run.sh` / `.\evals\run.ps1` |
+| Benchmark Eval Suite | `evals/` (46 tasks, mock gate) | (none) | `./evals/run.sh` / `.\evals\run.ps1` |
 | E2E / Smoke Tests | `web/tests/*.spec.ts` | (none) | `cd web && npm run test:e2e` |
 | Frontend Unit | `web/src/**/*.test.{ts,tsx}` | (none) | `cd web && npm test` |
 | Frontend Browser | `web/tests/*.spec.ts` | (none) | `cd web && npm run test:e2e` |
@@ -28,7 +28,14 @@ Use this skill when writing or running tests for ActonOS.
 ## Running Tests
 
 ```bash
-# All tests
+# While working: build + vet + typecheck, optionally one package's tests, short output
+make check-fast PKG=./internal/<pkg>/...
+make check-web
+
+# Final gate (lint, Go tests with coverage floors, web quality incl. Playwright); run alone
+make check-full
+
+# All Go tests
 make test
 
 # Unit tests only (fast, no external dependencies)
@@ -36,13 +43,13 @@ make test-unit
 # Equivalent to: CGO_ENABLED=0 go test -count=1 -coverprofile=build/coverage.out ./internal/...
 # then go run ./scripts/cover-gate.go build/coverage.out
 
-# Cognition & Reliability Benchmark Suite (30 tasks, CI gate)
+# Cognition & Reliability Benchmark Suite (mock mode, CI gate; pass rate does not measure model quality)
 ./evals/run.sh
 # on Windows PowerShell:
 .\evals\run.ps1
 
-# Live model benchmark evaluation
-go run ./evals/runner/main.go --mode=live --model=anthropic/claude-sonnet-4.5 --output=eval_report.md --fail-under=90.0
+# Live model benchmark evaluation (needs provider keys in the environment; the user runs it)
+go run ./evals/runner --mode=live --model=anthropic/claude-sonnet-4.5 --output=eval_report.md --fail-under=90.0
 
 # Integration tests
 make test-integ
@@ -52,7 +59,10 @@ make test-integ
 go test -v ./internal/agent/...
 
 # Specific test
-go test -v -run TestDecayScore ./internal/memory/...
+go test -v -run TestName -count=1 ./internal/memory/...
+
+# Race detector (CGO; Linux CI runs it for ./internal/...)
+make test-race
 
 # With coverage
 go test -coverprofile=build/coverage.out ./internal/...
@@ -64,7 +74,7 @@ cd web
 npm run quality
 npx tsc --noEmit
 
-# Playwright smoke test (requires a running ActonOS server)
+# Playwright (starts Vite itself; API calls are mocked per test). Run it alone, not next to Go tests
 npm run test:e2e
 ```
 
@@ -78,213 +88,28 @@ Playwright suite. Browser tests must use axe and reject serious or critical
 accessibility violations. Production frontend lint must reject explicit `any`
 and unused variables.
 
-## Test Patterns
+## Test Patterns (copy a real example, do not invent helpers)
 
-### Table-Driven Tests (Preferred)
+There is no shared `testutil` package. Each package keeps its own small helpers next to its tests; find the closest existing one before writing a new one.
 
-```go
-func TestDecayScore(t *testing.T) {
-    tests := []struct {
-        name     string
-        elapsed  time.Duration
-        lambda   float64
-        weight   float64
-        expected float64
-    }{
-        {
-            name:     "recent_memory_high_score",
-            elapsed:  1 * time.Hour,
-            lambda:   24.0,
-            weight:   1.0,
-            expected: 0.959,
-        },
-        {
-            name:     "old_memory_decayed",
-            elapsed:  72 * time.Hour,
-            lambda:   24.0,
-            weight:   1.0,
-            expected: 0.049,
-        },
-        {
-            name:     "zero_elapsed_full_score",
-            elapsed:  0,
-            lambda:   24.0,
-            weight:   1.0,
-            expected: 1.0,
-        },
-    }
+| Need | Real example |
+|:---|:---|
+| Table-driven unit test | any `*_test.go` in `internal/memory/` (for example `decay_test.go`), `internal/mailcal/policy/policy_test.go` |
+| Temporary SQLite DB | `setupTestDB(t)` in `internal/agent/manager_test.go`, `internal/auth/system_auth_test.go`, `internal/channels/session_test.go`; `memory.Open(filepath.Join(t.TempDir(), "x.db"))` |
+| Full HTTP server | `newTestServer(t)` in `internal/server/server_test.go` (auth disabled via `DisableAuthForTest`), then drive `srv.Router()` with `httptest` |
+| Mail and calendar service with a provider | `newFixture(t, nil)` in `internal/mailcal/testutil_test.go`; write path: `newWriteFixture` in `write_test.go` |
+| WASM plugin from a guest package | `refplugintest.BuildGuest` / `InstanceOf` in `internal/mailcal/refplugin/refplugintest`; hand-assembled module in `internal/plugin/abi_module_test.go` |
+| Sandbox | needs real bubblewrap; tests skip themselves when namespaces are unavailable |
+| Fakes for interfaces | define the small interface in production code, a struct with function fields in the `_test.go` file |
+| Fuzzing | `FuzzEvaluate...` in `internal/mailcal/policy`, `FuzzParse...` in `internal/mailcal/provkit/icskit`; run `go test -run '^$' -fuzz '^FuzzName$' -fuzztime=20s ./pkg` |
+| Web component | Vitest + Testing Library next to the component; wait for `i18nReady` (already in `src/test/setup.ts`); call `cleanup` in `afterEach` when using `it.each` |
+| Browser flow | `web/tests/*.spec.ts` with `page.route` mocks |
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            got := decay.Score(tt.elapsed, tt.lambda, tt.weight)
-            if math.Abs(got-tt.expected) > 0.01 {
-                t.Errorf("Score(%v, %v, %v) = %v, want %v",
-                    tt.elapsed, tt.lambda, tt.weight, got, tt.expected)
-            }
-        })
-    }
-}
-```
+Conventions: table-driven with `t.Run`, `t.Helper()` in helpers, `t.TempDir()` and `t.Cleanup()` for resources, no sleeps (inject a clock or a `sleep` func), and a test that proves the bad case (an invariant is only tested when a mutation of it fails the test).
 
-### Mock Interfaces
+## Coverage Floors
 
-Define interfaces in production code, implement mocks in tests:
-
-```go
-// internal/llm/provider.go (production)
-type LLMProvider interface {
-    Complete(ctx context.Context, messages []Message, opts Options) (*Response, error)
-    StreamComplete(ctx context.Context, messages []Message, opts Options) (<-chan Token, error)
-}
-
-// internal/llm/provider_test.go (test)
-type MockLLMProvider struct {
-    CompleteFunc       func(ctx context.Context, messages []Message, opts Options) (*Response, error)
-    CompleteCalled     int
-}
-
-func (m *MockLLMProvider) Complete(ctx context.Context, messages []Message, opts Options) (*Response, error) {
-    m.CompleteCalled++
-    if m.CompleteFunc != nil {
-        return m.CompleteFunc(ctx, messages, opts)
-    }
-    return &Response{Content: "mock response"}, nil
-}
-
-func NewMockLLM(response *Response) *MockLLMProvider {
-    return &MockLLMProvider{
-        CompleteFunc: func(_ context.Context, _ []Message, _ Options) (*Response, error) {
-            return response, nil
-        },
-    }
-}
-```
-
-### Test Helpers
-
-```go
-// internal/testutil/helpers.go
-package testutil
-
-func NewTestDB(t *testing.T) *memory.DB {
-    t.Helper()
-    dir := t.TempDir()
-    db, err := memory.Open(filepath.Join(dir, "test.db"))
-    if err != nil {
-        t.Fatalf("failed to open test DB: %v", err)
-    }
-    t.Cleanup(func() { db.Close() })
-    return db
-}
-
-func NewTestServer(t *testing.T) *server.Server {
-    t.Helper()
-    db := NewTestDB(t)
-    mgr := agent.NewManager(db)
-    return server.New(mgr, db)
-}
-```
-
-### Integration Test Example
-
-```go
-//go:build integration
-
-package integration_test
-
-import (
-    "context"
-    "testing"
-    "d:/Projects/ActonOS/internal/memory"
-)
-
-func TestHybridSearch_FTS5AndVector(t *testing.T) {
-    db := testutil.NewTestDB(t)
-    hybrid := memory.NewHybridSearch(db)
-
-    // Seed test data
-    ctx := context.Background()
-    hybrid.Index(ctx, "doc1", "ActonOS is an AI agent operating system")
-    hybrid.Index(ctx, "doc2", "Docker containers run on Alpine Linux")
-    hybrid.Index(ctx, "doc3", "The agent engine uses ReAct loop for reasoning")
-
-    // Search
-    results, err := hybrid.Search(ctx, "AI agent reasoning", 2)
-    if err != nil {
-        t.Fatalf("Search() error: %v", err)
-    }
-
-    if len(results) != 2 {
-        t.Fatalf("expected 2 results, got %d", len(results))
-    }
-
-    // First result should be the most relevant
-    if results[0].DocID != "doc3" && results[0].DocID != "doc1" {
-        t.Errorf("unexpected top result: %s", results[0].DocID)
-    }
-}
-```
-
-### HTTP Handler Tests
-
-```go
-func TestHandleListAgents(t *testing.T) {
-    srv := testutil.NewTestServer(t)
-
-    // Create test agent
-    ctx := context.Background()
-    srv.AgentManager.Create(ctx, agent.Manifest{Name: "Test Agent"})
-
-    // Make request
-    req := httptest.NewRequest("GET", "/api/agents", nil)
-    req.Header.Set("Authorization", "Bearer test-token")
-    w := httptest.NewRecorder()
-
-    srv.ServeHTTP(w, req)
-
-    if w.Code != 200 {
-        t.Fatalf("expected 200, got %d", w.Code)
-    }
-
-    var resp struct {
-        Data struct {
-            Agents []agent.Manifest `json:"agents"`
-        } `json:"data"`
-    }
-    json.NewDecoder(w.Body).Decode(&resp)
-
-    if len(resp.Data.Agents) != 1 {
-        t.Errorf("expected 1 agent, got %d", len(resp.Data.Agents))
-    }
-}
-```
-
-## Coverage Targets
-
-| Package | Target | Priority |
-|:---|:---|:---|
-| `internal/memory/` | 80%+ | Critical (data integrity) |
-| `internal/agent/` | 70%+ | High (core logic) |
-| `internal/auth/` | 80%+ | Critical (security) |
-| `internal/server/` | 60%+ | Medium (handlers) |
-| `internal/plugin/` | 70%+ | High (WASM sandbox) |
-| `internal/channels/` | 70%+ | High (pairing/routing) |
-| `internal/tools/` | 60%+ | Medium |
-| `internal/sandbox/` | 70%+ | High (security) |
-| `internal/security/` | 90%+ | Critical |
-
-## Test File Naming
-
-```
-internal/
-├── agent/
-│   ├── engine.go
-│   ├── engine_test.go            ← Unit tests
-│   └── engine_integ_test.go      ← Integration tests (build tag)
-├── memory/
-│   ├── decay.go
-│   └── decay_test.go             ← Unit tests
-```
+The floors live in `scripts/cover-gate.go` (memory 80, auth 80, security 90, plugin 70, channels 70, agent 70, sandbox 70, server 60, tools 60). `make test-unit` enforces them; never lower one to make a change pass. `internal/server` and `internal/security` sit close to their floors, so new code there needs its own tests.
 
 ## Mandatory Security Cases
 
@@ -308,12 +133,6 @@ Changes touching tools, agents, workspace APIs, MCP, or sandboxing must test:
 15. Provider streaming tests cover OpenAI-compatible, Anthropic, and Gemini.
 16. Realtime WebSocket tests cover authenticated upgrade, snapshot shape and disconnect cleanup.
 17. MCP administration tests prove environment secrets never appear in list responses and enable/disable restores persisted configuration.
-
-Security package target: `internal/security/` must maintain at least 90% coverage.
-
-The autonomous-kernel baseline established on 2026-08-18 is: agent 71.5%,
-server 60.6%, tools 60.3%, sandbox 87.8%, security 92.3%, and memory 83.3%.
-Changes must not reduce a package below its target.
 
 Linux CI must run `CGO_ENABLED=1 go test -race -count=1 ./internal/...`.
 Provider-storage tests must prove secrets are absent from metadata files,

@@ -19,7 +19,7 @@ make deps → make lint → make test → make test-race (Linux CI) → make bui
 | `make lint` | Run Go vet, gofmt, golangci-lint, ESLint | — |
 | `make test` | Run all tests (unit + integration) | `build/coverage.out` |
 | `make test-race` | Run the Linux CGO race detector | Required CI gate |
-| `make build-web` | Build React frontend (Vite production) | `web/dist/` |
+| `make build-web` | Build React frontend (Vite production) | `internal/server/dist/` (git-ignored; `VITE_BUILD_DIR` overrides) |
 | `make build` | Build full `actond` binary (includes web) | `build/actond` |
 | `make build-only` | Build Go binary only (skip web rebuild) | `build/actond` |
 | `make docker` | Build Docker image | `actonos/actonos:VERSION` |
@@ -49,10 +49,10 @@ These are read from:
 ```bash
 make build-web
 # Runs: cd web && npm run build
-# Output: web/dist/ (compressed static assets)
+# Output: internal/server/dist/
 ```
 
-The frontend is built with Vite and produces gzip/brotli compressed assets that are embedded into the Go binary via `go:embed`.
+The frontend is built with Vite straight into `internal/server/dist/`, which `go:embed` bakes into the Go binary. A fresh checkout needs that directory to exist (at least an empty `.keep`) or the Go build fails.
 
 ### 2. Build the Go Binary
 
@@ -81,9 +81,9 @@ make docker
 ```
 
 The Dockerfile uses multi-stage build:
-1. Stage 1: Build Go binary
-2. Stage 2: Build frontend
-3. Stage 3: Alpine minimal runtime image (<35 MB)
+1. Stage 1: web-builder (Node 22, Vite build)
+2. Stage 2: go-builder (static `actond`, plus the CGO `embeddingd` and ONNX Runtime/model)
+3. Stage 3: `debian:bookworm-slim` runtime with bubblewrap, Python venv, Node and Chromium (not a minimal image)
 
 ### 5. Build ISO (Bare-metal)
 
@@ -100,8 +100,8 @@ The built frontend assets are embedded into the Go binary:
 
 ```go
 // internal/server/static.go
-//go:embed all:../../../web/dist
-var embeddedAssets embed.FS
+//go:embed all:dist
+var embeddedWebAssets embed.FS
 ```
 
 The `layered_fs.go` module implements a layered filesystem that checks `/data/overrides/` before falling back to embedded assets, allowing runtime UI customization.
@@ -120,7 +120,7 @@ file build/actond
 # Expected: "ELF 64-bit LSB executable, x86-64, statically linked"
 
 # Quick smoke test
-./build/actond --data-dir=./dev-data --log-level=debug &
+./build/actond --data-dir=./build/data --log-level=debug &
 curl http://localhost:8080/api/health
 kill %1
 ```
@@ -129,9 +129,9 @@ kill %1
 
 | Issue | Cause | Solution |
 |:---|:---|:---|
-| `web/dist not found` | Frontend not built | Run `make build-web` first |
+| `internal/server/dist` missing | Frontend not built | Run `make build-web` first (or create the directory with a `.keep` for Go-only work) |
 | `CGO required` | Using `mattn/go-sqlite3` | Use `modernc.org/sqlite` instead |
-| `go:embed pattern matches no files` | Empty `web/dist/` | Build frontend first |
+| `go:embed pattern matches no files` | Empty `internal/server/dist/` | Build the frontend or add `.keep` |
 | Binary not static | CGO_ENABLED=1 | Set `CGO_ENABLED=0` |
 | Docker build OOM | Low memory during Go build | Increase Docker memory limit |
 

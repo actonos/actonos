@@ -14,6 +14,11 @@ Use this skill when developing components in the `internal/agent/` package — t
 ```
 internal/agent/
 ├── engine.go            # POMDP & ReAct execution loop with streaming SSE events
+├── engine_{plan,step,stream,resume}.go  # Planning, single step, SSE streaming, resume after approval
+├── approval_wait.go     # Waiting on human approvals inside a run
+├── runs.go              # Durable agent_runs and append-only run_events
+├── prompt_*.go          # Prompt assembly (builder, cognitive, heartbeat, planner, reflection, swarm, sections)
+├── lifecycle.go, environment.go, templates.go  # Agent lifecycle, environment facts, built-in templates
 ├── manager.go           # Agent CRUD & persistence (AgentManifest stored in SQLite/JSON)
 ├── tasks.go             # Autonomous Task Backlog Manager with SQLite & bi-directional TASKS.md sync
 ├── cron_scheduler.go    # Scheduled autonomous task engine (cron expressions & anti-double-dispatch)
@@ -33,57 +38,27 @@ internal/agent/
 
 ---
 
-## 2. Core Structs & Data Contracts (`types.go`, `tasks.go`)
+## 2. Core Structs & Data Contracts
 
-### Agent Manifest
-```go
-type AgentManifest struct {
-    AgentID             string           `json:"agent_id"`
-    Name                string           `json:"name"`
-    Description         string           `json:"description"`
-    AvatarIcon          string           `json:"avatar_icon"`
-    Status              AgentStatus      `json:"status"` // "active", "stopped", "error"
-    IsSystem            bool             `json:"is_system,omitempty"`
-    ModelConfig         llm.ModelConfig  `json:"model_config"`
-    SystemInstructions string           `json:"system_instructions"`
-    AuthorizedTools     []string         `json:"authorized_tools"`
-    ListenChannels      []string         `json:"listen_channels"` // ["*"] for all, or specific ["telegram"]
-    DelegationScope     DelegationScope  `json:"delegation_scope"`
-    TriggerRules        []TriggerRule    `json:"trigger_rules"`
-    CreatedAt           time.Time        `json:"created_at"`
-    UpdatedAt           time.Time        `json:"updated_at"`
-}
-```
+Read the structs where they live; copies in docs drift (the manifest has already gained `HeartbeatConfig`).
 
-### Autonomous Task Model (`tasks.go`)
-```go
-type AutonomousTask struct {
-    ID              string     `json:"id"`
-    Title           string     `json:"title"`
-    Description     string     `json:"description"`
-    Status          string     `json:"status"`            // "pending", "in_progress", "completed", "blocked", "cancelled"
-    Priority        string     `json:"priority"`          // "p0_critical", "p1_high", "p2_normal", "p3_low"
-    AssignedAgentID string     `json:"assigned_agent_id"` // "auto", "agent_system_core", or specific ID
-    TargetChannel   string     `json:"target_channel,omitempty"`
-    TargetAccountID string     `json:"target_account_id,omitempty"`
-    Progress        int        `json:"progress"` // 0 to 100%
-    ExecutionLog    string     `json:"execution_log,omitempty"`
-    SessionID       string     `json:"session_id,omitempty"`
-    CreatedBy       string     `json:"created_by"`
-    CreatedAt       time.Time  `json:"created_at"`
-    UpdatedAt       time.Time  `json:"updated_at"`
-    CompletedAt     *time.Time `json:"completed_at,omitempty"`
-}
-```
+- `AgentManifest`, `DelegationScope`, `TriggerRule`, `AgentStatus`, `DefaultSystemAgentID` (`agent_system_core`): `types.go`.
+- `AutonomousTask` (statuses, priorities, `assigned_agent_id` of `auto` or an agent id): `tasks.go`.
+- Run ledger types: `runs.go`.
+
+Any JSON-exposed field change must be mirrored in `web/src/lib/types.ts`, and for the manifest also `AgentFormModal.tsx`.
 
 ---
 
 ## 3. Cognitive Subsystems
 
 ### A. ReAct Reasoning Loop (`engine.go`)
-1. **Entropy Check**: Evaluates uncertainty $H(p)$. Low entropy $\rightarrow$ 1-step Greedy ReAct; High entropy $\rightarrow$ Tree-of-Thoughts exploration.
-2. **Tool Invocation**: Validates tool against `agent.AuthorizedTools` and executes inside isolated sandbox or MCP host.
-3. **Verification**: Passes candidate output through `verifier.go` (AST checks + policy guards) before returning to user.
+The loop is in `engine_step.go` (non-streaming) and `engine_stream.go` (SSE); `engine_resume.go` continues a run after a human approval. Per iteration:
+1. Build the prompt (`prompt_*.go`) and budget the messages (`context.go`).
+2. Call the model through the `llm` cascade router.
+3. Execute each requested tool through `ToolRegistry.Execute` (never directly); the agent's `AuthorizedTools` is enforced there.
+4. Feed observations back; stop on `[TASK_COMPLETED]` only after `Verifier.VerifyTaskCompletion` accepts it (`verifier.go`, outcome assertions in `verifier_outcome.go`).
+Limits: 20 iterations (10 when resuming), 5 consecutive tool failures, repeated equivalent observations, cancellation, budget exhaustion.
 
 ### B. Autonomous Task Matrix & Mission Backlog (`tasks.go`)
 - Maintains persistent queue in SQLite `autonomous_tasks`.
@@ -114,25 +89,20 @@ Manages cron expressions (e.g. `0 9 * * *`), dispatches autonomous prompt trigge
 
 ## 4. Key Dependencies
 
-| Subsystem | Package | Integration Purpose |
-|:---|:---|:---|
-| LLM | `internal/llm/` | ModelCascadeRouter, OpenAI-compatible streaming completion |
-| Memory | `internal/memory/` | HybridEngine (Chroma vector + SQLite FTS5) + TokenTracker |
-| Channels | `internal/channels/` | ChannelSessionManager for multi-step task working memory |
-| Tools | `internal/tools/` | ToolRegistry, native tools, MCP client, WASM runner |
-| Event Bus | `internal/bus/` | Async decoupling, stream event broadcasting |
-| **Event Bus** | `internal/bus` | Decoupled event publishing (`bus.EventAgentMessage`, etc.) |
-| **LLM Router** | `internal/llm` | Multi-model cascade and failover provider routing |
-| **Memory Engine** | `internal/memory` | Hybrid RAG, vector retrieval, and FTS5 decay search |
-| **Channels** | `internal/channels` | Multi-channel ingress and response dispatch |
-| **Tools Hub** | `internal/tools` | Native tools, MCP clients, and WASM runner |
-| **Auth** | `internal/auth` | User profile encryption and token lifecycle |
+| Package | Role for the agent engine |
+|:---|:---|
+| `internal/llm` | `ModelCascadeRouter`, streaming completion, per-task-kind routing and failover |
+| `internal/memory` | `HybridEngine` (vectors + FTS5), token ledger, decay |
+| `internal/channels` | `ChannelSessionManager` for mission working memory (`conv_task_<id>`), ingress and delivery |
+| `internal/tools` | `ToolRegistry` (the only execution boundary), native tools, MCP, WASM |
+| `internal/bus` | Event publishing (`bus.EventAgentMessage`, ...) |
+| `internal/auth` | Profile encryption and token lifecycle |
 
 ---
 
 ## 5. Development & Testing Rules
 
-1. Always add table-driven tests in `*_test.go`.
+1. Add table-driven tests in `*_test.go` (helpers: `setupTestDB` in `manager_test.go`); see the `actonos-testing` skill.
 2. Wrap all error returns with context: `fmt.Errorf("agent %s step failed: %w", agentID, err)`.
 3. Keep Goroutines governed by `context.Context` cancellation.
 4. When modifying `AgentManifest` or `DelegationScope`, update `web/src/lib/types.ts` immediately.

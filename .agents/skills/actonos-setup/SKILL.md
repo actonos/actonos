@@ -13,7 +13,7 @@ Before starting development, verify the following tools are installed:
 
 | Tool | Min Version | Verification Command | Install Guide |
 |:---|:---|:---|:---|
-| Go | 1.26+ | `go version` | https://go.dev/dl/ |
+| Go | 1.26.5+ (`go.mod`) | `go version` | https://go.dev/dl/ |
 | Node.js | 22 LTS+ | `node --version` | https://nodejs.org/ |
 | npm | 10+ | `npm --version` | Bundled with Node.js |
 | Make | 4.0+ | `make --version` | `apt install make` or `choco install make` |
@@ -24,7 +24,7 @@ Before starting development, verify the following tools are installed:
 | Tool | Purpose | Installation |
 |:---|:---|:---|
 | Docker 24+ | Container builds | https://docs.docker.com/get-docker/ |
-| golangci-lint | Go linting | `go install github.com/golangci-lint/golangci-lint/cmd/golangci-lint@latest` |
+| golangci-lint | Go linting | `go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest` |
 | air | Go live-reload | `go install github.com/air-verse/air@latest` |
 
 ## Setup Steps
@@ -46,25 +46,20 @@ This runs:
 1. `go mod download && go mod verify` — downloads Go modules
 2. `cd web && npm ci` — installs Node packages
 
-### Step 3: Create Dev Environment
+### Step 3: Local Settings (optional)
 
-```bash
-# Create local data directory for development
-mkdir -p dev-data/{config,agents,tokens,storage,logs,overrides,plugins,skills,mcp-servers,workspace}
-```
-
-### Step 4: Create Local Environment File
-
-Create `.env` in the project root (not committed):
+`make dev` stores data in `./build/data` unless `ACTON_DATA_DIR` says otherwise, so no directories need to be created. To change settings, create `.env` in the project root (git-ignored; only `make dev` / `scripts/dev.sh` loads it):
 
 ```env
 RUNTIME_MODE=docker
-LOG_LEVEL=debug
-LISTEN_ADDR=:8080
-DATA_DIR=./dev-data
 DISABLE_TAILSCALE=true
-DISABLE_SANDBOX=true
+ACTON_LOG_LEVEL=debug
+ACTON_LISTEN_ADDR=:8080
+ACTON_DATA_DIR=./dev-data
+ACTONOS_ALLOW_INSECURE_EXEC=1
 ```
+
+`ACTONOS_ALLOW_INSECURE_EXEC=1` and `RUNTIME_MODE=docker` enable the unsandboxed subshell: development only, never production. Without them, command tools refuse to run unless bubblewrap works.
 
 ### Step 5: Verify Setup
 
@@ -98,7 +93,9 @@ This starts:
 |:---|:---|
 | `CGO_ENABLED` error | Ensure using `modernc.org/sqlite`, not `mattn/go-sqlite3` |
 | Node version mismatch | Use `nvm install 22` and `nvm use 22` |
-| Port conflict | Set `LISTEN_ADDR=:8081` in `.env` |
+| Port conflict | Set `ACTON_LISTEN_ADDR=:8081` in `.env` |
+| `vite build` fails on a missing Tailwind/oxide binding | `web/node_modules` came from another OS: `cd web && npm ci` |
+| `go` not found | Go may live in `/usr/local/go/bin`; add it to `PATH` |
 | Permission denied on scripts | Run `chmod +x scripts/*.sh` |
 
 ## Reference Files

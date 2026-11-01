@@ -19,6 +19,7 @@
 - [ ] **i18n Completeness**: Every user-facing string uses `t('key')` — zero hardcoded text
 - [ ] **Locale Parity**: If you added keys to `en/*.json`, add the same keys to `vi/*.json` (and vice versa)
 - [ ] **Named Exports**: Use `export function X()` — never `export default`
+- [ ] **No emoji** in UI copy (`npm run check:emoji`)
 - [ ] **Type Safety**: No `any` types. All props have TypeScript interfaces
 - [ ] **Design System**: Follow `docs/DESIGN.md` — pill radius, correct colors, no drop shadows, correct fonts
 
@@ -41,16 +42,13 @@
 
 ## Change Impact Matrix
 
-Use this matrix to identify all files that must be updated when making changes:
+The matrix lives in the root `AGENTS.md` ("Change impact"); keep it only there.
 
-| If you change... | Also update... |
-|:---|:---|
-| Go struct fields (JSON-exposed) | `web/src/lib/types.ts` |
-| API endpoint (add/modify) | `docs/API.md`, `router.go` route registration |
-| UI text / labels | `locales/en/*.json` AND `locales/vi/*.json` |
-| New page / tab | `App.tsx`, `Sidebar.tsx`, `nav.json` (both locales) |
-| Design tokens / colors | `web/src/index.css`, `docs/DESIGN.md` |
-| Agent manifest fields | `internal/agent/types.go`, `web/src/lib/types.ts`, `AgentFormModal.tsx` |
-| LLM model catalog | `web/src/lib/models.ts` |
-| New locale namespace | `web/src/lib/i18n.ts`, both `en/` and `vi/` directories |
-| New internal package | `AGENTS.md` or relevant skill file |
+## Commands by scope
+
+| Scope | Narrow (while working) | Final gate |
+|:---|:---|:---|
+| Go | `make check-fast PKG=./internal/<pkg>/...` (or `go test ./internal/<pkg> -run Name -count=1`) | `make test-unit` (includes the coverage floors), `make test-race` for concurrency changes |
+| Web | `make check-web` (or `cd web && npx vitest run <file>`) | `make check-full` (includes `npm run quality`; run it alone, parallel load makes Playwright time out) |
+| Mail and calendar | `go test ./internal/mailcal/... -count=1` | add `make conformance`; sending/gate changes also need `-race` |
+| Commits | Conventional Commits scoped by package; no `Co-Authored-By` or "Generated with" trailer in commits or PR text | |

@@ -13,23 +13,21 @@ Use this skill when creating or modifying REST API endpoints in the `internal/se
 
 ```
 internal/server/
-├── router.go             # Chi router setup, global & auth middlewares, route tree
-├── api_auth.go           # Setup, login, logout, password change, auth status
-├── api_dashboard.go      # Dashboard aggregate metrics & summaries
-├── api_agent.go          # Agent CRUD, start/stop, chat, soul, memory-md, memories (pin/importance), cron
-├── api_tasks.go          # Autonomous Task matrix CRUD, Heartbeat config & manual pulse triggers
-├── api_conversations.go  # Chat conversations and message history
-├── api_plugins.go        # WASM plugin upload, enable/disable, logs, configuration & vault secrets
-├── api_vault.go          # Hardware-bound vault secret management
-├── api_integrations.go   # Channel accounts, pairing codes, sender authorization
-├── api_tools.go          # MCP servers, skills, tool execution, hub marketplace
-├── api_workspace.go      # Workspace file browser, read/write/mkdir/upload
-├── api_system.go         # Metrics, LLM health & retune, token usage ledger history, keys, identity, HAL
-├── api_setup.go          # Legacy/standalone setup endpoints
-├── layered_fs.go         # Layered filesystem (/data/overrides/ → go:embed fallback)
-├── static.go             # Embedded static asset server
-└── server_test.go        # Comprehensive endpoint test suite
+├── router.go             # Chi router setup, middlewares, the whole route tree (the place to register routes)
+├── api_<subsystem>.go    # Handlers grouped by subsystem; `ls internal/server/api_*.go` is authoritative
+│   ├── api_auth.go, api_setup.go, api_vault.go, api_providers.go
+│   ├── api_agent*.go (agent CRUD, chat, cognition, cron, soul/memory files), api_tasks.go, api_runs.go, api_approvals.go
+│   ├── api_conversations.go, api_dashboard.go, api_realtime.go, api_anomalies.go, api_audit.go
+│   ├── api_plugins.go, api_tools.go, api_integrations.go (channels, pairing), api_notifications.go
+│   ├── api_workspace_db.go (DB-backed workspace), api_embedding.go, api_terminal.go
+│   ├── api_system.go, api_backup.go, api_ota_storage.go (metrics, keys, HAL, backups, OTA)
+│   └── api_mailcal*.go (mail and calendar: accounts, OAuth, rules, proposals)
+├── health.go             # /api/health, /api/ready
+├── layered_fs.go, static.go  # Embedded SPA (/data/overrides/ layered over go:embed)
+└── server_test.go        # newTestServer(t) and the endpoint test suites
 ```
+
+Every route must also appear in `.agents/rules/source-registry.md`; `TestSourceRegistryListsEveryRoute` fails when the two drift.
 
 ---
 
@@ -85,79 +83,32 @@ func (s *Server) decodeJSON(r *http.Request, v any) error
 ## 3. Route Organization & Authentication
 
 ### Public Routes
-- `GET /api/health`
-- `GET /api/models`
-- `GET /api/notifications/push/vapid-key`
-- `GET /api/auth/status`
-- `POST /api/auth/setup`
-- `POST /api/auth/login`
-- `POST /api/auth/logout`
+Registered at the top of `setupRoutes()` in `router.go`: `/api/health`, `/api/ready`, `/api/models`, `/api/notifications/push/vapid-key`, `/api/auth/{status,setup,login,logout}`, and `/api/mailcal/oauth/callback` (the provider redirects the browser here without the SameSite=Strict session cookie; the handler is protected by single-use state and a nonce cookie). Keep this list as short as possible; a new public route needs a written reason in the handler.
 
 ### Protected Subsystems
-All other routes are nested inside `r.Group` with `r.Use(s.RequireAuthMiddleware)`. Requests must include `Authorization: Bearer <token>` in the HTTP headers when authentication is initialized.
+Every other route is nested inside the group that uses `s.RequireAuthMiddleware`. The browser authenticates with the HttpOnly `actonos_token` cookie; API clients may send `Authorization: Bearer <token>` (`api_auth.go`).
 
 ---
 
 ## 4. Implementing a New API Endpoint
 
-### Step 1: Add Request & Response Structs
+### Step 1: Pick the closest existing handler
 
-```go
-type UpdateSoulRequest struct {
-    SoulContent string `json:"soul_content"`
-}
+Find the neighbour in `internal/server/api_<subsystem>.go` (for example `handleSaveSoul` in `api_agent_files.go`, or a `handleMailcal*` handler in `api_mailcal_rules.go`) and copy its shape: define request/response types next to it, decode with `s.decodeJSON`, validate, call the subsystem, answer with `s.respondJSON` or `s.respondError(w, status, "UPPER_SNAKE_CODE", message)`. Nil-check optional subsystems (`if s.profileMgr == nil { ... 501 }`). Handlers contain no business logic; that belongs in the `internal/<subsystem>` package so it can be tested without HTTP.
 
-type SoulResponse struct {
-    AgentID   string `json:"agent_id"`
-    Content   string `json:"content"`
-    UpdatedAt string `json:"updated_at"`
-}
-```
+### Step 2: Test it
 
-### Step 2: Implement Handler Method on `*Server`
+Use `newTestServer(t)` (`server_test.go`) and `httptest` against `srv.Router()`; mailcal examples: `api_mailcal_rules_test.go`.
 
-```go
-func (s *Server) handleSaveSoul(w http.ResponseWriter, r *http.Request) {
-    agentID := chi.URLParam(r, "agentID")
-    if agentID == "" {
-        agentID = agent.DefaultSystemAgentID
-    }
+### Step 3: Register the route in `internal/server/router.go`
 
-    var req UpdateSoulRequest
-    if err := s.decodeJSON(r, &req); err != nil {
-        s.respondError(w, http.StatusBadRequest, "INVALID_BODY", "failed to decode json body")
-        return
-    }
-
-    if err := s.profileMgr.SaveSoul(r.Context(), agentID, req.SoulContent); err != nil {
-        s.respondError(w, http.StatusInternalServerError, "SAVE_FAILED", err.Error())
-        return
-    }
-
-    s.respondJSON(w, http.StatusOK, SoulResponse{
-        AgentID:   agentID,
-        Content:   req.SoulContent,
-        UpdatedAt: time.Now().UTC().Format(time.RFC3339),
-    })
-}
-```
-
-### Step 3: Register Route in `internal/server/router.go`
-
-```go
-r.Route("/agents", func(r chi.Router) {
-    // ...
-    r.Route("/{agentID}", func(r chi.Router) {
-        // ...
-        r.Put("/soul", s.handleSaveSoul)
-    })
-})
-```
+Add it inside the existing `r.Route(...)` block of its subsystem (for example `r.Put("/soul", s.handleSaveSoul)` under `/agents/{agentID}`). Aliases are separate routes and each needs its registry row.
 
 ### Step 4: Update Documentation and TypeScript Types
 1. Add endpoint entry to `docs/API.md`
 2. Add route and handler to `.agents/rules/source-registry.md`
-3. Add client method to `web/src/lib/api.ts` and interfaces to `web/src/lib/types.ts`
+3. Add the client method (`web/src/lib/api.ts` or a domain client under `web/src/lib/api/`) and interfaces in `web/src/lib/types.ts`
+4. `go test ./internal/server -run TestSourceRegistryListsEveryRoute` must pass
 
 ---
 
@@ -226,7 +177,7 @@ after the stream.
 - MCP connection is a High-risk administrative action and requires approval.
 - Preserve trace IDs through handler, engine, registry, approval, and audit calls.
 - Workspace, skill, WASM, Hub, and restart mutations must use
-  `requestAdminApproval` and exact dispatch from `api_approvals.go`.
+  `requestAdminAction` and exact dispatch (`executeAdminAction`) in `admin_actions.go`.
 - `GET /api/system/audit/verify` is the canonical audit-chain integrity check.
 - Checkpointed approvals resume the same durable run; do not create a replacement.
 - All server filesystem paths must derive from `Config.DataDir`,

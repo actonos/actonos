@@ -17,8 +17,8 @@ Use this skill when developing the Web UI in the `web/` directory. All frontend 
 | **Tailwind CSS** | v4 | Modern `@theme` CSS configuration with custom design tokens in `index.css` |
 | **Vite** | Latest | Fast build tool, dev server, HMR, proxy to `:8080` |
 | **TypeScript** | 5.x | Strict mode, zero `any`, exhaustive typing for props & i18n |
-| **i18next / react-i18next** | Latest | Mandatory localization for all UI strings across 16 namespaces |
-| **xterm.js** | Latest | Read-only observability terminal; never bypass tool authorization with an interactive shell |
+| **i18next / react-i18next** | Latest | Mandatory localization for all UI strings across all locale namespaces (`ls web/src/locales/en`) |
+| **xterm.js** | Latest | Operations view is a read-only observability terminal. The Terminal page is a deliberate operator PTY (`/api/terminal/ws`); do not add interactive shell access anywhere else, and never route agent actions around `ToolRegistry.Execute` |
 | **Lucide React** | Latest | Minimal line-style iconography (monochrome `#130e30` or `#5f5c6e`) |
 
 ---
@@ -84,26 +84,9 @@ ActonOS uses a **sunlit wildflower compliance atelier** aesthetic:
 **Every user-facing string in JSX/TSX must be loaded via `useTranslation()` or `<Trans>` components.**
 Hardcoded strings in components violate build verification.
 
-### Active 16 Locale Namespaces (`web/src/locales/{en,vi}/`)
+### Locale Namespaces (`web/src/locales/{en,vi}/`)
 
-| Namespace | Usage |
-|:---|:---|
-| `common.json` | Buttons, badges, modal actions, validation messages, generic labels |
-| `nav.json` | Sidebar navigation tabs, header titles, breadcrumbs |
-| `missions.json` | Mission control, autonomous backlog, task modal, standing directives |
-| `setup.json` | Setup wizard, initial admin identity, password setup |
-| `chat.json` | Chat interface, streaming thoughts, tool invocation outputs |
-| `agents.json` | Agent management, agent table, manifest editor, memory inspector |
-| `tools.json` | Tool Hub, MCP servers, tool status |
-| `skills.json` | Skills registry, skill cards, marketplace actions |
-| `plugins.json` | Sandboxed WASM plugins hub, upload, detail modal, logs, configuration & secrets |
-| `automations.json` | Cron scheduler, automated periodic tasks, heartbeat |
-| `dashboard.json` | System metrics, quick actions, agent status cards |
-| `workspace.json` | File manager, file preview, workspace browser |
-| `audit.json` | Audit logs ledger, filters, cryptographic hash verification, detail modal |
-| `settings.json` | System configuration, token ledger, backup snapshots, OTA updates, Tailscale |
-| `notifications.json` | Notification center, browser push, history page |
-| `operations.json` | Live telemetry, Docker, execution feed, canvas, terminal, queue, approvals, costs |
+One JSON file per namespace, identical keys in both languages (`npm run check:i18n`). The list is the directory (`ls web/src/locales/en`); `.agents/rules/source-registry.md` describes what each covers. A new namespace is also registered in `web/src/lib/i18n.ts`. Locale bundles load lazily per language, so tests and render code wait for `i18nReady`.
 
 ### Usage in Components
 
@@ -131,75 +114,33 @@ export function AgentsHeader({ onNewAgent }: { onNewAgent: () => void }) {
 
 ---
 
-## 4. Actual Component Architecture (`web/src/`)
+## 4. Component Architecture (`web/src/`)
+
+The tree below names directories and their roles only; individual files change often, so list the directory (or consult `.agents/rules/source-registry.md`) before importing something.
 
 ```
 web/src/
 ├── components/
-│   ├── ui/                         # Atomic Primitives (Design System)
-│   │   ├── Button.tsx              # Primary yellow pill, dark pill, ghost pill
-│   │   ├── Input.tsx               # Pill capsule input with label/error
-│   │   ├── Card.tsx                # Soft Meadow 24px surface card
-│   │   ├── Badge.tsx               # Pill status badges
-│   │   ├── Modal.tsx               # Accessible dialog container
-│   │   ├── ConfirmModal.tsx        # Standard confirmation dialog
-│   │   ├── PromptModal.tsx         # User input modal prompt
-│   │   ├── Toast.tsx               # ToastProvider & useToast notifications
-│   │   ├── BlobBackdrop.tsx        # Organic SVG decorative backdrop shapes
-│   │   ├── LanguageSwitcher.tsx    # Compact / standard language switcher trigger
-│   │   └── LanguageSelectModal.tsx # Sidebar-scoped & standalone language modal
-│   │
-│   ├── layout/                     # Structural Layouts
-│   │   ├── Sidebar.tsx             # Collapsible left navigation bar with compact mode
-│   │   ├── Header.tsx              # Sticky top bar with breadcrumbs and user actions
-│   │   ├── Navbar.tsx              # Standalone navigation bar
-│   │   └── PageContainer.tsx       # Standard constrained page wrapper
-│   │
-│   ├── chat/                       # Chat Feature Components
-│   │   └── MarkdownContent.tsx     # Rich markdown renderer for thoughts and responses
-│   │
-│   └── features/                   # Domain Specific Modules
-│       ├── agents/
-│       │   ├── AgentCard.tsx       # Summary card for an agent
-│       │   ├── AgentFormModal.tsx  # Create/edit manifest modal
-│       │   ├── CronJobModal.tsx    # Automation cron configuration modal
-│       │   └── SoulEditorModal.tsx # SOUL.md system instruction modal
-│       ├── onboarding/             # Setup wizard subcomponents
-│       └── tools/                  # Tool detail cards
-│
-├── pages/                          # Composed Route Views (NavTabs)
-│   ├── Dashboard/DashboardPage.tsx       # 'dashboard'
-│   ├── Agents/AgentsPage.tsx             # 'agents' (Rich table)
-│   ├── Agents/AgentStudioPage.tsx        # 'agent-studio' (Config, Soul, Memory.md)
-│   ├── Chat/ChatPage.tsx                 # 'chat'
-│   ├── Automations/AutomationsPage.tsx   # 'automations'
-│   ├── Missions/MissionsPage.tsx         # 'missions'
-│   ├── Operations/OperationsPage.tsx     # 'operations'
-│   ├── Plugins/
-│   │   ├── PluginsPage.tsx               # 'plugins' (WASM Plugin Hub)
-│   │   ├── PluginDetailModal.tsx         # Plugin manifest & config modal
-│   │   ├── PluginUploadModal.tsx         # .actonpkg bundle uploader
-│   │   └── PluginLogsModal.tsx           # Realtime sandbox log viewer
-│   ├── ToolHub/ToolHubPage.tsx           # 'tools'
-│   ├── Skills/SkillsPage.tsx             # 'skills'
-│   ├── Workspace/WorkspacePage.tsx       # 'workspace'
-│   ├── Terminal/TerminalPage.tsx         # 'terminal'
-│   ├── Notifications/NotificationsPage.tsx # 'notifications'
-│   ├── AuditLogs/AuditLogsPage.tsx       # 'audit-logs'
-│   ├── Settings/SettingsPage.tsx         # 'settings'
-│   └── Auth/
-│       ├── SetupWizardPage.tsx           # First-run onboarding
-│       └── LoginPage.tsx                 # Password authentication
-│
+│   ├── ui/          # Design-system primitives: Button, Input, Card, Badge, Modal, Toast, PageHeader, EmptyState, IconButton,
+│   │                #   SegmentedControl, MetricCard, AsyncState, FreshnessBadge, BlobBackdrop, language switcher
+│   ├── layout/      # Sidebar, Header, MobileBottomNav, PageContainer
+│   ├── chat/        # Chat feature components (composer, timeline, message bubble, markdown)
+│   ├── modals/      # Shared modals
+│   ├── providers/   # Context providers (density, realtime, ...)
+│   └── features/    # Domain modules: agents, governance (approval cards and interruption), onboarding, tools, ...
+├── pages/           # One directory per route; the page component is lazy-loaded from App.tsx
+│                    #   (Dashboard, Agents, Chat, Automations, Missions, Operations, Plugins, ToolHub, Skills, Workspace,
+│                    #    Terminal, Notifications, AuditLogs, Settings, Channels, Costs, Mailcal, Auth, SetupWizard)
 ├── lib/
-│   ├── api.ts                      # Full type-safe REST API client
-│   ├── i18n.ts                     # i18next configuration & resource loader
-│   ├── models.ts                   # Up-to-date LLM model catalog
-│   └── types.ts                    # TypeScript interface contracts
-│
-├── App.tsx                         # State root, auth gating, sidebar & page router
-├── index.css                       # Tailwind v4 @theme, custom scrollbars, typography
-└── main.tsx                        # React 19 application mount point
+│   ├── api.ts + api/    # REST facade: api/client.ts (fetch/session/approval handling) and domain clients (operations.ts, mailcal.ts)
+│   ├── types.ts         # TypeScript mirrors of Go JSON structs
+│   ├── i18n.ts          # i18next setup and lazy locale loading
+│   ├── url-state.ts     # Tab/filter state in the hash query
+│   └── models.ts        # LLM model catalog
+├── locales/{en,vi}/     # Translation namespaces
+├── App.tsx              # Auth gating, sidebar and hash router
+├── index.css            # Tailwind v4 @theme tokens, scrollbars, typography
+└── main.tsx
 ```
 
 ---
@@ -215,12 +156,13 @@ web/src/
 
 ### Verification Checklist
 ```bash
-# Complete frontend quality gate
+# Complete frontend quality gate (or `make check-web` for everything except build, bundle budget and Playwright)
 cd web
 npm run quality
 npx tsc --noEmit
 
-# Browser smoke tests require a running backend and installed browser
+# Playwright starts Vite itself and mocks API calls per test (page.route); no backend is needed.
+# Run it alone: parallel CPU load makes it time out.
 npm run test:e2e
 ```
 
@@ -252,7 +194,7 @@ in both English and Vietnamese.
   feature components must not open duplicate realtime sockets.
 - Consume `/api/realtime` with the HttpOnly session cookie and reconnect with
   exponential bounded backoff plus jitter. Invalid frames must close the socket.
-- Keep xterm.js read-only. Shell execution must continue through the authorized Tool Registry and sandbox.
+- Keep the Operations xterm.js view read-only. Agent shell execution must continue through the authorized Tool Registry and sandbox; the Terminal page is the only interactive operator shell.
 - Render run events as collapsible Thought/Action/Observation cards and fetch ordered detail from `/api/runs/{id}/events`.
 - Live Canvas embeds only a sanitized `SystemMetrics.canvas_url`, uses a sandboxed
   iframe without clipboard permissions, and shows a waiting state when unavailable.

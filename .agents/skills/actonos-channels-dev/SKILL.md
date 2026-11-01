@@ -16,8 +16,10 @@ internal/channels/
 ├── adapter.go          # Core ChannelAdapter interface, InboundMessage, OutboundMessage contracts
 ├── manager.go          # ChannelManager: multi-account lifecycle, account sync, dynamic poller registration
 ├── router.go           # MessageRouter: inbound dispatch, @agent mention parsing, routing modes
-├── pairing.go          # PairingManager: 6-digit security pairing codes & authorization ledger
+├── pairing.go          # PairingManager: 8-character pairing codes (10 minute expiry, lockout) & authorization ledger
 ├── session.go          # Session state store per sender/channel/agent (conv_{channel}_{sender}_{agentID})
+├── envelope.go, media.go  # Canonical message envelope and media handling
+├── inbound_queue.go    # Durable queue between adapters and the router
 ├── webhook.go          # Generic webhook router & verification handler
 └── *_test.go           # Channel test suites
 
@@ -48,28 +50,14 @@ type ChannelAdapter interface {
 ```
 
 ### Message Contracts
-```go
-type InboundMessage struct {
-    ChannelID   string            `json:"channel_id"`
-    SenderID    string            `json:"sender_id"`
-    SenderName  string            `json:"sender_name"`
-    TargetAgent string            `json:"target_agent"` // Extracted @agent_mention or bound agent
-    Content     string            `json:"content"`
-    Metadata    map[string]string `json:"metadata,omitempty"`
-}
 
-type OutboundMessage struct {
-    ChannelID string `json:"channel_id"`
-    Recipient string `json:"recipient"`
-    Content   string `json:"content"`
-}
-```
+`InboundMessage`, `OutboundMessage` and `ChannelAccount` are defined in `adapter.go` (the plugin contract; typed fields for kind, chat/thread ids, reactions, typing, media). Read the structs there instead of copying them: they grow over time. Adding a field means updating `web/src/lib/types.ts` if it is JSON-exposed.
 
 ---
 
 ## 3. Developing a Channel Plugin (Plugin SDK)
 
-Channel adapters run inside the **Wazero WebAssembly sandbox**. To create a new channel:
+Channel adapters run inside the **Wazero WebAssembly sandbox**. The `acton-plugin` CLI and its Go/TinyGo SDK are distributed outside this repository, so the snippets below are illustrative: confirm names against the SDK version you install. The host side of the contract (what the plugin may export and import) is in `internal/plugin/` (`bridge_channel.go`, `host_api*.go`, `security_gate.go`). To create a new channel:
 
 1. **Scaffold with `acton-plugin`**:
    ```bash
@@ -120,10 +108,11 @@ Channel adapters run inside the **Wazero WebAssembly sandbox**. To create a new 
 
 Incoming messages pass through `MessageRouter.handleInboundMessage()`:
 - **Mention Parsing (`ExtractAgentMention`)**: Extracts `@agent_name` or `/agent <name>` from prompt text, cleaning the input before passing to LLM.
-- **Routing Modes**:
+- **Agent resolution (`ResolveAgent`)**: an explicit `@mention` that the agent listens to wins, then the channel account's bound agents, then `agent.DefaultSystemAgentID`.
+- **Routing modes** (`ChannelAccount.RoutingMode`):
   - `exclusive`: Only the assigned agent can respond.
   - `mention`: Routes to explicitly mentioned `@agent` in group chats; falls back to default agent in private DMs.
-  - `fallback`: Routes to Nova (`agent_system_core`) if no matching agent is bound.
+  - `fallback`: Routes to the default system agent if no matching agent is bound.
 - **Session Isolation**: Generates deterministic session IDs `conv_{channel}_{sender}_{agentID}` so different agents maintain separate memory diaries with the same user.
 
 ---
@@ -131,8 +120,8 @@ Incoming messages pass through `MessageRouter.handleInboundMessage()`:
 ## 5. Pairing & Security Flow (`pairing.go`)
 
 To prevent unauthorized strangers from triggering agents on public channels:
-1. When an unknown `SenderID` messages the bot, the system generates a 6-digit temporary pairing code.
-2. The user enters the pairing code via REST API `POST /api/integrations/pairing/verify`.
+1. Channels that require pairing (`ChannelRequiresPairing`) reject unknown senders until they are paired. A pairing code (8 characters, 10 minute expiry, failed attempts lock out) is generated with `POST /api/integrations/pairing/code`.
+2. The sender completes pairing by sending `/pair CODE` on the channel (or `POST /api/integrations/pairing/verify`).
 3. `PairingManager` records the sender as authorized.
 
 ---

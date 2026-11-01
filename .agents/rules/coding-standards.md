@@ -69,8 +69,7 @@ func (m *AgentManager) CreateAgent(ctx context.Context, manifest AgentManifest) 
 
 ### Mandatory Internationalization (i18n)
 - **Zero hardcoded text**: Every string in UI must use `useTranslation()` or `<Trans>`.
-- Maintain keys across all **14 namespaces** in `web/src/locales/` (`en/` and `vi/`):
-  `common`, `nav`, `setup`, `chat`, `agents`, `tools`, `skills`, `automations`, `channels`, `connectors`, `dashboard`, `integrations`, `workspace`, `settings`.
+- Keep keys identical in `web/src/locales/en/` and `vi/` (`npm run check:i18n`); the namespace list is the directory listing and `.agents/rules/source-registry.md`. A new namespace is also registered in `web/src/lib/i18n.ts`.
 
 ### Component Structure & Exports
 ```tsx
@@ -113,3 +112,4 @@ Before concluding any development step, verify according to `.agents/rules/verif
 1. `go vet ./...` passes without errors.
 2. `cd web && npx tsc --noEmit` passes with zero type errors.
 3. Every new route or endpoint is recorded in `docs/API.md` and `.agents/rules/source-registry.md`.
+4. Web changes also pass `npm run lint`, `check:i18n`, `audit:i18n -- --fail` and `check:emoji`.

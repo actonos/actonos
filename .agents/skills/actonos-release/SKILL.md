@@ -11,8 +11,7 @@ Use this skill when creating releases for ActonOS — bumping versions, generati
 
 Before creating a release, ensure:
 
-- [ ] All tests pass: `make test`
-- [ ] Linters pass: `make lint`
+- [ ] Full gate passes: `make check-full` (run alone), plus `make test-race` on Linux
 - [ ] Build succeeds: `make build`
 - [ ] `CHANGELOG.md` has entries under `[Unreleased]`
 - [ ] Documentation is up to date
@@ -23,13 +22,13 @@ Before creating a release, ensure:
 ### Quick Commands
 
 ```bash
-# Patch release (bug fixes): 0.1.0 → 0.1.1
+# Patch release (bug fixes): 1.0.4 → 1.0.5
 make bump-patch
 
-# Minor release (new features): 0.1.0 → 0.2.0
+# Minor release (new features): 1.0.4 → 1.1.0
 make bump-minor
 
-# Major release (breaking changes): 0.1.0 → 1.0.0
+# Major release (breaking changes): 1.0.4 → 2.0.0
 make bump-major
 ```
 
@@ -39,7 +38,7 @@ The `scripts/version-bump.sh` script automatically:
 
 1. **Reads** current version from `VERSION` file
 2. **Calculates** new version
-3. **Updates** `VERSION` file
+3. **Updates** `VERSION` and `web/package.json`
 4. **Updates** `CHANGELOG.md`:
    - Moves `[Unreleased]` entries to `[X.Y.Z] - YYYY-MM-DD`
    - Creates fresh `[Unreleased]` section
@@ -93,16 +92,16 @@ The script groups commits by type:
 - `feat` → **Added**
 - `fix` → **Fixed**
 - `refactor`, `docs`, `style`, `test`, `build`, `ci`, `chore` → **Changed**
-- Breaking changes (`!`) → **Removed** (with ⚠️ marker)
+- Breaking changes (`!`) → **Removed** (with a warning marker)
 
 ## Full Release Workflow
 
 ### Step 1: Prepare
 
 ```bash
-# Ensure you're on main with latest changes
-git checkout main
-git pull origin main
+# Ensure you're on the default branch (master) with latest changes
+git checkout master
+git pull origin master
 
 # Verify everything passes
 make lint
@@ -131,10 +130,12 @@ make bump-minor  # or bump-patch / bump-major
 
 ```bash
 # Push commit and tag
-git push origin main --tags
+git push origin master --tags
 ```
 
-### Step 5: Build & Publish Artifacts
+Pushing a `v*` tag starts `.github/workflows/release.yml`, which builds the web UI and the OTA binaries (`actond`, and `embeddingd` with ONNX Runtime) for each OS/arch and publishes them to a GitHub release. Watch that run before doing anything by hand.
+
+### Step 5: Build & Publish Extra Artifacts (only if needed)
 
 ```bash
 # Docker image
@@ -146,15 +147,9 @@ docker push actonos/actonos:latest
 make iso
 ```
 
-### Step 6: Create GitHub Release
+### Step 6: Check the GitHub Release
 
-1. Go to GitHub → Releases → "Create new release"
-2. Select the tag `vX.Y.Z`
-3. Title: `ActonOS vX.Y.Z`
-4. Body: Copy the changelog section for this version
-5. Attach artifacts:
-   - `build/actond` (Linux AMD64 binary)
-   - `build/ActonOS-vX.Y.Z.iso` (if applicable)
+The workflow creates the release. Confirm the tag's release has the OTA assets for every platform, paste the changelog section into the body if it is empty, and attach `build/ActonOS-vX.Y.Z.iso` manually if you built one. Pushing, tagging and publishing are the maintainer's decision: an agent prepares the commit and tag locally and stops.
 
 ## Hotfix Release
 
@@ -162,7 +157,7 @@ For urgent fixes on a released version:
 
 ```bash
 # 1. Create hotfix branch from the tag
-git checkout -b hotfix/v0.2.1 v0.2.0
+git checkout -b hotfix/v1.0.5 v1.0.4
 
 # 2. Apply the fix
 # ... make changes ...
@@ -171,15 +166,15 @@ git commit -m "fix(memory): critical FTS5 corruption on write"
 # 3. Bump patch version
 bash scripts/version-bump.sh patch
 
-# 4. Merge back to main
-git checkout main
-git merge hotfix/v0.2.1
+# 4. Merge back to master
+git checkout master
+git merge hotfix/v1.0.5
 
 # 5. Push
-git push origin main --tags
+git push origin master --tags
 
 # 6. Clean up
-git branch -d hotfix/v0.2.1
+git branch -d hotfix/v1.0.5
 ```
 
 ## Version Files Reference
@@ -192,17 +187,13 @@ git branch -d hotfix/v0.2.1
 | Docker tag | Image version | `Makefile` (reads `VERSION`) |
 | ISO filename | Image version | `scripts/build-iso.sh` (reads `VERSION`) |
 
-## Pre-1.0 Policy
+## Versioning Policy
 
-While in `0.x.y`:
-- **MINOR** bumps may include breaking changes (API is unstable)
-- **PATCH** bumps are always backward-compatible
-- Document breaking changes clearly in CHANGELOG under **Removed** or **Changed**
-
-After `1.0.0`:
-- Strict SemVer compliance
-- Breaking changes require **MAJOR** bump
-- Deprecation warnings for at least 1 minor version before removal
+The project is past 1.0.0, so strict SemVer applies:
+- **PATCH**: backward-compatible fixes.
+- **MINOR**: backward-compatible features.
+- **MAJOR**: breaking API, schema or agent-manifest changes.
+- Deprecate for at least one minor version before removing.
 
 ## Reference Files
 
