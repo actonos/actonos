@@ -117,3 +117,50 @@ func TestDeepSeekToolTurnWithoutReasoningOmitsTheField(t *testing.T) {
 		t.Fatal("an empty reasoning_content must not be sent")
 	}
 }
+
+// A thinking model can return a tool call with no reasoning on a simple step. The
+// API still expects the field on that turn when the turn is replayed.
+func TestDeepSeekThinkingModelSendsEmptyReasoningOnToolTurns(t *testing.T) {
+	srv, bodies := captureServer(t)
+	provider := NewDeepSeekProvider("test-key", "deepseek-v4-flash")
+	provider.BaseURL = srv.URL
+
+	turn := toolTurn()
+	turn[1].ReasoningContent = ""
+	if _, err := provider.Complete(context.Background(), turn, CompletionOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	reasoning, present := assistantMessage(t, (*bodies)[0])["reasoning_content"]
+	if !present || reasoning != "" {
+		t.Fatalf("the field must be present (empty) on a thinking model's tool turn, got present=%v value=%v", present, reasoning)
+	}
+}
+
+func TestDeepSeekChatModelStillOmitsEmptyReasoningUnlessConversationUsesIt(t *testing.T) {
+	srv, bodies := captureServer(t)
+	provider := NewDeepSeekProvider("test-key", "deepseek-chat")
+	provider.BaseURL = srv.URL
+
+	// Earlier turn carried reasoning, so the conversation is in thinking mode and
+	// every tool turn must carry the field.
+	history := append(toolTurn(), Message{Role: RoleAssistant, ToolCalls: []ToolCall{{
+		ID: "call_2", Type: "function", Function: FunctionCall{Name: "native_file_read", Arguments: json.RawMessage(`{}`)},
+	}}}, Message{Role: RoleTool, ToolCallID: "call_2", Name: "native_file_read", Content: "data"})
+
+	if _, err := provider.Complete(context.Background(), history, CompletionOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	messages, _ := (*bodies)[0]["messages"].([]any)
+	var withField int
+	for _, m := range messages {
+		msg := m.(map[string]any)
+		if msg["role"] == "assistant" {
+			if _, ok := msg["reasoning_content"]; ok {
+				withField++
+			}
+		}
+	}
+	if withField != 2 {
+		t.Fatalf("both tool turns must carry reasoning_content once the conversation uses it, got %d", withField)
+	}
+}

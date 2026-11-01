@@ -59,9 +59,11 @@ func isOpenAIEndpoint(baseURL string) bool {
 }
 
 type openAIMessage struct {
-	Role             string           `json:"role"`
-	Content          *string          `json:"content"`
-	ReasoningContent string           `json:"reasoning_content,omitempty"`
+	Role    string  `json:"role"`
+	Content *string `json:"content"`
+	// Pointer: nil omits the field, a pointer to "" sends it empty. Thinking models need the
+	// field on replayed tool-call turns even when that turn produced no reasoning.
+	ReasoningContent *string          `json:"reasoning_content,omitempty"`
 	ToolCalls        []openAIToolCall `json:"tool_calls,omitempty"`
 	ToolCallID       string           `json:"tool_call_id,omitempty"`
 	Name             string           `json:"name,omitempty"`
@@ -103,13 +105,43 @@ func normalizeToolArguments(raw json.RawMessage) string {
 }
 
 func toOpenAIMessages(messages []Message) []openAIMessage {
-	return buildOpenAIMessages(messages, false)
+	return buildOpenAIMessages(messages, replayNone)
+}
+
+// reasoningReplay says how an assistant tool-call turn's reasoning_content is replayed.
+type reasoningReplay int
+
+const (
+	// replayNone never sends it (generic OpenAI-compatible endpoints reject the field).
+	replayNone reasoningReplay = iota
+	// replayWhenPresent sends it only when the turn produced reasoning.
+	replayWhenPresent
+	// replayAlways sends it on every tool-call turn, empty if need be.
+	replayAlways
+)
+
+// replayModeFor picks the replay mode. DeepSeek thinking models (everything except the
+// non-thinking *-chat models) need the field on every tool-call turn; a chat model needs
+// it only if the conversation already carries reasoning.
+func (p *OpenAIProvider) replayModeFor(model string, messages []Message) reasoningReplay {
+	if !p.ReplayReasoning {
+		return replayNone
+	}
+	if !strings.Contains(strings.ToLower(model), "chat") {
+		return replayAlways
+	}
+	for _, m := range messages {
+		if m.Role == RoleAssistant && strings.TrimSpace(m.ReasoningContent) != "" {
+			return replayAlways
+		}
+	}
+	return replayWhenPresent
 }
 
 // buildOpenAIMessages converts messages to the Chat Completions wire format.
 // With replayReasoning, an assistant turn that issued tool calls carries its
 // reasoning_content so thinking-mode providers can continue the tool loop.
-func buildOpenAIMessages(messages []Message, replayReasoning bool) []openAIMessage {
+func buildOpenAIMessages(messages []Message, replay reasoningReplay) []openAIMessage {
 	result := make([]openAIMessage, 0, len(messages))
 	for _, m := range messages {
 		var toolCalls []openAIToolCall
@@ -145,9 +177,16 @@ func buildOpenAIMessages(messages []Message, replayReasoning bool) []openAIMessa
 		// reasoning_content is an OUTPUT-only field for most gateways, which reject
 		// it in input messages, so it is not replayed unless the provider asks for it.
 		// DeepSeek thinking mode is the exception, and only for tool-call turns.
-		reasoning := ""
-		if replayReasoning && m.Role == RoleAssistant && len(toolCalls) > 0 {
-			reasoning = m.ReasoningContent
+		var reasoning *string
+		if m.Role == RoleAssistant && len(toolCalls) > 0 {
+			switch {
+			case replay == replayAlways:
+				r := m.ReasoningContent
+				reasoning = &r
+			case replay == replayWhenPresent && m.ReasoningContent != "":
+				r := m.ReasoningContent
+				reasoning = &r
+			}
 		}
 		result = append(result, openAIMessage{
 			Role:             string(m.Role),
@@ -207,7 +246,7 @@ func (p *OpenAIProvider) completeChat(ctx context.Context, messages []Message, o
 
 	reqBody := openAIChatRequest{
 		Model:     model,
-		Messages:  buildOpenAIMessages(messages, p.ReplayReasoning),
+		Messages:  buildOpenAIMessages(messages, p.replayModeFor(model, messages)),
 		Tools:     opts.Tools,
 		Stream:    false,
 		MaxTokens: opts.MaxTokens,
@@ -303,7 +342,7 @@ func (p *OpenAIProvider) streamChat(ctx context.Context, messages []Message, opt
 	}
 	reqBody := openAIChatRequest{
 		Model:     model,
-		Messages:  buildOpenAIMessages(messages, p.ReplayReasoning),
+		Messages:  buildOpenAIMessages(messages, p.replayModeFor(model, messages)),
 		Tools:     opts.Tools,
 		Stream:    true,
 		MaxTokens: opts.MaxTokens,
