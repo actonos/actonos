@@ -40,19 +40,25 @@ func (s *BubblewrapSandbox) Execute(ctx context.Context, req CommandRequest) (*C
 	}
 
 	// Bubblewrap namespace isolation arguments
-	args := []string{
-		"--ro-bind", "/usr", "/usr",
-		"--ro-bind", "/bin", "/bin",
-		"--ro-bind", "/lib", "/lib",
+	args := []string{}
+	// /lib64 holds the ELF loader on x86_64; without it no dynamic binary starts.
+	for _, dir := range []string{"/usr", "/bin", "/lib", "/lib64"} {
+		if _, err := os.Stat(dir); err == nil {
+			args = append(args, "--ro-bind", dir, dir)
+		}
+	}
+	args = append(args,
 		"--proc", "/proc",
 		"--dev", "/dev",
 		"--unshare-all",
 		"--new-session",
 		"--die-with-parent",
 		"--cap-drop", "ALL",
+		// Never inherit the daemon's environment (API keys, tokens).
+		"--clearenv",
 		"--bind", workspace, "/workspace",
 		"--setenv", "PATH", "/usr/bin:/bin:/data/bin",
-	}
+	)
 	for _, mount := range req.BindMounts {
 		source, err := filepath.Abs(mount.Source)
 		if err != nil {
@@ -70,11 +76,6 @@ func (s *BubblewrapSandbox) Execute(ctx context.Context, req CommandRequest) (*C
 	args = append(args, "--chdir", "/workspace", "bash", "-c", req.Command)
 
 	cmd := exec.CommandContext(execCtx, "bwrap", args...)
-	if len(req.Env) > 0 {
-		for key, value := range req.Env {
-			cmd.Env = append(cmd.Environ(), key+"="+value)
-		}
-	}
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -103,11 +104,11 @@ func (s *BubblewrapSandbox) Execute(ctx context.Context, req CommandRequest) (*C
 	}
 
 	if err != nil {
+		result.Killed = execCtx.Err() == context.DeadlineExceeded
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			result.ExitCode = exitErr.ExitCode()
 		} else {
 			result.ExitCode = -1
-			result.Killed = execCtx.Err() == context.DeadlineExceeded
 		}
 	}
 
